@@ -174,31 +174,36 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {(salesperson?.salespersons || salesperson || []).sort((a: any, b: any) => (b.kra_score || 0) - (a.kra_score || 0)).map((sp: any) => (
-                    <tr key={sp.phone || sp.salesperson_phone} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-gray-800">{sp.name || 'Unknown'}</p>
-                        <p className="text-xs text-gray-400">{sp.phone || sp.salesperson_phone}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`text-sm font-bold px-2 py-0.5 rounded-full
-                          ${(sp.kra_score || 0) >= 80 ? 'bg-green-100 text-green-700'
-                            : (sp.kra_score || 0) >= 60 ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-red-100 text-red-700'}`}>
-                          {sp.kra_score || 0}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{sp.total_deals || 0}</td>
-                      <td className="px-4 py-3 text-green-600 font-medium">{sp.won_deals || 0}</td>
-                      <td className="px-4 py-3 text-gray-700">{sp.total_visits || 0}</td>
-                      <td className="px-4 py-3 text-gray-700">{sp.new_customers || 0}</td>
-                      <td className="px-4 py-3 text-gray-700">{sp.payments_collected || 0}</td>
-                      <td className="px-4 py-3 text-gray-700">{sp.complaint_resolution_rate != null ? `${sp.complaint_resolution_rate}%` : '—'}</td>
-                    </tr>
-                  ))}
+                  {((salesperson?.salespersons || [])).map((sp: any) => {
+                    const compTotal = sp.complaints?.total || 0;
+                    const compResolved = sp.complaints?.resolved || 0;
+                    const compRate = compTotal > 0 ? Math.round((compResolved / compTotal) * 100) : 100;
+                    return (
+                      <tr key={sp.salesperson_phone} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-800">{sp.name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-400">{sp.salesperson_phone}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-sm font-bold px-2 py-0.5 rounded-full
+                            ${(sp.kra_score || 0) >= 80 ? 'bg-green-100 text-green-700'
+                              : (sp.kra_score || 0) >= 60 ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-red-100 text-red-700'}`}>
+                            {sp.kra_score || 0}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">{sp.deals?.total || 0}</td>
+                        <td className="px-4 py-3 text-green-600 font-medium">{sp.deals?.won || 0}</td>
+                        <td className="px-4 py-3 text-gray-700">{sp.visits?.total || 0}</td>
+                        <td className="px-4 py-3 text-gray-700">{sp.new_customers?.count || 0}</td>
+                        <td className="px-4 py-3 text-gray-700">{sp.payments?.collected || 0}</td>
+                        <td className="px-4 py-3 text-gray-700">{compTotal > 0 ? `${compRate}% (${compResolved}/${compTotal})` : '—'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-              {(!salesperson || (salesperson?.salespersons || salesperson).length === 0) && (
+              {(!salesperson || (salesperson?.salespersons || []).length === 0) && (
                 <div className="text-center py-12 text-gray-400">No salesperson data</div>
               )}
             </div>
@@ -216,7 +221,7 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {(sku?.by_sku || sku || []).sort((a: any, b: any) => (b.total_value || 0) - (a.total_value || 0)).map((item: any, i: number) => (
+                  {((sku?.skus || [])).map((item: any, i: number) => (
                     <tr key={i} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-800">{item.sku_text}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{item.grade || '—'}</td>
@@ -230,7 +235,7 @@ export default function ReportsPage() {
                   ))}
                 </tbody>
               </table>
-              {(!sku || (sku?.by_sku || sku).length === 0) && (
+              {(!sku || (sku?.skus || []).length === 0) && (
                 <div className="text-center py-12 text-gray-400">No SKU data this month</div>
               )}
             </div>
