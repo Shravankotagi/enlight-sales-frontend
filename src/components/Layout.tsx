@@ -1,7 +1,8 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, TrendingUp, 
          FileText, BarChart3, Menu, X } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { path: '/', label: 'Pipeline', icon: LayoutDashboard },
@@ -10,6 +11,48 @@ const navItems = [
   { path: '/inquiries', label: 'Inquiries', icon: FileText },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
 ];
+
+function EmployeeFooter() {
+  const { employee, viewingAs, logout, clearViewingAs, isAdmin } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const handleBackToAdmin = () => {
+    clearViewingAs();
+    navigate('/admin');
+  };
+
+  return (
+    <div>
+      {/* Viewing as banner */}
+      {isAdmin && viewingAs && (
+        <div className="mb-2 p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
+          <p className="text-xs text-amber-400 font-medium">Viewing as:</p>
+          <p className="text-xs text-white font-semibold">{viewingAs.name}</p>
+          <button
+            onClick={handleBackToAdmin}
+            className="text-xs text-amber-400 hover:text-amber-300 mt-1
+              transition-colors">
+            ← Back to Admin
+          </button>
+        </div>
+      )}
+      <p className="text-xs text-white font-medium">{employee?.name}</p>
+      <p className="text-xs text-slate-400">
+        {employee?.employee_id} · {employee?.role}
+      </p>
+      <button
+        onClick={handleLogout}
+        className="text-xs text-red-400 hover:text-red-300 mt-1 transition-colors">
+        Logout
+      </button>
+    </div>
+  );
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -53,8 +96,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         {sidebarOpen && (
-          <div className="p-4 border-t border-slate-700">
+          <div className="p-4 border-t border-slate-700 space-y-2">
             <p className="text-xs text-slate-400">Enlight Metals Pvt. Ltd.</p>
+            <EmployeeFooter />
           </div>
         )}
       </div>
