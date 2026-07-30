@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsApi } from '../lib/api';
-import { useState } from 'react';
-import { AlertCircle, Loader2, IndianRupee } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertCircle, IndianRupee } from 'lucide-react';
+
+import toast from 'react-hot-toast';
+import DealDetailDrawer from '../components/DealDetailDrawer';
 
 const STAGES = [
   { key: 'new_inquiry', label: 'New Inquiry', color: 'bg-blue-50 border-blue-200' },
@@ -11,9 +14,9 @@ const STAGES = [
 ];
 
 const LOST_REASONS = [
-  'Price too high', 'Competitor relationship', 
-  'Customer went silent', 'Delivery timeline',
-  'Quality concerns', 'Budget cut', 'Other'
+  'Price', 'Credit terms', 'Delivery timeline',
+  'Material unavailable', 'Spec mismatch',
+  'Competitor relationship', 'Customer silent', 'Cancelled by customer',
 ];
 
 function formatINR(amount: number) {
@@ -21,20 +24,23 @@ function formatINR(amount: number) {
   return '₹' + Number(amount).toLocaleString('en-IN');
 }
 
-function DealCard({ deal, onStageChange }: { 
-  deal: any; 
-  onStageChange: (id: string, stage: string, reason?: string) => void 
+function DealCard({ deal, onStageChange, onSelect }: {
+  deal: any;
+  onStageChange: (id: string, stage: string, reason?: string) => void;
+  onSelect: (id: string) => void;
 }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm
-      hover:shadow-md transition-shadow cursor-pointer">
+    <div
+      onClick={() => onSelect(deal.id)}
+      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+    >
       <div className="flex items-start justify-between mb-2">
         <h4 className="text-sm font-semibold text-gray-800 leading-tight">
           {deal.customer_name || 'Unknown Customer'}
         </h4>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-          ${deal.inquiry_type === 'purchase_order' 
-            ? 'bg-green-100 text-green-700' 
+          ${deal.inquiry_type === 'purchase_order'
+            ? 'bg-green-100 text-green-700'
             : 'bg-blue-100 text-blue-700'}`}>
           {deal.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
         </span>
@@ -52,9 +58,7 @@ function DealCard({ deal, onStageChange }: {
             </p>
           ))}
           {deal.deal_items.length > 2 && (
-            <p className="text-xs text-gray-400">
-              +{deal.deal_items.length - 2} more items
-            </p>
+            <p className="text-xs text-gray-400">+{deal.deal_items.length - 2} more</p>
           )}
         </div>
       )}
@@ -66,12 +70,12 @@ function DealCard({ deal, onStageChange }: {
         </div>
       )}
 
-      <div className="mt-3 flex gap-1 flex-wrap">
+      <div className="mt-3 flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
         {['qualified', 'quoted', 'negotiation', 'won', 'lost'].map(stage => (
           <button key={stage}
             onClick={() => onStageChange(deal.id, stage)}
             className={`text-xs px-2 py-1 rounded border transition-colors
-              ${stage === 'won' 
+              ${stage === 'won'
                 ? 'border-green-300 text-green-700 hover:bg-green-50'
                 : stage === 'lost'
                 ? 'border-red-300 text-red-700 hover:bg-red-50'
@@ -91,9 +95,12 @@ function DealCard({ deal, onStageChange }: {
 
 export default function PipelinePage() {
   const queryClient = useQueryClient();
-  const [lostModal, setLostModal] = useState<{
-    dealId: string; reason: string
-  } | null>(null);
+  const [lostModal, setLostModal] = useState<{ dealId: string; reason: string } | null>(null);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.title = 'Pipeline — Enlight Sales OS';
+  }, []);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['kanban'],
@@ -106,14 +113,15 @@ export default function PipelinePage() {
   });
 
   const stageMutation = useMutation({
-    mutationFn: ({ id, stage, reason }: { 
-      id: string; stage: string; reason?: string 
-    }) => dealsApi.updateStage(id, stage, reason),
+    mutationFn: ({ id, stage, reason }: { id: string; stage: string; reason?: string }) =>
+      dealsApi.updateStage(id, stage, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kanban'] });
       queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      toast.success('Deal stage updated');
       setLostModal(null);
-    }
+    },
+    onError: () => toast.error('Failed to update deal'),
   });
 
   const handleStageChange = (id: string, stage: string) => {
@@ -125,8 +133,22 @@ export default function PipelinePage() {
   };
 
   if (isLoading) return (
-    <div className="flex items-center justify-center h-64">
-      <Loader2 className="animate-spin text-blue-600" size={32} />
+    <div className="grid grid-cols-4 gap-4">
+      {STAGES.map(s => (
+        <div key={s.key} className={`rounded-xl border-2 ${s.color} p-3`}>
+          <div className="animate-pulse mb-3">
+            <div className="h-4 bg-gray-200 rounded w-24" />
+          </div>
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white rounded-lg p-3 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                <div className="h-3 bg-gray-200 rounded w-1/2" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 
@@ -145,18 +167,14 @@ export default function PipelinePage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Sales Pipeline</h1>
-          <p className="text-gray-500 text-sm">Drag deals through stages</p>
+          <p className="text-gray-500 text-sm">Click a deal card to view details</p>
         </div>
-
-        {/* Summary */}
         {pipelineData && (
           <div className="flex gap-4">
             {pipelineData.map((s: any) => (
               <div key={s.stage} className="text-center">
                 <p className="text-lg font-bold text-gray-800">{s.count}</p>
-                <p className="text-xs text-gray-500 capitalize">
-                  {s.stage.replace('_', ' ')}
-                </p>
+                <p className="text-xs text-gray-500 capitalize">{s.stage.replace('_', ' ')}</p>
               </div>
             ))}
           </div>
@@ -169,20 +187,21 @@ export default function PipelinePage() {
           <div key={key} className={`rounded-xl border-2 ${color} p-3`}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
-              <span className="bg-white text-gray-600 text-xs font-bold 
-                px-2 py-0.5 rounded-full border">
+              <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
                 {board[key]?.length || 0}
               </span>
             </div>
             <div className="space-y-2">
               {(board[key] || []).map((deal: any) => (
-                <DealCard key={deal.id} deal={deal} 
-                  onStageChange={handleStageChange} />
+                <DealCard
+                  key={deal.id}
+                  deal={deal}
+                  onStageChange={handleStageChange}
+                  onSelect={setSelectedDealId}
+                />
               ))}
               {(!board[key] || board[key].length === 0) && (
-                <div className="text-center py-6 text-gray-400 text-sm">
-                  No deals
-                </div>
+                <div className="text-center py-6 text-gray-400 text-sm">No deals</div>
               )}
             </div>
           </div>
@@ -191,24 +210,16 @@ export default function PipelinePage() {
 
       {/* Loss Modal */}
       {lostModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center 
-          justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-96 shadow-xl">
-            <h3 className="text-lg font-bold text-gray-900 mb-1">
-              Mark as Lost
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Please select a reason (required)
-            </p>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Mark as Lost</h3>
+            <p className="text-sm text-gray-500 mb-4">Please select a reason (required)</p>
             <div className="space-y-2 mb-4">
               {LOST_REASONS.map(reason => (
-                <label key={reason} 
-                  className="flex items-center gap-2 cursor-pointer">
+                <label key={reason} className="flex items-center gap-2 cursor-pointer">
                   <input type="radio" name="reason" value={reason}
                     checked={lostModal.reason === reason}
-                    onChange={() => setLostModal(
-                      prev => prev ? { ...prev, reason } : null
-                    )}
+                    onChange={() => setLostModal(prev => prev ? { ...prev, reason } : null)}
                     className="text-blue-600" />
                   <span className="text-sm text-gray-700">{reason}</span>
                 </label>
@@ -216,26 +227,25 @@ export default function PipelinePage() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => setLostModal(null)}
-                className="flex-1 px-4 py-2 border border-gray-300 
-                  rounded-lg text-sm hover:bg-gray-50">
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
                 Cancel
               </button>
               <button
                 disabled={!lostModal.reason}
-                onClick={() => stageMutation.mutate({
-                  id: lostModal.dealId,
-                  stage: 'lost',
-                  reason: lostModal.reason
-                })}
-                className="flex-1 px-4 py-2 bg-red-600 text-white 
-                  rounded-lg text-sm hover:bg-red-700 
-                  disabled:opacity-50 disabled:cursor-not-allowed">
+                onClick={() => stageMutation.mutate({ id: lostModal.dealId, stage: 'lost', reason: lostModal.reason })}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
                 Confirm Lost
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Deal Detail Drawer */}
+      <DealDetailDrawer
+        dealId={selectedDealId}
+        onClose={() => setSelectedDealId(null)}
+      />
     </div>
   );
 }

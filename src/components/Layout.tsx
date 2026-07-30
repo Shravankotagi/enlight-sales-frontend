@@ -1,12 +1,17 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, TrendingUp, 
-         FileText, BarChart3, Menu, X } from 'lucide-react';
+import {
+  Home, LayoutDashboard, Users, TrendingUp,
+  FileText, BarChart3, Menu, X, Brain, Tag
+} from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
+  { path: '/home', label: 'Home', icon: Home },
   { path: '/', label: 'Pipeline', icon: LayoutDashboard },
   { path: '/customers', label: 'Customers', icon: Users },
+  { path: '/intelligence', label: 'Intelligence', icon: Brain },
+  { path: '/pricing', label: 'Pricing', icon: Tag },
   { path: '/kra', label: 'KRA Dashboard', icon: TrendingUp },
   { path: '/inquiries', label: 'Inquiries', icon: FileText },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
@@ -35,16 +40,13 @@ function EmployeeFooter() {
           <p className="text-xs text-white font-semibold">{viewingAs.name}</p>
           <button
             onClick={handleBackToAdmin}
-            className="text-xs text-amber-400 hover:text-amber-300 mt-1
-              transition-colors">
+            className="text-xs text-amber-400 hover:text-amber-300 mt-1 transition-colors">
             ← Back to Admin
           </button>
         </div>
       )}
       <p className="text-xs text-white font-medium">{employee?.name}</p>
-      <p className="text-xs text-slate-400">
-        {employee?.employee_id} · {employee?.role}
-      </p>
+      <p className="text-xs text-slate-400">{employee?.employee_id} · {employee?.role}</p>
       <button
         onClick={handleLogout}
         className="text-xs text-red-400 hover:text-red-300 mt-1 transition-colors">
@@ -58,12 +60,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} 
-        bg-slate-900 text-white transition-all duration-300 flex flex-col`}>
-        
+      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-slate-900 text-white transition-all duration-300 flex flex-col`}>
+
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           {sidebarOpen && (
@@ -79,12 +85,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map(({ path, label, icon: Icon }) => (
             <Link key={path} to={path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg
-                transition-colors text-sm font-medium
-                ${location.pathname === path
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium
+                ${isActive(path)
                   ? 'bg-blue-600 text-white'
                   : 'text-slate-300 hover:bg-slate-700 hover:text-white'
                 }`}>
