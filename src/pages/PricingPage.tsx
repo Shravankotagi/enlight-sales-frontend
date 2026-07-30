@@ -33,12 +33,12 @@ export default function PricingPage() {
 
   const { data: todaySheet, isLoading: sheetLoading } = useQuery({
     queryKey: ['pricing-today'],
-    queryFn: () => pricingApi.getToday().then(r => r.data),
+    queryFn: () => pricingApi.getToday().then(r => r.data.data),
   });
 
   const { data: margins, isLoading: marginsLoading } = useQuery({
     queryKey: ['floor-margins'],
-    queryFn: () => pricingApi.getFloorMargins().then(r => r.data),
+    queryFn: () => pricingApi.getFloorMargins().then(r => r.data.data),
     enabled: tab === 'margins',
   });
 
