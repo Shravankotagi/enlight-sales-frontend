@@ -87,10 +87,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {(() => {
-            const { employee } = useAuth();
+            const { employee, viewingAs } = useAuth();
             const isAdmin = employee?.role === 'admin';
+            const showAdminTab = isAdmin && !viewingAs;
             const visibleItems = [
-              ...(isAdmin ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }] : []),
+              ...(showAdminTab ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }] : []),
               ...navItems,
             ];
             return visibleItems.map(({ path, label, icon: Icon }) => (

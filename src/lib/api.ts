@@ -65,11 +65,16 @@ export const inquiriesApi = {
 };
 
 export const reportsApi = {
-  getMonthly: () => API.get('/reports/monthly'),
-  getFunnel: () => API.get('/reports/funnel'),
-  getSalesperson: () => API.get('/reports/salesperson'),
-  getSku: () => API.get('/reports/sku'),
+  getMonthly: (params?: any) => API.get('/reports/monthly', { params }),
+  getFunnel: (params?: any) => API.get('/reports/funnel', { params }),
+  getSalesperson: (params?: any) => API.get('/reports/salesperson', { params }),
+  getSku: (params?: any) => API.get('/reports/sku', { params }),
 };
+
+export const employeesApi = {
+  getAll: () => API.get('/employees'),
+};
+
 
 export const pricingApi = {
   getToday: () => API.get('/pricing/today'),
