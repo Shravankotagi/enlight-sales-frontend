@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Users, LogOut, Loader2, UserPlus, X } from 'lucide-react';
+import { Users, LogOut, Loader2, UserPlus, X, ShieldAlert } from 'lucide-react';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ||
   'https://enlight-sales-backend-production.up.railway.app';
+
 
 interface Employee {
   id: string;
@@ -203,13 +204,24 @@ export default function AdminSelectionPage() {
               </p>
             </div>
           </div>
-          <button
-            onClick={handleOpenModal}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700
-              text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            <UserPlus size={16} />
-            Add Salesperson
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/admin-dashboard')}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700
+                text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              <ShieldAlert size={16} className="text-blue-400" />
+              Go to Admin Dashboard
+            </button>
+            <button
+              onClick={handleOpenModal}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700
+                text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              <UserPlus size={16} />
+              Add Salesperson
+            </button>
+          </div>
         </div>
 
         {/* Employee List */}
