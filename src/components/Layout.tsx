@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, LayoutDashboard, Users, TrendingUp,
-  FileText, BarChart3, Menu, X, Brain, Tag
+  FileText, BarChart3, Menu, X, Brain, Tag, ShieldAlert
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -86,17 +86,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map(({ path, label, icon: Icon }) => (
-            <Link key={path} to={path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium
-                ${isActive(path)
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-                }`}>
-              <Icon size={18} className="shrink-0" />
-              {sidebarOpen && <span>{label}</span>}
-            </Link>
-          ))}
+          {(() => {
+            const { employee } = useAuth();
+            const isAdmin = employee?.role === 'admin';
+            const visibleItems = [
+              ...(isAdmin ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }] : []),
+              ...navItems,
+            ];
+            return visibleItems.map(({ path, label, icon: Icon }) => (
+              <Link key={path} to={path}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium
+                  ${isActive(path)
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}>
+                <Icon size={18} className="shrink-0" />
+                {sidebarOpen && <span>{label}</span>}
+              </Link>
+            ));
+          })()}
         </nav>
 
         {/* Footer */}

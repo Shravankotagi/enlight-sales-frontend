@@ -12,8 +12,12 @@ import ReportsPage from './pages/ReportsPage';
 import IntelligencePage from './pages/IntelligencePage';
 import PricingPage from './pages/PricingPage';
 import NotFoundPage from './pages/NotFoundPage';
+import AdminDashboard from './pages/AdminDashboard';
 
 function AppRoutes() {
+  const { employee } = useAuth();
+  const isAdmin = employee?.role === 'admin';
+
   return (
     <Layout>
       <Routes>
@@ -25,6 +29,7 @@ function AppRoutes() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
         <Route path="/pricing" element={<PricingPage />} />
+        {isAdmin && <Route path="/admin-dashboard" element={<AdminDashboard />} />}
       </Routes>
     </Layout>
   );
@@ -32,6 +37,8 @@ function AppRoutes() {
 
 function AdminRoutes() {
   const { viewingAs } = useAuth();
+  // Allow accessing the Admin Overview directly even if no salesperson is selected
+  if (window.location.pathname === '/admin-dashboard') return <AppRoutes />;
   if (!viewingAs) return <Navigate to="/admin" replace />;
   return <AppRoutes />;
 }
