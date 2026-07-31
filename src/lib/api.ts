@@ -8,12 +8,12 @@ const API = axios.create({
 
 // Attach JWT token and salesperson filter to every request
 API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('enlight_token');
+  const token = sessionStorage.getItem('enlight_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   // Add salesperson_phone filter if admin is viewing a specific salesperson
-  const viewingAs = localStorage.getItem('enlight_viewing_as');
+  const viewingAs = sessionStorage.getItem('enlight_viewing_as');
   if (viewingAs) {
     const emp = JSON.parse(viewingAs);
     config.params = { ...config.params, salesperson_phone: emp.phone };
@@ -26,9 +26,9 @@ API.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('enlight_token');
-      localStorage.removeItem('enlight_employee');
-      localStorage.removeItem('enlight_viewing_as');
+      sessionStorage.removeItem('enlight_token');
+      sessionStorage.removeItem('enlight_employee');
+      sessionStorage.removeItem('enlight_viewing_as');
       window.location.href = '/login';
     }
     return Promise.reject(error);

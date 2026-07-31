@@ -25,40 +25,40 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem('enlight_token')
+    () => sessionStorage.getItem('enlight_token')
   );
   const [employee, setEmployee] = useState<Employee | null>(() => {
-    const saved = localStorage.getItem('enlight_employee');
+    const saved = sessionStorage.getItem('enlight_employee');
     return saved ? JSON.parse(saved) : null;
   });
   const [viewingAs, setViewingAsState] = useState<Employee | null>(() => {
-    const saved = localStorage.getItem('enlight_viewing_as');
+    const saved = sessionStorage.getItem('enlight_viewing_as');
     return saved ? JSON.parse(saved) : null;
   });
 
   const login = (newToken: string, newEmployee: Employee) => {
-    localStorage.setItem('enlight_token', newToken);
-    localStorage.setItem('enlight_employee', JSON.stringify(newEmployee));
+    sessionStorage.setItem('enlight_token', newToken);
+    sessionStorage.setItem('enlight_employee', JSON.stringify(newEmployee));
     setToken(newToken);
     setEmployee(newEmployee);
   };
 
   const logout = () => {
-    localStorage.removeItem('enlight_token');
-    localStorage.removeItem('enlight_employee');
-    localStorage.removeItem('enlight_viewing_as');
+    sessionStorage.removeItem('enlight_token');
+    sessionStorage.removeItem('enlight_employee');
+    sessionStorage.removeItem('enlight_viewing_as');
     setToken(null);
     setEmployee(null);
     setViewingAsState(null);
   };
 
   const setViewingAs = (emp: Employee) => {
-    localStorage.setItem('enlight_viewing_as', JSON.stringify(emp));
+    sessionStorage.setItem('enlight_viewing_as', JSON.stringify(emp));
     setViewingAsState(emp);
   };
 
   const clearViewingAs = () => {
-    localStorage.removeItem('enlight_viewing_as');
+    sessionStorage.removeItem('enlight_viewing_as');
     setViewingAsState(null);
   };
 
