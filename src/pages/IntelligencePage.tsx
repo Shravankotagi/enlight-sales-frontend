@@ -371,7 +371,7 @@ export default function IntelligencePage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {logsData.map((log: any) => {
-                    const kraNum = parseInt(log.kra_type?.replace(/\D/g, '') || '1');
+                    const kraNum = log.kra_number || 1;
                     return (
                       <tr key={log.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3">
@@ -379,7 +379,9 @@ export default function IntelligencePage() {
                             KRA{kraNum}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 capitalize text-xs">{log.activity_type}</td>
+                        <td className="px-4 py-3 text-gray-600 capitalize text-xs">
+                          {log.kra_type?.replace(/_/g, ' ')}
+                        </td>
                         <td className="px-4 py-3 text-gray-800 font-medium text-xs">{log.customer_name || '—'}</td>
                         <td className="px-4 py-3 text-gray-600 text-xs max-w-xs truncate">{log.description}</td>
                         <td className="px-4 py-3 text-gray-400 text-xs">
