@@ -97,19 +97,30 @@ export default function PipelinePage() {
   const queryClient = useQueryClient();
   const [lostModal, setLostModal] = useState<{ dealId: string; reason: string } | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const years = [2025, 2026, 2027];
+
+  const fromDate = new Date(Date.UTC(selectedYear, selectedMonth, 1, 0, 0, 0)).toISOString();
+  const toDate = new Date(Date.UTC(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)).toISOString();
 
   useEffect(() => {
     document.title = 'Pipeline — Enlight Sales OS';
   }, []);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['kanban'],
-    queryFn: () => dealsApi.getKanban().then(r => r.data.data),
+    queryKey: ['kanban', selectedMonth, selectedYear],
+    queryFn: () => dealsApi.getKanban({ from: fromDate, to: toDate }).then(r => r.data.data),
   });
 
   const { data: pipelineData } = useQuery({
-    queryKey: ['pipeline'],
-    queryFn: () => dealsApi.getPipeline().then(r => r.data.data),
+    queryKey: ['pipeline', selectedMonth, selectedYear],
+    queryFn: () => dealsApi.getPipeline({ from: fromDate, to: toDate }).then(r => r.data.data),
   });
 
   const stageMutation = useMutation({
@@ -164,21 +175,45 @@ export default function PipelinePage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Sales Pipeline</h1>
           <p className="text-gray-500 text-sm">Click a deal card to view details</p>
         </div>
-        {pipelineData && (
-          <div className="flex gap-4">
-            {pipelineData.map((s: any) => (
-              <div key={s.stage} className="text-center">
-                <p className="text-lg font-bold text-gray-800">{s.count}</p>
-                <p className="text-xs text-gray-500 capitalize">{s.stage.replace('_', ' ')}</p>
-              </div>
-            ))}
+        <div className="flex flex-wrap items-center gap-4">
+          {pipelineData && (
+            <div className="flex gap-4 border-r pr-4 border-gray-200">
+              {pipelineData.map((s: any) => (
+                <div key={s.stage} className="text-center">
+                  <p className="text-base font-bold text-gray-800">{s.count}</p>
+                  <p className="text-[10px] text-gray-500 capitalize">{s.stage.replace('_', ' ')}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Month/Year Selector */}
+          <div className="flex gap-2">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {months.map((m, idx) => (
+                <option key={m} value={idx}>{m}</option>
+              ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {years.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Kanban Board */}

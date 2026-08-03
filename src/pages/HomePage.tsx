@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { kraApi } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertCircle, Clock, CheckCircle,
   TrendingUp, Users, Home
@@ -35,14 +35,22 @@ const PRIORITY_BADGE: Record<string, string> = {
 export default function HomePage() {
   const navigate = useNavigate();
   const { employee } = useAuth();
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const years = [2025, 2026, 2027];
 
   useEffect(() => {
     document.title = 'Home — Enlight Sales OS';
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['action-queue'],
-    queryFn: () => kraApi.getActionQueue().then(r => r.data.data),
+    queryKey: ['action-queue', selectedMonth, selectedYear],
+    queryFn: () => kraApi.getActionQueue({ month: selectedMonth, year: selectedYear }).then(r => r.data.data),
     refetchInterval: 5 * 60 * 1000,
   });
 
@@ -57,8 +65,8 @@ export default function HomePage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-1">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">
             {employee?.name?.charAt(0) || 'U'}
           </div>
@@ -68,6 +76,28 @@ export default function HomePage() {
             </h1>
             <p className="text-gray-500 text-sm">{today}</p>
           </div>
+        </div>
+
+        {/* Month/Year selectors */}
+        <div className="flex gap-2">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {months.map((m, idx) => (
+              <option key={m} value={idx}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {years.map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
         </div>
       </div>
 

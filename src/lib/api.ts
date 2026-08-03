@@ -36,8 +36,8 @@ API.interceptors.response.use(
 );
 
 export const dealsApi = {
-  getKanban: () => API.get('/deals/kanban'),
-  getPipeline: () => API.get('/deals/pipeline'),
+  getKanban: (params?: any) => API.get('/deals/kanban', { params }),
+  getPipeline: (params?: any) => API.get('/deals/pipeline', { params }),
   getAll: (params?: any) => API.get('/deals', { params }),
   getOne: (id: string) => API.get(`/deals/${id}`),
   updateStage: (id: string, stage: string, lost_reason?: string) =>
@@ -55,7 +55,7 @@ export const customersApi = {
 export const kraApi = {
   getDashboard: (params?: { month?: number; year?: number }) => API.get('/kra/dashboard', { params }),
   getLogs: () => API.get('/kra/logs'),
-  getActionQueue: () => API.get('/kra/action-queue'),
+  getActionQueue: (params?: { month?: number; year?: number }) => API.get('/kra/action-queue', { params }),
 };
 
 export const inquiriesApi = {

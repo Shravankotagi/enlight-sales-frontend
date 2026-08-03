@@ -10,6 +10,17 @@ import { useNavigate } from 'react-router-dom';
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [selectedPhone, setSelectedPhone] = useState<string>('');
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const years = [2025, 2026, 2027];
+
+  const fromDate = new Date(Date.UTC(selectedYear, selectedMonth, 1, 0, 0, 0)).toISOString();
+  const toDate = new Date(Date.UTC(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)).toISOString();
 
   useEffect(() => {
     document.title = 'Admin Overview — Enlight Sales OS';
@@ -27,27 +38,31 @@ export default function AdminDashboard() {
 
   const selectedSalesperson = salespeople.find((s: any) => s.phone === selectedPhone);
 
-  const queryParams = selectedPhone ? { salesperson_phone: selectedPhone } : undefined;
+  const queryParams = {
+    ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
+    month: selectedMonth,
+    year: selectedYear,
+  };
 
   // Queries with dynamic parameters
   const { data: monthly, isLoading: monthlyLoading } = useQuery({
-    queryKey: ['admin-monthly', selectedPhone],
+    queryKey: ['admin-monthly', selectedPhone, selectedMonth, selectedYear],
     queryFn: () => reportsApi.getMonthly(queryParams).then(r => r.data.data),
   });
 
   const { data: funnel, isLoading: funnelLoading } = useQuery({
-    queryKey: ['admin-funnel', selectedPhone],
+    queryKey: ['admin-funnel', selectedPhone, selectedMonth, selectedYear],
     queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data.data),
   });
 
   const { data: sku, isLoading: skuLoading } = useQuery({
-    queryKey: ['admin-sku', selectedPhone],
+    queryKey: ['admin-sku', selectedPhone, selectedMonth, selectedYear],
     queryFn: () => reportsApi.getSku(queryParams).then(r => r.data.data),
   });
 
   const { data: salesperson, isLoading: salespersonLoading } = useQuery({
-    queryKey: ['admin-salesperson'],
-    queryFn: () => reportsApi.getSalesperson().then(r => r.data.data),
+    queryKey: ['admin-salesperson', selectedMonth, selectedYear],
+    queryFn: () => reportsApi.getSalesperson({ month: selectedMonth, year: selectedYear }).then(r => r.data.data),
   });
 
   const { data: inquiries, isLoading: inquiriesLoading } = useQuery({
@@ -56,8 +71,8 @@ export default function AdminDashboard() {
   });
 
   const { data: deals, isLoading: dealsLoading } = useQuery({
-    queryKey: ['admin-recent-deals', selectedPhone],
-    queryFn: () => dealsApi.getAll(queryParams).then(r => r.data.data),
+    queryKey: ['admin-recent-deals', selectedPhone, selectedMonth, selectedYear],
+    queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data.data),
   });
 
   const isLoading = monthlyLoading || funnelLoading || skuLoading || salespersonLoading || inquiriesLoading || dealsLoading;
@@ -107,12 +122,34 @@ export default function AdminDashboard() {
         </div>
 
         {/* Dropdown Selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Filter by Salesperson:</label>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Month/Year Selector */}
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="px-3 py-2 border rounded-lg bg-white border-gray-300 text-gray-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+          >
+            {months.map((m, idx) => (
+              <option key={m} value={idx}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="px-3 py-2 border rounded-lg bg-white border-gray-300 text-gray-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+          >
+            {years.map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+
+          <span className="w-[1px] h-6 bg-gray-200 mx-1" />
+
+          <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Filter:</label>
           <select
             value={selectedPhone}
             onChange={(e) => setSelectedPhone(e.target.value)}
-            className="px-4 py-2 border rounded-lg bg-gray-55 border-gray-300 text-gray-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+            className="px-4 py-2 border rounded-lg bg-white border-gray-300 text-gray-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
           >
             <option value="">All Salespeople (Global)</option>
             {salespeople.map((sp: any) => (
