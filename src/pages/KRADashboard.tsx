@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { kraApi } from '../lib/api';
 import { Loader2, CheckCircle, AlertCircle, Clock } from 'lucide-react';
@@ -214,9 +215,13 @@ function KRACard({ number, label, data }: {
 }
 
 export default function KRADashboard() {
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['kra-dashboard'],
-    queryFn: () => kraApi.getDashboard().then(r => r.data.data),
+    queryKey: ['kra-dashboard', selectedMonth, selectedYear],
+    queryFn: () => kraApi.getDashboard({ month: selectedMonth, year: selectedYear }).then(r => r.data.data),
     refetchInterval: 60000,
   });
 
@@ -245,14 +250,46 @@ export default function KRADashboard() {
     { number: 9, key: 'kra9' },
   ];
 
+  const formattedDate = new Date(selectedYear, selectedMonth, 1).toLocaleString('en-IN', {
+    month: 'long',
+    year: 'numeric'
+  });
+
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">KRA Dashboard</h1>
-        <p className="text-gray-500 text-sm">
-          {new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
-          {' '}· Live from WhatsApp Bot
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">KRA Dashboard</h1>
+          <p className="text-gray-500 text-sm">
+            {formattedDate} · Live from WhatsApp Bot
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i} value={i}>
+                {new Date(2026, i, 1).toLocaleString('en-IN', { month: 'long' })}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {[2025, 2026, 2027].map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
