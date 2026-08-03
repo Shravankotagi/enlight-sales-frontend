@@ -81,6 +81,7 @@ export const pricingApi = {
   getHistory: () => API.get('/pricing/history'),
   getFloorMargins: () => API.get('/pricing/floor-margins'),
   createRateSheet: (items: any[]) => API.post('/pricing/rate-sheet', { items }),
+  updateRateSheet: (id: string, items: any[]) => API.put(`/pricing/rate-sheet/${id}`, { items }),
   lockRateSheet: (id: string) => API.post(`/pricing/rate-sheet/${id}/lock`),
   updateFloorMargin: (id: string, floor_pct: number) =>
     API.patch(`/pricing/floor-margins/${id}`, { floor_pct }),

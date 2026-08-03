@@ -22,6 +22,7 @@ function emptyRow(): RateRow {
 export default function PricingPage() {
   const [tab, setTab] = useState<'rate' | 'margins'>('rate');
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<RateRow[]>([...Array(5)].map(() => emptyRow()));
   const { employee } = useAuth();
   const isAdmin = employee?.role === 'admin';
@@ -62,6 +63,27 @@ export default function PricingPage() {
     onError: () => toast.error('Failed to create rate sheet'),
   });
 
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      const items = rows
+        .filter(r => r.sku_text.trim())
+        .map(r => ({
+          sku_text: r.sku_text,
+          category: r.category,
+          price_per_kg: r.price_per_kg ? parseFloat(r.price_per_kg) : null,
+          price_per_mt: r.price_per_mt ? parseFloat(r.price_per_mt) : null,
+        }));
+      return pricingApi.updateRateSheet(todaySheet.id, items);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pricing-today'] });
+      toast.success('Rate sheet updated and unlocked');
+      setCreating(false);
+      setEditing(false);
+    },
+    onError: () => toast.error('Failed to update rate sheet'),
+  });
+
   const lockMutation = useMutation({
     mutationFn: (id: string) => pricingApi.lockRateSheet(id),
     onSuccess: () => {
@@ -83,6 +105,28 @@ export default function PricingPage() {
 
   const updateRow = (i: number, field: keyof RateRow, value: string) => {
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
+  };
+
+  const handleStartEdit = () => {
+    if (todaySheet?.rate_sheet_items) {
+      setRows(
+        todaySheet.rate_sheet_items.map((item: any) => ({
+          sku_text: item.sku_text || '',
+          category: item.category || '',
+          price_per_kg: item.price_per_kg !== null ? String(item.price_per_kg) : '',
+          price_per_mt: item.price_per_mt !== null ? String(item.price_per_mt) : '',
+        }))
+      );
+    } else {
+      setRows([...Array(5)].map(() => emptyRow()));
+    }
+    setCreating(true);
+    setEditing(true);
+  };
+
+  const formatLockedBy = (lockedBy: string) => {
+    if (lockedBy === '919187305823') return 'Shravan';
+    return lockedBy;
   };
 
   return (
@@ -124,9 +168,19 @@ export default function PricingPage() {
                 {/* Locked/Unlocked status */}
                 <div className="flex items-center justify-between mb-4">
                   {todaySheet.locked_at ? (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm font-medium">
-                      <Lock size={16} />
-                      Locked at {new Date(todaySheet.locked_at).toLocaleTimeString('en-IN')} by {todaySheet.locked_by}
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm font-medium">
+                        <Lock size={16} />
+                        Locked at {new Date(todaySheet.locked_at).toLocaleTimeString('en-IN')} by {formatLockedBy(todaySheet.locked_by)}
+                      </div>
+                      {isAdmin && (
+                        <button
+                          onClick={handleStartEdit}
+                          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                        >
+                          Edit Rate Sheet
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center gap-3">
@@ -134,13 +188,21 @@ export default function PricingPage() {
                         ⚠ Not locked yet
                       </span>
                       {isAdmin && (
-                        <button
-                          onClick={() => lockMutation.mutate(todaySheet.id)}
-                          disabled={lockMutation.isPending}
-                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-                        >
-                          <Lock size={14} /> Lock Rate Sheet
-                        </button>
+                        <>
+                          <button
+                            onClick={() => lockMutation.mutate(todaySheet.id)}
+                            disabled={lockMutation.isPending}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          >
+                            <Lock size={14} /> Lock Rate Sheet
+                          </button>
+                          <button
+                            onClick={handleStartEdit}
+                            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                          >
+                            Edit Rate Sheet
+                          </button>
+                        </>
                       )}
                     </div>
                   )}
@@ -196,8 +258,10 @@ export default function PricingPage() {
               /* Create form */
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-semibold text-gray-800">New Rate Sheet — {new Date().toLocaleDateString('en-IN')}</h2>
-                  <button onClick={() => setCreating(false)} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+                  <h2 className="font-semibold text-gray-800">
+                    {editing ? 'Edit Rate Sheet' : 'New Rate Sheet'} — {new Date().toLocaleDateString('en-IN')}
+                  </h2>
+                  <button onClick={() => { setCreating(false); setEditing(false); }} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
                 </div>
                 <div className="border rounded-xl overflow-hidden mb-4">
                   <table className="w-full text-sm">
@@ -260,8 +324,14 @@ export default function PricingPage() {
                     <Plus size={14} /> Add Row
                   </button>
                   <button
-                    onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending}
+                    onClick={() => {
+                      if (editing) {
+                        updateMutation.mutate();
+                      } else {
+                        createMutation.mutate();
+                      }
+                    }}
+                    disabled={editing ? updateMutation.isPending : createMutation.isPending}
                     className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
                   >
                     <Save size={14} /> Save Rate Sheet
