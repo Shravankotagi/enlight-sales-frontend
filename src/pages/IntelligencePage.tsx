@@ -25,7 +25,7 @@ export default function IntelligencePage() {
   const [tab, setTab] = useState<Tab>('churn');
 
   useEffect(() => {
-    document.title = 'Intelligence — Enlight Sales OS';
+    document.title = 'Intelligence - Enlight Sales OS';
   }, []);
 
   const { data: churnData, isLoading: churnLoading } = useQuery({
@@ -85,7 +85,7 @@ export default function IntelligencePage() {
         ))}
       </div>
 
-      {/* TAB 1 — CHURN RADAR */}
+      {/* TAB 1 - CHURN RADAR */}
       {tab === 'churn' && (
         churnLoading ? (
           <div className="space-y-3">
@@ -101,7 +101,7 @@ export default function IntelligencePage() {
             {/* High Risk */}
             <div>
               <h3 className="text-sm font-semibold text-red-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500" /> High Risk — {highRisk.length} customers
+                <span className="w-2 h-2 rounded-full bg-red-500" /> High Risk - {highRisk.length} customers
               </h3>
               {highRisk.length === 0 ? (
                 <p className="text-gray-400 text-sm">No high risk customers 🎉</p>
@@ -124,7 +124,7 @@ export default function IntelligencePage() {
                             <span className="text-red-600 font-bold">{c.days_since_order}d</span>
                           </td>
                           <td className="px-4 py-3 text-gray-500 text-xs">
-                            {c.last_order_date ? new Date(c.last_order_date).toLocaleDateString('en-IN') : '—'}
+                            {c.last_order_date ? new Date(c.last_order_date).toLocaleDateString('en-IN') : '-'}
                           </td>
                           <td className="px-4 py-3">
                             <button className="text-xs px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium">
@@ -142,7 +142,7 @@ export default function IntelligencePage() {
             {/* At Risk */}
             <div>
               <h3 className="text-sm font-semibold text-yellow-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-yellow-500" /> At Risk — {medRisk.length} customers
+                <span className="w-2 h-2 rounded-full bg-yellow-500" /> At Risk - {medRisk.length} customers
               </h3>
               {medRisk.length === 0 ? (
                 <p className="text-gray-400 text-sm">No at-risk customers</p>
@@ -165,7 +165,7 @@ export default function IntelligencePage() {
                             <span className="text-yellow-600 font-bold">{c.days_since_order}d</span>
                           </td>
                           <td className="px-4 py-3 text-gray-500 text-xs">
-                            {c.last_order_date ? new Date(c.last_order_date).toLocaleDateString('en-IN') : '—'}
+                            {c.last_order_date ? new Date(c.last_order_date).toLocaleDateString('en-IN') : '-'}
                           </td>
                           <td className="px-4 py-3">
                             <button className="text-xs px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors font-medium">
@@ -183,7 +183,7 @@ export default function IntelligencePage() {
         )
       )}
 
-      {/* TAB 2 — REORDER QUEUE */}
+      {/* TAB 2 - REORDER QUEUE */}
       {tab === 'reorder' && (
         reorderLoading ? (
           <div className="animate-pulse space-y-3">
@@ -219,11 +219,11 @@ export default function IntelligencePage() {
                       <tr key={c.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium text-gray-800">{c.customer_name}</td>
                         <td className="px-4 py-3 text-gray-500 text-xs">
-                          {c.last_order_date ? new Date(c.last_order_date).toLocaleDateString('en-IN') : '—'}
+                          {c.last_order_date ? new Date(c.last_order_date).toLocaleDateString('en-IN') : '-'}
                         </td>
                         <td className="px-4 py-3 text-gray-600 text-xs">Every {c.avg_order_frequency_days}d</td>
                         <td className="px-4 py-3 text-gray-600 text-xs">
-                          {c.predicted_reorder_date ? new Date(c.predicted_reorder_date).toLocaleDateString('en-IN') : '—'}
+                          {c.predicted_reorder_date ? new Date(c.predicted_reorder_date).toLocaleDateString('en-IN') : '-'}
                         </td>
                         <td className="px-4 py-3 font-bold text-sm">
                           {c.is_overdue ? (
@@ -251,7 +251,7 @@ export default function IntelligencePage() {
         )
       )}
 
-      {/* TAB 3 — LOSS ANALYTICS */}
+      {/* TAB 3 - LOSS ANALYTICS */}
       {tab === 'loss' && (
         lossLoading ? (
           <div className="animate-pulse space-y-4">
@@ -326,9 +326,9 @@ export default function IntelligencePage() {
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium text-gray-800">{d.customer_name}</td>
                         <td className="px-4 py-3">
-                          <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full">{d.lost_reason || '—'}</span>
+                          <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full">{d.lost_reason || '-'}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{d.total_amount ? `₹${Number(d.total_amount).toLocaleString('en-IN')}` : '—'}</td>
+                        <td className="px-4 py-3 text-gray-700">{d.total_amount ? `₹${Number(d.total_amount).toLocaleString('en-IN')}` : '-'}</td>
                         <td className="px-4 py-3 text-gray-400 text-xs">
                           {new Date(d.created_at).toLocaleDateString('en-IN')}
                         </td>
@@ -342,7 +342,7 @@ export default function IntelligencePage() {
         )
       )}
 
-      {/* TAB 4 — KRA LOGS */}
+      {/* TAB 4 - KRA LOGS */}
       {tab === 'logs' && (
         logsLoading ? (
           <div className="animate-pulse space-y-3">
@@ -382,7 +382,7 @@ export default function IntelligencePage() {
                         <td className="px-4 py-3 text-gray-600 capitalize text-xs">
                           {log.kra_type?.replace(/_/g, ' ')}
                         </td>
-                        <td className="px-4 py-3 text-gray-800 font-medium text-xs">{log.customer_name || '—'}</td>
+                        <td className="px-4 py-3 text-gray-800 font-medium text-xs">{log.customer_name || '-'}</td>
                         <td className="px-4 py-3 text-gray-600 text-xs max-w-xs truncate">{log.description}</td>
                         <td className="px-4 py-3 text-gray-400 text-xs">
                           {new Date(log.logged_at || log.created_at).toLocaleDateString('en-IN')}

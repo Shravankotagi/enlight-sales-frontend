@@ -212,14 +212,14 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                               <td className="px-3 py-2 text-gray-800 text-xs font-medium max-w-[100px] truncate">
                                 {item.sku_text}
                               </td>
-                              <td className="px-3 py-2 text-gray-600 text-xs">{item.grade || '—'}</td>
+                              <td className="px-3 py-2 text-gray-600 text-xs">{item.grade || '-'}</td>
                               <td className="px-3 py-2 text-gray-800 text-xs font-semibold">{item.quantity}</td>
                               <td className="px-3 py-2 text-gray-600 text-xs">{item.unit}</td>
                               <td className="px-3 py-2 text-gray-800 text-xs">
-                                {rate > 0 ? `₹${Number(rate).toLocaleString('en-IN')}` : '—'}
+                                {rate > 0 ? `₹${Number(rate).toLocaleString('en-IN')}` : '-'}
                               </td>
                               <td className="px-3 py-2 text-gray-800 text-xs font-semibold">
-                                {amount > 0 ? `₹${Number(amount).toLocaleString('en-IN')}` : '—'}
+                                {amount > 0 ? `₹${Number(amount).toLocaleString('en-IN')}` : '-'}
                               </td>
                             </tr>
                           );

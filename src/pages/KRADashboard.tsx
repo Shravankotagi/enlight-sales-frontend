@@ -110,7 +110,7 @@ function KRACard({ number, label, data }: {
           <div className="flex justify-between">
             <span className="text-gray-500">Collected</span>
             <span className="font-semibold text-green-600">
-              {data.collected_count}
+              {data.collected_amount ? `₹${Number(data.collected_amount).toLocaleString('en-IN')}` : data.collected_count}
             </span>
           </div>
           <div className="flex justify-between">

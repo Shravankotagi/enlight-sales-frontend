@@ -45,7 +45,7 @@ export default function HomePage() {
   const years = [2025, 2026, 2027];
 
   useEffect(() => {
-    document.title = 'Home — Enlight Sales OS';
+    document.title = 'Home - Enlight Sales OS';
   }, []);
 
   const { data, isLoading } = useQuery({

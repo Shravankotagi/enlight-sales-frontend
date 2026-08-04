@@ -23,7 +23,7 @@ export default function AdminDashboard() {
   const toDate = new Date(Date.UTC(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)).toISOString();
 
   useEffect(() => {
-    document.title = 'Admin Overview — Enlight Sales OS';
+    document.title = 'Admin Overview - Enlight Sales OS';
   }, []);
 
   // Fetch employees list
@@ -218,7 +218,7 @@ export default function AdminDashboard() {
                   <div key={deal.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div>
                       <p className="text-sm font-semibold text-gray-800">{deal.customer_name || 'Unknown Customer'}</p>
-                      <p className="text-xs text-gray-500">PO Number: {deal.po_number || '—'}</p>
+                      <p className="text-xs text-gray-500">PO Number: {deal.po_number || '-'}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-gray-900">₹{Number(deal.total_amount || 0).toLocaleString('en-IN')}</p>
@@ -257,10 +257,10 @@ export default function AdminDashboard() {
                 {(sku?.skus || []).slice(0, 5).map((item: any, i: number) => (
                   <tr key={i} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-800 max-w-xs truncate">{item.sku_text}</td>
-                    <td className="px-4 py-3 text-gray-800">{item.total_quantity || '—'}</td>
+                    <td className="px-4 py-3 text-gray-800">{item.total_quantity || '-'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{item.unit || 'MT'}</td>
                     <td className="px-4 py-3 text-gray-800 font-semibold">
-                      {item.total_value ? `₹${Number(item.total_value).toLocaleString('en-IN')}` : '—'}
+                      {item.total_value ? `₹${Number(item.total_value).toLocaleString('en-IN')}` : '-'}
                     </td>
                   </tr>
                 ))}

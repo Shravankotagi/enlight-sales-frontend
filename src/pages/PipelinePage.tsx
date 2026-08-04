@@ -20,7 +20,7 @@ const LOST_REASONS = [
 ];
 
 function formatINR(amount: number) {
-  if (!amount) return '—';
+  if (!amount) return '-';
   return '₹' + Number(amount).toLocaleString('en-IN');
 }
 
@@ -54,7 +54,7 @@ function DealCard({ deal, onStageChange, onSelect }: {
         <div className="mb-2">
           {deal.deal_items.slice(0, 2).map((item: any, i: number) => (
             <p key={i} className="text-xs text-gray-600">
-              • {item.sku_text} — {item.quantity} {item.unit}
+              • {item.sku_text} - {item.quantity} {item.unit}
             </p>
           ))}
           {deal.deal_items.length > 2 && (
@@ -110,7 +110,7 @@ export default function PipelinePage() {
   const toDate = new Date(Date.UTC(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)).toISOString();
 
   useEffect(() => {
-    document.title = 'Pipeline — Enlight Sales OS';
+    document.title = 'Pipeline - Enlight Sales OS';
   }, []);
 
   const { data, isLoading, error } = useQuery({

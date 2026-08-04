@@ -29,7 +29,7 @@ export default function PricingPage() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    document.title = 'Pricing — Enlight Sales OS';
+    document.title = 'Pricing - Enlight Sales OS';
   }, []);
 
   const { data: todaySheet, isLoading: sheetLoading } = useQuery({
@@ -153,7 +153,7 @@ export default function PricingPage() {
         ))}
       </div>
 
-      {/* TAB 1 — RATE SHEET */}
+      {/* TAB 1 - RATE SHEET */}
       {tab === 'rate' && (
         sheetLoading ? (
           <div className="animate-pulse space-y-3">
@@ -226,13 +226,13 @@ export default function PricingPage() {
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium text-gray-800">{item.sku_text}</td>
                           <td className="px-4 py-3 text-gray-600">
-                            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">{item.category || '—'}</span>
+                            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">{item.category || '-'}</span>
                           </td>
                           <td className="px-4 py-3 text-gray-800 font-medium">
-                            {item.price_per_kg ? `₹${item.price_per_kg}` : '—'}
+                            {item.price_per_kg ? `₹${item.price_per_kg}` : '-'}
                           </td>
                           <td className="px-4 py-3 text-gray-800 font-medium">
-                            {item.price_per_mt ? `₹${Number(item.price_per_mt).toLocaleString('en-IN')}` : '—'}
+                            {item.price_per_mt ? `₹${Number(item.price_per_mt).toLocaleString('en-IN')}` : '-'}
                           </td>
                         </tr>
                       ))}
@@ -259,7 +259,7 @@ export default function PricingPage() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-semibold text-gray-800">
-                    {editing ? 'Edit Rate Sheet' : 'New Rate Sheet'} — {new Date().toLocaleDateString('en-IN')}
+                    {editing ? 'Edit Rate Sheet' : 'New Rate Sheet'} - {new Date().toLocaleDateString('en-IN')}
                   </h2>
                   <button onClick={() => { setCreating(false); setEditing(false); }} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
                 </div>
@@ -343,7 +343,7 @@ export default function PricingPage() {
         )
       )}
 
-      {/* TAB 2 — FLOOR MARGINS */}
+      {/* TAB 2 - FLOOR MARGINS */}
       {tab === 'margins' && (
         !isAdmin ? (
           <div className="text-center py-16 text-gray-400">
@@ -415,7 +415,7 @@ function MarginRow({ margin, onUpdate }: { margin: any; onUpdate: (v: { id: stri
         )}
       </td>
       <td className="px-4 py-3 text-gray-500 text-xs">
-        {margin.effective_from ? new Date(margin.effective_from).toLocaleDateString('en-IN') : '—'}
+        {margin.effective_from ? new Date(margin.effective_from).toLocaleDateString('en-IN') : '-'}
       </td>
       <td className="px-4 py-3 text-gray-500 text-xs">{margin.set_by}</td>
     </tr>

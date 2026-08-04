@@ -42,7 +42,7 @@ function BillingChart({ customer }: { customer: any }) {
 
   return (
     <div className="bg-white rounded-xl border p-4 mb-4">
-      <h3 className="font-semibold text-gray-800 mb-4 text-sm">Billing Activity — Last 6 Months</h3>
+      <h3 className="font-semibold text-gray-800 mb-4 text-sm">Billing Activity - Last 6 Months</h3>
       <div className="space-y-3">
         {dealsByMonth.map(month => (
           <div key={month.key} className="flex items-center gap-3">
@@ -84,7 +84,7 @@ function CustomerDetail({ id, onBack }: { id: string; onBack: () => void }) {
   });
 
   useEffect(() => {
-    document.title = 'Customers — Enlight Sales OS';
+    document.title = 'Customers - Enlight Sales OS';
   }, []);
 
   if (isLoading) return (
@@ -139,12 +139,12 @@ function CustomerDetail({ id, onBack }: { id: string; onBack: () => void }) {
           <div className="space-y-3 text-sm">
             <div>
               <p className="text-gray-400 text-xs">Phone</p>
-              <p className="font-medium">{customer.customer_phone || '—'}</p>
+              <p className="font-medium">{customer.customer_phone || '-'}</p>
             </div>
             <div>
               <p className="text-gray-400 text-xs">Last Order</p>
               <p className="font-medium">
-                {customer.last_order_date ? new Date(customer.last_order_date).toLocaleDateString('en-IN') : '—'}
+                {customer.last_order_date ? new Date(customer.last_order_date).toLocaleDateString('en-IN') : '-'}
               </p>
             </div>
             <div>
@@ -173,7 +173,7 @@ function CustomerDetail({ id, onBack }: { id: string; onBack: () => void }) {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-gray-800">
-                      {deal.total_amount ? '₹' + Number(deal.total_amount).toLocaleString('en-IN') : '—'}
+                      {deal.total_amount ? '₹' + Number(deal.total_amount).toLocaleString('en-IN') : '-'}
                     </p>
                     <span className={`text-xs px-2 py-0.5 rounded-full
                       ${deal.stage === 'won' ? 'bg-green-100 text-green-700'
@@ -239,7 +239,7 @@ export default function CustomersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = 'Customers — Enlight Sales OS';
+    document.title = 'Customers - Enlight Sales OS';
   }, []);
 
   const { data, isLoading } = useQuery({
@@ -314,10 +314,10 @@ export default function CustomersPage() {
                     <p className="text-xs text-gray-500">{customer.customer_phone}</p>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {customer.last_order_date ? new Date(customer.last_order_date).toLocaleDateString('en-IN') : '—'}
+                    {customer.last_order_date ? new Date(customer.last_order_date).toLocaleDateString('en-IN') : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {customer.days_since_order != null ? `${customer.days_since_order}d ago` : '—'}
+                    {customer.days_since_order != null ? `${customer.days_since_order}d ago` : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">Every {customer.avg_order_frequency_days || 30}d</td>
                   <td className="px-4 py-3">

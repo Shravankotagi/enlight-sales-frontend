@@ -380,7 +380,7 @@ export default function AdminSelectionPage() {
                       focus:outline-none focus:border-blue-500 font-mono"
                   />
                   <p className="text-slate-500 text-xs mt-1">
-                    Auto-generated — edit if needed
+                    Auto-generated - edit if needed
                   </p>
                 </div>
 

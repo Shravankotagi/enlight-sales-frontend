@@ -127,7 +127,7 @@ export default function InquiriesPage() {
                           ? 'text-green-600' : 'text-orange-500'}`}>
                         {Math.round(inq.overall_confidence * 100)}%
                       </span>
-                    ) : '—'}
+                    ) : '-'}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
                     {new Date(inq.created_at).toLocaleDateString('en-IN')}

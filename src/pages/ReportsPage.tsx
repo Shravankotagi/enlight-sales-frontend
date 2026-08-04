@@ -10,7 +10,7 @@ export default function ReportsPage() {
   const [tab, setTab] = useState<Tab>('monthly');
 
   useEffect(() => {
-    document.title = 'Reports — Enlight Sales OS';
+    document.title = 'Reports - Enlight Sales OS';
   }, []);
 
   const { data: monthly, isLoading: monthlyLoading } = useQuery({
@@ -54,7 +54,7 @@ export default function ReportsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
         <p className="text-gray-500 text-sm">
-          {monthly?.period?.month} {monthly?.period?.year} — Sales performance overview
+          {monthly?.period?.month} {monthly?.period?.year} - Sales performance overview
         </p>
       </div>
 
@@ -81,7 +81,7 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
-          {/* TAB 1 — MONTHLY */}
+          {/* TAB 1 - MONTHLY */}
           {tab === 'monthly' && monthly && (
             <div className="space-y-6">
               <div className="grid grid-cols-4 gap-4">
@@ -134,7 +134,7 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* TAB 2 — FUNNEL */}
+          {/* TAB 2 - FUNNEL */}
           {tab === 'funnel' && funnel && (
             <div className="bg-white rounded-xl border p-6">
               <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -162,7 +162,7 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* TAB 3 — SALESPERSON */}
+          {/* TAB 3 - SALESPERSON */}
           {tab === 'salesperson' && salesperson && (
             <div className="border rounded-xl overflow-hidden bg-white">
               <table className="w-full text-sm">
@@ -197,7 +197,7 @@ export default function ReportsPage() {
                         <td className="px-4 py-3 text-gray-700">{sp.visits?.total || 0}</td>
                         <td className="px-4 py-3 text-gray-700">{sp.new_customers?.count || 0}</td>
                         <td className="px-4 py-3 text-gray-700">{sp.payments?.collected || 0}</td>
-                        <td className="px-4 py-3 text-gray-700">{compTotal > 0 ? `${compRate}% (${compResolved}/${compTotal})` : '—'}</td>
+                        <td className="px-4 py-3 text-gray-700">{compTotal > 0 ? `${compRate}% (${compResolved}/${compTotal})` : '-'}</td>
                       </tr>
                     );
                   })}
@@ -209,7 +209,7 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* TAB 4 — SKU BREAKDOWN */}
+          {/* TAB 4 - SKU BREAKDOWN */}
           {tab === 'sku' && sku && (
             <div className="border rounded-xl overflow-hidden bg-white">
               <table className="w-full text-sm">
@@ -224,13 +224,13 @@ export default function ReportsPage() {
                   {((sku?.skus || [])).map((item: any, i: number) => (
                     <tr key={i} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-800">{item.sku_text}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{item.grade || '—'}</td>
-                      <td className="px-4 py-3 text-gray-800 font-semibold">{item.total_quantity || item.quantity || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{item.grade || '-'}</td>
+                      <td className="px-4 py-3 text-gray-800 font-semibold">{item.total_quantity || item.quantity || '-'}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{item.unit || 'MT'}</td>
                       <td className="px-4 py-3 text-gray-800 font-medium">
-                        {item.total_value ? `₹${Number(item.total_value).toLocaleString('en-IN')}` : '—'}
+                        {item.total_value ? `₹${Number(item.total_value).toLocaleString('en-IN')}` : '-'}
                       </td>
-                      <td className="px-4 py-3 text-gray-500">{item.deal_count || item.count || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{item.deal_count || item.count || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
