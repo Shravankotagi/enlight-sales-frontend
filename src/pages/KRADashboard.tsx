@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { kraApi } from '../lib/api';
-import { Loader2, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, Clock, ExternalLink, X } from 'lucide-react';
 
-function KRACard({ number, label, data }: { 
-  number: number; label: string; data: any 
+function KRACard({ number, label, data, onClick }: { 
+  number: number; label: string; data: any; onClick?: () => void;
 }) {
   const status = data.status || 'default';
   const configMap: Record<string, { class: string; icon: React.ReactNode | null; badge: string; }> = {
@@ -191,7 +191,10 @@ function KRACard({ number, label, data }: {
   };
 
   return (
-    <div className={`rounded-xl border-2 p-4 ${statusConfig.class}`}>
+    <div
+      onClick={onClick}
+      className={`rounded-xl border-2 p-4 cursor-pointer hover:shadow-lg hover:border-blue-400 transition-all ${statusConfig.class}`}
+    >
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
@@ -203,13 +206,18 @@ function KRACard({ number, label, data }: {
         </div>
         <div className="flex items-center gap-1">
           {statusConfig.icon}
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-            ${statusConfig.badge}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusConfig.badge}`}>
             {data.status?.replace('_', ' ')}
           </span>
         </div>
       </div>
+
       {renderMetrics()}
+
+      <div className="mt-3 pt-2 border-t border-gray-200/80 flex items-center justify-between text-xs text-blue-600 font-semibold group">
+        <span>View Detailed Report Sheet</span>
+        <ExternalLink size={13} className="group-hover:translate-x-0.5 transition-transform" />
+      </div>
     </div>
   );
 }
@@ -218,7 +226,7 @@ function KRASheetView({ sheet }: { sheet: any }) {
   if (!sheet) return null;
 
   return (
-    <div className="bg-white border-2 border-gray-300 rounded-xl overflow-hidden shadow-sm font-sans mt-8">
+    <div className="bg-white border-2 border-gray-300 rounded-xl overflow-hidden shadow-sm font-sans">
       {/* Outer Title Banner */}
       <div className="bg-blue-950 text-white font-bold py-2.5 px-4 text-center text-lg uppercase tracking-wide border-b border-blue-900">
         {sheet.title}
@@ -290,11 +298,40 @@ function KRASheetView({ sheet }: { sheet: any }) {
   );
 }
 
+function KRASheetModal({ sheet, onClose }: { sheet: any; onClose: () => void }) {
+  if (!sheet) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto border border-gray-200">
+        {/* Modal Header */}
+        <div className="sticky top-0 bg-blue-950 text-white px-6 py-4 flex items-center justify-between z-10 border-b border-blue-900">
+          <div>
+            <h2 className="text-lg font-bold uppercase tracking-wide">{sheet.title}</h2>
+            <p className="text-xs text-blue-200 mt-0.5">Detailed KRA Report Sheet</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-full hover:bg-blue-900 text-blue-200 hover:text-white transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6">
+          <KRASheetView sheet={sheet} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function KRADashboard() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [selectedSheetTab, setSelectedSheetTab] = useState<number>(1);
+  const [activeKraModal, setActiveKraModal] = useState<number | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['kra-dashboard', selectedMonth, selectedYear],
@@ -338,8 +375,8 @@ export default function KRADashboard() {
     year: 'numeric'
   });
 
-  const currentSheetKey = `kra${selectedSheetTab}`;
-  const currentSheet = sheetsData ? sheetsData[currentSheetKey] : null;
+  const modalSheetKey = activeKraModal ? `kra${activeKraModal}` : null;
+  const modalSheet = (sheetsData && modalSheetKey) ? sheetsData[modalSheetKey] : null;
 
   return (
     <div>
@@ -347,7 +384,7 @@ export default function KRADashboard() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">KRA Dashboard</h1>
           <p className="text-gray-500 text-sm">
-            {formattedDate} · Live from WhatsApp Bot
+            {formattedDate} · Live from WhatsApp Bot (Click any card to view full KRA Sheet Report)
           </p>
         </div>
 
@@ -385,43 +422,18 @@ export default function KRADashboard() {
             number={number}
             label={data[key]?.label || `KRA ${number}`}
             data={data[key] || {}}
+            onClick={() => setActiveKraModal(number)}
           />
         ))}
       </div>
 
-      {/* Detailed KRA Sheets Section (Matching Excel Templates) */}
-      <div className="mt-10">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-900">Detailed KRA Breakdown Sheets</h2>
-          <span className="text-xs text-gray-500 font-medium">Select a tab to view full breakdown</span>
-        </div>
-
-        {/* Tab Buttons for KRA 1 to KRA 5 */}
-        <div className="flex gap-2 border-b border-gray-200 overflow-x-auto pb-1">
-          {[
-            { num: 1, label: 'KRA 1: Sales Achievement' },
-            { num: 2, label: 'KRA 2: New Customer' },
-            { num: 3, label: 'KRA 3: Retention' },
-            { num: 4, label: 'KRA 4: Conversion' },
-            { num: 5, label: 'KRA 5: Payment Collection' },
-          ].map((tab) => (
-            <button
-              key={tab.num}
-              onClick={() => setSelectedSheetTab(tab.num)}
-              className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors border-t border-l border-r ${
-                selectedSheetTab === tab.num
-                  ? 'bg-blue-950 text-white border-blue-950'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Selected Sheet Rendered in exact Excel Template Layout */}
-        {currentSheet && <KRASheetView sheet={currentSheet} />}
-      </div>
+      {/* Modal Popup when a KRA Card is clicked */}
+      {modalSheet && (
+        <KRASheetModal
+          sheet={modalSheet}
+          onClose={() => setActiveKraModal(null)}
+        />
+      )}
     </div>
   );
 }
