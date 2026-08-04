@@ -71,9 +71,13 @@ export default function AdminSelectionPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      return data.data?.next_id || data.data || 'EMP001';
+      return (
+        data.data?.next_employee_id ||
+        data.data?.next_id ||
+        (typeof data.data === 'string' ? data.data : 'EMP005')
+      );
     } catch {
-      return 'EMP001';
+      return 'EMP005';
     }
   };
 
@@ -81,12 +85,13 @@ export default function AdminSelectionPage() {
     setFormError('');
     setFormSuccess('');
     const nextId = await fetchNextId();
+    const cleanId = typeof nextId === 'string' ? nextId : nextId?.next_employee_id || 'EMP005';
     setForm({
       name: '',
       phone: '91',
       email: '',
       role: 'salesperson',
-      employee_id: nextId,
+      employee_id: cleanId,
     });
     setShowModal(true);
   };
