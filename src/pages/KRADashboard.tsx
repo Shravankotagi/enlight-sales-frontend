@@ -193,28 +193,30 @@ function KRACard({ number, label, data, onClick }: {
   return (
     <div
       onClick={onClick}
-      className={`rounded-xl border-2 p-4 cursor-pointer hover:shadow-lg hover:border-blue-400 transition-all ${statusConfig.class}`}
+      className={`rounded-xl border-2 p-4 cursor-pointer hover:shadow-lg hover:border-blue-400 transition-all flex flex-col justify-between h-full min-h-[210px] ${statusConfig.class}`}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
-            KRA {number}
-          </p>
-          <h3 className="text-sm font-semibold text-gray-800 mt-0.5">
-            {label}
-          </h3>
+      <div>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
+              KRA {number}
+            </p>
+            <h3 className="text-sm font-semibold text-gray-800 mt-0.5">
+              {label}
+            </h3>
+          </div>
+          <div className="flex items-center gap-1">
+            {statusConfig.icon}
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusConfig.badge}`}>
+              {data.status?.replace('_', ' ')}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          {statusConfig.icon}
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusConfig.badge}`}>
-            {data.status?.replace('_', ' ')}
-          </span>
-        </div>
+
+        {renderMetrics()}
       </div>
 
-      {renderMetrics()}
-
-      <div className="mt-3 pt-2 border-t border-gray-200/80 flex items-center justify-between text-xs text-blue-600 font-semibold group">
+      <div className="mt-4 pt-2.5 border-t border-gray-200/80 flex items-center justify-between text-xs text-blue-600 font-semibold group">
         <span>View Detailed Report Sheet</span>
         <ExternalLink size={13} className="group-hover:translate-x-0.5 transition-transform" />
       </div>
@@ -298,17 +300,15 @@ function KRASheetView({ sheet }: { sheet: any }) {
   );
 }
 
-function KRASheetModal({ sheet, onClose }: { sheet: any; onClose: () => void }) {
-  if (!sheet) return null;
-
+function KRASheetModal({ kraNumber, sheet, isLoading, onClose }: { kraNumber: number; sheet: any; isLoading: boolean; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto border border-gray-200">
         {/* Modal Header */}
         <div className="sticky top-0 bg-blue-950 text-white px-6 py-4 flex items-center justify-between z-10 border-b border-blue-900">
           <div>
-            <h2 className="text-lg font-bold uppercase tracking-wide">{sheet.title}</h2>
-            <p className="text-xs text-blue-200 mt-0.5">Detailed KRA Report Sheet</p>
+            <h2 className="text-lg font-bold uppercase tracking-wide">{sheet?.title || `KRA ${kraNumber} Report Sheet`}</h2>
+            <p className="text-xs text-blue-200 mt-0.5">Detailed KRA Excel Breakdown Sheet</p>
           </div>
           <button
             onClick={onClose}
@@ -320,7 +320,18 @@ function KRASheetModal({ sheet, onClose }: { sheet: any; onClose: () => void }) 
 
         {/* Modal Body */}
         <div className="p-6">
-          <KRASheetView sheet={sheet} />
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="animate-spin text-blue-600" size={36} />
+              <p className="text-sm font-medium text-gray-500">Loading KRA Sheet Report...</p>
+            </div>
+          ) : sheet ? (
+            <KRASheetView sheet={sheet} />
+          ) : (
+            <div className="text-center py-12 text-gray-500 font-medium">
+              No detailed breakdown sheet found for KRA {kraNumber}.
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -339,7 +350,7 @@ export default function KRADashboard() {
     refetchInterval: 60000,
   });
 
-  const { data: sheetsData } = useQuery({
+  const { data: sheetsData, isLoading: isSheetsLoading } = useQuery({
     queryKey: ['kra-sheets', selectedMonth, selectedYear],
     queryFn: () => kraApi.getSheets({ month: selectedMonth, year: selectedYear }).then(r => r.data),
     refetchInterval: 60000,
@@ -415,7 +426,7 @@ export default function KRADashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 items-stretch">
         {kras.map(({ number, key }) => (
           <KRACard
             key={number}
@@ -428,9 +439,11 @@ export default function KRADashboard() {
       </div>
 
       {/* Modal Popup when a KRA Card is clicked */}
-      {modalSheet && (
+      {activeKraModal !== null && (
         <KRASheetModal
+          kraNumber={activeKraModal}
           sheet={modalSheet}
+          isLoading={isSheetsLoading}
           onClose={() => setActiveKraModal(null)}
         />
       )}
