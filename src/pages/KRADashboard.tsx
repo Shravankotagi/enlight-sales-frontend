@@ -352,7 +352,7 @@ export default function KRADashboard() {
 
   const { data: sheetsData, isLoading: isSheetsLoading } = useQuery({
     queryKey: ['kra-sheets', selectedMonth, selectedYear],
-    queryFn: () => kraApi.getSheets({ month: selectedMonth, year: selectedYear }).then(r => r.data),
+    queryFn: () => kraApi.getSheets({ month: selectedMonth, year: selectedYear }).then(r => r.data.data || r.data),
     refetchInterval: 60000,
   });
 
@@ -387,7 +387,9 @@ export default function KRADashboard() {
   });
 
   const modalSheetKey = activeKraModal ? `kra${activeKraModal}` : null;
-  const modalSheet = (sheetsData && modalSheetKey) ? sheetsData[modalSheetKey] : null;
+  const modalSheet = (sheetsData && modalSheetKey)
+    ? (sheetsData[modalSheetKey] || sheetsData.data?.[modalSheetKey])
+    : null;
 
   return (
     <div>
