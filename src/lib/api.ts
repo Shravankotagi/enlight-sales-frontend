@@ -54,6 +54,7 @@ export const customersApi = {
 
 export const kraApi = {
   getDashboard: (params?: { month?: number; year?: number }) => API.get('/kra/dashboard', { params }),
+  getSheets: (params?: { month?: number; year?: number }) => API.get('/kra/sheets', { params }),
   getLogs: () => API.get('/kra/logs'),
   getActionQueue: (params?: { month?: number; year?: number }) => API.get('/kra/action-queue', { params }),
 };

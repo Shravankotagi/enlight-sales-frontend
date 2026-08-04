@@ -214,14 +214,97 @@ function KRACard({ number, label, data }: {
   );
 }
 
+function KRASheetView({ sheet }: { sheet: any }) {
+  if (!sheet) return null;
+
+  return (
+    <div className="bg-white border-2 border-gray-300 rounded-xl overflow-hidden shadow-sm font-sans mt-8">
+      {/* Outer Title Banner */}
+      <div className="bg-blue-950 text-white font-bold py-2.5 px-4 text-center text-lg uppercase tracking-wide border-b border-blue-900">
+        {sheet.title}
+      </div>
+
+      {/* Top Table Header */}
+      <div className="grid grid-cols-4 bg-blue-900 text-white font-semibold text-xs text-center border-b divide-x divide-blue-800 uppercase tracking-wider">
+        <div className="py-2 px-3">Sr. No.</div>
+        <div className="py-2 px-3">KRA (Key Result Area)</div>
+        <div className="py-2 px-3">Target</div>
+        <div className="py-2 px-3">Achieved</div>
+      </div>
+
+      {/* Top Table Content */}
+      <div className="grid grid-cols-4 bg-amber-50 text-gray-900 text-sm font-medium text-center border-b divide-x divide-amber-200">
+        <div className="py-2.5 px-3 font-semibold">{sheet.number}</div>
+        <div className="py-2.5 px-3 font-bold text-gray-800">{sheet.title?.split(':')[1]?.trim() || sheet.title}</div>
+        <div className="py-2.5 px-3 text-gray-700">{sheet.target}</div>
+        <div className="py-2.5 px-3 font-extrabold text-blue-700">{sheet.achieved}</div>
+      </div>
+
+      {/* Explanation Banner */}
+      <div className="bg-blue-950 text-white font-bold py-1.5 px-4 text-center text-xs uppercase tracking-wide border-b border-blue-900">
+        What this KRA means
+      </div>
+      <div className="p-3.5 bg-green-50/70 text-gray-800 text-xs text-left italic border-b leading-relaxed border-green-200">
+        {sheet.meaning}
+      </div>
+
+      {/* Sales Person Explanation Header */}
+      <div className="bg-blue-950 text-white font-bold py-1.5 px-4 text-center text-xs uppercase tracking-wide border-b border-blue-900">
+        Sales Person Explanation
+      </div>
+
+      {/* Detailed Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs text-left border-collapse">
+          <thead className="bg-blue-900 text-white font-semibold uppercase tracking-wider border-b border-blue-800">
+            <tr>
+              {sheet.headers?.map((header: string, idx: number) => (
+                <th key={idx} className="py-2.5 px-3 border-r border-blue-800 last:border-r-0 whitespace-nowrap">
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {sheet.rows?.length > 0 ? (
+              sheet.rows.map((row: any, rIdx: number) => (
+                <tr key={rIdx} className="hover:bg-blue-50/40 transition-colors">
+                  {Object.values(row).map((val: any, cIdx: number) => (
+                    <td key={cIdx} className="py-2.5 px-3 border-r last:border-r-0 text-gray-800 font-medium whitespace-nowrap">
+                      {val || '-'}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={sheet.headers?.length || 1} className="py-8 text-center text-gray-400 italic font-normal">
+                  No breakdown records found for this KRA in the selected month
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function KRADashboard() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedSheetTab, setSelectedSheetTab] = useState<number>(1);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['kra-dashboard', selectedMonth, selectedYear],
     queryFn: () => kraApi.getDashboard({ month: selectedMonth, year: selectedYear }).then(r => r.data.data),
+    refetchInterval: 60000,
+  });
+
+  const { data: sheetsData } = useQuery({
+    queryKey: ['kra-sheets', selectedMonth, selectedYear],
+    queryFn: () => kraApi.getSheets({ month: selectedMonth, year: selectedYear }).then(r => r.data),
     refetchInterval: 60000,
   });
 
@@ -254,6 +337,9 @@ export default function KRADashboard() {
     month: 'long',
     year: 'numeric'
   });
+
+  const currentSheetKey = `kra${selectedSheetTab}`;
+  const currentSheet = sheetsData ? sheetsData[currentSheetKey] : null;
 
   return (
     <div>
@@ -301,6 +387,40 @@ export default function KRADashboard() {
             data={data[key] || {}}
           />
         ))}
+      </div>
+
+      {/* Detailed KRA Sheets Section (Matching Excel Templates) */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Detailed KRA Breakdown Sheets</h2>
+          <span className="text-xs text-gray-500 font-medium">Select a tab to view full breakdown</span>
+        </div>
+
+        {/* Tab Buttons for KRA 1 to KRA 5 */}
+        <div className="flex gap-2 border-b border-gray-200 overflow-x-auto pb-1">
+          {[
+            { num: 1, label: 'KRA 1: Sales Achievement' },
+            { num: 2, label: 'KRA 2: New Customer' },
+            { num: 3, label: 'KRA 3: Retention' },
+            { num: 4, label: 'KRA 4: Conversion' },
+            { num: 5, label: 'KRA 5: Payment Collection' },
+          ].map((tab) => (
+            <button
+              key={tab.num}
+              onClick={() => setSelectedSheetTab(tab.num)}
+              className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors border-t border-l border-r ${
+                selectedSheetTab === tab.num
+                  ? 'bg-blue-950 text-white border-blue-950'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Selected Sheet Rendered in exact Excel Template Layout */}
+        {currentSheet && <KRASheetView sheet={currentSheet} />}
       </div>
     </div>
   );
