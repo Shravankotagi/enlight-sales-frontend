@@ -141,23 +141,41 @@ export default function ReportsPage() {
                 <TrendingUp size={16} className="text-green-600" /> Sales Funnel
               </h3>
               <div className="space-y-3">
-                {(funnel?.funnel || []).map((stage: any) => (
-                  <div key={stage.stage} className="flex items-center gap-4">
-                    <span className="text-sm text-gray-600 w-28 capitalize">{stage.stage.replace('_', ' ')}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
-                      <div className="bg-gradient-to-r from-blue-400 to-blue-600 h-full rounded-full flex items-center pl-3 transition-all"
-                        style={{ width: `${funnel.funnel[0]?.count > 0 ? Math.max(6, (stage.count / funnel.funnel[0].count) * 100) : 0}%` }}>
-                        <span className="text-xs text-white font-bold">{stage.count}</span>
+                {(() => {
+                  const maxCount = funnel.max_count || Math.max(...(funnel.funnel || []).map((f: any) => f.count), 1);
+                  return (funnel?.funnel || []).map((stage: any) => {
+                    const pct = maxCount > 0 && stage.count > 0
+                      ? Math.max(10, Math.round((stage.count / maxCount) * 100))
+                      : 0;
+                    return (
+                      <div key={stage.stage} className="flex items-center gap-4">
+                        <span className="text-sm font-medium text-gray-600 w-28 capitalize">
+                          {stage.stage.replace('_', ' ')}
+                        </span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
+                          {stage.count > 0 ? (
+                            <div
+                              className="bg-gradient-to-r from-blue-500 to-blue-700 h-full rounded-full flex items-center pl-3 transition-all"
+                              style={{ width: `${pct}%` }}
+                            >
+                              <span className="text-xs text-white font-bold">{stage.count}</span>
+                            </div>
+                          ) : (
+                            <div className="h-full flex items-center pl-3 text-xs text-gray-400 font-medium">
+                              0
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-xs font-semibold text-gray-500 w-16 text-right">
+                          {stage.count > 0 ? `${stage.count} deal${stage.count > 1 ? 's' : ''}` : '-'}
+                        </span>
                       </div>
-                    </div>
-                    {stage.conversion_rate != null && (
-                      <span className="text-xs text-gray-400 w-16 text-right">{stage.conversion_rate}%</span>
-                    )}
-                  </div>
-                ))}
+                    );
+                  });
+                })()}
               </div>
-              <p className="text-sm text-gray-500 mt-4">
-                Overall win rate: <span className="font-bold text-gray-800">{funnel?.overall_win_rate || 0}%</span>
+              <p className="text-sm text-gray-500 mt-5 pt-3 border-t">
+                Overall win rate: <span className="font-bold text-green-600 text-base">{funnel?.overall_win_rate || 0}%</span>
               </p>
             </div>
           )}
