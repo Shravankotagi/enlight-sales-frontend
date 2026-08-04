@@ -50,6 +50,7 @@ export const customersApi = {
   getChurnRisk: () => API.get('/customers/churn-risk'),
   getReorderQueue: () => API.get('/customers/reorder-queue'),
   getLossAnalytics: () => API.get('/customers/loss-analytics'),
+  importClients: (data: any) => API.post('/customers/import', data),
 };
 
 export const kraApi = {

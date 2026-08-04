@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Users, LogOut, Loader2, UserPlus, X, ShieldAlert } from 'lucide-react';
+import { Users, LogOut, Loader2, UserPlus, X, ShieldAlert, FileSpreadsheet } from 'lucide-react';
+import ImportClientsModal from '../components/ImportClientsModal';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ||
   'https://enlight-sales-backend-production.up.railway.app';
@@ -34,6 +35,7 @@ export default function AdminSelectionPage() {
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
@@ -209,7 +211,7 @@ export default function AdminSelectionPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => navigate('/admin-dashboard')}
               className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700
@@ -217,6 +219,14 @@ export default function AdminSelectionPage() {
             >
               <ShieldAlert size={16} className="text-blue-400" />
               Go to Admin Dashboard
+            </button>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700
+                text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            >
+              <FileSpreadsheet size={16} />
+              Import Clients (CSV/XLSX)
             </button>
             <button
               onClick={handleOpenModal}
@@ -423,6 +433,17 @@ export default function AdminSelectionPage() {
           </div>
         </div>
       )}
+
+      {/* Import Clients Modal */}
+      <ImportClientsModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        salespeople={employees.map((e) => ({
+          name: e.name,
+          phone: e.phone,
+          employee_id: e.employee_id,
+        }))}
+      />
     </div>
   );
 }
