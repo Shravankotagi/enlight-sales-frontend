@@ -51,7 +51,7 @@ export default function IntelligencePage() {
 
   const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ['kra-logs', salespersonPhone],
-    queryFn: () => kraApi.getLogs().then(r => r.data.data),
+    queryFn: () => kraApi.getLogs({ salesperson_phone: salespersonPhone }).then(r => r.data.data),
     enabled: tab === 'logs',
   });
 
