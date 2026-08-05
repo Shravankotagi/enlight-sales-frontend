@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { customersApi, kraApi } from '../lib/api';
 import { useEffect, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import {
   AlertTriangle, Clock, TrendingDown,
   Activity, Brain
@@ -23,7 +24,8 @@ const KRA_COLORS: Record<number, string> = {
 
 export default function IntelligencePage() {
   const [tab, setTab] = useState<Tab>('churn');
-  const salespersonPhone = localStorage.getItem('salesperson_phone_override') || undefined;
+  const auth = useAuth();
+  const salespersonPhone = auth?.effectivePhone || undefined;
 
   useEffect(() => {
     document.title = 'Intelligence - Enlight Sales OS';
