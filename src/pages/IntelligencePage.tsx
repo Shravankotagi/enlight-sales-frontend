@@ -23,31 +23,32 @@ const KRA_COLORS: Record<number, string> = {
 
 export default function IntelligencePage() {
   const [tab, setTab] = useState<Tab>('churn');
+  const salespersonPhone = localStorage.getItem('salesperson_phone_override') || undefined;
 
   useEffect(() => {
     document.title = 'Intelligence - Enlight Sales OS';
   }, []);
 
   const { data: churnData, isLoading: churnLoading } = useQuery({
-    queryKey: ['churn-risk'],
-    queryFn: () => customersApi.getChurnRisk().then(r => r.data.data),
+    queryKey: ['churn-risk', salespersonPhone],
+    queryFn: () => customersApi.getChurnRisk({ salesperson_phone: salespersonPhone }).then(r => r.data.data),
     enabled: tab === 'churn',
   });
 
   const { data: reorderData, isLoading: reorderLoading } = useQuery({
-    queryKey: ['reorder-queue'],
-    queryFn: () => customersApi.getReorderQueue().then(r => r.data.data),
+    queryKey: ['reorder-queue', salespersonPhone],
+    queryFn: () => customersApi.getReorderQueue({ salesperson_phone: salespersonPhone }).then(r => r.data.data),
     enabled: tab === 'reorder',
   });
 
   const { data: lossData, isLoading: lossLoading } = useQuery({
-    queryKey: ['loss-analytics'],
-    queryFn: () => customersApi.getLossAnalytics().then(r => r.data.data),
+    queryKey: ['loss-analytics', salespersonPhone],
+    queryFn: () => customersApi.getLossAnalytics({ salesperson_phone: salespersonPhone }).then(r => r.data.data),
     enabled: tab === 'loss',
   });
 
   const { data: logsData, isLoading: logsLoading } = useQuery({
-    queryKey: ['kra-logs'],
+    queryKey: ['kra-logs', salespersonPhone],
     queryFn: () => kraApi.getLogs().then(r => r.data.data),
     enabled: tab === 'logs',
   });

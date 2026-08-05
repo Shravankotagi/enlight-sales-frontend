@@ -45,11 +45,11 @@ export const dealsApi = {
 };
 
 export const customersApi = {
-  getAll: () => API.get('/customers'),
+  getAll: (params?: any) => API.get('/customers', { params }),
   getOne: (id: string) => API.get(`/customers/${id}`),
-  getChurnRisk: () => API.get('/customers/churn-risk'),
-  getReorderQueue: () => API.get('/customers/reorder-queue'),
-  getLossAnalytics: () => API.get('/customers/loss-analytics'),
+  getChurnRisk: (params?: any) => API.get('/customers/churn-risk', { params }),
+  getReorderQueue: (params?: any) => API.get('/customers/reorder-queue', { params }),
+  getLossAnalytics: (params?: any) => API.get('/customers/loss-analytics', { params }),
   importClients: (data: any) => API.post('/customers/import', data),
 };
 
