@@ -104,7 +104,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   if (!dealId) return null;
 
   const totalAmount = deal?.deal_items?.reduce(
-    (sum: number, item: any) => sum + ((item.quoted_price || item.price_per_mt || 0) * (item.quantity || 0)),
+    (sum: number, item: any) => sum + ((item.quoted_price || item.price_per_mt || item.rate || 0) * (item.quantity || 0)),
     0
   ) || deal?.total_amount || 0;
 
@@ -205,8 +205,8 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {deal.deal_items.map((item: any, i: number) => {
-                          const rate = item.quoted_price || item.price_per_mt || 0;
-                          const amount = rate * (item.quantity || 0);
+                          const rate = item.quoted_price || item.price_per_mt || item.rate || 0;
+                          const amount = item.amount ? Number(item.amount) : rate * (item.quantity || 0);
                           return (
                             <tr key={i} className="hover:bg-gray-50">
                               <td className="px-3 py-2 text-gray-800 text-xs font-medium max-w-[100px] truncate">
