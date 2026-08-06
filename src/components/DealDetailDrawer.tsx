@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { dealsApi, pricingApi } from '../lib/api';
+import { dealsApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import {
   X, FileText,
   Package, IndianRupee, Clock,
-  ChevronRight, AlertCircle, Printer
+  AlertCircle, Printer
 } from 'lucide-react';
 
 
@@ -44,9 +44,6 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   const queryClient = useQueryClient();
   const [lostReason, setLostReason] = useState('');
   const [showLostModal, setShowLostModal] = useState(false);
-  const [showQuoteBuilder, setShowQuoteBuilder] = useState(false);
-  const [quotedPrices, setQuotedPrices] = useState<Record<string, number>>({});
-  const [marginChecks, setMarginChecks] = useState<Record<string, any>>({});
 
   const { data: dealData, isLoading } = useQuery({
     queryKey: ['deal', dealId],
@@ -87,15 +84,6 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
     }
   };
 
-  const handleCheckMargin = async (itemId: string, skuText: string, quotedPrice: number) => {
-    if (!quotedPrice) return;
-    try {
-      const res = await pricingApi.checkMargin(skuText, quotedPrice, quotedPrice * 0.95);
-      setMarginChecks(prev => ({ ...prev, [itemId]: res.data }));
-    } catch {
-      // silent
-    }
-  };
 
   const handlePrint = () => {
     window.print();
@@ -177,6 +165,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-xl p-4">
                   <InfoRow label="Phone" value={deal.customer_phone} />
                   <InfoRow label="GST" value={deal.customer_gst} />
+                  <InfoRow label="Contact Person" value={deal.contact_person} />
                   <InfoRow label="Delivery Location" value={deal.delivery_location} />
                   <InfoRow label="Delivery Date" value={deal.delivery_date
                     ? new Date(deal.delivery_date).toLocaleDateString('en-IN') : null} />
@@ -310,104 +299,72 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 </div>
               </div>
 
-              {/* Quote Builder Toggle */}
+              {/* Quote Builder — Print Only */}
               {deal.deal_items && deal.deal_items.length > 0 && (
                 <div>
-                  <button
-                    onClick={() => setShowQuoteBuilder(v => !v)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl text-sm font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      <FileText size={16} /> Quote Builder
+                  <div className="flex items-center justify-between px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                    <span className="flex items-center gap-2 text-sm font-medium text-indigo-700">
+                      <FileText size={16} /> Quoted Prices
                     </span>
-                    <ChevronRight size={16} className={`transition-transform ${showQuoteBuilder ? 'rotate-90' : ''}`} />
-                  </button>
+                    <button
+                      onClick={handlePrint}
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      <Printer size={14} /> Print Quote
+                    </button>
+                  </div>
 
-                  {showQuoteBuilder && (
-                    <div className="mt-3 border rounded-xl overflow-hidden">
-                      <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-gray-700">Quoted Prices</h4>
-                        <button
-                          onClick={handlePrint}
-                          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                          <Printer size={14} /> Print Quote
-                        </button>
-                      </div>
+                  {/* Print-only letterhead */}
+                  <div className="hidden print:block p-6">
+                    <h1 className="text-2xl font-bold text-gray-900">Enlight Metals Private Limited</h1>
+                    <p className="text-sm text-gray-500">Quote for {deal.customer_name}</p>
+                    <p className="text-sm text-gray-500">Date: {new Date().toLocaleDateString('en-IN')}</p>
+                    <hr className="my-4" />
+                  </div>
 
-                      {/* Print-only letterhead */}
-                      <div className="hidden print:block p-6">
-                        <h1 className="text-2xl font-bold text-gray-900">Enlight Metals Private Limited</h1>
-                        <p className="text-sm text-gray-500">Quote for {deal.customer_name}</p>
-                        <p className="text-sm text-gray-500">Date: {new Date().toLocaleDateString('en-IN')}</p>
-                        <hr className="my-4" />
-                      </div>
-
-                      <div className="p-3 space-y-3">
-                        {deal.deal_items.map((item: any, i: number) => {
-                          const itemKey = item.id || `item-${i}`;
-                          const margin = marginChecks[itemKey];
-                          return (
-                            <div key={itemKey} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-gray-800 truncate">{item.sku_text}</p>
-                                <p className="text-xs text-gray-500">{item.quantity} {item.unit}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="relative">
-                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
-                                  <input
-                                    type="number"
-                                    placeholder="Rate"
-                                    value={quotedPrices[itemKey] || ''}
-                                    onChange={e => {
-                                      const val = parseFloat(e.target.value);
-                                      setQuotedPrices(prev => ({ ...prev, [itemKey]: val }));
-                                      if (val) handleCheckMargin(itemKey, item.sku_text, val);
-                                    }}
-                                    className="w-28 pl-5 pr-2 py-1.5 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  />
-                                </div>
-                                {margin && (
-                                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold
-                                    ${margin.approved ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                    {margin.margin_pct?.toFixed(1)}%
-                                  </span>
-                                )}
-                              </div>
+                  <div className="mt-2 border rounded-xl overflow-hidden">
+                    <div className="p-3 space-y-3">
+                      {deal.deal_items.map((item: any, i: number) => {
+                        const rate = item.quoted_price || item.price_per_mt || item.rate || 0;
+                        const amount = rate * (item.quantity || 0);
+                        return (
+                          <div key={item.id || `item-${i}`} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-gray-800 truncate">{item.sku_text}</p>
+                              <p className="text-xs text-gray-500">{item.quantity} {item.unit}</p>
                             </div>
-                          );
-                        })}
+                            <div className="text-right">
+                              <p className="text-xs font-semibold text-gray-800">₹{Number(rate).toLocaleString('en-IN')}/MT</p>
+                              <p className="text-xs text-gray-500">₹{Number(amount).toLocaleString('en-IN')}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
 
-                        {/* Quote totals */}
-                        <div className="border-t pt-3 space-y-1">
-                          {(() => {
-                            const qTotal = deal.deal_items.reduce((sum: number, item: any, i: number) => {
-                              const key = item.id || `item-${i}`;
-                              return sum + ((quotedPrices[key] || 0) * (item.quantity || 0));
-                            }, 0);
-                            const qGst = qTotal * 0.18;
-                            return (
-                              <>
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-gray-500">Subtotal</span>
-                                  <span>₹{Number(qTotal).toLocaleString('en-IN')}</span>
-                                </div>
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-gray-500">GST 18%</span>
-                                  <span>₹{Number(qGst).toLocaleString('en-IN')}</span>
-                                </div>
-                                <div className="flex justify-between text-sm font-bold">
-                                  <span>Grand Total</span>
-                                  <span className="text-blue-700">₹{Number(qTotal + qGst).toLocaleString('en-IN')}</span>
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </div>
+                      {/* Quote totals */}
+                      {(() => {
+                        const qTotal = deal.deal_items.reduce((sum: number, item: any) =>
+                          sum + ((item.quoted_price || item.price_per_mt || item.rate || 0) * (item.quantity || 0)), 0);
+                        const qGst = qTotal * 0.18;
+                        return (
+                          <div className="border-t pt-3 space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-500">Subtotal</span>
+                              <span>₹{Number(qTotal).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-500">GST 18%</span>
+                              <span>₹{Number(qGst).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-sm font-bold">
+                              <span>Grand Total</span>
+                              <span className="text-blue-700">₹{Number(qTotal + qGst).toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
