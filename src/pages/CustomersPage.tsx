@@ -138,6 +138,10 @@ function CustomerDetail({ id, onBack }: { id: string; onBack: () => void }) {
           <h3 className="font-semibold text-gray-800 mb-3 text-sm">Customer Info</h3>
           <div className="space-y-3 text-sm">
             <div>
+              <p className="text-gray-400 text-xs">Customer Name</p>
+              <p className="font-medium">{customer.customer_name || '-'}</p>
+            </div>
+            <div>
               <p className="text-gray-400 text-xs">Phone</p>
               <p className="font-medium">{customer.customer_phone || '-'}</p>
             </div>
