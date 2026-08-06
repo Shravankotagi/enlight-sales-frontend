@@ -142,6 +142,10 @@ function CustomerDetail({ id, onBack }: { id: string; onBack: () => void }) {
               <p className="font-medium">{customer.customer_name || '-'}</p>
             </div>
             <div>
+              <p className="text-gray-400 text-xs">Contact Person</p>
+              <p className="font-medium">{customer.contact_person || '-'}</p>
+            </div>
+            <div>
               <p className="text-gray-400 text-xs">Phone</p>
               <p className="font-medium">{customer.customer_phone || '-'}</p>
             </div>
