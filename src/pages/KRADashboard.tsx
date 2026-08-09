@@ -42,6 +42,10 @@ function KRACard({ number, label, data, onClick }: {
             <span className="font-semibold text-green-600">{data.won_count}</span>
           </div>
           <div className="flex justify-between">
+            <span className="text-gray-500">Lost</span>
+            <span className="font-semibold text-red-600">{data.lost_count || 0}</span>
+          </div>
+          <div className="flex justify-between">
             <span className="text-gray-500">Total Value</span>
             <span className="font-semibold">
               ₹{Number(data.total_value || 0).toLocaleString('en-IN')}
