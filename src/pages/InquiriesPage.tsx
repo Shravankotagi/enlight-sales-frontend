@@ -1,24 +1,35 @@
 import { useQuery } from '@tanstack/react-query';
 import { inquiriesApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { Loader2, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { useState } from 'react';
 
 export default function InquiriesPage() {
+  const { effectivePhone } = useAuth();
   const [tab, setTab] = useState<'all' | 'review'>('review');
 
   const { data: reviewData, isLoading: reviewLoading } = useQuery({
-    queryKey: ['inquiries-review'],
-    queryFn: () => inquiriesApi.getReviewQueue().then(r => r.data.data),
+    queryKey: ['inquiries-review', effectivePhone],
+    queryFn: () =>
+      inquiriesApi
+        .getReviewQueue({ salesperson_phone: effectivePhone })
+        .then((r) => r.data.data),
   });
 
   const { data: allData, isLoading: allLoading } = useQuery({
-    queryKey: ['inquiries-all'],
-    queryFn: () => inquiriesApi.getAll().then(r => r.data.data),
+    queryKey: ['inquiries-all', effectivePhone],
+    queryFn: () =>
+      inquiriesApi
+        .getAll({ salesperson_phone: effectivePhone })
+        .then((r) => r.data.data),
   });
 
   const { data: statsData } = useQuery({
-    queryKey: ['inquiries-stats'],
-    queryFn: () => inquiriesApi.getStats().then(r => r.data.data),
+    queryKey: ['inquiries-stats', effectivePhone],
+    queryFn: () =>
+      inquiriesApi
+        .getStats({ salesperson_phone: effectivePhone })
+        .then((r) => r.data.data),
   });
 
   const isLoading = tab === 'review' ? reviewLoading : allLoading;

@@ -62,8 +62,8 @@ export const kraApi = {
 
 export const inquiriesApi = {
   getAll: (params?: any) => API.get('/inquiries', { params }),
-  getReviewQueue: () => API.get('/inquiries/review-queue'),
-  getStats: () => API.get('/inquiries/stats'),
+  getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
+  getStats: (params?: any) => API.get('/inquiries/stats', { params }),
 };
 
 export const reportsApi = {

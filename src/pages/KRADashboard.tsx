@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { kraApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { Loader2, CheckCircle, AlertCircle, Clock, ExternalLink, X } from 'lucide-react';
 
 function KRACard({ number, label, data, onClick }: { 
@@ -339,20 +340,35 @@ function KRASheetModal({ kraNumber, sheet, isLoading, onClose }: { kraNumber: nu
 }
 
 export default function KRADashboard() {
+  const { effectivePhone } = useAuth();
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [activeKraModal, setActiveKraModal] = useState<number | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['kra-dashboard', selectedMonth, selectedYear],
-    queryFn: () => kraApi.getDashboard({ month: selectedMonth, year: selectedYear }).then(r => r.data.data),
+    queryKey: ['kra-dashboard', selectedMonth, selectedYear, effectivePhone],
+    queryFn: () =>
+      kraApi
+        .getDashboard({
+          month: selectedMonth,
+          year: selectedYear,
+          salesperson_phone: effectivePhone,
+        })
+        .then((r) => r.data.data),
     refetchInterval: 60000,
   });
 
   const { data: sheetsData, isLoading: isSheetsLoading } = useQuery({
-    queryKey: ['kra-sheets', selectedMonth, selectedYear],
-    queryFn: () => kraApi.getSheets({ month: selectedMonth, year: selectedYear }).then(r => r.data.data || r.data),
+    queryKey: ['kra-sheets', selectedMonth, selectedYear, effectivePhone],
+    queryFn: () =>
+      kraApi
+        .getSheets({
+          month: selectedMonth,
+          year: selectedYear,
+          salesperson_phone: effectivePhone,
+        })
+        .then((r) => r.data.data || r.data),
     refetchInterval: 60000,
   });
 

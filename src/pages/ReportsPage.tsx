@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
 import { TrendingUp, ShoppingBag, Users, Package } from 'lucide-react';
-
 
 type Tab = 'monthly' | 'funnel' | 'salesperson' | 'sku';
 
 export default function ReportsPage() {
+  const { effectivePhone } = useAuth();
   const [tab, setTab] = useState<Tab>('monthly');
 
   useEffect(() => {
@@ -14,26 +15,35 @@ export default function ReportsPage() {
   }, []);
 
   const { data: monthly, isLoading: monthlyLoading } = useQuery({
-    queryKey: ['reports-monthly'],
-    queryFn: () => reportsApi.getMonthly().then(r => r.data.data),
+    queryKey: ['reports-monthly', effectivePhone],
+    queryFn: () =>
+      reportsApi
+        .getMonthly({ salesperson_phone: effectivePhone })
+        .then((r) => r.data.data),
     enabled: tab === 'monthly',
   });
 
   const { data: funnel, isLoading: funnelLoading } = useQuery({
-    queryKey: ['reports-funnel'],
-    queryFn: () => reportsApi.getFunnel().then(r => r.data.data),
+    queryKey: ['reports-funnel', effectivePhone],
+    queryFn: () =>
+      reportsApi
+        .getFunnel({ salesperson_phone: effectivePhone })
+        .then((r) => r.data.data),
     enabled: tab === 'funnel',
   });
 
   const { data: salesperson, isLoading: salespersonLoading } = useQuery({
     queryKey: ['reports-salesperson'],
-    queryFn: () => reportsApi.getSalesperson().then(r => r.data.data),
+    queryFn: () => reportsApi.getSalesperson().then((r) => r.data.data),
     enabled: tab === 'salesperson',
   });
 
   const { data: sku, isLoading: skuLoading } = useQuery({
-    queryKey: ['reports-sku'],
-    queryFn: () => reportsApi.getSku().then(r => r.data.data),
+    queryKey: ['reports-sku', effectivePhone],
+    queryFn: () =>
+      reportsApi
+        .getSku({ salesperson_phone: effectivePhone })
+        .then((r) => r.data.data),
     enabled: tab === 'sku',
   });
 
