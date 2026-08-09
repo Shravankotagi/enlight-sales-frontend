@@ -34,7 +34,7 @@ const PRIORITY_BADGE: Record<string, string> = {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee } = useAuth();
+  const { employee, effectivePhone } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
@@ -49,8 +49,15 @@ export default function HomePage() {
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['action-queue', selectedMonth, selectedYear],
-    queryFn: () => kraApi.getActionQueue({ month: selectedMonth, year: selectedYear }).then(r => r.data.data),
+    queryKey: ['action-queue', selectedMonth, selectedYear, effectivePhone],
+    queryFn: () =>
+      kraApi
+        .getActionQueue({
+          month: selectedMonth,
+          year: selectedYear,
+          salesperson_phone: effectivePhone,
+        })
+        .then((r) => r.data.data),
     refetchInterval: 5 * 60 * 1000,
   });
 

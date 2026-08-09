@@ -8,35 +8,66 @@ type Tab = 'monthly' | 'funnel' | 'sku';
 
 export default function ReportsPage() {
   const { effectivePhone } = useAuth();
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [tab, setTab] = useState<Tab>('monthly');
+
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  const years = [2025, 2026, 2027];
 
   useEffect(() => {
     document.title = 'Reports - Enlight Sales OS';
   }, []);
 
   const { data: monthly, isLoading: monthlyLoading } = useQuery({
-    queryKey: ['reports-monthly', effectivePhone],
+    queryKey: ['reports-monthly', selectedMonth, selectedYear, effectivePhone],
     queryFn: () =>
       reportsApi
-        .getMonthly({ salesperson_phone: effectivePhone })
+        .getMonthly({
+          month: selectedMonth,
+          year: selectedYear,
+          salesperson_phone: effectivePhone,
+        })
         .then((r) => r.data.data),
     enabled: tab === 'monthly',
   });
 
   const { data: funnel, isLoading: funnelLoading } = useQuery({
-    queryKey: ['reports-funnel', effectivePhone],
+    queryKey: ['reports-funnel', selectedMonth, selectedYear, effectivePhone],
     queryFn: () =>
       reportsApi
-        .getFunnel({ salesperson_phone: effectivePhone })
+        .getFunnel({
+          month: selectedMonth,
+          year: selectedYear,
+          salesperson_phone: effectivePhone,
+        })
         .then((r) => r.data.data),
     enabled: tab === 'funnel',
   });
 
   const { data: sku, isLoading: skuLoading } = useQuery({
-    queryKey: ['reports-sku', effectivePhone],
+    queryKey: ['reports-sku', selectedMonth, selectedYear, effectivePhone],
     queryFn: () =>
       reportsApi
-        .getSku({ salesperson_phone: effectivePhone })
+        .getSku({
+          month: selectedMonth,
+          year: selectedYear,
+          salesperson_phone: effectivePhone,
+        })
         .then((r) => r.data.data),
     enabled: tab === 'sku',
   });
@@ -56,11 +87,39 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-        <p className="text-gray-500 text-sm">
-          {monthly?.period?.month} {monthly?.period?.year} - Sales performance overview
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+          <p className="text-gray-500 text-sm">
+            {months[selectedMonth]} {selectedYear} - Sales performance overview
+          </p>
+        </div>
+
+        {/* Month/Year selectors */}
+        <div className="flex gap-2">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {months.map((m, idx) => (
+              <option key={m} value={idx}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Tabs */}
