@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
-import { TrendingUp, ShoppingBag, Users, Package } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package } from 'lucide-react';
 
-type Tab = 'monthly' | 'funnel' | 'salesperson' | 'sku';
+type Tab = 'monthly' | 'funnel' | 'sku';
 
 export default function ReportsPage() {
   const { effectivePhone } = useAuth();
@@ -32,12 +32,6 @@ export default function ReportsPage() {
     enabled: tab === 'funnel',
   });
 
-  const { data: salesperson, isLoading: salespersonLoading } = useQuery({
-    queryKey: ['reports-salesperson'],
-    queryFn: () => reportsApi.getSalesperson().then((r) => r.data.data),
-    enabled: tab === 'salesperson',
-  });
-
   const { data: sku, isLoading: skuLoading } = useQuery({
     queryKey: ['reports-sku', effectivePhone],
     queryFn: () =>
@@ -50,14 +44,15 @@ export default function ReportsPage() {
   const tabs = [
     { key: 'monthly' as Tab, label: 'Monthly', icon: TrendingUp },
     { key: 'funnel' as Tab, label: 'Funnel', icon: ShoppingBag },
-    { key: 'salesperson' as Tab, label: 'Salesperson', icon: Users },
     { key: 'sku' as Tab, label: 'SKU Breakdown', icon: Package },
   ];
 
-  const isLoading = tab === 'monthly' ? monthlyLoading
-    : tab === 'funnel' ? funnelLoading
-    : tab === 'salesperson' ? salespersonLoading
-    : skuLoading;
+  const isLoading =
+    tab === 'monthly'
+      ? monthlyLoading
+      : tab === 'funnel'
+        ? funnelLoading
+        : skuLoading;
 
   return (
     <div>
@@ -190,54 +185,7 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* TAB 3 - SALESPERSON */}
-          {tab === 'salesperson' && salesperson && (
-            <div className="border rounded-xl overflow-hidden bg-white">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    {['Salesperson', 'KRA Score', 'Deals', 'Won', 'Visits', 'New Customers', 'Payments', 'Complaints'].map(h => (
-                      <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {((salesperson?.salespersons || [])).map((sp: any) => {
-                    const compTotal = sp.complaints?.total || 0;
-                    const compResolved = sp.complaints?.resolved || 0;
-                    const compRate = compTotal > 0 ? Math.round((compResolved / compTotal) * 100) : 100;
-                    return (
-                      <tr key={sp.salesperson_phone} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gray-800">{sp.name || 'Unknown'}</p>
-                          <p className="text-xs text-gray-400">{sp.salesperson_phone}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-sm font-bold px-2 py-0.5 rounded-full
-                            ${(sp.kra_score || 0) >= 80 ? 'bg-green-100 text-green-700'
-                              : (sp.kra_score || 0) >= 60 ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-red-100 text-red-700'}`}>
-                            {sp.kra_score || 0}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">{sp.deals?.total || 0}</td>
-                        <td className="px-4 py-3 text-green-600 font-medium">{sp.deals?.won || 0}</td>
-                        <td className="px-4 py-3 text-gray-700">{sp.visits?.total || 0}</td>
-                        <td className="px-4 py-3 text-gray-700">{sp.new_customers?.count || 0}</td>
-                        <td className="px-4 py-3 text-gray-700">{sp.payments?.collected || 0}</td>
-                        <td className="px-4 py-3 text-gray-700">{compTotal > 0 ? `${compRate}% (${compResolved}/${compTotal})` : '-'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {(!salesperson || (salesperson?.salespersons || []).length === 0) && (
-                <div className="text-center py-12 text-gray-400">No salesperson data</div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 4 - SKU BREAKDOWN */}
+          {/* TAB 3 - SKU BREAKDOWN */}
           {tab === 'sku' && sku && (
             <div className="border rounded-xl overflow-hidden bg-white">
               <table className="w-full text-sm">
