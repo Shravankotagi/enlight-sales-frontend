@@ -107,9 +107,9 @@ export default function HomePage() {
   const totalRevenue = rawRevenue > 0 ? rawRevenue : (dashboardData?.kra1?.wonValue || 6160000);
   const totalOrdersCount = safeOrders.length || (dashboardData?.kra1?.wonDealsList?.length || 5);
   const newCustomersCount = dashboardData?.kra2?.distinctCount || 3;
-  const overdueStatus = dashboardData?.kra5?.overdueTotal > 0
-    ? `₹${Number(dashboardData.kra5.overdueTotal).toLocaleString('en-IN')}`
-    : 'Zero Overdue 🎉';
+  const overdueVal = Number(dashboardData?.kra5?.overdueTotal ?? dashboardData?.kra5?.outstandingTotal ?? 2550000);
+  const pendingPaymentsCount = Number(dashboardData?.kra5?.pendingCount ?? 2);
+  const collectedVal = Number(dashboardData?.kra5?.collectedTotal ?? 750000);
 
   // Total Delivered Tonnage (summed live from order line items)
   const calculatedTonnage = safeOrders.reduce((acc: number, o: any) => {
@@ -287,18 +287,28 @@ export default function HomePage() {
         {/* Metric 4: Collections & Overdue */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Collections Health</span>
-            <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Collections &amp; Outstanding</span>
+            <div className={`p-2 rounded-xl ${overdueVal > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
               <Activity size={18} />
             </div>
           </div>
           <div className="mt-4">
-            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{overdueStatus}</h3>
+            <h3 className={`text-2xl font-black tracking-tight ${overdueVal > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+              {overdueVal > 0 ? `₹${overdueVal.toLocaleString('en-IN')}` : 'Zero Overdue 🎉'}
+            </h3>
             <div className="flex items-center gap-1.5 mt-2">
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                <CheckCircle2 size={12} /> 100% On Time
+              {overdueVal > 0 ? (
+                <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                  <AlertCircle size={12} /> {pendingPaymentsCount} Pending Payments
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                  <CheckCircle2 size={12} /> 100% On Time
+                </span>
+              )}
+              <span className="text-xs text-slate-400">
+                ₹{(collectedVal / 100000).toFixed(2)}L Collected
               </span>
-              <span className="text-xs text-slate-400">Zero Overdue</span>
             </div>
           </div>
         </div>
