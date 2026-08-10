@@ -36,7 +36,7 @@ const PRIORITY_BADGE: Record<string, string> = {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, effectivePhone } = useAuth();
+  const { employee, effectivePhone, isAdmin, viewingAs, clearViewingAs } = useAuth();
   const now = new Date();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
@@ -186,13 +186,23 @@ export default function HomePage() {
             {employee?.name?.charAt(0) || 'E'}
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
                 {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}! 👋
               </h1>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200">
-                Enlight Metals OS
-              </span>
+              {isAdmin && !viewingAs ? (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
+                  <Users size={12} /> Company-Wide (All Salespersons)
+                </span>
+              ) : viewingAs ? (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold border border-amber-200">
+                  Viewing: {viewingAs.name}
+                </span>
+              ) : (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+                  Enlight Metals OS
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
               <Clock size={13} className="text-slate-400" />
@@ -203,6 +213,20 @@ export default function HomePage() {
 
         {/* Top Control Bar Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {isAdmin && (
+            <button
+              onClick={() => {
+                clearViewingAs();
+                navigate('/admin');
+              }}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all hover:scale-105"
+              title="Go to Salesperson Selection Page"
+            >
+              <Users size={15} />
+              Select Salesperson Page
+            </button>
+          )}
+
           <DateFilterControl onChange={setDateRange} />
           
           <button

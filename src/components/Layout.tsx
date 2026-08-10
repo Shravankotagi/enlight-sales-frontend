@@ -37,24 +37,22 @@ function EmployeeFooter() {
   };
 
   return (
-    <div>
-      {/* Viewing as banner */}
-      {isAdmin && viewingAs && (
-        <div className="mb-2 p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
-          <p className="text-xs text-amber-400 font-medium">Viewing as:</p>
-          <p className="text-xs text-white font-semibold">{viewingAs.name}</p>
-          <button
-            onClick={handleBackToAdmin}
-            className="text-xs text-amber-400 hover:text-amber-300 mt-1 transition-colors">
-            ← Back to Admin
-          </button>
-        </div>
+    <div className="space-y-2">
+      {isAdmin && (
+        <button
+          onClick={handleBackToAdmin}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 hover:text-white rounded-xl border border-blue-500/40 text-xs font-bold transition-all shadow-xs"
+          title="Return to Salesperson Selection Page"
+        >
+          <Users size={14} />
+          {viewingAs ? `Viewing: ${viewingAs.name}` : 'Salesperson Selection'}
+        </button>
       )}
       <p className="text-xs text-white font-medium">{employee?.name}</p>
       <p className="text-xs text-slate-400">{employee?.employee_id} · {employee?.role}</p>
       <button
         onClick={handleLogout}
-        className="text-xs text-red-400 hover:text-red-300 mt-1 transition-colors">
+        className="text-xs text-red-400 hover:text-red-300 transition-colors">
         Logout
       </button>
     </div>
@@ -96,6 +94,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             const isAdmin = employee?.role === 'admin';
             const showAdminTab = isAdmin && !viewingAs;
             const visibleItems = [
+              ...(isAdmin ? [{ path: '/admin', label: 'Select Salesperson', icon: Users }] : []),
               ...(showAdminTab ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }] : []),
               ...navItems,
             ];
