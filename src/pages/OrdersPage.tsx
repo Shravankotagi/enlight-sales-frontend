@@ -261,7 +261,7 @@ export default function OrdersPage() {
                     <tr
                       key={ord.id || idx}
                       onClick={() => setSelectedQuotationOrder(ord)}
-                      className="hover:bg-blue-50/70 transition-colors cursor-pointer group"
+                      className="hover:bg-blue-50/80 transition-colors cursor-pointer group select-none"
                       title="Click to view full Official Sales Quotation & Invoice"
                     >
                       <td className="px-4 py-3.5 font-medium text-slate-500">{idx + 1}</td>
@@ -299,9 +299,9 @@ export default function OrdersPage() {
                             e.stopPropagation();
                             setSelectedQuotationOrder(ord);
                           }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-all group-hover:shadow-sm hover:scale-105"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all group-hover:shadow-md hover:scale-105"
                         >
-                          <Eye size={13} /> View Quotation
+                          <Eye size={14} /> View Quotation
                         </button>
                       </td>
                     </tr>
@@ -442,8 +442,14 @@ export default function OrdersPage() {
 
       {/* Official Sales Quotation & Tax Invoice Modal */}
       {selectedQuotationOrder && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div
+          className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 z-[9999] overflow-y-auto"
+          onClick={() => setSelectedQuotationOrder(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-3xl w-full my-auto shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             
             {/* Modal Controls Header */}
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between no-print">
