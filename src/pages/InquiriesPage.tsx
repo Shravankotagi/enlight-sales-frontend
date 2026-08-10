@@ -82,9 +82,35 @@ export default function InquiriesPage() {
     }
   };
 
-  const safeInquiries = Array.isArray(inquiries) ? inquiries : [];
+  const isProductEnquiry = (i: InquiryItem) => {
+    if (i.source_channel === 'web_dashboard') return true;
+    const text = (i.raw_text || '').trim().toLowerCase();
+    if (!text) return false;
 
-  // Filter inquiries
+    // Exclude single digits / choice selections (1, 2, 3)
+    if (/^\d{1,2}$/.test(text)) return false;
+
+    // Exclude Deal ID codes (#DEAL-...)
+    if (/^#deal-[a-f0-9]+$/i.test(text)) return false;
+
+    // Exclude deal status commands (won/lost updates)
+    if (/\b(deal is won|deal lost|deal closed|won deal|lost deal|marked as won|marked as lost)\b/i.test(text)) return false;
+
+    // Exclude question lookups / PO queries
+    if (/\b(can you share|po number|show my|what is the|where is the|login link|portal link|dashboard link)\b/i.test(text)) return false;
+
+    // Exclude payment messages
+    if (/\b(paid|advance|cheque|rtgs|neft|upi|balance|outstanding|payment received)\b/i.test(text)) return false;
+
+    // Include if contains product keywords / tonnage / requirement intent
+    const hasProductKeywords = /\b(ton|tons|mt|kg|coil|coils|plate|plates|sheet|sheets|tmt|bar|bars|hr|cr|ms|steel|pipe|pipes|beam|angle|channel|requirement|requires|need|asking for|quote|quotation|price for|rate for)\b/i.test(text);
+
+    return hasProductKeywords || text.length > 3;
+  };
+
+  const safeInquiries = (Array.isArray(inquiries) ? inquiries : []).filter(isProductEnquiry);
+
+  // Filter inquiries by search & status
   const filtered = safeInquiries.filter(i => {
     const name = i?.sender_name || i?.customer_name || '';
     const text = i?.raw_text || '';
