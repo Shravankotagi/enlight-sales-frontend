@@ -36,7 +36,7 @@ const PRIORITY_BADGE: Record<string, string> = {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, effectivePhone, isAdmin, viewingAs, clearViewingAs } = useAuth();
+  const { employee, effectivePhone, isAdmin, viewingAs } = useAuth();
   const now = new Date();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
@@ -213,20 +213,6 @@ export default function HomePage() {
 
         {/* Top Control Bar Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {isAdmin && (
-            <button
-              onClick={() => {
-                clearViewingAs();
-                navigate('/admin');
-              }}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all hover:scale-105"
-              title="Go to Salesperson Selection Page"
-            >
-              <Users size={15} />
-              Select Salesperson Page
-            </button>
-          )}
-
           <DateFilterControl onChange={setDateRange} />
           
           <button

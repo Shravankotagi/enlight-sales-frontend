@@ -94,7 +94,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             const isAdmin = employee?.role === 'admin';
             const showAdminTab = isAdmin && !viewingAs;
             const visibleItems = [
-              ...(isAdmin ? [{ path: '/admin', label: 'Select Salesperson', icon: Users }] : []),
               ...(showAdminTab ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }] : []),
               ...navItems,
             ];
