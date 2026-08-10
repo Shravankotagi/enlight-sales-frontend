@@ -172,6 +172,8 @@ export default function HomePage() {
       { name: 'Supreme Steel', val: 1740000 },
       { name: 'Mehta Engineering', val: 780000 }
     );
+  }
+
   const grandTotalCustomerVal = topCustomers.reduce((s, c) => s + c.val, 0) || 1;
 
   return (
@@ -571,5 +573,4 @@ export default function HomePage() {
 
     </div>
   );
-}
 }
