@@ -1,13 +1,25 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2, Phone, Calendar } from 'lucide-react';
 import { inquiriesApi } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
-import { Loader2, AlertCircle, CheckCircle, Clock, Plus, X, FileText } from 'lucide-react';
-import { useState } from 'react';
+
+interface InquiryItem {
+  id: string;
+  sender_name?: string;
+  customer_name?: string;
+  sender_phone?: string;
+  raw_text?: string;
+  inquiry_type?: string;
+  status?: string;
+  source_channel?: string;
+  overall_confidence?: number;
+  created_at: string;
+}
 
 export default function InquiriesPage() {
-  const { effectivePhone } = useAuth();
-  const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'all' | 'review'>('review');
+  const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -17,32 +29,28 @@ export default function InquiriesPage() {
   const [formRequirement, setFormRequirement] = useState('');
   const [formInquiryType, setFormInquiryType] = useState('Product Requirement');
 
-  const { data: reviewData, isLoading: reviewLoading } = useQuery({
-    queryKey: ['inquiries-review', effectivePhone],
-    queryFn: () =>
-      inquiriesApi
-        .getReviewQueue({ salesperson_phone: effectivePhone })
-        .then((r) => r.data.data),
-  });
+  // Calculate start of current month (e.g. 2026-08-01T00:00:00.000Z)
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  const { data: allData, isLoading: allLoading } = useQuery({
-    queryKey: ['inquiries-all', effectivePhone],
-    queryFn: () =>
-      inquiriesApi
-        .getAll({ salesperson_phone: effectivePhone })
-        .then((r) => r.data.data),
-  });
+  const fetchMonthlyInquiries = async () => {
+    try {
+      setLoading(true);
+      const res = await inquiriesApi.getAll({ from: startOfMonth });
+      const raw = res?.data;
+      const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      setInquiries(list);
+    } catch (err) {
+      console.error('Error fetching monthly inquiries:', err);
+      setInquiries([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const { data: statsData } = useQuery({
-    queryKey: ['inquiries-stats', effectivePhone],
-    queryFn: () =>
-      inquiriesApi
-        .getStats({ salesperson_phone: effectivePhone })
-        .then((r) => r.data.data),
-  });
-
-  const isLoading = tab === 'review' ? reviewLoading : allLoading;
-  const inquiries = tab === 'review' ? reviewData : allData;
+  useEffect(() => {
+    fetchMonthlyInquiries();
+  }, []);
 
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,9 +73,7 @@ export default function InquiriesPage() {
       setFormRequirement('');
       setFormInquiryType('Product Requirement');
 
-      queryClient.invalidateQueries({ queryKey: ['inquiries-review'] });
-      queryClient.invalidateQueries({ queryKey: ['inquiries-all'] });
-      queryClient.invalidateQueries({ queryKey: ['inquiries-stats'] });
+      fetchMonthlyInquiries();
     } catch (err) {
       console.error('Error logging inquiry:', err);
       alert('Failed to log inquiry. Please try again.');
@@ -76,139 +82,208 @@ export default function InquiriesPage() {
     }
   };
 
-  const statusIcon = (status: string) => {
-    if (status === 'processed') 
-      return <CheckCircle size={14} className="text-green-500" />;
-    if (status === 'review') 
-      return <AlertCircle size={14} className="text-orange-500" />;
-    return <Clock size={14} className="text-blue-500" />;
-  };
+  const safeInquiries = Array.isArray(inquiries) ? inquiries : [];
+
+  // Filter inquiries
+  const filtered = safeInquiries.filter(i => {
+    const name = i?.sender_name || i?.customer_name || '';
+    const text = i?.raw_text || '';
+    const phone = i?.sender_phone || '';
+
+    const matchesSearch =
+      name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      phone.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = filterStatus === 'all' || (i?.status || '').toLowerCase() === filterStatus.toLowerCase();
+
+    return matchesSearch && matchesStatus;
+  });
+
+  const totalThisMonth = safeInquiries.length;
+  const newCount = safeInquiries.filter(i => ['new', 'review', 'needs_review', 'pending'].includes(i?.status || '')).length;
+  const processedCount = safeInquiries.filter(i => ['processed', 'won', 'converted'].includes(i?.status || '')).length;
+
+  const currentMonthName = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText className="text-blue-600" size={26} />
-            Customer Inquiries (KRA 4)
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <FileText className="text-blue-600" size={28} />
+            New Inquiries Received This Month ({currentMonthName})
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">WhatsApp &amp; Dashboard captured inquiries</p>
+          <p className="text-slate-500 text-sm mt-1">
+            Detailed breakdown of all customer product inquiries and material requirements received this month.
+          </p>
         </div>
 
-        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-          {statsData && (
-            <div className="flex gap-2 sm:gap-4">
-              {[
-                { label: 'Total', value: statsData.total, color: 'text-gray-800' },
-                { label: 'Review', value: statsData.review, color: 'text-orange-600' },
-                { label: 'Processed', value: statsData.processed, color: 'text-green-600' },
-              ].map(s => (
-                <div key={s.label} className="text-center bg-white border rounded-lg px-3 py-1.5 shadow-sm">
-                  <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
-                  <p className="text-[10px] text-gray-500">{s.label}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchMonthlyInquiries}
+            className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+            title="Refresh">
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors whitespace-nowrap">
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
             <Plus size={18} />
             Log New Inquiry
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
-        {[
-          { key: 'review', label: `Review Queue (${reviewData?.length || 0})` },
-          { key: 'all', label: 'All Inquiries' },
-        ].map(t => (
-          <button key={t.key}
-            onClick={() => setTab(t.key as 'all' | 'review')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors
-              ${tab === t.key
-                ? 'bg-white text-gray-800 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'}`}>
-            {t.label}
-          </button>
-        ))}
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-500 font-medium">New Inquiries ({currentMonthName})</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">{totalThisMonth}</p>
+          </div>
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+            <FileText size={22} />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Active / Pending Review ⏳</p>
+            <p className="text-2xl font-bold text-amber-600 mt-1">{newCount}</p>
+          </div>
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
+            <Clock size={22} />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Processed / Converted 📈</p>
+            <p className="text-2xl font-bold text-emerald-600 mt-1">{processedCount}</p>
+          </div>
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+            <CheckCircle size={22} />
+          </div>
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="animate-spin text-blue-600" size={32} />
+      {/* Filters & Search */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
+        <div className="relative w-full sm:w-80">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search customer, material requirement, phone..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          />
         </div>
-      ) : (
-        <div className="bg-white rounded-xl border overflow-hidden shadow-sm">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
+
+        <div className="flex gap-2 w-full sm:w-auto">
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="all">All Inquiry Statuses</option>
+            <option value="review">Pending Review</option>
+            <option value="processed">Processed / Converted</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Data Table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-700">
+            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                {['Status', 'Sender / Customer', 'Message / Requirements', 'Channel', 
-                  'Confidence', 'Date'].map(h => (
-                  <th key={h} className="text-left text-xs font-semibold 
-                    text-gray-500 uppercase tracking-wide px-4 py-3">
-                    {h}
-                  </th>
-                ))}
+                <th className="px-4 py-3">Sr.</th>
+                <th className="px-4 py-3">Received Date</th>
+                <th className="px-4 py-3">Customer / Company Name</th>
+                <th className="px-4 py-3">Contact Phone</th>
+                <th className="px-4 py-3">Inquiry Type</th>
+                <th className="px-4 py-3">Full Requirements Details</th>
+                <th className="px-4 py-3">Source Channel</th>
+                <th className="px-4 py-3 text-right">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(inquiries || []).map((inq: any) => (
-                <tr key={inq.id} className="hover:bg-gray-50/80 transition-colors">
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      {statusIcon(inq.status)}
-                      <span className="text-xs capitalize font-medium text-gray-700">
-                        {inq.status}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {inq.sender_name || 'Unknown'}
-                    </p>
-                    <p className="text-xs text-gray-400">{inq.sender_phone || '-'}</p>
-                  </td>
-                  <td className="px-4 py-3.5 max-w-sm">
-                    <p className="text-sm text-gray-700 font-medium truncate" title={inq.raw_text}>
-                      {inq.raw_text || '-'}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className="text-xs bg-slate-100 text-slate-700 font-medium px-2.5 py-0.5 rounded-full capitalize">
-                      {inq.source_channel || 'whatsapp'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    {inq.overall_confidence != null ? (
-                      <span className={`text-sm font-semibold
-                        ${inq.overall_confidence >= 0.85 
-                          ? 'text-green-600' : 'text-orange-500'}`}>
-                        {Math.round((inq.overall_confidence > 1 ? inq.overall_confidence / 100 : inq.overall_confidence) * 100)}%
-                      </span>
-                    ) : (
-                      <span className="text-sm font-semibold text-green-600">
-                        92%
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-xs text-gray-500 whitespace-nowrap">
-                    {inq.created_at ? new Date(inq.created_at).toLocaleDateString('en-IN') : '-'}
+            <tbody className="divide-y divide-slate-200">
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                    Loading monthly inquiries...
                   </td>
                 </tr>
-              ))}
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                    No new inquiries received this month yet.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((inq, idx) => {
+                  const custName = inq?.sender_name || inq?.customer_name || 'Customer';
+                  const isProcessed = inq?.status === 'processed' || inq?.status === 'won';
+
+                  return (
+                    <tr key={inq.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-4 py-3.5 font-medium text-slate-500">{idx + 1}</td>
+                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} className="text-slate-400" />
+                          {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 font-semibold text-slate-900">
+                        <span className="flex items-center gap-1.5">
+                          <Building2 size={14} className="text-blue-500" />
+                          {custName}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-slate-600 font-mono">
+                        {inq.sender_phone ? (
+                          <span className="flex items-center gap-1">
+                            <Phone size={12} className="text-slate-400" /> {inq.sender_phone}
+                          </span>
+                        ) : '-'}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                          {inq.inquiry_type || 'Product Requirement'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-slate-800 font-medium max-w-sm" title={inq.raw_text}>
+                        <div className="bg-slate-50 p-2 rounded border border-slate-200 leading-relaxed">
+                          {inq.raw_text || 'No requirement details specified.'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 capitalize">
+                          {inq.source_channel || 'WhatsApp Bot'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                        {isProcessed ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
+                            <CheckCircle size={12} /> Processed 🎉
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                            <Clock size={12} /> In Review ⏳
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {(!inquiries || inquiries.length === 0) && (
-            <div className="text-center py-12 text-gray-400">
-              No inquiries found
-            </div>
-          )}
         </div>
-      )}
+      </div>
 
       {/* Log Inquiry Modal */}
       {showModal && (

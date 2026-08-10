@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, LayoutDashboard, Users, TrendingUp,
   FileText, BarChart3, Menu, X, Brain, Tag, ShieldAlert,
-  AlertTriangle, MapPin, ShoppingBag
+  AlertTriangle, MapPin, ShoppingBag, History
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 const navItems = [
   { path: '/home', label: 'Home', icon: Home },
   { path: '/', label: 'Pipeline', icon: LayoutDashboard },
+  { path: '/inquiries', label: 'Inquiries', icon: FileText },
   { path: '/orders', label: 'Orders', icon: ShoppingBag },
   { path: '/customers', label: 'Customers', icon: Users },
   { path: '/visits', label: 'Visits', icon: MapPin },
@@ -17,7 +18,7 @@ const navItems = [
   { path: '/intelligence', label: 'Intelligence', icon: Brain },
   { path: '/pricing', label: 'Pricing', icon: Tag },
   { path: '/kra', label: 'KRA Dashboard', icon: TrendingUp },
-  { path: '/inquiries', label: 'Inquiries', icon: FileText },
+  { path: '/logs', label: 'Logs', icon: History },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
 ];
 
