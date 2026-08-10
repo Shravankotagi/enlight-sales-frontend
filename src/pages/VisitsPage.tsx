@@ -129,7 +129,7 @@ export default function VisitsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <MapPin className="text-emerald-600" size={28} />
-            Field Customer Visits (KRA 9)
+            Field Customer Visits
           </h1>
           <p className="text-slate-500 text-sm mt-1">
             Log and manage customer visits, meeting notes, outcomes, and follow-up actions.

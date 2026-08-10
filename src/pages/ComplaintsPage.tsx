@@ -141,7 +141,7 @@ export default function ComplaintsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <AlertTriangle className="text-amber-600" size={28} />
-            Customer Complaints (KRA 8)
+            Customer Complaints
           </h1>
           <p className="text-slate-500 text-sm mt-1">
             Track and log customer complaints with 48-hour resolution SLA management.

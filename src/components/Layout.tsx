@@ -17,7 +17,7 @@ const navItems = [
   { path: '/complaints', label: 'Complaints', icon: AlertTriangle },
   { path: '/intelligence', label: 'Intelligence', icon: Brain },
   { path: '/pricing', label: 'Pricing', icon: Tag },
-  { path: '/kra', label: 'KRA Dashboard', icon: TrendingUp },
+  { path: '/kra', label: 'Dashboard', icon: TrendingUp },
   { path: '/logs', label: 'Logs', icon: History },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
 ];

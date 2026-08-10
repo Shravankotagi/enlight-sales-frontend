@@ -147,7 +147,7 @@ export default function OrdersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <ShoppingBag className="text-blue-600" size={28} />
-            Completed &amp; Delivered Orders (KRA 1 &amp; KRA 4)
+            Completed &amp; Delivered Orders
           </h1>
           <p className="text-slate-500 text-sm mt-1">
             Track confirmed sales orders, PO numbers, tonnage, and delivery dispatches.

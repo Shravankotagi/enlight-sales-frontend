@@ -205,7 +205,7 @@ function KRACard({ number, label, data, onClick }: {
         <div className="flex items-start justify-between mb-3">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
-              KRA {number}
+              Metric {number}
             </p>
             <h3 className="text-sm font-semibold text-gray-800 mt-0.5">
               {label}
@@ -393,7 +393,7 @@ export default function KRADashboard() {
   if (error || !data) return (
     <div className="flex items-center gap-2 text-red-600 p-4">
       <AlertCircle size={20} />
-      <span>Failed to load KRA dashboard</span>
+      <span>Failed to load dashboard</span>
     </div>
   );
 
@@ -418,9 +418,9 @@ export default function KRADashboard() {
     <div>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">KRA Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500 text-sm">
-            Live metrics from WhatsApp Bot &amp; Web Dashboard (Click any card to view full KRA Sheet Report)
+            Live metrics from WhatsApp Bot &amp; Web Dashboard (Click any card to view detailed achievement report)
           </p>
         </div>
 
