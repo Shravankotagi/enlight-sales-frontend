@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { kraApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, CheckCircle, AlertCircle, Clock, ExternalLink, X } from 'lucide-react';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 
 function KRACard({ number, label, data, onClick }: { 
   number: number; label: string; data: any; onClick?: () => void;
@@ -346,17 +347,22 @@ function KRASheetModal({ kraNumber, sheet, isLoading, onClose }: { kraNumber: nu
 export default function KRADashboard() {
   const { effectivePhone } = useAuth();
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: 'this_month',
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+    to: now.toISOString().split('T')[0]
+  });
   const [activeKraModal, setActiveKraModal] = useState<number | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['kra-dashboard', selectedMonth, selectedYear, effectivePhone],
+    queryKey: ['kra-dashboard', dateRange, effectivePhone],
     queryFn: () =>
       kraApi
         .getDashboard({
-          month: selectedMonth,
-          year: selectedYear,
+          month: dateRange.preset === 'monthly' ? dateRange.month : undefined,
+          year: dateRange.preset === 'monthly' ? dateRange.year : undefined,
+          from: dateRange.from,
+          to: dateRange.to,
           salesperson_phone: effectivePhone,
         })
         .then((r) => r.data.data),
@@ -364,12 +370,14 @@ export default function KRADashboard() {
   });
 
   const { data: sheetsData, isLoading: isSheetsLoading } = useQuery({
-    queryKey: ['kra-sheets', selectedMonth, selectedYear, effectivePhone],
+    queryKey: ['kra-sheets', dateRange, effectivePhone],
     queryFn: () =>
       kraApi
         .getSheets({
-          month: selectedMonth,
-          year: selectedYear,
+          month: dateRange.preset === 'monthly' ? dateRange.month : undefined,
+          year: dateRange.preset === 'monthly' ? dateRange.year : undefined,
+          from: dateRange.from,
+          to: dateRange.to,
           salesperson_phone: effectivePhone,
         })
         .then((r) => r.data.data || r.data),
@@ -401,51 +409,22 @@ export default function KRADashboard() {
     { number: 9, key: 'kra9' },
   ];
 
-  const formattedDate = new Date(selectedYear, selectedMonth, 1).toLocaleString('en-IN', {
-    month: 'long',
-    year: 'numeric'
-  });
-
   const modalSheetKey = activeKraModal ? `kra${activeKraModal}` : null;
   const modalSheet = (sheetsData && modalSheetKey)
-    ? (sheetsData[modalSheetKey] || sheetsData.data?.[modalSheetKey])
+    ? sheetsData[modalSheetKey]
     : null;
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">KRA Dashboard</h1>
           <p className="text-gray-500 text-sm">
-            {formattedDate} · Live from WhatsApp Bot (Click any card to view full KRA Sheet Report)
+            Live metrics from WhatsApp Bot &amp; Web Dashboard (Click any card to view full KRA Sheet Report)
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i} value={i}>
-                {new Date(2026, i, 1).toLocaleString('en-IN', { month: 'long' })}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            {[2025, 2026, 2027].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
+        <DateFilterControl onChange={setDateRange} />
       </div>
 
       <div className="grid grid-cols-3 gap-4 items-stretch">

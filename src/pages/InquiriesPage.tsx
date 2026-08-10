@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2, Phone, Calendar } from 'lucide-react';
 import { inquiriesApi } from '../lib/api';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 
 interface InquiryItem {
   id: string;
@@ -23,20 +24,27 @@ export default function InquiriesPage() {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const now = new Date();
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: 'this_month',
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+    to: now.toISOString().split('T')[0]
+  });
+
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRequirement, setFormRequirement] = useState('');
   const [formInquiryType, setFormInquiryType] = useState('Product Requirement');
 
-  // Calculate start of current month (e.g. 2026-08-01T00:00:00.000Z)
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-
   const fetchMonthlyInquiries = async () => {
     try {
       setLoading(true);
-      const res = await inquiriesApi.getAll({ from: startOfMonth });
+      const params: any = {};
+      if (dateRange.from) params.from = dateRange.from;
+      if (dateRange.to) params.to = dateRange.to;
+
+      const res = await inquiriesApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
       setInquiries(list);
@@ -50,7 +58,7 @@ export default function InquiriesPage() {
 
   useEffect(() => {
     fetchMonthlyInquiries();
-  }, []);
+  }, [dateRange]);
 
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,14 +147,15 @@ export default function InquiriesPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <FileText className="text-blue-600" size={28} />
-            New Inquiries Received This Month ({currentMonthName})
+            Customer Product Inquiries
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Detailed breakdown of all customer product inquiries and material requirements received this month.
+            Detailed breakdown of customer product inquiries and material requirements.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DateFilterControl onChange={setDateRange} />
           <button
             onClick={fetchMonthlyInquiries}
             className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
