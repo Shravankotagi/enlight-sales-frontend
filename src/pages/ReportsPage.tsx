@@ -3,71 +3,60 @@ import { reportsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
 import { TrendingUp, ShoppingBag, Package } from 'lucide-react';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 
 type Tab = 'monthly' | 'funnel' | 'sku';
 
 export default function ReportsPage() {
   const { effectivePhone } = useAuth();
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [tab, setTab] = useState<Tab>('monthly');
 
-  const months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-  const years = [2025, 2026, 2027];
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: 'this_month',
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+    to: now.toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     document.title = 'Reports - Enlight Sales OS';
   }, []);
 
+  const getParams = () => {
+    const params: any = { salesperson_phone: effectivePhone };
+    if (dateRange.preset === 'monthly') {
+      params.month = dateRange.month;
+      params.year = dateRange.year;
+    } else {
+      if (dateRange.from) params.from = dateRange.from;
+      if (dateRange.to) params.to = dateRange.to;
+    }
+    return params;
+  };
+
   const { data: monthly, isLoading: monthlyLoading } = useQuery({
-    queryKey: ['reports-monthly', selectedMonth, selectedYear, effectivePhone],
+    queryKey: ['reports-monthly', dateRange, effectivePhone],
     queryFn: () =>
       reportsApi
-        .getMonthly({
-          month: selectedMonth,
-          year: selectedYear,
-          salesperson_phone: effectivePhone,
-        })
+        .getMonthly(getParams())
         .then((r) => r.data.data),
     enabled: tab === 'monthly',
   });
 
   const { data: funnel, isLoading: funnelLoading } = useQuery({
-    queryKey: ['reports-funnel', selectedMonth, selectedYear, effectivePhone],
+    queryKey: ['reports-funnel', dateRange, effectivePhone],
     queryFn: () =>
       reportsApi
-        .getFunnel({
-          month: selectedMonth,
-          year: selectedYear,
-          salesperson_phone: effectivePhone,
-        })
+        .getFunnel(getParams())
         .then((r) => r.data.data),
     enabled: tab === 'funnel',
   });
 
   const { data: sku, isLoading: skuLoading } = useQuery({
-    queryKey: ['reports-sku', selectedMonth, selectedYear, effectivePhone],
+    queryKey: ['reports-sku', dateRange, effectivePhone],
     queryFn: () =>
       reportsApi
-        .getSku({
-          month: selectedMonth,
-          year: selectedYear,
-          salesperson_phone: effectivePhone,
-        })
+        .getSku(getParams())
         .then((r) => r.data.data),
     enabled: tab === 'sku',
   });
@@ -87,39 +76,15 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Reports &amp; Analytics</h1>
           <p className="text-gray-500 text-sm">
-            {months[selectedMonth]} {selectedYear} - Sales performance overview
+            Comprehensive sales performance, funnel conversion, and product breakdown overview.
           </p>
         </div>
 
-        {/* Month/Year selectors */}
-        <div className="flex gap-2">
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {months.map((m, idx) => (
-              <option key={m} value={idx}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
+        <DateFilterControl onChange={setDateRange} />
       </div>
 
       {/* Tabs */}
