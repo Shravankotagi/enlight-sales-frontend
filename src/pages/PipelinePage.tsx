@@ -34,15 +34,20 @@ function DealCard({ deal, onStageChange, onSelect }: {
       onClick={() => onSelect(deal.id)}
       className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
     >
-      <div className="flex items-start justify-between mb-2">
-        <h4 className="text-sm font-semibold text-gray-800 leading-tight">
-          {deal.customer_name || 'Unknown Customer'}
-        </h4>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-          ${deal.inquiry_type === 'purchase_order'
+      <div className="flex items-start justify-between mb-2 gap-1">
+        <div>
+          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded mr-1.5 inline-block uppercase">
+            #{deal.deal_number || (deal.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+          </span>
+          <h4 className="text-sm font-semibold text-gray-800 leading-tight inline">
+            {deal.customer_name || 'Unknown Customer'}
+          </h4>
+        </div>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0
+          ${deal.stage === 'won' || deal.inquiry_type === 'purchase_order'
             ? 'bg-green-100 text-green-700'
             : 'bg-blue-100 text-blue-700'}`}>
-          {deal.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
+          {deal.stage === 'won' ? 'WON' : deal.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
         </span>
       </div>
 

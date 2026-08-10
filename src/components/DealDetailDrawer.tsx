@@ -123,6 +123,9 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                   {deal?.customer_name || 'Unknown Customer'}
                 </h2>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-bold uppercase">
+                    #{deal?.deal_number || (deal?.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+                  </span>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STAGE_COLORS[deal?.stage] || 'bg-gray-100 text-gray-600'}`}>
                     {deal?.stage?.replace('_', ' ').toUpperCase()}
                   </span>
@@ -130,7 +133,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                     {deal?.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
                   </span>
                   {deal?.po_number && (
-                    <span className="text-xs text-gray-500">PO: {deal.po_number}</span>
+                    <span className="text-xs text-gray-500 font-medium">PO: {deal.po_number}</span>
                   )}
                 </div>
               </>
