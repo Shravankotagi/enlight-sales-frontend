@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ShoppingBag, Plus, Search, CheckCircle, PackageCheck, Truck, RefreshCw, X, FileText, Building2 } from 'lucide-react';
 import { ordersApi } from '../lib/api';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 
 interface DealItem {
   id?: string;
@@ -30,6 +31,13 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const now = new Date();
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: 'this_month',
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+    to: now.toISOString().split('T')[0]
+  });
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -105,8 +113,17 @@ export default function OrdersPage() {
 
   const safeOrders = Array.isArray(orders) ? orders : [];
 
-  // Filter orders
+  // Filter orders by date range & search
   const filtered = safeOrders.filter(o => {
+    // Date filter
+    if (dateRange.from && dateRange.to) {
+      const dateStr = o.po_date || o.created_at || o.won_at;
+      if (dateStr) {
+        const itemDate = new Date(dateStr).toISOString().split('T')[0];
+        if (itemDate < dateRange.from || itemDate > dateRange.to) return false;
+      }
+    }
+
     const itemsStr = (o?.deal_items || []).map(i => i?.sku_text || '').join(' ');
     return (
       (o?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -116,9 +133,9 @@ export default function OrdersPage() {
     );
   });
 
-  const totalOrders = safeOrders.length;
-  const totalRevenue = safeOrders.reduce((sum, o) => sum + Number(o?.total_amount || 0), 0);
-  const totalTonnage = safeOrders.reduce((sum, o) => {
+  const totalOrders = filtered.length;
+  const totalRevenue = filtered.reduce((sum, o) => sum + Number(o?.total_amount || 0), 0);
+  const totalTonnage = filtered.reduce((sum, o) => {
     const itemsQty = (o?.deal_items || []).reduce((iSum, i) => iSum + Number(i?.quantity || 0), 0);
     return sum + itemsQty;
   }, 0);
@@ -137,7 +154,8 @@ export default function OrdersPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DateFilterControl onChange={setDateRange} />
           <button
             onClick={fetchOrders}
             className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"

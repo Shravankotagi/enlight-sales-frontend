@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Plus, Search, CheckCircle2, Clock, ThumbsUp, RefreshCw, X, User, Phone, Map } from 'lucide-react';
 import { visitsApi } from '../lib/api';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 
 interface CustomerVisit {
   id: string;
@@ -21,6 +22,13 @@ export default function VisitsPage() {
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const now = new Date();
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: 'this_month',
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+    to: now.toISOString().split('T')[0]
+  });
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -89,8 +97,17 @@ export default function VisitsPage() {
 
   const safeVisits = Array.isArray(visits) ? visits : [];
 
-  // Filter visits
+  // Filter visits by date range, search, & outcome
   const filtered = safeVisits.filter(v => {
+    // Date filter
+    if (dateRange.from && dateRange.to) {
+      const dateStr = v.visited_at;
+      if (dateStr) {
+        const itemDate = new Date(dateStr).toISOString().split('T')[0];
+        if (itemDate < dateRange.from || itemDate > dateRange.to) return false;
+      }
+    }
+
     const matchesSearch =
       (v?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.person_met || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -100,10 +117,10 @@ export default function VisitsPage() {
     return matchesSearch && matchesOutcome;
   });
 
-  const totalVisits = safeVisits.length;
-  const positiveVisits = safeVisits.filter(v => v?.outcome?.toLowerCase() === 'positive').length;
-  const neutralVisits = safeVisits.filter(v => v?.outcome?.toLowerCase() === 'neutral').length;
-  const negativeVisits = safeVisits.filter(v => v?.outcome?.toLowerCase() === 'negative').length;
+  const totalVisits = filtered.length;
+  const positiveVisits = filtered.filter(v => (v?.outcome || '').toLowerCase() === 'positive').length;
+  const neutralVisits = filtered.filter(v => (v?.outcome || '').toLowerCase() === 'neutral').length;
+  const negativeVisits = filtered.filter(v => (v?.outcome || '').toLowerCase() === 'negative').length;
 
   return (
     <div className="p-6 space-y-6">
@@ -119,7 +136,8 @@ export default function VisitsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DateFilterControl onChange={setDateRange} />
           <button
             onClick={fetchVisits}
             className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
