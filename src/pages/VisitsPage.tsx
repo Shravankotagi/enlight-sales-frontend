@@ -36,9 +36,12 @@ export default function VisitsPage() {
     try {
       setLoading(true);
       const res = await visitsApi.getAll();
-      setVisits(res.data || []);
+      const raw = res?.data;
+      const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      setVisits(list);
     } catch (err) {
       console.error('Error fetching visits:', err);
+      setVisits([]);
     } finally {
       setLoading(false);
     }
@@ -84,21 +87,23 @@ export default function VisitsPage() {
     }
   };
 
+  const safeVisits = Array.isArray(visits) ? visits : [];
+
   // Filter visits
-  const filtered = visits.filter(v => {
+  const filtered = safeVisits.filter(v => {
     const matchesSearch =
-      v.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.person_met?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.remarks?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesOutcome = filterOutcome === 'all' || v.outcome?.toLowerCase() === filterOutcome.toLowerCase();
+      (v?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v?.person_met || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v?.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v?.remarks || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesOutcome = filterOutcome === 'all' || (v?.outcome || '').toLowerCase() === filterOutcome.toLowerCase();
     return matchesSearch && matchesOutcome;
   });
 
-  const totalVisits = visits.length;
-  const positiveVisits = visits.filter(v => v.outcome?.toLowerCase() === 'positive').length;
-  const neutralVisits = visits.filter(v => v.outcome?.toLowerCase() === 'neutral').length;
-  const negativeVisits = visits.filter(v => v.outcome?.toLowerCase() === 'negative').length;
+  const totalVisits = safeVisits.length;
+  const positiveVisits = safeVisits.filter(v => v?.outcome?.toLowerCase() === 'positive').length;
+  const neutralVisits = safeVisits.filter(v => v?.outcome?.toLowerCase() === 'neutral').length;
+  const negativeVisits = safeVisits.filter(v => v?.outcome?.toLowerCase() === 'negative').length;
 
   return (
     <div className="p-6 space-y-6">
@@ -212,7 +217,7 @@ export default function VisitsPage() {
                 <th className="px-4 py-3">Contact Phone</th>
                 <th className="px-4 py-3">Location / City</th>
                 <th className="px-4 py-3">Outcome</th>
-                <th className="px-4 py-3">Remarks & Requirements</th>
+                <th className="px-4 py-3">Remarks &amp; Requirements</th>
                 <th className="px-4 py-3">Follow-up Action</th>
               </tr>
             </thead>
@@ -231,7 +236,7 @@ export default function VisitsPage() {
                 </tr>
               ) : (
                 filtered.map((v, idx) => {
-                  const outcomeLower = v.outcome?.toLowerCase() || 'positive';
+                  const outcomeLower = (v?.outcome || '').toLowerCase() || 'positive';
 
                   return (
                     <tr key={v.id || idx} className="hover:bg-slate-50/80 transition-colors">
@@ -239,7 +244,7 @@ export default function VisitsPage() {
                       <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
                         {v.visited_at ? new Date(v.visited_at).toLocaleDateString('en-IN') : '-'}
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-slate-900">{v.customer_name}</td>
+                      <td className="px-4 py-3.5 font-semibold text-slate-900">{v.customer_name || 'Customer'}</td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-medium flex items-center gap-1.5 mt-1">
                         <User size={13} className="text-slate-400" />
                         {v.person_met || '-'}
@@ -367,7 +372,7 @@ export default function VisitsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks & Requirements</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
                 <textarea
                   rows={2}
                   placeholder="Details of discussion, product requirements..."

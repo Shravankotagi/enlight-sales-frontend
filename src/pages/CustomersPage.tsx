@@ -252,15 +252,19 @@ export default function CustomersPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['customers-churn'],
-    queryFn: () => customersApi.getChurnRisk().then(r => r.data.data),
+    queryFn: () => customersApi.getChurnRisk().then(r => {
+      const raw = r?.data;
+      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    }),
   });
 
   if (selectedId) {
     return <CustomerDetail id={selectedId} onBack={() => setSelectedId(null)} />;
   }
 
-  const customers = (data || []).filter((c: any) =>
-    c.customer_name?.toLowerCase().includes(search.toLowerCase())
+  const safeCustomers = Array.isArray(data) ? data : [];
+  const customers = safeCustomers.filter((c: any) =>
+    (c?.customer_name || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (

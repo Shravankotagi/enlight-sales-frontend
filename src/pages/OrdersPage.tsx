@@ -44,9 +44,12 @@ export default function OrdersPage() {
     try {
       setLoading(true);
       const res = await ordersApi.getAll();
-      setOrders(res.data || []);
+      const raw = res?.data;
+      const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      setOrders(list);
     } catch (err) {
       console.error('Error fetching orders:', err);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -100,21 +103,23 @@ export default function OrdersPage() {
     }
   };
 
+  const safeOrders = Array.isArray(orders) ? orders : [];
+
   // Filter orders
-  const filtered = orders.filter(o => {
-    const itemsStr = (o.deal_items || []).map(i => i.sku_text).join(' ');
+  const filtered = safeOrders.filter(o => {
+    const itemsStr = (o?.deal_items || []).map(i => i?.sku_text || '').join(' ');
     return (
-      o.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.delivery_location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (o?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (o?.po_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (o?.delivery_location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       itemsStr.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
 
-  const totalOrders = orders.length;
-  const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
-  const totalTonnage = orders.reduce((sum, o) => {
-    const itemsQty = (o.deal_items || []).reduce((iSum, i) => iSum + Number(i.quantity || 0), 0);
+  const totalOrders = safeOrders.length;
+  const totalRevenue = safeOrders.reduce((sum, o) => sum + Number(o?.total_amount || 0), 0);
+  const totalTonnage = safeOrders.reduce((sum, o) => {
+    const itemsQty = (o?.deal_items || []).reduce((iSum, i) => iSum + Number(i?.quantity || 0), 0);
     return sum + itemsQty;
   }, 0);
 
@@ -125,7 +130,7 @@ export default function OrdersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <ShoppingBag className="text-blue-600" size={28} />
-            Completed & Delivered Orders (KRA 1 & KRA 4)
+            Completed &amp; Delivered Orders (KRA 1 &amp; KRA 4)
           </h1>
           <p className="text-slate-500 text-sm mt-1">
             Track confirmed sales orders, PO numbers, tonnage, and delivery dispatches.
@@ -226,8 +231,8 @@ export default function OrdersPage() {
                 </tr>
               ) : (
                 filtered.map((ord, idx) => {
-                  const itemsStr = (ord.deal_items || [])
-                    .map(i => `${i.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''} ${i.sku_text || 'Material'}`)
+                  const itemsStr = (ord?.deal_items || [])
+                    .map(i => `${i?.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''} ${i?.sku_text || 'Material'}`)
                     .filter(Boolean)
                     .join(', ') || 'Steel Products';
 
@@ -245,7 +250,7 @@ export default function OrdersPage() {
                       <td className="px-4 py-3.5 font-semibold text-slate-900">
                         <span className="flex items-center gap-1.5">
                           <Building2 size={14} className="text-slate-400" />
-                          {ord.customer_name}
+                          {ord.customer_name || 'Customer'}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-800 font-medium max-w-xs truncate" title={itemsStr}>

@@ -36,9 +36,12 @@ export default function ComplaintsPage() {
     try {
       setLoading(true);
       const res = await complaintsApi.getAll();
-      setComplaints(res.data || []);
+      const raw = res?.data;
+      const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      setComplaints(list);
     } catch (err) {
       console.error('Error fetching complaints:', err);
+      setComplaints([]);
     } finally {
       setLoading(false);
     }
