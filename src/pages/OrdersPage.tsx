@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingBag, Plus, Search, CheckCircle, PackageCheck, Truck, RefreshCw, X, FileText, Building2 } from 'lucide-react';
+import { ShoppingBag, Plus, Search, CheckCircle, PackageCheck, Truck, RefreshCw, X, FileText, Building2, Printer, Eye, Copy, Check } from 'lucide-react';
 import { ordersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 
@@ -31,6 +31,8 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedQuotationOrder, setSelectedQuotationOrder] = useState<Order | null>(null);
+  const [copiedPo, setCopiedPo] = useState(false);
 
   const now = new Date();
   const [dateRange, setDateRange] = useState<DateFilterRange>({
@@ -232,18 +234,19 @@ export default function OrdersPage() {
                 <th className="px-4 py-3 text-right">Order Value (₹)</th>
                 <th className="px-4 py-3">Delivery Location</th>
                 <th className="px-4 py-3 text-right">Status</th>
+                <th className="px-4 py-3 text-center">Quotation</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
                     Loading orders data...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
                     No orders found.
                   </td>
                 </tr>
@@ -255,19 +258,24 @@ export default function OrdersPage() {
                     .join(', ') || 'Steel Products';
 
                   return (
-                    <tr key={ord.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={ord.id || idx}
+                      onClick={() => setSelectedQuotationOrder(ord)}
+                      className="hover:bg-blue-50/70 transition-colors cursor-pointer group"
+                      title="Click to view full Official Sales Quotation & Invoice"
+                    >
                       <td className="px-4 py-3.5 font-medium text-slate-500">{idx + 1}</td>
                       <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
                         {ord.po_date || (ord.created_at ? new Date(ord.created_at).toLocaleDateString('en-IN') : '-')}
                       </td>
                       <td className="px-4 py-3.5 font-mono text-xs text-blue-700 font-semibold">
-                        <span className="inline-flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          <FileText size={12} /> {ord.po_number || 'PO-2026-AUTO'}
+                        <span className="inline-flex items-center gap-1.5 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-md border border-blue-200 group-hover:border-blue-600 transition-all font-bold shadow-2xs">
+                          <FileText size={13} /> {ord.po_number || 'PO-2026-AUTO'}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 font-semibold text-slate-900">
-                        <span className="flex items-center gap-1.5">
-                          <Building2 size={14} className="text-slate-400" />
+                        <span className="flex items-center gap-1.5 group-hover:text-blue-700 transition-colors">
+                          <Building2 size={14} className="text-slate-400 group-hover:text-blue-500" />
                           {ord.customer_name || 'Customer'}
                         </span>
                       </td>
@@ -284,6 +292,17 @@ export default function OrdersPage() {
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
                           <CheckCircle size={12} /> Won / Delivered 🎉
                         </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedQuotationOrder(ord);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-all group-hover:shadow-sm hover:scale-105"
+                        >
+                          <Eye size={13} /> View Quotation
+                        </button>
                       </td>
                     </tr>
                   );
@@ -417,6 +436,209 @@ export default function OrdersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Official Sales Quotation & Tax Invoice Modal */}
+      {selectedQuotationOrder && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Controls Header */}
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between no-print">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center font-black text-white text-sm shadow-sm">
+                  EM
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white flex items-center gap-2">
+                    Official Sales Quotation &amp; Order Invoice
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    PO Reference: {selectedQuotationOrder.po_number || 'PO-AUTO-GENERATED'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const po = selectedQuotationOrder.po_number || 'PO-AUTO';
+                    navigator.clipboard.writeText(po);
+                    setCopiedPo(true);
+                    setTimeout(() => setCopiedPo(false), 2000);
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+                >
+                  {copiedPo ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                  {copiedPo ? 'PO Copied!' : 'Copy PO'}
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
+                  title="Print Quotation or Save as PDF"
+                >
+                  <Printer size={14} /> Print / Save PDF
+                </button>
+
+                <button
+                  onClick={() => setSelectedQuotationOrder(null)}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ml-1"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Content */}
+            <div className="p-8 space-y-6 printable-area bg-white text-slate-900">
+              
+              {/* Document Letterhead */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-6 border-b-2 border-slate-900 gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-slate-900 text-white font-black text-xl px-2.5 py-1 rounded">ENLIGHT</span>
+                    <span className="text-2xl font-bold tracking-tight text-slate-900">METALS</span>
+                  </div>
+                  <p className="text-xs font-bold text-blue-700 tracking-wider uppercase mt-1">
+                    Enlight Metals Private Limited • Industrial Steel Solutions
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    MIDC Industrial Zone, Mumbai - 400001 • GSTIN: 27AAACE1234F1Z9
+                  </p>
+                </div>
+
+                <div className="sm:text-right">
+                  <span className="inline-block bg-emerald-100 text-emerald-800 font-bold text-xs px-3 py-1 rounded-full border border-emerald-300">
+                    ✓ CONFIRMED ORDER &amp; QUOTATION
+                  </span>
+                  <p className="text-xs text-slate-600 mt-2 font-mono">
+                    <strong>PO Number:</strong> {selectedQuotationOrder.po_number || 'PO-2026-AUTO'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    <strong>Order Date:</strong> {selectedQuotationOrder.po_date || (selectedQuotationOrder.created_at ? new Date(selectedQuotationOrder.created_at).toLocaleDateString('en-IN') : '-')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Billed To & Delivery Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                    <Building2 size={13} /> Billed To / Customer Account
+                  </p>
+                  <h4 className="text-base font-bold text-slate-900">{selectedQuotationOrder.customer_name}</h4>
+                  <p className="text-xs text-slate-600 mt-1">Industrial Purchase &amp; Contracting Account</p>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                    Deal Ref ID: #{selectedQuotationOrder.id?.slice(0, 8).toUpperCase() || 'DEAL-WON'}
+                  </p>
+                </div>
+
+                <div className="sm:text-right">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1 sm:justify-end">
+                    <Truck size={13} /> Ship To / Delivery Destination
+                  </p>
+                  <h4 className="text-sm font-bold text-slate-800">
+                    {selectedQuotationOrder.delivery_location || 'Customer Site / MIDC Warehouse'}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1">Dispatch Mode: Commercial Freight Heavy Transport</p>
+                  <p className="text-xs text-emerald-700 font-semibold mt-0.5">Status: Ready for Loading &amp; Dispatch</p>
+                </div>
+              </div>
+
+              {/* Quotation Line Items Table */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-900 text-white text-xs font-semibold uppercase">
+                    <tr>
+                      <th className="px-4 py-3 text-center w-12">#</th>
+                      <th className="px-4 py-3">Material / Product Description</th>
+                      <th className="px-4 py-3 text-right">Quantity (MT)</th>
+                      <th className="px-4 py-3 text-right">Unit Rate (₹/MT)</th>
+                      <th className="px-4 py-3 text-right">Total Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {selectedQuotationOrder.deal_items && selectedQuotationOrder.deal_items.length > 0 ? (
+                      selectedQuotationOrder.deal_items.map((item, i) => {
+                        const qty = Number(item.quantity || 0);
+                        const amt = Number(item.amount || (qty * Number(item.rate || 0)) || selectedQuotationOrder.total_amount || 0);
+                        const rate = item.rate || (qty > 0 ? Math.round(amt / qty) : 0);
+
+                        return (
+                          <tr key={i} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 text-center text-slate-500 font-medium">{i + 1}</td>
+                            <td className="px-4 py-3 font-semibold text-slate-900">{item.sku_text || 'Steel Products'}</td>
+                            <td className="px-4 py-3 text-right font-mono font-medium">{qty ? `${qty} MT` : '-'}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{rate ? `₹${rate.toLocaleString('en-IN')}` : '-'}</td>
+                            <td className="px-4 py-3 text-right font-bold text-slate-900">₹{amt.toLocaleString('en-IN')}</td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-center text-slate-500 font-medium">1</td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">Industrial Steel Supply Order Requirement</td>
+                        <td className="px-4 py-3 text-right font-mono font-medium">Bulk Order</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-600">Standard Rate</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-900">
+                          ₹{Number(selectedQuotationOrder.total_amount || 0).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Financial Calculation Box & Terms */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pt-2">
+                <div className="text-xs text-slate-500 max-w-sm space-y-1">
+                  <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>
+                  <p>1. Material meets IS 2062 / IS 1786 prime steel standards.</p>
+                  <p>2. Payment terms: 100% as per agreed commercial contract.</p>
+                  <p>3. Official computer-generated quotation from Enlight Metals OS.</p>
+                </div>
+
+                <div className="w-full sm:w-80 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>Subtotal (Base Value):</span>
+                    <span className="font-mono font-medium">
+                      ₹{Math.round(Number(selectedQuotationOrder.total_amount || 0) / 1.18).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>GST (18% Estimated):</span>
+                    <span className="font-mono font-medium">
+                      ₹{(Number(selectedQuotationOrder.total_amount || 0) - Math.round(Number(selectedQuotationOrder.total_amount || 0) / 1.18)).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-300 flex justify-between items-center">
+                    <span className="text-sm font-bold text-slate-900">Total Order Value:</span>
+                    <span className="text-lg font-bold text-emerald-600 font-mono">
+                      ₹{Number(selectedQuotationOrder.total_amount || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Signature Footer */}
+              <div className="pt-6 border-t border-slate-200 flex justify-between items-end text-xs text-slate-500">
+                <div>
+                  <p className="font-semibold text-slate-800">Enlight Metals Sales Ops Team</p>
+                  <p>System Generated Official Quotation &amp; Invoice</p>
+                </div>
+
+                <div className="text-right">
+                  <div className="h-10 border-b border-dashed border-slate-300 w-36 mb-1"></div>
+                  <p className="font-bold text-slate-800">Authorized Signatory</p>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       )}
