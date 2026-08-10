@@ -35,14 +35,9 @@ function DealCard({ deal, onStageChange, onSelect }: {
       className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
     >
       <div className="flex items-start justify-between mb-2 gap-1">
-        <div>
-          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded mr-1.5 inline-block uppercase">
-            #{deal.deal_number || (deal.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
-          </span>
-          <h4 className="text-sm font-semibold text-gray-800 leading-tight inline">
-            {deal.customer_name || 'Unknown Customer'}
-          </h4>
-        </div>
+        <h4 className="text-sm font-semibold text-gray-800 leading-tight">
+          {deal.customer_name || 'Unknown Customer'}
+        </h4>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0
           ${deal.stage === 'won' || deal.inquiry_type === 'purchase_order'
             ? 'bg-green-100 text-green-700'
@@ -91,9 +86,14 @@ function DealCard({ deal, onStageChange, onSelect }: {
         ))}
       </div>
 
-      <p className="text-xs text-gray-400 mt-2">
-        {new Date(deal.created_at).toLocaleDateString('en-IN')}
-      </p>
+      <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+        <span className="text-gray-400 font-medium">
+          {new Date(deal.created_at).toLocaleDateString('en-IN')}
+        </span>
+        <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded tracking-wide uppercase">
+          #{deal.deal_number || (deal.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+        </span>
+      </div>
     </div>
   );
 }
