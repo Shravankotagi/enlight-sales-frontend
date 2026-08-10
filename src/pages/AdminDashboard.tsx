@@ -3,7 +3,7 @@ import { reportsApi, inquiriesApi, dealsApi, employeesApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
-  ChevronRight, Calendar, UserCheck
+  ChevronRight, Calendar, UserCheck, Home
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -123,6 +123,14 @@ export default function AdminDashboard() {
 
         {/* Dropdown Selector */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => navigate('/home')}
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700
+              text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-sm hover:scale-105"
+          >
+            <Home size={15} />
+            Go to Executive Home Dashboard
+          </button>
           {/* Month/Year Selector */}
           <select
             value={selectedMonth}

@@ -57,9 +57,12 @@ export default function LoginPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Invalid OTP');
       login(data.data.token, data.data.employee);
-      navigate('/');
+      if (data.data.employee.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/home');
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {

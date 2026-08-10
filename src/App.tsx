@@ -45,13 +45,14 @@ function AppRoutes() {
 
 function AdminRoutes() {
   const { viewingAs } = useAuth();
-  // Allow accessing the Admin Overview directly even if no salesperson is selected
-  if (window.location.pathname === '/admin-dashboard') return <AppRoutes />;
+  // Allow accessing Admin Overview or Executive Home directly even if no salesperson is selected
+  if (window.location.pathname === '/admin-dashboard' || window.location.pathname === '/home') return <AppRoutes />;
   if (!viewingAs) return <Navigate to="/admin" replace />;
   return <AppRoutes />;
 }
 
 function SalespersonRoutes() {
+  if (window.location.pathname === '/') return <Navigate to="/home" replace />;
   return <AppRoutes />;
 }
 
