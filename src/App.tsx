@@ -11,6 +11,9 @@ import InquiriesPage from './pages/InquiriesPage';
 import ReportsPage from './pages/ReportsPage';
 import IntelligencePage from './pages/IntelligencePage';
 import PricingPage from './pages/PricingPage';
+import ComplaintsPage from './pages/ComplaintsPage';
+import VisitsPage from './pages/VisitsPage';
+import OrdersPage from './pages/OrdersPage';
 import NotFoundPage from './pages/NotFoundPage';
 import AdminDashboard from './pages/AdminDashboard';
 
@@ -23,7 +26,10 @@ function AppRoutes() {
       <Routes>
         <Route path="/home" element={<HomePage />} />
         <Route path="/" element={<PipelinePage />} />
+        <Route path="/orders" element={<OrdersPage />} />
         <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/visits" element={<VisitsPage />} />
+        <Route path="/complaints" element={<ComplaintsPage />} />
         <Route path="/kra" element={<KRADashboard />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
         <Route path="/reports" element={<ReportsPage />} />

@@ -60,10 +60,28 @@ export const kraApi = {
   getActionQueue: (params?: any) => API.get('/kra/action-queue', { params }),
 };
 
+export const complaintsApi = {
+  getAll: (params?: any) => API.get('/kra/complaints', { params }),
+  create: (data: any) => API.post('/kra/complaints', data),
+  updateStatus: (id: string, status: string, resolution_notes?: string) =>
+    API.patch(`/kra/complaints/${id}`, { status, resolution_notes }),
+};
+
+export const visitsApi = {
+  getAll: (params?: any) => API.get('/kra/visits', { params }),
+  create: (data: any) => API.post('/kra/visits', data),
+};
+
+export const ordersApi = {
+  getAll: (params?: any) => API.get('/deals', { params: { ...params, stage: 'won' } }),
+  create: (data: any) => API.post('/deals/order', data),
+};
+
 export const inquiriesApi = {
   getAll: (params?: any) => API.get('/inquiries', { params }),
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
+  create: (data: any) => API.post('/inquiries', data),
 };
 
 export const reportsApi = {
