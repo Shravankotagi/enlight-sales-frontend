@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Calendar, Check } from 'lucide-react';
+import { Calendar, Check, ChevronDown } from 'lucide-react';
 
-export type FilterPreset = '7_days' | '15_days' | 'this_month' | 'custom' | 'monthly';
+export type FilterPreset = '7_days' | '14_days' | 'this_month' | 'custom' | 'monthly';
 
 export type DateFilterRange = {
   preset: FilterPreset;
@@ -19,7 +19,7 @@ interface DateFilterControlProps {
 export default function DateFilterControl({ onChange, initialPreset = 'this_month' }: DateFilterControlProps) {
   const now = new Date();
   const [preset, setPreset] = useState<FilterPreset>(initialPreset);
-  const [showCustom, setShowCustom] = useState(false);
+  const [showCustom, setShowCustom] = useState(initialPreset === 'custom');
   const [customFrom, setCustomFrom] = useState(
     new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString().split('T')[0]
   );
@@ -33,10 +33,10 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
       const fromStr = new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString().split('T')[0];
       setShowCustom(false);
       onChange({ preset: '7_days', from: fromStr, to: todayStr });
-    } else if (newPreset === '15_days') {
+    } else if (newPreset === '14_days') {
       const fromStr = new Date(now.getTime() - 15 * 24 * 3600 * 1000).toISOString().split('T')[0];
       setShowCustom(false);
-      onChange({ preset: '15_days', from: fromStr, to: todayStr });
+      onChange({ preset: '14_days', from: fromStr, to: todayStr });
     } else if (newPreset === 'this_month') {
       const fromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
       setShowCustom(false);
@@ -53,74 +53,42 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Preset Pills */}
-      <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 shadow-sm text-xs font-medium">
-        <button
-          type="button"
-          onClick={() => handleSelectPreset('7_days')}
-          className={`px-3 py-1.5 rounded-lg transition-colors ${
-            preset === '7_days'
-              ? 'bg-white text-blue-600 font-bold shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}>
-          Last 7 Days
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleSelectPreset('15_days')}
-          className={`px-3 py-1.5 rounded-lg transition-colors ${
-            preset === '15_days'
-              ? 'bg-white text-blue-600 font-bold shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}>
-          Last 15 Days
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleSelectPreset('this_month')}
-          className={`px-3 py-1.5 rounded-lg transition-colors ${
-            preset === 'this_month'
-              ? 'bg-white text-blue-600 font-bold shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}>
-          This Month
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleSelectPreset('custom')}
-          className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${
-            preset === 'custom'
-              ? 'bg-white text-blue-600 font-bold shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}>
-          <Calendar size={13} />
-          Custom Date
-        </button>
+      {/* Dropdown Select Menu */}
+      <div className="relative inline-flex items-center">
+        <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+        <select
+          value={preset}
+          onChange={(e) => handleSelectPreset(e.target.value as FilterPreset)}
+          className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs appearance-none cursor-pointer transition-all"
+        >
+          <option value="this_month">This Month</option>
+          <option value="7_days">Last 7 Days</option>
+          <option value="14_days">Last 15 Days</option>
+          <option value="custom">Custom Date Range</option>
+        </select>
+        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
       </div>
 
-      {/* Custom Date Pickers */}
+      {/* Custom Date Range Pickers */}
       {showCustom && (
-        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm text-xs">
+        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm text-xs animate-in fade-in slide-in-from-left-2 duration-150">
           <input
             type="date"
             value={customFrom}
             onChange={e => setCustomFrom(e.target.value)}
-            className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500"
+            className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
           />
           <span className="text-slate-400 font-medium">to</span>
           <input
             type="date"
             value={customTo}
             onChange={e => setCustomTo(e.target.value)}
-            className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500"
+            className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
           />
           <button
             type="button"
             onClick={handleApplyCustom}
-            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded transition-colors flex items-center gap-1">
+            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded transition-colors flex items-center gap-1 shadow-2xs">
             <Check size={12} /> Apply
           </button>
         </div>
