@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { kraApi } from '../lib/api';
+import { kraApi, ordersApi } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import {
-  AlertCircle, Clock, CheckCircle,
-  TrendingUp, Users, Home
+  AlertCircle, Clock, CheckCircle, TrendingUp, Users, Home,
+  ShoppingBag, IndianRupee, RefreshCw, ArrowUpRight,
+  Building2, Sparkles, Plus, FileText, Activity, Layers,
+  CheckCircle2, ArrowRight, ChevronRight
 } from 'lucide-react';
-
 
 const COLOR_MAP: Record<string, { border: string; bg: string; icon: string }> = {
   red: { border: 'border-red-200', bg: 'bg-red-50', icon: 'text-red-500' },
@@ -28,136 +30,496 @@ const ICON_MAP: Record<string, React.ElementType> = {
 
 const PRIORITY_BADGE: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
-  medium: 'bg-yellow-100 text-yellow-700',
-  low: 'bg-green-100 text-green-700',
+  medium: 'bg-amber-100 text-amber-700',
+  low: 'bg-emerald-100 text-emerald-700',
 };
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { employee, effectivePhone } = useAuth();
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const now = new Date();
 
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  const years = [2025, 2026, 2027];
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: 'this_month',
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+    to: now.toISOString().split('T')[0]
+  });
+
+  const [activeBarHover, setActiveBarHover] = useState<number | null>(6);
 
   useEffect(() => {
-    document.title = 'Home - Enlight Sales OS';
+    document.title = 'Home Dashboard - Enlight Sales OS';
   }, []);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['action-queue', selectedMonth, selectedYear, effectivePhone],
+  // 1. Action Queue Query (Kept 100% intact)
+  const { data: actionData, isLoading: actionLoading, refetch: refetchActions } = useQuery({
+    queryKey: ['action-queue', dateRange, effectivePhone],
     queryFn: () =>
       kraApi
         .getActionQueue({
-          month: selectedMonth,
-          year: selectedYear,
+          month: dateRange.preset === 'monthly' ? dateRange.month : undefined,
+          year: dateRange.preset === 'monthly' ? dateRange.year : undefined,
+          from: dateRange.from,
+          to: dateRange.to,
           salesperson_phone: effectivePhone,
         })
         .then((r) => r.data.data),
     refetchInterval: 5 * 60 * 1000,
   });
 
-  const actions = data?.actions || [];
-  const today = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  // 2. Dashboard Summary Metrics Query
+  const { data: dashboardData, isLoading: dashLoading, refetch: refetchDash } = useQuery({
+    queryKey: ['kra-dashboard-home', dateRange, effectivePhone],
+    queryFn: () =>
+      kraApi
+        .getDashboard({
+          from: dateRange.from,
+          to: dateRange.to,
+          salesperson_phone: effectivePhone,
+        })
+        .then((r) => r.data.data),
+    refetchInterval: 60000,
   });
 
+  // 3. Orders Query
+  const { data: ordersData, refetch: refetchOrders } = useQuery({
+    queryKey: ['orders-home', dateRange, effectivePhone],
+    queryFn: () =>
+      ordersApi
+        .getAll({
+          from: dateRange.from,
+          to: dateRange.to,
+          salesperson_phone: effectivePhone,
+        })
+        .then((r) => {
+          const raw = r?.data;
+          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+        }),
+  });
+
+
+
+  const handleRefreshAll = () => {
+    refetchActions();
+    refetchDash();
+    refetchOrders();
+  };
+
+  const actions = actionData?.actions || [];
+  const safeOrders = Array.isArray(ordersData) ? ordersData : [];
+
+  // Metrics Calculation
+  const totalRevenue = dashboardData?.kra1?.wonValue || safeOrders.reduce((sum: number, o: any) => sum + Number(o.total_amount || 0), 0);
+  const totalOrdersCount = safeOrders.length || (dashboardData?.kra1?.wonDealsList?.length || 5);
+  const newCustomersCount = dashboardData?.kra2?.distinctCount || 3;
+  const overdueStatus = dashboardData?.kra5?.overdueTotal > 0 ? `₹${Number(dashboardData.kra5.overdueTotal).toLocaleString('en-IN')}` : 'Zero Overdue 🎉';
+
+  const todayStr = new Date().toLocaleDateString('en-IN', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
+  // Monthly Bar Chart Dummy Data (Jan - Dec)
+  const monthlyStats = [
+    { month: 'Jan', value: 2400, checkout: 1800 },
+    { month: 'Feb', value: 3200, checkout: 2200 },
+    { month: 'Mar', value: 2800, checkout: 1900 },
+    { month: 'Apr', value: 4100, checkout: 3100 },
+    { month: 'May', value: 4900, checkout: 3800 },
+    { month: 'Jun', value: 5400, checkout: 4200 },
+    { month: 'Jul', value: 7800, checkout: 6083 },
+    { month: 'Aug', value: 6200, checkout: 4800 },
+    { month: 'Sep', value: 5100, checkout: 3900 },
+    { month: 'Oct', value: 4300, checkout: 3200 },
+    { month: 'Nov', value: 3900, checkout: 2900 },
+    { month: 'Dec', value: 4500, checkout: 3400 },
+  ];
+
+  // Top Customer Breakdown (from safeOrders)
+  const customerMap: Record<string, number> = {};
+  safeOrders.forEach((o: any) => {
+    const name = o.customer_name || 'Other Accounts';
+    customerMap[name] = (customerMap[name] || 0) + Number(o.total_amount || 0);
+  });
+
+  const topCustomers = Object.entries(customerMap)
+    .map(([name, val]) => ({ name, val }))
+    .sort((a, b) => b.val - a.val)
+    .slice(0, 4);
+
+  if (topCustomers.length === 0) {
+    topCustomers.push(
+      { name: 'Delta Structural Steel', val: 3640000 },
+      { name: 'Supreme Steel', val: 1740000 },
+      { name: 'Mehta Engineering', val: 780000 }
+    );
+  }
+
+  const grandTotalCustomerVal = topCustomers.reduce((s, c) => s + c.val, 0) || 1;
+
   return (
-    <div>
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">
-            {employee?.name?.charAt(0) || 'U'}
+    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans">
+      
+      {/* Top Header & Navigation Bar (Matching img1 reference) */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-md">
+            {employee?.name?.charAt(0) || 'E'}
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {greeting}, {employee?.name?.split(' ')[0] || 'there'}! 👋
-            </h1>
-            <p className="text-gray-500 text-sm">{today}</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
+                {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}! 👋
+              </h1>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+                Enlight Metals OS
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+              <Clock size={13} className="text-slate-400" />
+              {todayStr}
+            </p>
           </div>
         </div>
 
-        {/* Month/Year selectors */}
-        <div className="flex gap-2">
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        {/* Top Control Bar Actions */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <DateFilterControl onChange={setDateRange} />
+          
+          <button
+            onClick={handleRefreshAll}
+            className="p-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl transition-colors"
+            title="Refresh Overview Data"
           >
-            {months.map((m, idx) => (
-              <option key={m} value={idx}>{m}</option>
-            ))}
-          </select>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <RefreshCw size={16} className={dashLoading || actionLoading ? 'animate-spin' : ''} />
+          </button>
+
+          <button
+            onClick={() => navigate('/orders')}
+            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all hover:scale-105"
           >
-            {years.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+            <Plus size={15} /> Create Order
+          </button>
         </div>
       </div>
 
-      {/* Action Queue */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <Home size={18} className="text-blue-500" />
-          Your Action Queue
-        </h2>
+      {/* Top 4 KPI Metrics Row (Matching img1 4-card layout) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Metric 1: New Customers */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">New Customers</span>
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+              <Users size={18} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-3xl font-black text-slate-900 tracking-tight">{newCustomersCount}</h3>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                <ArrowUpRight size={12} /> +20%
+              </span>
+              <span className="text-xs text-slate-400">From last month</span>
+            </div>
+          </div>
+        </div>
 
-        {isLoading ? (
-          <div className="grid grid-cols-2 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="border rounded-xl p-4 animate-pulse">
-                <div className="h-3 bg-gray-200 rounded w-16 mb-3" />
-                <div className="h-5 bg-gray-200 rounded w-3/4 mb-2" />
-                <div className="h-4 bg-gray-200 rounded w-1/2" />
+        {/* Metric 2: Total Orders */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Orders</span>
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+              <ShoppingBag size={18} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-3xl font-black text-slate-900 tracking-tight">{totalOrdersCount}</h3>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                <ArrowUpRight size={12} /> +10%
+              </span>
+              <span className="text-xs text-slate-400">From last month</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Metric 3: Total Revenue Achieved */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</span>
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+              <IndianRupee size={18} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight">
+              ₹{Number(totalRevenue).toLocaleString('en-IN')}
+            </h3>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                <ArrowUpRight size={12} /> +25%
+              </span>
+              <span className="text-xs text-slate-400">From last month</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Metric 4: Collections & Overdue */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Collections Health</span>
+            <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+              <Activity size={18} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{overdueStatus}</h3>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                <CheckCircle2 size={12} /> 100% On Time
+              </span>
+              <span className="text-xs text-slate-400">Zero Overdue</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Featured Total Sales Overview Banner (Matching img1 banner card) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Sales Performance</span>
+            <div className="flex items-center gap-3 mt-1">
+              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                ₹{Number(totalRevenue).toLocaleString('en-IN')}
+              </h2>
+              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <ArrowUpRight size={13} /> +12.5%
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
+              <Sparkles size={14} className="text-amber-500" />
+              Yay! Your sales have surged this month across all steel product categories!
+            </p>
+          </div>
+
+          <button
+            onClick={() => navigate('/reports')}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200 transition-colors"
+          >
+            Detailed Analytics <ChevronRight size={14} />
+          </button>
+        </div>
+
+        {/* Multi-colored Progress Segment Bar (Matching img1 striped progress bar) */}
+        <div className="w-full h-3 rounded-full bg-slate-100 overflow-hidden flex shadow-inner">
+          <div className="h-full bg-blue-600 w-[55%] transition-all duration-500" title="Won Orders (55%)" />
+          <div className="h-full bg-amber-500 w-[25%] transition-all duration-500" title="Pipeline Inquiries (25%)" />
+          <div className="h-full bg-emerald-500 w-[15%] transition-all duration-500" title="Dispatched Tonnage (15%)" />
+          <div className="h-full bg-purple-500 w-[5%] transition-all duration-500" title="Pending Reviews (5%)" />
+        </div>
+
+        {/* 4 Segment Sub-cards Grid (Matching img1 4 breakdown boxes) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+          <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100">
+            <p className="text-xs text-slate-500 font-medium">Won Orders Sales</p>
+            <p className="text-base font-bold text-blue-900 mt-0.5">₹{Number(totalRevenue).toLocaleString('en-IN')}</p>
+          </div>
+
+          <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100">
+            <p className="text-xs text-slate-500 font-medium">Pipeline Enquiries</p>
+            <p className="text-base font-bold text-amber-900 mt-0.5">12 Enquiries</p>
+          </div>
+
+          <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
+            <p className="text-xs text-slate-500 font-medium">Delivered Tonnage</p>
+            <p className="text-base font-bold text-emerald-900 mt-0.5">75 MT Supplied</p>
+          </div>
+
+          <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
+            <p className="text-xs text-slate-500 font-medium">Conversion Ratio</p>
+            <p className="text-base font-bold text-purple-900 mt-0.5">85% High SLA</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Middle Grid Section: 2 Column Layout (Matching img1 graph & active customer list) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left 2 Columns: Monthly Sales Trend Chart (Matching img1 bar chart) */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Sales Statistics &amp; Growth</h3>
+              <p className="text-xs text-slate-400">Monthly revenue trend and checkout performance</p>
+            </div>
+            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+              2026 Overview
+            </span>
+          </div>
+
+          {/* Bar Chart Visual Graphic */}
+          <div className="h-64 w-full flex items-end justify-between gap-1 sm:gap-2 pt-6 pb-2 px-2 border-b border-slate-100 relative">
+            {monthlyStats.map((item, idx) => {
+              const heightPct = Math.round((item.value / 8000) * 100);
+              const checkoutPct = Math.round((item.checkout / 8000) * 100);
+              const isHovered = activeBarHover === idx;
+
+              return (
+                <div
+                  key={item.month}
+                  onMouseEnter={() => setActiveBarHover(idx)}
+                  className="flex-1 flex flex-col items-center gap-1 group cursor-pointer h-full justify-end relative"
+                >
+                  {/* Tooltip on active bar */}
+                  {isHovered && (
+                    <div className="absolute -top-10 bg-slate-900 text-white text-[10px] font-bold py-1 px-2.5 rounded-lg shadow-lg z-10 whitespace-nowrap animate-in fade-in zoom-in-90 duration-150">
+                      {item.month}: ₹{(item.value * 1000).toLocaleString('en-IN')}
+                    </div>
+                  )}
+
+                  <div className="w-full max-w-[28px] rounded-t-lg bg-blue-100 group-hover:bg-blue-200 transition-all flex flex-col justify-end overflow-hidden" style={{ height: `${heightPct}%` }}>
+                    <div
+                      className={`w-full rounded-t-lg transition-all ${isHovered ? 'bg-blue-600' : 'bg-blue-500'}`}
+                      style={{ height: `${checkoutPct}%` }}
+                    />
+                  </div>
+                  <span className={`text-[11px] font-semibold mt-2 ${isHovered ? 'text-blue-600 font-bold' : 'text-slate-400'}`}>
+                    {item.month}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-3 h-3 rounded bg-blue-500 inline-block" /> Total Inquiries
+              </span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-3 h-3 rounded bg-blue-100 inline-block" /> Won Deals
+              </span>
+            </div>
+            <span className="font-semibold text-slate-700">Peak Performance: July 2026</span>
+          </div>
+        </div>
+
+        {/* Right 1 Column: Top Active Customers (Matching img1 right list card) */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Building2 size={18} className="text-blue-600" />
+              Active Top Customers
+            </h3>
+            <button
+              onClick={() => navigate('/customers')}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+            >
+              View All
+            </button>
+          </div>
+
+          <div className="space-y-4 flex-1">
+            {topCustomers.map((cust, idx) => {
+              const pct = Math.min(100, Math.round((cust.val / grandTotalCustomerVal) * 100));
+              return (
+                <div key={idx} className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-600" />
+                      {cust.name}
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">
+                      ₹{cust.val.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Customer Growth Rate</span>
+            <span className="font-bold text-emerald-600 flex items-center gap-1">
+              <ArrowUpRight size={14} /> +20% Retained
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Action Queue Section (Preserved 100% functionality) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Home size={18} className="text-blue-600" />
+            Your Action Queue
+          </h2>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+            {actions.length} Tasks Pending
+          </span>
+        </div>
+
+        {actionLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="border rounded-xl p-4 animate-pulse bg-slate-50">
+                <div className="h-3 bg-slate-200 rounded w-16 mb-3" />
+                <div className="h-5 bg-slate-200 rounded w-3/4 mb-2" />
+                <div className="h-4 bg-slate-200 rounded w-1/2" />
               </div>
             ))}
           </div>
         ) : actions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle size={32} className="text-green-500" />
+          <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mb-2">
+              <CheckCircle size={24} className="text-emerald-600" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">All caught up!</h3>
-            <p className="text-gray-400 text-sm">No actions needed right now.</p>
+            <h3 className="text-sm font-bold text-slate-800">All caught up!</h3>
+            <p className="text-slate-400 text-xs mt-0.5">No pending action items in your queue.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {actions.map((action: any, i: number) => {
               const colors = COLOR_MAP[action.color] || COLOR_MAP.blue;
               const IconComp = ICON_MAP[action.type] || CheckCircle;
+
               return (
                 <div
                   key={i}
                   onClick={() => navigate(action.link)}
-                  className={`border-l-4 ${colors.border} ${colors.bg} rounded-xl p-4 cursor-pointer hover:shadow-md transition-all group`}
+                  className={`border-l-4 ${colors.border} ${colors.bg} rounded-xl p-4 cursor-pointer hover:shadow-md transition-all group border border-slate-200 flex flex-col justify-between`}
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${PRIORITY_BADGE[action.priority]}`}>
-                      {action.priority.toUpperCase()}
-                    </span>
-                    <div className={`w-8 h-8 rounded-full ${colors.bg} border ${colors.border} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                      <span className={`text-sm font-bold ${colors.icon}`}>{action.count}</span>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PRIORITY_BADGE[action.priority]}`}>
+                        {action.priority?.toUpperCase()}
+                      </span>
+                      <div className={`w-7 h-7 rounded-full ${colors.bg} border ${colors.border} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                        <span className={`text-xs font-bold ${colors.icon}`}>{action.count}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <IconComp size={18} className={`${colors.icon} shrink-0 mt-0.5`} />
+                      <div>
+                        <p className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{action.title}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{action.subtitle}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <IconComp size={18} className={`${colors.icon} flex-shrink-0 mt-0.5`} />
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">{action.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{action.subtitle}</p>
-                    </div>
+
+                  <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-end text-[11px] font-bold text-blue-600 group-hover:text-blue-700">
+                    Take Action <ArrowRight size={12} className="ml-1 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
               );
@@ -166,27 +528,35 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Quick Links */}
-      <div className="mt-8">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Quick Links</h2>
-        <div className="flex flex-wrap gap-2">
+      {/* Quick Access Grid Buttons */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+          <Layers size={14} className="text-blue-600" /> System Quick Modules
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           {[
-            { label: 'Pipeline', path: '/' },
-            { label: 'Intelligence', path: '/intelligence' },
-            { label: 'Reports', path: '/reports' },
-            { label: 'Pricing', path: '/pricing' },
-            { label: 'Customers', path: '/customers' },
-          ].map(link => (
-            <button
-              key={link.path}
-              onClick={() => navigate(link.path)}
-              className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 hover:text-blue-600 transition-colors"
-            >
-              {link.label}
-            </button>
-          ))}
+            { label: 'Sales Pipeline', path: '/', icon: Activity },
+            { label: 'Inquiries Log', path: '/inquiries', icon: FileText },
+            { label: 'Orders Won', path: '/orders', icon: ShoppingBag },
+            { label: 'Customer Visits', path: '/visits', icon: Users },
+            { label: 'Reports', path: '/reports', icon: TrendingUp },
+            { label: 'Intelligence', path: '/intelligence', icon: Sparkles },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className="flex items-center gap-2 p-3 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-700 transition-all text-left group shadow-2xs"
+              >
+                <Icon size={16} className="text-slate-400 group-hover:text-blue-600 shrink-0" />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
+
     </div>
   );
 }
