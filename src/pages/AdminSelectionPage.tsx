@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Users, LogOut, Loader2, UserPlus, X, ShieldAlert, FileSpreadsheet, Home } from 'lucide-react';
+import { Users, LogOut, Loader2, UserPlus, X, ShieldAlert, FileSpreadsheet } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ||
@@ -212,14 +212,6 @@ export default function AdminSelectionPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => navigate('/home')}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700
-                text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md hover:scale-105"
-            >
-              <Home size={16} />
-              Go to Executive Home Dashboard
-            </button>
             <button
               onClick={() => navigate('/admin-dashboard')}
               className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700
