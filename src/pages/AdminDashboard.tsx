@@ -6,9 +6,10 @@ import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
   ArrowUpRight, Award, CheckCircle2, AlertCircle, Layers,
-  Sparkles, Plus
+  Sparkles, Plus, Upload, Download
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -87,6 +88,10 @@ export default function AdminDashboard() {
     queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data.data),
   });
 
+  const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
   const handleRefreshAll = () => {
     refetchMonthly();
     refetchFunnel();
@@ -94,6 +99,36 @@ export default function AdminDashboard() {
     refetchSalesperson();
     refetchInquiries();
     refetchDeals();
+  };
+
+  const handlePushToBigin = async () => {
+    setIsPushing(true);
+    setSyncMsg(null);
+    try {
+      await axios.get('https://enlight-sales-bot-production.up.railway.app/bigin-sync');
+      setSyncMsg({ text: '✅ Database records & live deals pushed to Zoho Bigin CRM successfully!', type: 'success' });
+      handleRefreshAll();
+    } catch (err: any) {
+      setSyncMsg({ text: `❌ Push failed: ${err.message || 'Error pushing to Bigin'}`, type: 'error' });
+    } finally {
+      setIsPushing(false);
+      setTimeout(() => setSyncMsg(null), 6000);
+    }
+  };
+
+  const handlePullFromBigin = async () => {
+    setIsPulling(true);
+    setSyncMsg(null);
+    try {
+      await axios.get('https://enlight-sales-bot-production.up.railway.app/bigin-import');
+      setSyncMsg({ text: '📥 Contacts & active deals pulled from Zoho Bigin CRM to Database!', type: 'success' });
+      handleRefreshAll();
+    } catch (err: any) {
+      setSyncMsg({ text: `❌ Pull failed: ${err.message || 'Error pulling from Bigin'}`, type: 'error' });
+    } finally {
+      setIsPulling(false);
+      setTimeout(() => setSyncMsg(null), 6000);
+    }
   };
 
   const isLoading = monthlyLoading || funnelLoading || skuLoading || salespersonLoading || inquiriesLoading || dealsLoading;
@@ -200,6 +235,29 @@ export default function AdminDashboard() {
             </select>
           </div>
 
+          {/* Both Zoho Bigin Sync Action Buttons */}
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+            <button
+              onClick={handlePushToBigin}
+              disabled={isPushing || isPulling}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              title="Push all database contacts and live ongoing deals to Zoho Bigin CRM"
+            >
+              <Upload size={13} className={isPushing ? 'animate-spin' : ''} />
+              {isPushing ? 'Pushing...' : 'Push DB → Bigin'}
+            </button>
+
+            <button
+              onClick={handlePullFromBigin}
+              disabled={isPushing || isPulling}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              title="Pull all customer contacts and active deals from Zoho Bigin CRM into database"
+            >
+              <Download size={13} className={isPulling ? 'animate-spin' : ''} />
+              {isPulling ? 'Pulling...' : 'Pull Bigin → DB'}
+            </button>
+          </div>
+
           <button
             onClick={handleRefreshAll}
             title="Refresh All Dashboard Metrics"
@@ -216,6 +274,18 @@ export default function AdminDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Sync Status Toast Banner */}
+      {syncMsg && (
+        <div className={`px-4 py-3 rounded-2xl border font-bold text-xs flex items-center justify-between shadow-xs animate-in fade-in duration-200 ${
+          syncMsg.type === 'success'
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            : 'bg-red-50 text-red-800 border-red-200'
+        }`}>
+          <span className="flex items-center gap-2">{syncMsg.text}</span>
+          <button onClick={() => setSyncMsg(null)} className="font-black opacity-70 hover:opacity-100 ml-3">✕</button>
+        </div>
+      )}
 
       {/* Top 4 KPI Executive Stat Cards (Matching Home Dashboard Layout) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
