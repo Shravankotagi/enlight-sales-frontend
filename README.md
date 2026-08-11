@@ -2,8 +2,8 @@
 
 Welcome! This is the **Web Dashboard App** (Frontend) of Enlight Metals Sales OS.
 
-> 📖 **Complete System Architecture & Setup Guide**:  
-> For full step-by-step local setup instructions across all modules, environment keys, and database connections, see **[Root Master Setup Guide (README.md)](../README.md)**.
+> 📖 **Complete System Architecture & Local Setup Guide**:  
+> For full step-by-step local setup instructions across all modules, environment keys, and database connections, see **[LOCAL_SETUP.md](LOCAL_SETUP.md)**.
 
 ---
 
@@ -27,7 +27,7 @@ npm run dev
 ```
 
 - Local web app runs on `http://localhost:5173`.
-- For complete `.env` configuration details, see **[Root Master Setup Guide (README.md)](../README.md)**.
+- For complete `.env` configuration details, see **[LOCAL_SETUP.md](LOCAL_SETUP.md)**.
 
 ---
 
