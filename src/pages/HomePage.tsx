@@ -102,17 +102,34 @@ export default function HomePage() {
   const actions = actionData?.actions || [];
   const safeOrders = Array.isArray(ordersData) ? ordersData : [];
 
+  // Filter orders dynamically based on selected Date Range (dateRange.from to dateRange.to) & Salesperson Phone
+  const filteredOrders = safeOrders.filter((o: any) => {
+    if (effectivePhone) {
+      const pMatch = (o.salesperson_phone && o.salesperson_phone.slice(-10) === effectivePhone.slice(-10)) ||
+                     (o.customer_phone && o.customer_phone.slice(-10) === effectivePhone.slice(-10));
+      if (!pMatch) return false;
+    }
+    const dStr = o.po_date || o.created_at || o.won_at;
+    if (!dStr) return true;
+    const itemDateStr = new Date(dStr).toISOString().split('T')[0];
+    if (dateRange.from && itemDateStr < dateRange.from) return false;
+    if (dateRange.to && itemDateStr > dateRange.to) return false;
+    return true;
+  });
+
+  const targetOrders = (dateRange.from || dateRange.to || effectivePhone) ? filteredOrders : safeOrders;
+
   // Real Metrics Calculations directly from live database
-  const rawRevenue = safeOrders.reduce((sum: number, o: any) => sum + Number(o.total_amount || 0), 0);
+  const rawRevenue = targetOrders.reduce((sum: number, o: any) => sum + Number(o.total_amount || 0), 0);
   const totalRevenue = rawRevenue > 0 ? rawRevenue : (dashboardData?.kra1?.wonValue || 6160000);
-  const totalOrdersCount = safeOrders.length || (dashboardData?.kra1?.wonDealsList?.length || 5);
+  const totalOrdersCount = targetOrders.length || (dashboardData?.kra1?.wonDealsList?.length || 0);
   const newCustomersCount = dashboardData?.kra2?.distinctCount || 3;
   const overdueVal = Number(dashboardData?.kra5?.overdueTotal ?? dashboardData?.kra5?.outstandingTotal ?? 2550000);
   const pendingPaymentsCount = Number(dashboardData?.kra5?.pendingCount ?? 2);
   const collectedVal = Number(dashboardData?.kra5?.collectedTotal ?? 750000);
 
   // Total Delivered Tonnage (summed live from order line items)
-  const calculatedTonnage = safeOrders.reduce((acc: number, o: any) => {
+  const calculatedTonnage = targetOrders.reduce((acc: number, o: any) => {
     const itemsTonnage = (o.deal_items || []).reduce((iSum: number, item: any) => iSum + Number(item.quantity || 0), 0);
     return acc + itemsTonnage;
   }, 0);
@@ -154,9 +171,9 @@ export default function HomePage() {
   const maxValForChart = Math.max(...monthlyStats.map(s => s.value), 100000);
   const maxMonthObj = monthlyStats.reduce((max, curr) => curr.value > max.value ? curr : max, { month: monthNames[currentMonthIdx], value: totalRevenue });
 
-  // Real Top Customer Accounts (from live orders)
+  // Real Top Customer Accounts (from filtered live orders)
   const customerMap: Record<string, number> = {};
-  safeOrders.forEach((o: any) => {
+  targetOrders.forEach((o: any) => {
     const name = o.customer_name || 'Unassigned Customer';
     customerMap[name] = (customerMap[name] || 0) + Number(o.total_amount || 0);
   });
