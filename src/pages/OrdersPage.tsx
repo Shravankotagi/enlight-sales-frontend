@@ -255,7 +255,7 @@ export default function OrdersPage() {
                   const itemsStr = (ord?.deal_items || [])
                     .map(i => `${i?.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''} ${i?.sku_text || 'Material'}`)
                     .filter(Boolean)
-                    .join(', ') || 'Steel Products';
+                    .join(', ') || 'Metal Products';
 
                   return (
                     <tr
@@ -509,7 +509,7 @@ export default function OrdersPage() {
                     <span className="text-2xl font-bold tracking-tight text-slate-900">METALS</span>
                   </div>
                   <p className="text-xs font-bold text-blue-700 tracking-wider uppercase mt-1">
-                    Enlight Metals Private Limited • Industrial Steel Solutions
+                    Enlight Metals Private Limited • Industrial Metal Solutions
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">
                     MIDC Industrial Zone, Mumbai - 400001 • GSTIN: 27AAACE1234F1Z9
@@ -576,7 +576,7 @@ export default function OrdersPage() {
                         return (
                           <tr key={i} className="hover:bg-slate-50">
                             <td className="px-4 py-3 text-center text-slate-500 font-medium">{i + 1}</td>
-                            <td className="px-4 py-3 font-semibold text-slate-900">{item.sku_text || 'Steel Products'}</td>
+                            <td className="px-4 py-3 font-semibold text-slate-900">{item.sku_text || 'Metal Products'}</td>
                             <td className="px-4 py-3 text-right font-mono font-medium">{qty ? `${qty} MT` : '-'}</td>
                             <td className="px-4 py-3 text-right font-mono text-slate-600">{rate ? `₹${rate.toLocaleString('en-IN')}` : '-'}</td>
                             <td className="px-4 py-3 text-right font-bold text-slate-900">₹{amt.toLocaleString('en-IN')}</td>
@@ -586,7 +586,7 @@ export default function OrdersPage() {
                     ) : (
                       <tr className="hover:bg-slate-50">
                         <td className="px-4 py-3 text-center text-slate-500 font-medium">1</td>
-                        <td className="px-4 py-3 font-semibold text-slate-900">Industrial Steel Supply Order Requirement</td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">Industrial Metal Supply Order Requirement</td>
                         <td className="px-4 py-3 text-right font-mono font-medium">Bulk Order</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-600">Standard Rate</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-900">
@@ -602,7 +602,7 @@ export default function OrdersPage() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pt-2">
                 <div className="text-xs text-slate-500 max-w-sm space-y-1">
                   <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>
-                  <p>1. Material meets IS 2062 / IS 1786 prime steel standards.</p>
+                  <p>1. Material meets IS 2062 / IS 1786 prime metal standards.</p>
                   <p>2. Payment terms: 100% as per agreed commercial contract.</p>
                   <p>3. Official computer-generated quotation from Enlight Metals OS.</p>
                 </div>

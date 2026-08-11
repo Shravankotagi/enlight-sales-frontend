@@ -340,7 +340,7 @@ export default function HomePage() {
             </div>
             <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
               <Sparkles size={14} className="text-amber-500" />
-              Yay! Your sales have surged this month across all steel product categories!
+              Yay! Your sales have surged this month across all metal product categories!
             </p>
           </div>
 
