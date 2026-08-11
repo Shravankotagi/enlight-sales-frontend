@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi, inquiriesApi, dealsApi, employeesApi } from '../lib/api';
 import { useEffect, useState } from 'react';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
@@ -15,14 +16,21 @@ export default function AdminDashboard() {
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
+  const now = new Date();
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: 'this_month',
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+    to: now.toISOString().split('T')[0]
+  });
+
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   const years = [2025, 2026, 2027];
 
-  const fromDate = new Date(Date.UTC(selectedYear, selectedMonth, 1, 0, 0, 0)).toISOString();
-  const toDate = new Date(Date.UTC(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)).toISOString();
+  const fromDate = dateRange.from || new Date(Date.UTC(selectedYear, selectedMonth, 1, 0, 0, 0)).toISOString();
+  const toDate = dateRange.to || new Date(Date.UTC(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)).toISOString();
 
   useEffect(() => {
     document.title = 'Admin Overview - Enlight Sales OS';
@@ -42,29 +50,31 @@ export default function AdminDashboard() {
 
   const queryParams = {
     ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
-    month: selectedMonth,
-    year: selectedYear,
+    month: dateRange.preset === 'monthly' ? dateRange.month : selectedMonth,
+    year: dateRange.preset === 'monthly' ? dateRange.year : selectedYear,
+    from: fromDate,
+    to: toDate,
   };
 
   // Queries with dynamic parameters
   const { data: monthly, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery({
-    queryKey: ['admin-monthly', selectedPhone, selectedMonth, selectedYear],
+    queryKey: ['admin-monthly', selectedPhone, selectedMonth, selectedYear, dateRange],
     queryFn: () => reportsApi.getMonthly(queryParams).then(r => r.data.data),
   });
 
   const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
-    queryKey: ['admin-funnel', selectedPhone, selectedMonth, selectedYear],
+    queryKey: ['admin-funnel', selectedPhone, selectedMonth, selectedYear, dateRange],
     queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data.data),
   });
 
   const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
-    queryKey: ['admin-sku', selectedPhone, selectedMonth, selectedYear],
+    queryKey: ['admin-sku', selectedPhone, selectedMonth, selectedYear, dateRange],
     queryFn: () => reportsApi.getSku(queryParams).then(r => r.data.data),
   });
 
   const { data: salesperson, isLoading: salespersonLoading, refetch: refetchSalesperson } = useQuery({
-    queryKey: ['admin-salesperson', selectedMonth, selectedYear],
-    queryFn: () => reportsApi.getSalesperson({ month: selectedMonth, year: selectedYear }).then(r => r.data.data),
+    queryKey: ['admin-salesperson', selectedMonth, selectedYear, dateRange],
+    queryFn: () => reportsApi.getSalesperson({ month: selectedMonth, year: selectedYear, from: fromDate, to: toDate }).then(r => r.data.data),
   });
 
   const { data: inquiries, isLoading: inquiriesLoading, refetch: refetchInquiries } = useQuery({
@@ -73,7 +83,7 @@ export default function AdminDashboard() {
   });
 
   const { data: deals, isLoading: dealsLoading, refetch: refetchDeals } = useQuery({
-    queryKey: ['admin-recent-deals', selectedPhone, selectedMonth, selectedYear],
+    queryKey: ['admin-recent-deals', selectedPhone, selectedMonth, selectedYear, dateRange],
     queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data.data),
   });
 
@@ -149,6 +159,9 @@ export default function AdminDashboard() {
 
         {/* Dynamic Filters & Refresh Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Quick Date Range Filter (This Month, Last 7 Days, Last 15 Days, Custom Date Range) */}
+          <DateFilterControl onChange={setDateRange} initialPreset={dateRange.preset} />
+
           <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
             <select
               value={selectedMonth}
