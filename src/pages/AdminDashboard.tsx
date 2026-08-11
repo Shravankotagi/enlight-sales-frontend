@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { reportsApi, inquiriesApi, dealsApi, employeesApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import SalesQuotationModal from '../components/SalesQuotationModal';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
@@ -91,6 +92,7 @@ export default function AdminDashboard() {
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [selectedQuotationDeal, setSelectedQuotationDeal] = useState<any | null>(null);
 
   const handleRefreshAll = () => {
     refetchMonthly();
@@ -506,7 +508,7 @@ export default function AdminDashboard() {
                   <div
                     key={deal.id}
                     className="flex items-center justify-between p-3.5 bg-slate-50/80 hover:bg-blue-50/50 rounded-xl border border-slate-100 transition-colors group cursor-pointer"
-                    onClick={() => navigate('/pipeline')}
+                    onClick={() => setSelectedQuotationDeal(deal)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-700 text-sm shadow-2xs group-hover:border-blue-300">
@@ -679,6 +681,14 @@ export default function AdminDashboard() {
 
         </div>
       </div>
+
+      {/* Render Official Sales Quotation & Invoice Modal when clicking any deal */}
+      {selectedQuotationDeal && (
+        <SalesQuotationModal
+          deal={selectedQuotationDeal}
+          onClose={() => setSelectedQuotationDeal(null)}
+        />
+      )}
     </div>
   );
 }

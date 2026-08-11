@@ -27,6 +27,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/home" element={<HomePage />} />
         <Route path="/" element={<PipelinePage />} />
+        <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/customers" element={<CustomersPage />} />
@@ -45,8 +46,13 @@ function AppRoutes() {
 
 function AdminRoutes() {
   const { viewingAs } = useAuth();
-  // Allow accessing Admin Overview or Executive Home directly even if no salesperson is selected
-  if (window.location.pathname === '/admin-dashboard' || window.location.pathname === '/home') return <AppRoutes />;
+  // Allow accessing Admin Overview, Pipeline or Executive Home directly even if no salesperson is selected
+  if (
+    window.location.pathname === '/admin-dashboard' ||
+    window.location.pathname === '/home' ||
+    window.location.pathname === '/pipeline' ||
+    window.location.pathname === '/'
+  ) return <AppRoutes />;
   if (!viewingAs) return <Navigate to="/admin" replace />;
   return <AppRoutes />;
 }
