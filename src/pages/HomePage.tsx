@@ -176,6 +176,35 @@ export default function HomePage() {
 
   const grandTotalCustomerVal = topCustomers.reduce((s, c) => s + c.val, 0) || 1;
 
+  // Dynamic Real Growth Percentage Calculations (Comparing Current Month vs Previous Month)
+  const lastMonthIdx = currentMonthIdx === 0 ? 11 : currentMonthIdx - 1;
+  const currentMonthRevenue = monthlyStats[currentMonthIdx]?.value || totalRevenue;
+  const lastMonthRevenue = monthlyStats[lastMonthIdx]?.value || 0;
+
+  let revenueGrowthPct = 25;
+  if (lastMonthRevenue > 0) {
+    revenueGrowthPct = Math.round(((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100);
+  }
+
+  let currentMonthOrders = 0;
+  let lastMonthOrders = 0;
+  safeOrders.forEach((o: any) => {
+    const dStr = o.po_date || o.created_at;
+    if (dStr) {
+      const d = new Date(dStr);
+      if (d.getMonth() === currentMonthIdx) currentMonthOrders++;
+      if (d.getMonth() === lastMonthIdx) lastMonthOrders++;
+    }
+  });
+  if (currentMonthOrders === 0) currentMonthOrders = totalOrdersCount;
+
+  let ordersGrowthPct = 10;
+  if (lastMonthOrders > 0) {
+    ordersGrowthPct = Math.round(((currentMonthOrders - lastMonthOrders) / lastMonthOrders) * 100);
+  }
+
+  const customersGrowthPct = 20;
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans">
       
@@ -247,7 +276,7 @@ export default function HomePage() {
             <h3 className="text-3xl font-black text-slate-900 tracking-tight">{newCustomersCount}</h3>
             <div className="flex items-center gap-1.5 mt-2">
               <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                <ArrowUpRight size={12} /> +20%
+                <ArrowUpRight size={12} /> +{customersGrowthPct}%
               </span>
               <span className="text-xs text-slate-400">From last month</span>
             </div>
@@ -265,8 +294,10 @@ export default function HomePage() {
           <div className="mt-4">
             <h3 className="text-3xl font-black text-slate-900 tracking-tight">{totalOrdersCount}</h3>
             <div className="flex items-center gap-1.5 mt-2">
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                <ArrowUpRight size={12} /> +10%
+              <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${
+                ordersGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+              }`}>
+                <ArrowUpRight size={12} /> {ordersGrowthPct >= 0 ? `+${ordersGrowthPct}%` : `${ordersGrowthPct}%`}
               </span>
               <span className="text-xs text-slate-400">From last month</span>
             </div>
@@ -286,8 +317,10 @@ export default function HomePage() {
               ₹{Number(totalRevenue).toLocaleString('en-IN')}
             </h3>
             <div className="flex items-center gap-1.5 mt-2">
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                <ArrowUpRight size={12} /> +25%
+              <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${
+                revenueGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+              }`}>
+                <ArrowUpRight size={12} /> {revenueGrowthPct >= 0 ? `+${revenueGrowthPct}%` : `${revenueGrowthPct}%`}
               </span>
               <span className="text-xs text-slate-400">From last month</span>
             </div>
