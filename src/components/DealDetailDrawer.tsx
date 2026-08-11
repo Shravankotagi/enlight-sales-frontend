@@ -6,6 +6,7 @@ import {
   Package, IndianRupee, Clock,
   AlertCircle, Printer
 } from 'lucide-react';
+import SalesQuotationModal from './SalesQuotationModal';
 
 
 import toast from 'react-hot-toast';
@@ -85,8 +86,10 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   };
 
 
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
+
   const handlePrint = () => {
-    window.print();
+    setShowQuotationModal(true);
   };
 
   if (!dealId) return null;
@@ -463,6 +466,14 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
             </div>
           </div>
         </div>
+      )}
+
+      {/* Render Official Sales Quotation & Invoice Modal */}
+      {showQuotationModal && deal && (
+        <SalesQuotationModal
+          deal={deal}
+          onClose={() => setShowQuotationModal(false)}
+        />
       )}
     </>
   );
