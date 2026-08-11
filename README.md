@@ -1,74 +1,81 @@
-# 💻 Enlight Metals Web Dashboard (Frontend) — Easy Setup Guide
+# 💻 Enlight Metals Web Dashboard — Comprehensive Setup & User Manual
 
-Welcome! This is the **Web Dashboard App** for Enlight Metals. It provides an intuitive, executive-grade web browser interface for Admins and Sales Executives to track deals, view performance analytics, manage rate sheets, and sync data with Zoho Bigin.
-
----
-
-## 🎯 Main Features & Tabs
-
-1. 🏠 **Home Tab (`/`)**: Daily sales metrics overview, monthly revenue trend charts, and top active customer accounts.
-2. 🛡️ **Admin Overview (`/admin`)**: Executive management dashboard with date range filters, SKU demand distribution, AI review queue, leaderboard scores, and **Push/Pull Bigin Sync** buttons.
-3. 🔲 **Sales Pipeline (`/pipeline`)**: Drag-and-drop Kanban deal pipeline (*New Inquiry $\rightarrow$ Qualified $\rightarrow$ Quoted $\rightarrow$ Negotiation $\rightarrow$ Won*).
-4. 🛍️ **Orders & Invoices (`/orders`)**: Confirmed won sales orders with printable official metal sales quotations & invoices.
-5. 🏷️ **Pricing Management (`/pricing`)**: Master metal rate sheet editor and floor margin controls.
-6. 📈 **Reports & Exports (`/reports`)**: Downloadable KRA Excel and PDF reports (KRA 1 to KRA 9).
+This is the official documentation for the **Web Dashboard App** (Frontend) of Enlight Metals Sales OS. Built with **React**, **TypeScript**, **Vite**, and **TailwindCSS**, this application provides a modern executive browser interface for tracking deals, managing metal pricing, reviewing AI inquiries, downloading reports, and triggering Zoho Bigin CRM syncs.
 
 ---
 
-## 🚀 How to Run the Web Dashboard (Step-by-Step)
+## 🎯 Navigation & Feature Pages Overview
 
-### Step 1: Open Terminal in the `frontend` folder
+The web dashboard is organized into intuitive side navigation tabs:
 
+| Tab Name | Route | Key Functionality |
+| :--- | :--- | :--- |
+| **Home** | `/` | Daily executive overview, monthly sales revenue growth chart, top active accounts, and priority action items. |
+| **Admin Overview** | `/admin` | Executive management dashboard featuring date range filters (*This Month*, *Last 7 Days*, *Last 15 Days*, *Custom Date Range*), SKU demand distribution, AI review queue, salesperson leaderboards, and **Push/Pull Bigin Sync** buttons. |
+| **Pipeline** | `/pipeline` | Interactive Kanban deal board (*New Inquiry $\rightarrow$ Qualified $\rightarrow$ Quoted $\rightarrow$ Negotiation $\rightarrow$ Won $\rightarrow$ Lost*). |
+| **Inquiries** | `/inquiries` | Review queue for raw customer product inquiries received via WhatsApp. |
+| **Orders** | `/orders` | Confirmed won orders, purchase orders, and printable Official Metal Sales Quotations & Invoices. |
+| **Customers** | `/customers` | Registered customer directory, GSTIN details, and customer churn risk indicators. |
+| **Visits** | `/visits` | Salesperson field visit logs, on-site meeting notes, and follow-ups. |
+| **Complaints** | `/complaints` | Quality complaints log, SLA breach tracking, and resolution status. |
+| **Intelligence** | `/intelligence` | AI-driven sales insights and recommendations. |
+| **Pricing** | `/pricing` | Master metal rate sheet manager (*HR Coil*, *CR Sheet*, *TMT Bar*, *MS Plate*) and margin floor controls. |
+| **Dashboard & Reports**| `/reports` | KRA score cards and downloadable Excel/PDF reports (KRA 1 to KRA 9). |
+
+---
+
+## 🛠️ Step-by-Step Local Setup Instructions
+
+### Step 1: Open Terminal in the `frontend` Folder
 ```bash
 cd frontend
 ```
 
-### Step 2: Install Dependencies (First Time Only)
-
+### Step 2: Install Node.js Dependencies
 ```bash
 npm install
 ```
 
-### Step 3: Start the Development Web Server
+### Step 3: Configure Environment Variables (`.env`)
+Create a `.env` file inside the `frontend/` folder:
+
+```env
+# Backend API Base URL
+VITE_BACKEND_URL=http://localhost:3001
+```
+
+### Step 4: Run the Local Development Web Server
 
 ```bash
 npm run dev
 ```
 
-✅ **What Success Looks Like:**
-You will see output in the terminal:
+✅ **Verification**: Look for this terminal output:
 `Local: http://localhost:5173/`
 
-Open your web browser (Google Chrome, Microsoft Edge, or Safari) and go to **`http://localhost:5173`** to log in and start using your dashboard!
+Open your web browser (Google Chrome, Edge, or Safari) and go to:
+**`http://localhost:5173`**
 
 ---
 
-## 🔑 Environment Settings (`.env` File)
+## 🛠️ Build & Deployment Commands
 
-The frontend uses a simple `.env` file in the `frontend/` directory.
-
-Essential settings inside `.env`:
-- `VITE_BACKEND_URL` = Your backend server URL (e.g. `http://localhost:3001` or your live Railway URL)
-
-*(If `.env` is missing, copy `.env.example` to `.env`.)*
+- `npm run dev` — Launches local dev server with Hot Module Replacement (HMR).
+- `npm run build` — Compiles and minifies the web app into the `dist/` folder for production deployment.
+- `npm run preview` — Previews the built production site locally on port 4173.
 
 ---
 
-## 🛠️ Handy Commands
+## ❓ Frequently Asked Questions & Solutions
 
-- `npm run dev` — Starts the local web app for daily use.
-- `npm run build` — Builds the final production bundle for deployment.
-- `npm run preview` — Previews the built production app locally.
+- **Q: How do I test the Push & Pull Zoho Bigin Sync buttons?**
+  - **A:** Go to the **Admin Overview** page (`/admin`). Look at the header bar next to the filter dropdowns:
+    - Click **`Push DB → Bigin`** to push local deals up to Zoho Bigin.
+    - Click **`Pull Bigin → DB`** to import contacts and deals from Zoho Bigin into the local database.
 
----
-
-## ❓ Simple Troubleshooting
-
-- **Issue:** Webpage shows blank screen or cannot connect to backend
-  - **Solution:** Make sure your backend server (`npm run start:dev` inside `backend/`) is running on port 3001.
-- **Issue:** Browser shows login page repeatedly
-  - **Solution:** Clear browser session storage or re-enter valid admin credentials.
+- **Q: How do I switch views to see a specific salesperson's data?**
+  - **A:** At the bottom-left of the sidebar, click **`Salesperson Selection`** and choose any salesperson from the dropdown list.
 
 ---
 
-*Powered by React, Vite, TailwindCSS, and Enlight Sales OS.*
+*Enlight Metals OS — Executive Web Dashboard App.*
