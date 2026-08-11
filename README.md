@@ -1,75 +1,74 @@
-# React + TypeScript + Vite
+# 💻 Enlight Metals Web Dashboard (Frontend) — Easy Setup Guide
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Welcome! This is the **Web Dashboard App** for Enlight Metals. It provides an intuitive, executive-grade web browser interface for Admins and Sales Executives to track deals, view performance analytics, manage rate sheets, and sync data with Zoho Bigin.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🎯 Main Features & Tabs
 
-## React Compiler
+1. 🏠 **Home Tab (`/`)**: Daily sales metrics overview, monthly revenue trend charts, and top active customer accounts.
+2. 🛡️ **Admin Overview (`/admin`)**: Executive management dashboard with date range filters, SKU demand distribution, AI review queue, leaderboard scores, and **Push/Pull Bigin Sync** buttons.
+3. 🔲 **Sales Pipeline (`/pipeline`)**: Drag-and-drop Kanban deal pipeline (*New Inquiry $\rightarrow$ Qualified $\rightarrow$ Quoted $\rightarrow$ Negotiation $\rightarrow$ Won*).
+4. 🛍️ **Orders & Invoices (`/orders`)**: Confirmed won sales orders with printable official metal sales quotations & invoices.
+5. 🏷️ **Pricing Management (`/pricing`)**: Master metal rate sheet editor and floor margin controls.
+6. 📈 **Reports & Exports (`/reports`)**: Downloadable KRA Excel and PDF reports (KRA 1 to KRA 9).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 🚀 How to Run the Web Dashboard (Step-by-Step)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Step 1: Open Terminal in the `frontend` folder
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+cd frontend
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Step 2: Install Dependencies (First Time Only)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
 ```
+
+### Step 3: Start the Development Web Server
+
+```bash
+npm run dev
+```
+
+✅ **What Success Looks Like:**
+You will see output in the terminal:
+`Local: http://localhost:5173/`
+
+Open your web browser (Google Chrome, Microsoft Edge, or Safari) and go to **`http://localhost:5173`** to log in and start using your dashboard!
+
+---
+
+## 🔑 Environment Settings (`.env` File)
+
+The frontend uses a simple `.env` file in the `frontend/` directory.
+
+Essential settings inside `.env`:
+- `VITE_BACKEND_URL` = Your backend server URL (e.g. `http://localhost:3001` or your live Railway URL)
+
+*(If `.env` is missing, copy `.env.example` to `.env`.)*
+
+---
+
+## 🛠️ Handy Commands
+
+- `npm run dev` — Starts the local web app for daily use.
+- `npm run build` — Builds the final production bundle for deployment.
+- `npm run preview` — Previews the built production app locally.
+
+---
+
+## ❓ Simple Troubleshooting
+
+- **Issue:** Webpage shows blank screen or cannot connect to backend
+  - **Solution:** Make sure your backend server (`npm run start:dev` inside `backend/`) is running on port 3001.
+- **Issue:** Browser shows login page repeatedly
+  - **Solution:** Clear browser session storage or re-enter valid admin credentials.
+
+---
+
+*Powered by React, Vite, TailwindCSS, and Enlight Sales OS.*
