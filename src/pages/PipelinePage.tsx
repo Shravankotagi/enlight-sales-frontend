@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import DealDetailDrawer from '../components/DealDetailDrawer';
 
 const STAGES = [
-  { key: 'new_inquiry', label: 'New Inquiry', color: 'bg-blue-50 border-blue-200' },
+  { key: 'new_inquiry', label: 'New Deals', color: 'bg-blue-50 border-blue-200' },
   { key: 'qualified', label: 'Qualified', color: 'bg-purple-50 border-purple-200' },
   { key: 'quoted', label: 'Quoted', color: 'bg-yellow-50 border-yellow-200' },
   { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },

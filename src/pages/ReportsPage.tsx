@@ -178,8 +178,8 @@ export default function ReportsPage() {
                       : 0;
                     return (
                       <div key={stage.stage} className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-gray-600 w-28 capitalize">
-                          {stage.stage.replace('_', ' ')}
+                        <span className="text-sm font-medium text-gray-700 w-28">
+                          {stage.label || (stage.stage === 'new_inquiry' || stage.stage === 'new_deals' ? 'New Deals' : stage.stage.replace('_', ' '))}
                         </span>
                         <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
                           {stage.count > 0 ? (
