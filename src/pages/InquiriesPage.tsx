@@ -422,9 +422,8 @@ export default function InquiriesPage() {
                 <th className="px-4 py-3">Received Date</th>
                 <th className="px-4 py-3">Customer / Company Name</th>
                 <th className="px-4 py-3">Customer Phone</th>
-                <th className="px-4 py-3">Inquiry Type</th>
+                <th className="px-4 py-3">Product Type</th>
                 <th className="px-4 py-3">Form &amp; Dimensions</th>
-                <th className="px-4 py-3">Full Requirements Details</th>
                 <th className="px-4 py-3">Source Channel</th>
                 <th className="px-4 py-3 text-right">Status / Actions</th>
               </tr>
@@ -432,13 +431,13 @@ export default function InquiriesPage() {
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                     Loading monthly inquiries...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                     No product inquiries found for this period.
                   </td>
                 </tr>
@@ -487,11 +486,6 @@ export default function InquiriesPage() {
                           <span className="text-slate-600 font-mono font-medium">
                             {details.thickness} {details.width ? `x ${details.width}` : ''} {details.length ? `x ${details.length}` : ''}
                           </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-800 font-medium max-w-xs truncate" title={inq.raw_text}>
-                        <div className="bg-slate-50 p-2 rounded border border-slate-200 truncate">
-                          {inq.raw_text || 'No requirement details specified.'}
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
