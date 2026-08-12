@@ -221,6 +221,7 @@ export default function InquiriesPage() {
   const [quotationEmail, setQuotationEmail] = useState('shravankotagi314@gmail.com');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
+  const [isQuotationSent, setIsQuotationSent] = useState(false);
 
   const now = new Date();
   const [dateRange, setDateRange] = useState<DateFilterRange>({
@@ -293,8 +294,10 @@ export default function InquiriesPage() {
     const parsed = parseInquiryText(inq.raw_text || '', inq);
     setEditDetails(parsed);
     const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
+    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
     setIsEditing(!isConfirmedState);
     setSaveSuccess(isConfirmedState);
+    setIsQuotationSent(isQuotedState);
   };
 
   const handleSaveDrawerDetails = async () => {
@@ -1017,8 +1020,20 @@ export default function InquiriesPage() {
               <button
                 type="button"
                 onClick={() => setShowQuotationModal(true)}
-                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
-                <Send size={15} /> Send Quotation to Customer ✉️
+                className={`px-4 py-2.5 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                  ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-purple-600 hover:bg-purple-700'
+                }`}>
+                {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
+                  <>
+                    <Check size={15} /> Quotation Sent to Customer ✓
+                  </>
+                ) : (
+                  <>
+                    <Send size={15} /> Send Quotation to Customer ✉️
+                  </>
+                )}
               </button>
 
               <button
@@ -1092,7 +1107,11 @@ export default function InquiriesPage() {
 
               {resendNotice && (
                 <div className={`p-3 rounded-xl text-xs font-bold border ${
-                  resendNotice.includes('dispatched') || resendNotice.includes('logged')
+                  resendNotice.toLowerCase().includes('dispatched') ||
+                  resendNotice.toLowerCase().includes('sent') ||
+                  resendNotice.toLowerCase().includes('generated') ||
+                  resendNotice.toLowerCase().includes('recorded') ||
+                  resendNotice.toLowerCase().includes('success')
                     ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
                     : 'bg-rose-50 text-rose-900 border-rose-200'
                 }`}>
@@ -1122,13 +1141,15 @@ export default function InquiriesPage() {
                       customer_name: editDetails.companyName,
                       details: editDetails
                     });
-                    const msg = res?.data?.message || 'Quotation generated & sent with PDF attachment!';
+                    const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
                     setResendNotice(msg);
+                    setIsQuotationSent(true);
+                    setSelectedInquiry(prev => prev ? { ...prev, status: 'quoted' } : null);
                     setTimeout(() => {
                       setShowQuotationModal(false);
                       setResendNotice('');
                       fetchMonthlyInquiries();
-                    }, 2200);
+                    }, 2500);
                   } catch (err: any) {
                     console.error('Error sending quotation:', err);
                     setResendNotice(err?.response?.data?.message || 'Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.');
