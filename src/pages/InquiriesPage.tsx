@@ -346,42 +346,99 @@ export default function InquiriesPage() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setPoFileName(file.name);
     setIsExtractingPo(true);
 
-    setTimeout(() => {
-      let extName = 'Supreme Steel';
-      let extPhone = '9988776655';
-      let extReq = `Inquiry Extracted from ${file.name}: 30 MT HR Pickled Sheet 3.0mm x 1250mm x 2500mm, Rate ₹62,000/MT, Payment Terms 30 Days Credit, Delivery Nashik MIDC`;
+    try {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const base64String = evt.target?.result as string;
+        if (!base64String) {
+          setIsExtractingPo(false);
+          return;
+        }
 
-      if (file.name.toLowerCase().includes('delta')) {
-        extName = 'Delta Structural Steel';
-        extPhone = '9123456789';
-        extReq = `Inquiry Extracted from ${file.name}: 40 MT HR Coil 4.0mm x 1500mm, Rate ₹62,500/MT, Payment Terms Advance, Delivery Mumbai`;
-      } else if (file.name.toLowerCase().includes('mehta')) {
-        extName = 'Mehta Engineering';
-        extPhone = '9876543210';
-        extReq = `Inquiry Extracted from ${file.name}: 20 MT CR Sheet 2.0mm x 1250mm x 2500mm, Rate ₹68,000/MT, Payment Terms STRICTLY 45 Days Credit, Delivery Pune`;
-      } else if (file.name.toLowerCase().includes('ram ratna') || file.name.toLowerCase().includes('rr')) {
-        extName = 'Ram Ratna Infrastructure Pvt. Ltd.';
-        extPhone = '7304424725';
-        extReq = `Inquiry Extracted from ${file.name}: 160 MT GI Spangled Coil (IS 277) 1.5mm / 2.0mm / 3.0mm x 1250mm, Payment Terms STRICTLY 45 Days Credit, Delivery Khopoli`;
-      } else if (file.name.toLowerCase().includes('avion')) {
-        extName = 'AVION EXIM PVT. LTD.';
-        extPhone = '9909976980';
-        extReq = `Inquiry Extracted from ${file.name}: 43.3 MT HR Pickled Coil 1.6mm / 2.0mm / 2.5mm x 240mm / 312mm, Delivery Umbergaon`;
-      }
+        const cleanBase64 = base64String.replace(/^data:[^;]+;base64,/, '');
 
-      setFormCustomerName(extName);
-      setFormPhone(extPhone);
-      setFormRequirement(extReq);
-      setFormInquiryType('Product Requirement (File Upload)');
+        // 1. Try Backend Gemini Vision API Route
+        try {
+          const res = await inquiriesApi.parseDocument({
+            file_base64: cleanBase64,
+            mime_type: file.type || 'image/jpeg',
+          });
+          if (res.data?.success && res.data?.data) {
+            const extracted = res.data.data;
+            if (extracted.customer_name) setFormCustomerName(extracted.customer_name);
+            if (extracted.contact_phone) setFormPhone(extracted.contact_phone);
+            if (extracted.requirement) setFormRequirement(extracted.requirement);
+            setFormInquiryType('Product Requirement (AI Document)');
+            setIsExtractingPo(false);
+            return;
+          }
+        } catch (apiErr) {
+          console.warn('Backend parse-document unavailable, using client-side Gemini 3.6 Flash Vision...', apiErr);
+        }
+
+        // 2. Direct Gemini 3.6 Flash Vision AI Call using Paid Key from Environment
+        try {
+          const apiKey = import.meta.env.VITE_GEMINI_PAID_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
+          if (!apiKey) {
+            console.warn('VITE_GEMINI_PAID_API_KEY not configured, relies on backend parseDocument');
+            setIsExtractingPo(false);
+            return;
+          }
+
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: `You are an expert OCR document parser for steel inquiry purchase orders. Extract fields from this document image and return ONLY a valid JSON object with no markdown formatting or codeblocks:\n{\n  "customer_name": "company or customer name",\n  "contact_phone": "10-digit phone number if present",\n  "requirement": "detailed material specification, quantity in MT, rate, and delivery location"\n}`
+                      },
+                      {
+                        inline_data: {
+                          mime_type: file.type || 'image/jpeg',
+                          data: cleanBase64,
+                        }
+                      }
+                    ]
+                  }
+                ]
+              })
+            }
+          );
+
+          const geminiData = await geminiRes.json();
+          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJson);
+
+          if (parsed.customer_name) setFormCustomerName(parsed.customer_name);
+          if (parsed.contact_phone) setFormPhone(parsed.contact_phone);
+          if (parsed.requirement) setFormRequirement(parsed.requirement);
+          setFormInquiryType('Product Requirement (AI Document)');
+        } catch (visionErr) {
+          console.error('Gemini vision extraction error:', visionErr);
+          alert('Could not auto-extract document with AI. Please enter details manually.');
+        } finally {
+          setIsExtractingPo(false);
+        }
+      };
+
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('FileReader error:', err);
       setIsExtractingPo(false);
-    }, 1200);
+    }
   };
 
   const handleCreateInquiry = async (e: React.FormEvent) => {

@@ -84,6 +84,7 @@ export const inquiriesApi = {
   create: (data: any) => API.post('/inquiries', data),
   updateStatus: (id: string, status: string) => API.patch(`/inquiries/${id}/status`, { status }),
   sendQuotation: (id: string, data: any) => API.post(`/inquiries/${id}/send-quotation`, data),
+  parseDocument: (data: { file_base64: string; mime_type: string }) => API.post('/inquiries/parse-document', data),
 };
 
 export const reportsApi = {
