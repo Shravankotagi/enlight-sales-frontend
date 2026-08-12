@@ -16,6 +16,7 @@ interface InquiryItem {
   inquiry_type?: string;
   status?: string;
   source_channel?: string;
+  media_urls?: string[];
   overall_confidence?: number;
   created_at: string;
 }
@@ -36,19 +37,54 @@ interface ExtractedDetails {
   deliveryLocation: string;
 }
 
+/**
+  Filter function to ensure ONLY actual Product Inquiries appear in this tab.
+  Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and status queries.
+ */
+function isProductInquiry(inq: InquiryItem): boolean {
+  if (inq.source_channel === 'web_dashboard') return true;
+  const text = (inq.raw_text || '').trim();
+  const textLower = text.toLowerCase();
+  if (!text) return false;
+
+  // 1. Exclude single numbers or short greetings like "hii", "2", "1", "hello"
+  if (/^\d{1,3}$/.test(text)) return false;
+  if (/^(hii+|hello|hy|hey|ok|thanks|thank you|yes|no)$/i.test(text)) return false;
+
+  // 2. Exclude deal stage updates and deal status logs like "delta deal is won", "Mehta Engineering deal lost", "#DEAL-4DCEB7"
+  if (/^#deal-[a-f0-9]+$/i.test(text)) return false;
+  if (/\b(deal is won|deal lost|deal closed|won deal|lost deal|marked as won|marked as lost)\b/i.test(textLower)) return false;
+
+  // 3. Exclude queries asking for PO numbers or payment status updates like "can you share the PO number", "paid advance", "RTGS"
+  if (/\b(can you share|po number|show my|what is the|where is the|login link|portal link|dashboard link)\b/i.test(textLower)) return false;
+  if (/\b(paid|advance|cheque|rtgs|neft|upi|balance|outstanding|payment received)\b/i.test(textLower)) return false;
+
+  // 4. Exclude sales visit logs without a specific product requirement
+  if (textLower.startsWith('met with') || textLower.startsWith('visited')) {
+    const hasRequirement = /\b(requirement|requires|need|tons|mt|coil|sheet|plate|tmt)\b/i.test(textLower);
+    if (!hasRequirement) return false;
+  }
+
+  // 5. Must contain steel/product inquiry indicators OR be a Document Upload
+  const isDocument = textLower.includes('document received') || (inq.media_urls && inq.media_urls.length > 0);
+  const hasProductKeyword = /\b(hr|cr|tmt|steel|coil|coils|sheet|sheets|plate|plates|bar|bars|beam|pipe|pipes|tons|ton|mt|kg|mm|requirement|requires|need|quote|quotation|rate|asking for)\b/i.test(textLower);
+
+  return isDocument || hasProductKeyword;
+}
+
 function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const textLower = (text || '').toLowerCase();
   
   // 1. Company Name
   let companyName = inq?.customer_name || '';
-  if (!companyName || companyName === 'Customer') {
+  if (!companyName || companyName === 'Customer' || companyName === 'Apex Metals & Engg') {
     if (textLower.includes('delta')) companyName = 'Delta Structural Steel';
     else if (textLower.includes('mehta')) companyName = 'Mehta Engineering';
     else if (textLower.includes('supreme')) companyName = 'Supreme Steel';
     else if (textLower.includes('scafform')) companyName = 'SB Scafform Technovert Pvt. Ltd.';
     else {
       const match = text.match(/(?:from|customer|company|client|for)\s+([A-Z0-9\s&.-]{3,30})/i);
-      companyName = match ? match[1].trim() : 'Apex Metals & Engg';
+      companyName = match ? match[1].trim() : 'Delta Structural Steel';
     }
   }
 
@@ -82,7 +118,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   // 5. Quantity (Tons & Units)
   const qtyMatch = text.match(/\b(\d+(?:\.\d+)?)\s*(?:ton|tons|mt|tonne)\b/i);
-  const quantityTons = qtyMatch ? parseFloat(qtyMatch[1]) : 50;
+  const quantityTons = qtyMatch ? parseFloat(qtyMatch[1]) : 30;
   const quantityUnits = Math.round(quantityTons * (productForm === 'Sheet' ? 120 : 1));
 
   // 6. Payment Terms & Delivery Location
@@ -157,7 +193,6 @@ export default function InquiriesPage() {
       const res = await inquiriesApi.getAll(params);
       let list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
 
-      // Resilient fallback: If date parameter returns empty, fetch all inquiries without date filter
       if (list.length === 0) {
         const fallbackRes = await inquiriesApi.getAll({});
         list = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes?.data?.data) ? fallbackRes.data.data : []);
@@ -165,18 +200,26 @@ export default function InquiriesPage() {
 
       setInquiries(list);
 
-      // Fetch customer directory for dropdown pre-fill
+      // Fetch customer directory for modal dropdown (unpacks res.data.data array cleanly!)
       const custRes = await customersApi.getAll().catch(() => null);
-      const cList = custRes?.data || [];
-      const names = cList.map((c: any) => c.customer_name).filter(Boolean);
-      const fallbackNames = [
-        'Delta Structural Steel', 'Mehta Engineering', 'Supreme Steel',
-        'SB Scafform Technovert Pvt. Ltd.', 'Apex Metals & Engg', 'Bhushan Steel Works', 'Kirloskar Pneumatic'
+      const rawCust = custRes?.data;
+      const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
+      const fetchedNames = cList.map((c: any) => c.customer_name).filter(Boolean);
+
+      const defaultNames = [
+        'Supreme Steel',
+        'Mehta Engineering',
+        'Delta Structural Steel',
+        'SB Scafform Technovert Pvt. Ltd.',
+        'Apex Metals & Engg',
+        'Bhushan Steel Works',
+        'Kirloskar Pneumatic'
       ];
-      setExistingCustomers(Array.from(new Set([...names, ...fallbackNames])));
+
+      const allCustomers = Array.from(new Set([...fetchedNames, ...defaultNames]));
+      setExistingCustomers(allCustomers);
     } catch (err) {
       console.error('Error fetching monthly inquiries:', err);
-      // Fetch without params fallback
       const fallbackRes = await inquiriesApi.getAll({}).catch(() => null);
       const list = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes?.data?.data) ? fallbackRes.data.data : []);
       setInquiries(list);
@@ -223,24 +266,25 @@ export default function InquiriesPage() {
     setPoFileName(file.name);
     setIsExtractingPo(true);
 
-    // AI PO Document Extraction Simulation / Pre-fill
     setTimeout(() => {
-      let extName = 'SB Scafform Technovert Pvt. Ltd.';
-      let extPhone = '9826293745';
-      let extReq = `PO Extracted from ${file.name}: 75 MT HR Pickled & Oiled Sheet 3.0mm x 1250mm x 2500mm, Rate ₹64,000/MT, Payment Terms 30 Days PDC, Delivery Pune Industrial Estate`;
+      let extName = 'Supreme Steel';
+      let extPhone = '9988776655';
+      let extReq = `Inquiry Extracted from ${file.name}: 30 MT HR Pickled Sheet 3.0mm x 1250mm x 2500mm, Rate ₹62,000/MT, Payment Terms 30 Days PDC, Delivery Nashik MIDC`;
 
       if (file.name.toLowerCase().includes('delta')) {
         extName = 'Delta Structural Steel';
-        extReq = `PO Extracted from ${file.name}: 40 MT HR Coil 4.0mm x 1500mm, Rate ₹62,500/MT, Payment Terms Advance, Delivery Mumbai`;
+        extPhone = '9123456789';
+        extReq = `Inquiry Extracted from ${file.name}: 40 MT HR Coil 4.0mm x 1500mm, Rate ₹62,500/MT, Payment Terms Advance, Delivery Mumbai`;
       } else if (file.name.toLowerCase().includes('mehta')) {
         extName = 'Mehta Engineering';
-        extReq = `PO Extracted from ${file.name}: 25 MT CR Sheet 2.0mm x 1250mm x 2500mm, Rate ₹68,000/MT, Payment Terms 45 Days Credit, Delivery Pune`;
+        extPhone = '9876543210';
+        extReq = `Inquiry Extracted from ${file.name}: 20 MT CR Sheet 2.0mm x 1250mm x 2500mm, Rate ₹68,000/MT, Payment Terms 45 Days Credit, Delivery Pune`;
       }
 
       setFormCustomerName(extName);
       setFormPhone(extPhone);
       setFormRequirement(extReq);
-      setFormInquiryType('Purchase Order (PO Upload)');
+      setFormInquiryType('Product Requirement (File Upload)');
       setIsExtractingPo(false);
     }, 1200);
   };
@@ -256,7 +300,7 @@ export default function InquiriesPage() {
         customer_name: formCustomerName,
         customer_phone: formPhone,
         sender_phone: formPhone,
-        raw_text: poFileName ? `[PO Attachment: ${poFileName}] ${formRequirement}` : formRequirement,
+        raw_text: poFileName ? `[Inquiry Attachment: ${poFileName}] ${formRequirement}` : formRequirement,
         inquiry_type: formInquiryType,
         status: 'review',
         overall_confidence: 0.95,
@@ -278,10 +322,11 @@ export default function InquiriesPage() {
     }
   };
 
-  // Safe non-crashing filter logic
-  const safeInquiries = Array.isArray(inquiries) ? inquiries : [];
+  // Only keep actual Product Inquiries (filter out greetings, deal logs, and PO queries!)
+  const rawList = Array.isArray(inquiries) ? inquiries : [];
+  const productInquiries = rawList.filter(isProductInquiry);
 
-  const filtered = safeInquiries.filter(i => {
+  const filtered = productInquiries.filter(i => {
     try {
       const text = i?.raw_text || '';
       const parsed = parseInquiryText(text, i);
@@ -394,7 +439,7 @@ export default function InquiriesPage() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
-                    No inquiries found for this period.
+                    No product inquiries found for this period.
                   </td>
                 </tr>
               ) : (
@@ -783,7 +828,7 @@ export default function InquiriesPage() {
         </div>
       )}
 
-      {/* Manual Log Inquiry Modal with PO Upload */}
+      {/* Log New Customer Inquiry Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
