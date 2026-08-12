@@ -237,22 +237,8 @@ export default function InquiriesPage() {
     }
   };
 
-  const isProductEnquiry = (i: InquiryItem) => {
-    if (i.source_channel === 'web_dashboard') return true;
-    const text = (i.raw_text || '').trim().toLowerCase();
-    if (!text) return false;
-
-    if (/^\d{1,2}$/.test(text)) return false;
-    if (/^#deal-[a-f0-9]+$/i.test(text)) return false;
-    if (/\b(deal is won|deal lost|deal closed|won deal|lost deal|marked as won|marked as lost)\b/i.test(text)) return false;
-    if (/\b(can you share|po number|show my|what is the|where is the|login link|portal link|dashboard link)\b/i.test(text)) return false;
-    if (/\b(paid|advance|cheque|rtgs|neft|upi|balance|outstanding|payment received)\b/i.test(text)) return false;
-
-    const hasProductKeywords = /\b(ton|tons|mt|kg|coil|coils|plate|plates|sheet|sheets|tmt|bar|bars|hr|cr|ms|steel|pipe|pipes|beam|angle|channel|requirement|requires|need|asking for|quote|quotation|price for|rate for)\b/i.test(text);
-    return hasProductKeywords || text.length > 3;
-  };
-
-  const safeInquiries = (Array.isArray(inquiries) ? inquiries : []).filter(isProductEnquiry);
+  // Include all received inquiries (including PO documents and text inquiries)
+  const safeInquiries = Array.isArray(inquiries) ? inquiries : [];
 
   const filtered = safeInquiries.filter(i => {
     const parsed = parseInquiryText(i.raw_text || '', i);
