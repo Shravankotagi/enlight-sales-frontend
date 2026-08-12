@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck
+  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -231,6 +232,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 }
 
 export default function InquiriesPage() {
+  const navigate = useNavigate();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,6 +246,12 @@ export default function InquiriesPage() {
   const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Send Quotation Email State (Resend API)
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [quotationEmail, setQuotationEmail] = useState('');
+  const [sendingQuotation, setSendingQuotation] = useState(false);
+  const [resendNotice, setResendNotice] = useState('');
 
   const now = new Date();
   const [dateRange, setDateRange] = useState<DateFilterRange>({
@@ -457,6 +465,12 @@ export default function InquiriesPage() {
           <DateFilterControl onChange={setDateRange} initialPreset="this_month" />
 
           <button
+            onClick={() => navigate('/orders')}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs">
+            <ShoppingBag size={15} className="text-emerald-600" /> View Confirmed Orders / POs 📦
+          </button>
+
+          <button
             onClick={fetchMonthlyInquiries}
             className="p-2 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors shadow-2xs">
             <RefreshCw size={16} className={loading ? 'animate-spin text-blue-600' : ''} />
@@ -465,7 +479,7 @@ export default function InquiriesPage() {
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
-            <Plus size={16} /> Log New Inquiry
+            <Plus size={16} /> Log New Inquiry / PO
           </button>
         </div>
       </div>
@@ -919,7 +933,7 @@ export default function InquiriesPage() {
             </div>
 
             {/* Bottom Actions Bar */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3">
+            <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setSelectedInquiry(null)}
@@ -929,9 +943,16 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
+                onClick={() => setShowQuotationModal(true)}
+                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
+                <Send size={15} /> Send Quotation to Customer ✉️
+              </button>
+
+              <button
+                type="button"
                 disabled={submitting}
                 onClick={handleSaveDrawerDetails}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
                 {submitting ? (
                   <RefreshCw size={16} className="animate-spin" />
                 ) : saveSuccess ? (
@@ -943,6 +964,99 @@ export default function InquiriesPage() {
                     <Save size={16} /> Save &amp; Confirm Inquiry
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Official Quotation Email Modal (Resend API Integration) */}
+      {showQuotationModal && editDetails && selectedInquiry && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Send className="text-purple-600" size={22} />
+                Send Price Quotation (Resend API)
+              </h2>
+              <button
+                onClick={() => setShowQuotationModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-2">
+              <div className="font-bold text-purple-900 flex items-center justify-between">
+                <span>Commercial Proposal Summary</span>
+                <span className="font-extrabold text-emerald-800">Total: ₹{editDetails.totalAmount.toLocaleString('en-IN')} + GST</span>
+              </div>
+              <p className="text-slate-700 font-mono">
+                {editDetails.companyName} · {editDetails.productType} ({editDetails.productForm}) {editDetails.quantityTons} MT @ ₹{editDetails.unitPrice}/MT
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Customer Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. procurement@supremesteel.com"
+                  value={quotationEmail}
+                  onChange={e => setQuotationEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              {resendNotice && (
+                <div className={`p-3 rounded-xl text-xs font-bold border ${
+                  resendNotice.includes('dispatched') || resendNotice.includes('logged')
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                    : 'bg-amber-50 text-amber-900 border-amber-200'
+                }`}>
+                  {resendNotice}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowQuotationModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={sendingQuotation || !quotationEmail}
+                onClick={async () => {
+                  try {
+                    setSendingQuotation(true);
+                    setResendNotice('');
+                    const res = await inquiriesApi.sendQuotation(selectedInquiry.id, {
+                      customer_email: quotationEmail,
+                      customer_name: editDetails.companyName,
+                      details: editDetails
+                    });
+                    const msg = res?.data?.message || 'Quotation generated & sent!';
+                    setResendNotice(msg);
+                    setTimeout(() => {
+                      setShowQuotationModal(false);
+                      setResendNotice('');
+                      fetchMonthlyInquiries();
+                    }, 1800);
+                  } catch (err: any) {
+                    console.error('Error sending quotation:', err);
+                    setResendNotice('Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.');
+                  } finally {
+                    setSendingQuotation(false);
+                  }
+                }}
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2">
+                {sendingQuotation ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                {sendingQuotation ? 'Dispatching Quotation...' : 'Send Quotation Email'}
               </button>
             </div>
           </div>

@@ -83,6 +83,7 @@ export const inquiriesApi = {
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),
   updateStatus: (id: string, status: string) => API.patch(`/inquiries/${id}/status`, { status }),
+  sendQuotation: (id: string, data: any) => API.post(`/inquiries/${id}/send-quotation`, data),
 };
 
 export const reportsApi = {
