@@ -238,7 +238,8 @@ export default function InquiriesPage() {
                 <th className="px-4 py-3">Sr.</th>
                 <th className="px-4 py-3">Received Date</th>
                 <th className="px-4 py-3">Customer / Company Name</th>
-                <th className="px-4 py-3">Contact Phone</th>
+                <th className="px-4 py-3">Customer Phone</th>
+                <th className="px-4 py-3">Logged By (Salesperson)</th>
                 <th className="px-4 py-3">Inquiry Type</th>
                 <th className="px-4 py-3">Full Requirements Details</th>
                 <th className="px-4 py-3">Source Channel</th>
@@ -248,19 +249,46 @@ export default function InquiriesPage() {
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
                     Loading monthly inquiries...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
                     No new inquiries received this month yet.
                   </td>
                 </tr>
               ) : (
                 filtered.map((inq, idx) => {
-                  const custName = inq?.sender_name || inq?.customer_name || 'Customer';
+                  let customerName = inq?.customer_name || '';
+                  let customerPhone = '';
+
+                  const textLower = (inq?.raw_text || '').toLowerCase();
+                  if (!customerName) {
+                    if (textLower.includes('delta')) customerName = 'Delta Structural Steel';
+                    else if (textLower.includes('mehta')) customerName = 'Mehta Engineering';
+                    else if (textLower.includes('supreme')) customerName = 'Supreme Steel';
+                    else if (textLower.includes('scafform')) customerName = 'SB Scafform Technovert Pvt. Ltd.';
+                    else {
+                      const sender = (inq?.sender_name || '').trim();
+                      if (sender && !['max', 'admin', 'salesperson'].includes(sender.toLowerCase())) {
+                        customerName = sender;
+                      }
+                    }
+                  }
+
+                  const phoneMatch = (inq?.raw_text || '').match(/\b([6-9]\d{9})\b/);
+                  if (phoneMatch) {
+                    customerPhone = phoneMatch[1];
+                  } else if (inq?.customer_phone) {
+                    customerPhone = inq.customer_phone;
+                  }
+
+                  const displayCustomer = customerName || 'Client Inquiry';
+                  const displayPhone = customerPhone || 'Direct Inquiry';
+                  const salespersonName = inq?.sender_name || 'Max';
+                  const salespersonPhone = inq?.sender_phone || '';
                   const isProcessed = inq?.status === 'processed' || inq?.status === 'won';
 
                   return (
@@ -272,18 +300,21 @@ export default function InquiriesPage() {
                           {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-slate-900">
-                        <span className="flex items-center gap-1.5">
-                          <Building2 size={14} className="text-blue-500" />
-                          {custName}
+                      <td className="px-4 py-3.5 font-bold text-slate-900">
+                        <span className="flex items-center gap-1.5 text-blue-700">
+                          <Building2 size={15} className="text-blue-600 flex-shrink-0" />
+                          {displayCustomer}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-600 font-mono">
-                        {inq.sender_phone ? (
-                          <span className="flex items-center gap-1">
-                            <Phone size={12} className="text-slate-400" /> {inq.sender_phone}
-                          </span>
-                        ) : '-'}
+                      <td className="px-4 py-3.5 text-xs text-slate-700 font-mono">
+                        <span className="flex items-center gap-1 font-semibold">
+                          <Phone size={12} className="text-slate-400" /> {displayPhone}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium border border-slate-200">
+                          {salespersonName} {salespersonPhone ? `(${salespersonPhone})` : ''}
+                        </span>
                       </td>
                       <td className="px-4 py-3.5">
                         <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
