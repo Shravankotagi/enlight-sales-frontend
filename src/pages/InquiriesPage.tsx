@@ -150,7 +150,7 @@ export default function InquiriesPage() {
       setLoading(true);
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
-      if (dateRange.to) params.to = dateRange.to;
+      if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
 
       const res = await inquiriesApi.getAll(params);
       const raw = res?.data;
