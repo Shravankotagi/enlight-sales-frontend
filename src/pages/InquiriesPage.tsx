@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag
+  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -603,7 +603,9 @@ export default function InquiriesPage() {
               ) : (
                 filtered.map((inq, idx) => {
                   const details = parseInquiryText(inq.raw_text || '', inq);
-                  const isProcessed = inq?.status === 'processed' || inq?.status === 'won';
+                  const st = (inq.status || '').toLowerCase();
+                  const isQuoted = st === 'quoted';
+                  const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won';
 
                   return (
                     <tr
@@ -657,15 +659,31 @@ export default function InquiriesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                        {isProcessed ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
-                            <CheckCircle size={12} /> Processed 🎉
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
-                            <Clock size={12} /> Review &amp; Edit ✍️
-                          </span>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {isQuoted ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                              <CheckCircle size={12} /> Quotation Sent ✉️
+                            </span>
+                          ) : isConfirmed ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
+                              <CheckCircle size={12} /> Confirmed &amp; Saved ✓
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                              <Clock size={12} /> Review &amp; Edit ✍️
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDrawer(inq);
+                            }}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1">
+                            <Eye size={13} /> View Quotation
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
