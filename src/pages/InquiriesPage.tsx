@@ -7,6 +7,7 @@ interface InquiryItem {
   id: string;
   sender_name?: string;
   customer_name?: string;
+  customer_phone?: string;
   sender_phone?: string;
   raw_text?: string;
   inquiry_type?: string;
