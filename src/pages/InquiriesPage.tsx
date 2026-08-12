@@ -1002,18 +1002,22 @@ export default function InquiriesPage() {
                 <input
                   type="email"
                   required
-                  placeholder="e.g. procurement@supremesteel.com"
-                  value={quotationEmail}
+                  placeholder="e.g. shravankotagi314@gmail.com"
+                  value={quotationEmail || 'shravankotagi314@gmail.com'}
                   onChange={e => setQuotationEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
                 />
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed font-medium">
+                ⚡ <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>shravankotagi314@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
               </div>
 
               {resendNotice && (
                 <div className={`p-3 rounded-xl text-xs font-bold border ${
                   resendNotice.includes('dispatched') || resendNotice.includes('logged')
                     ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                    : 'bg-amber-50 text-amber-900 border-amber-200'
+                    : 'bg-rose-50 text-rose-900 border-rose-200'
                 }`}>
                   {resendNotice}
                 </div>
