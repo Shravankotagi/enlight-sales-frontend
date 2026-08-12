@@ -249,7 +249,7 @@ export default function InquiriesPage() {
 
   // Send Quotation Email State (Resend API)
   const [showQuotationModal, setShowQuotationModal] = useState(false);
-  const [quotationEmail, setQuotationEmail] = useState('');
+  const [quotationEmail, setQuotationEmail] = useState('shravankotagi314@gmail.com');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
 
@@ -1003,7 +1003,7 @@ export default function InquiriesPage() {
                   type="email"
                   required
                   placeholder="e.g. shravankotagi314@gmail.com"
-                  value={quotationEmail || 'shravankotagi314@gmail.com'}
+                  value={quotationEmail}
                   onChange={e => setQuotationEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
                 />
@@ -1034,33 +1034,34 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
-                disabled={sendingQuotation || !quotationEmail}
+                disabled={sendingQuotation || !quotationEmail.trim()}
                 onClick={async () => {
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
+                    const targetEmail = quotationEmail.trim() || 'shravankotagi314@gmail.com';
                     const res = await inquiriesApi.sendQuotation(selectedInquiry.id, {
-                      customer_email: quotationEmail,
+                      customer_email: targetEmail,
                       customer_name: editDetails.companyName,
                       details: editDetails
                     });
-                    const msg = res?.data?.message || 'Quotation generated & sent!';
+                    const msg = res?.data?.message || 'Quotation generated & sent with PDF attachment!';
                     setResendNotice(msg);
                     setTimeout(() => {
                       setShowQuotationModal(false);
                       setResendNotice('');
                       fetchMonthlyInquiries();
-                    }, 1800);
+                    }, 2200);
                   } catch (err: any) {
                     console.error('Error sending quotation:', err);
-                    setResendNotice('Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.');
+                    setResendNotice(err?.response?.data?.message || 'Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.');
                   } finally {
                     setSendingQuotation(false);
                   }
                 }}
                 className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2">
                 {sendingQuotation ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                {sendingQuotation ? 'Dispatching Quotation...' : 'Send Quotation Email'}
+                {sendingQuotation ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}
               </button>
             </div>
           </div>
