@@ -241,19 +241,29 @@ export default function InquiriesPage() {
   const safeInquiries = Array.isArray(inquiries) ? inquiries : [];
 
   const filtered = safeInquiries.filter(i => {
-    const parsed = parseInquiryText(i.raw_text || '', i);
-    const name = parsed.companyName;
-    const text = i?.raw_text || '';
-    const phone = parsed.customerPhone;
+    try {
+      const text = i?.raw_text || '';
+      const parsed = parseInquiryText(text, i);
+      const name = parsed.companyName || i?.customer_name || i?.sender_name || '';
+      const phone = parsed.customerPhone || i?.customer_phone || i?.sender_phone || '';
 
-    const matchesSearch =
-      name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      phone.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch =
+        !searchTerm.trim() ||
+        name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        phone.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = filterStatus === 'all' || (i?.status || '').toLowerCase() === filterStatus.toLowerCase();
+      const statusStr = (i?.status || 'processed').toLowerCase();
+      const matchesStatus =
+        filterStatus === 'all' ||
+        statusStr === filterStatus.toLowerCase() ||
+        (filterStatus === 'review' && ['review', 'needs_review', 'pending'].includes(statusStr)) ||
+        (filterStatus === 'processed' && ['processed', 'won', 'auto_created'].includes(statusStr));
 
-    return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus;
+    } catch (e) {
+      return true;
+    }
   });
 
   return (
