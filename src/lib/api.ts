@@ -82,6 +82,7 @@ export const inquiriesApi = {
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),
+  updateStatus: (id: string, status: string) => API.patch(`/inquiries/${id}/status`, { status }),
 };
 
 export const reportsApi = {
