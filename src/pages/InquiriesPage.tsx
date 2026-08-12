@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, MapPin, CreditCard, UploadCloud, FileCheck
+  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -634,26 +634,45 @@ export default function InquiriesPage() {
                 </button>
               </div>
 
-              {/* QA & Audit Section (Original Source Message) */}
-              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl space-y-2 border border-slate-800 shadow-inner">
-                <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase tracking-wider">
-                  <span className="flex items-center gap-1">
-                    <Layers size={13} className="text-blue-400" /> Full Requirement Details &amp; Original Audit Source
+              {/* QA & Audit Section (Original Source Message & Document File) */}
+              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl space-y-3 border border-slate-800 shadow-inner">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
+                  <span className="flex items-center gap-1.5 text-blue-400">
+                    <Layers size={14} /> Original Source Document &amp; Audit Input
                   </span>
-                  <span className="bg-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-300">
-                    Channel: {selectedInquiry.source_channel || 'WhatsApp'}
+                  <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] text-slate-300">
+                    Source: {selectedInquiry.source_channel || 'WhatsApp'}
                   </span>
                 </div>
-                <p className="text-sm font-mono bg-slate-950 p-3 rounded-xl border border-slate-800/80 leading-relaxed text-blue-200">
-                  "{selectedInquiry.raw_text || 'No text content available.'}"
-                </p>
+
+                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-2">
+                  <p className="text-sm font-mono text-blue-200 leading-relaxed">
+                    "{selectedInquiry.raw_text || 'Document received'}"
+                  </p>
+                  
+                  {/* Stored Document Audit Attachment View */}
+                  {(selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) || (selectedInquiry.raw_text && selectedInquiry.raw_text.toLowerCase().includes('document')) ? (
+                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                      <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <FileCheck size={14} className="text-emerald-400" /> Original File Stored in Database
+                      </span>
+                      <a
+                        href={selectedInquiry.media_urls && selectedInquiry.media_urls[0] ? selectedInquiry.media_urls[0] : '#'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs">
+                        <ShieldCheck size={14} /> View Original Document (Audit)
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               {/* Edit vs View Toggle Header */}
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pt-1">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Building2 size={16} className="text-blue-600" />
-                  Pre-filled &amp; Extracted Customer Inquiry Details
+                  Pre-filled &amp; Extracted Customer Inquiry Table
                 </h3>
                 <button
                   type="button"
@@ -665,7 +684,7 @@ export default function InquiriesPage() {
 
               {/* Editable Fields Form / Structured View */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                {/* 1. Customer Company Dropdown & Phone */}
+                {/* Customer Company Dropdown & Phone */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -708,179 +727,145 @@ export default function InquiriesPage() {
                   </div>
                 </div>
 
-                {/* 2. Structured Product Details Table */}
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
-                  <div className="px-4 py-2.5 bg-slate-100/70 border-b border-slate-200 text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
-                    <span>Structured Material Specification</span>
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold uppercase border ${
-                      editDetails.productForm === 'Sheet'
-                        ? 'bg-purple-100 text-purple-800 border-purple-300'
-                        : editDetails.productForm === 'Plate'
-                        ? 'bg-amber-100 text-amber-800 border-amber-300'
-                        : editDetails.productForm === 'Bar'
-                        ? 'bg-blue-100 text-blue-800 border-blue-300'
-                        : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                    }`}>
-                      Form: {editDetails.productForm} ({editDetails.length ? 'Length Specified' : 'No Length = Coil'})
-                    </span>
-                  </div>
+                {/* Structured Inquiry Table Layout (Matching User's Img1 Format) */}
+                <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
+                  <table className="w-full text-left text-xs text-slate-800 border-collapse">
+                    <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3 border-r border-slate-700">Quantity</th>
+                        <th className="px-4 py-3 border-r border-slate-700">Description (Material &amp; Dimensions)</th>
+                        <th className="px-4 py-3 border-r border-slate-700">Unit Price</th>
+                        <th className="px-4 py-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      <tr className="hover:bg-blue-50/30">
+                        <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editDetails.quantityTons}
+                              onChange={(e) => {
+                                const q = parseFloat(e.target.value) || 0;
+                                setEditDetails({
+                                  ...editDetails,
+                                  quantityTons: q,
+                                  totalAmount: q * editDetails.unitPrice
+                                });
+                              }}
+                              className="w-20 px-2 py-1 border rounded font-bold"
+                            />
+                          ) : (
+                            `${editDetails.quantityTons} MT (${editDetails.quantityUnits} nos)`
+                          )}
+                        </td>
 
-                  <div className="p-4 space-y-4 text-xs">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div>
-                        <span className="text-slate-400 font-semibold block mb-1">Product Type</span>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editDetails.productType}
-                            onChange={(e) => setEditDetails({ ...editDetails, productType: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-xs font-bold"
-                          />
-                        ) : (
-                          <span className="font-bold text-slate-900 block">{editDetails.productType}</span>
-                        )}
-                      </div>
+                        <td className="px-4 py-3.5 border-r border-slate-200">
+                          <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editDetails.productType}
+                                onChange={(e) => setEditDetails({ ...editDetails, productType: e.target.value })}
+                                className="px-2 py-1 border rounded font-bold text-xs"
+                              />
+                            ) : (
+                              editDetails.productType
+                            )}
+                            <span className={`px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border ${
+                              editDetails.productForm === 'Sheet'
+                                ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                : editDetails.productForm === 'Plate'
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : editDetails.productForm === 'Bar'
+                                ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            }`}>
+                              {editDetails.productForm}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono mt-1">
+                            Spec: {editDetails.thickness} {editDetails.width ? `x ${editDetails.width}` : ''} {editDetails.length ? `x ${editDetails.length}` : ''}
+                          </div>
+                        </td>
 
-                      <div>
-                        <span className="text-slate-400 font-semibold block mb-1">Thickness</span>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editDetails.thickness}
-                            onChange={(e) => setEditDetails({ ...editDetails, thickness: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-xs font-mono font-bold"
-                          />
-                        ) : (
-                          <span className="font-mono font-bold text-slate-900 block">{editDetails.thickness}</span>
-                        )}
-                      </div>
+                        <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-slate-800 font-mono">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editDetails.unitPrice}
+                              onChange={(e) => {
+                                const r = parseFloat(e.target.value) || 0;
+                                setEditDetails({
+                                  ...editDetails,
+                                  unitPrice: r,
+                                  totalAmount: editDetails.quantityTons * r
+                                });
+                              }}
+                              className="w-24 px-2 py-1 border rounded font-bold"
+                            />
+                          ) : (
+                            `₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT`
+                          )}
+                        </td>
 
-                      <div>
-                        <span className="text-slate-400 font-semibold block mb-1">Width</span>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editDetails.width}
-                            onChange={(e) => setEditDetails({ ...editDetails, width: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-xs font-mono font-bold"
-                          />
-                        ) : (
-                          <span className="font-mono font-bold text-slate-900 block">{editDetails.width || '-'}</span>
-                        )}
-                      </div>
-
-                      <div>
-                        <span className="text-slate-400 font-semibold block mb-1">Length</span>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editDetails.length}
-                            onChange={(e) => {
-                              const newLen = e.target.value;
-                              const newForm = newLen.trim() ? 'Sheet' : 'Coil';
-                              setEditDetails({ ...editDetails, length: newLen, productForm: newForm });
-                            }}
-                            placeholder="e.g. 2500mm"
-                            className="w-full px-2 py-1 border rounded text-xs font-mono font-bold"
-                          />
-                        ) : (
-                          <span className="font-mono font-bold text-slate-900 block">{editDetails.length || 'None (Coil Form)'}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
-                      <div>
-                        <span className="text-slate-400 font-semibold block mb-1">Quantity (MT)</span>
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editDetails.quantityTons}
-                            onChange={(e) => {
-                              const q = parseFloat(e.target.value) || 0;
-                              setEditDetails({
-                                ...editDetails,
-                                quantityTons: q,
-                                totalAmount: q * editDetails.unitPrice
-                              });
-                            }}
-                            className="w-full px-2 py-1 border rounded text-xs font-bold"
-                          />
-                        ) : (
-                          <span className="font-extrabold text-blue-700 text-sm block">{editDetails.quantityTons} MT</span>
-                        )}
-                      </div>
-
-                      <div>
-                        <span className="text-slate-400 font-semibold block mb-1">Unit Price (₹/MT)</span>
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editDetails.unitPrice}
-                            onChange={(e) => {
-                              const r = parseFloat(e.target.value) || 0;
-                              setEditDetails({
-                                ...editDetails,
-                                unitPrice: r,
-                                totalAmount: editDetails.quantityTons * r
-                              });
-                            }}
-                            className="w-full px-2 py-1 border rounded text-xs font-bold"
-                          />
-                        ) : (
-                          <span className="font-bold text-slate-900 block">₹{editDetails.unitPrice.toLocaleString('en-IN')}/MT</span>
-                        )}
-                      </div>
-
-                      <div className="col-span-2">
-                        <span className="text-slate-400 font-semibold block mb-1">Calculated Total Amount</span>
-                        <span className="font-black text-emerald-700 text-sm block">
+                        <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono text-sm">
+                          ₹{editDetails.totalAmount.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    </tbody>
+                    <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
+                      <tr>
+                        <td className="px-4 py-2.5 font-bold border-r border-slate-200">Total: {editDetails.quantityTons} MT</td>
+                        <td colSpan={2} className="px-4 py-2.5 text-right font-bold uppercase text-slate-600 border-r border-slate-200">
+                          Total Amount:
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-extrabold text-emerald-800 text-sm">
                           ₹{editDetails.totalAmount.toLocaleString('en-IN')} + GST
-                        </span>
-                      </div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+
+                  {/* Commercial Terms Footer (Matching Img1 Layout) */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                    <div>
+                      <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Delivery Address</span>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editDetails.deliveryLocation}
+                          onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
+                          className="w-full px-2 py-1 border rounded text-xs font-bold"
+                        />
+                      ) : (
+                        <span className="font-bold text-slate-900 block">{editDetails.deliveryLocation}</span>
+                      )}
                     </div>
-                  </div>
-                </div>
 
-                {/* 3. Commercial Terms & Delivery Location */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-                      <CreditCard size={13} className="text-purple-600" /> Payment Terms
-                    </label>
-                    {isEditing ? (
-                      <select
-                        value={editDetails.paymentTerms}
-                        onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="30 Days Credit">30 Days Credit</option>
-                        <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
-                        <option value="60 Days Credit">60 Days Credit</option>
-                        <option value="Advance Payment">Advance Payment</option>
-                      </select>
-                    ) : (
-                      <div className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-purple-900">
-                        {editDetails.paymentTerms}
-                      </div>
-                    )}
-                  </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Payment Terms</span>
+                      {isEditing ? (
+                        <select
+                          value={editDetails.paymentTerms}
+                          onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
+                          className="w-full px-2 py-1 border rounded text-xs font-bold">
+                          <option value="30 Days Credit">30 Days Credit</option>
+                          <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
+                          <option value="60 Days Credit">60 Days Credit</option>
+                          <option value="Advance Payment">Advance Payment</option>
+                        </select>
+                      ) : (
+                        <span className="font-bold text-purple-900 block">{editDetails.paymentTerms}</span>
+                      )}
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-                      <MapPin size={13} className="text-emerald-600" /> Delivery Address / Location
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editDetails.deliveryLocation}
-                        onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <div className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
-                        {editDetails.deliveryLocation}
-                      </div>
-                    )}
+                    <div>
+                      <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Inquiry Received Date</span>
+                      <span className="font-mono font-bold text-slate-700 block">
+                        {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
