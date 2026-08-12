@@ -790,7 +790,7 @@ export default function InquiriesPage() {
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={22} />
-                Log New Inquiry / Upload PO
+                Log New Customer Inquiry (Text / File)
               </h2>
               <button
                 onClick={() => setShowModal(false)}
@@ -799,11 +799,11 @@ export default function InquiriesPage() {
               </button>
             </div>
 
-            {/* Upload PO Section */}
+            {/* Upload Inquiry Document Section */}
             <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50/60 rounded-2xl border border-blue-200 space-y-2">
               <label className="block text-xs font-bold text-blue-900 flex items-center gap-1.5">
                 <UploadCloud size={16} className="text-blue-600" />
-                Upload Purchase Order (PO PDF or Image) for Auto AI Extraction
+                Upload Inquiry Document (PDF, JPEG, PNG) for Auto AI Extraction
               </label>
               <div className="relative flex items-center justify-center border-2 border-dashed border-blue-300 rounded-xl p-4 bg-white/80 hover:bg-white transition-all cursor-pointer">
                 <input
@@ -816,19 +816,19 @@ export default function InquiriesPage() {
                   {isExtractingPo ? (
                     <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
                       <RefreshCw size={16} className="animate-spin text-blue-600" />
-                      Gemini AI Analyzing &amp; Extracting PO Details...
+                      Gemini AI Analyzing &amp; Extracting Inquiry Document...
                     </div>
                   ) : poFileName ? (
                     <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
                       <FileCheck size={18} />
-                      {poFileName} (PO Extracted &amp; Pre-filled!)
+                      {poFileName} (Inquiry Details Extracted &amp; Pre-filled!)
                     </div>
                   ) : (
                     <p className="text-xs font-bold text-slate-600">
-                      Drop PO PDF or Image here, or <span className="text-blue-600 underline">Browse File</span>
+                      Drop Inquiry File (PDF, JPEG, PNG) here, or <span className="text-blue-600 underline">Browse File</span>
                     </p>
                   )}
-                  <p className="text-[11px] text-slate-400">PDF, PNG, JPG supported · AI pre-fills fields below</p>
+                  <p className="text-[11px] text-slate-400">PDF, JPEG, PNG supported · Gemini AI pre-fills fields below</p>
                 </div>
               </div>
             </div>
