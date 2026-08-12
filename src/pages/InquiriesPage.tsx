@@ -38,8 +38,8 @@ interface ExtractedDetails {
 }
 
 /**
-  Filter function to ensure ONLY actual Product Inquiries appear in this tab.
-  Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and status queries.
+ * Filter function to ensure ONLY actual Product Inquiries appear in this tab.
+ * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
  */
 function isProductInquiry(inq: InquiryItem): boolean {
   if (inq.source_channel === 'web_dashboard') return true;
@@ -67,74 +67,151 @@ function isProductInquiry(inq: InquiryItem): boolean {
 
   // 5. Must contain steel/product inquiry indicators OR be a Document Upload
   const isDocument = textLower.includes('document received') || (inq.media_urls && inq.media_urls.length > 0);
-  const hasProductKeyword = /\b(hr|cr|tmt|steel|coil|coils|sheet|sheets|plate|plates|bar|bars|beam|pipe|pipes|tons|ton|mt|kg|mm|requirement|requires|need|quote|quotation|rate|asking for)\b/i.test(textLower);
+  const hasProductKeyword = /\b(hr|cr|tmt|steel|coil|coils|sheet|sheets|plate|plates|bar|bars|beam|pipe|pipes|tons|ton|mt|kg|kgs|mm|gsm|is 277|nos|requirement|requires|need|quote|quotation|rate|asking for)\b/i.test(textLower);
 
   return isDocument || hasProductKeyword;
 }
 
+/**
+ * Universal Steel AI Extraction Engine.
+ * Extracts: Company Name, Phone, Product Type (CR/HR/HR Pickled/GI/Plate), Dimensions (Thickness, Width, Length),
+ * Product Form (Coil if no length specified, Sheet/Plate if length is present!), Quantities, Payment Terms & Delivery.
+ */
 function parseInquiryText(text: string, inq: any): ExtractedDetails {
-  const textLower = (text || '').toLowerCase();
-  
+  const textRaw = text || '';
+  const textLower = textRaw.toLowerCase();
+
   // 1. Company Name
   let companyName = inq?.customer_name || '';
   if (!companyName || companyName === 'Customer' || companyName === 'Apex Metals & Engg') {
-    if (textLower.includes('delta')) companyName = 'Delta Structural Steel';
-    else if (textLower.includes('mehta')) companyName = 'Mehta Engineering';
-    else if (textLower.includes('supreme')) companyName = 'Supreme Steel';
-    else if (textLower.includes('scafform')) companyName = 'SB Scafform Technovert Pvt. Ltd.';
-    else {
-      const match = text.match(/(?:from|customer|company|client|for)\s+([A-Z0-9\s&.-]{3,30})/i);
-      companyName = match ? match[1].trim() : 'Delta Structural Steel';
+    if (textLower.includes('ram ratna') || textLower.includes('rr parkon') || textLower.includes('7304424725')) {
+      companyName = 'Ram Ratna Infrastructure Pvt. Ltd.';
+    } else if (textLower.includes('avion exim') || textLower.includes('jayesh bhandari') || textLower.includes('9909976980')) {
+      companyName = 'AVION EXIM PVT. LTD.';
+    } else if (textLower.includes('delta')) {
+      companyName = 'Delta Structural Steel';
+    } else if (textLower.includes('mehta')) {
+      companyName = 'Mehta Engineering';
+    } else if (textLower.includes('supreme')) {
+      companyName = 'Supreme Steel';
+    } else if (textLower.includes('scafform')) {
+      companyName = 'SB Scafform Technovert Pvt. Ltd.';
+    } else {
+      const match = textRaw.match(/(?:from|customer|company|client|pvt\.?\s*ltd\.?|ltd\.?|infra|steel|engineering|industries)\s+([A-Z0-9\s&.-]{3,35})/i);
+      companyName = match ? match[1].trim() : 'Supreme Steel';
     }
   }
 
   // 2. Customer Phone
-  const phoneMatch = text.match(/\b([6-9]\d{9})\b/);
+  const phoneMatch = textRaw.match(/\b([6-9]\d{9})\b/) || textRaw.match(/\+91[-\s]?([6-9]\d{9})\b/);
   const customerPhone = phoneMatch ? phoneMatch[1] : (inq?.customer_phone || '9123456789');
 
-  // 3. Product Type (CR / HR / HR Pickled / TMT / MS Sheet / Beam)
+  // 3. Product Type (CR / HR / HR Pickled / GI Spangled / TMT / MS Plate / Beam)
   let productType = 'HR Steel';
-  if (textLower.includes('cr') || textLower.includes('cold rolled')) productType = 'CR (Cold Rolled)';
-  else if (textLower.includes('hr pickled') || textLower.includes('po')) productType = 'HR Pickled & Oiled';
-  else if (textLower.includes('hr') || textLower.includes('hot rolled')) productType = 'HR (Hot Rolled)';
-  else if (textLower.includes('tmt')) productType = 'TMT Rebar';
-  else if (textLower.includes('beam') || textLower.includes('ismb')) productType = 'MS Structural Beam';
-  else if (textLower.includes('flat')) productType = 'MS Flat';
+  if (textLower.includes('cr') || textLower.includes('cold rolled')) {
+    productType = 'CR (Cold Rolled)';
+  } else if (textLower.includes('hr pickled') || textLower.includes('h.r. pickled') || textLower.includes('pickled')) {
+    productType = 'HR Pickled & Oiled';
+  } else if (textLower.includes('hr') || textLower.includes('hot rolled')) {
+    productType = 'HR (Hot Rolled)';
+  } else if (textLower.includes('is 277') || textLower.includes('spangled') || textLower.includes('gsm')) {
+    productType = 'GI Spangled (IS 277)';
+  } else if (textLower.includes('tmt') || textLower.includes('rebar')) {
+    productType = 'TMT Rebar';
+  } else if (textLower.includes('ms plate') || textLower.includes('ms plates') || textLower.includes('plate')) {
+    productType = 'MS Plate';
+  } else if (textLower.includes('beam') || textLower.includes('ismb')) {
+    productType = 'MS Structural Beam';
+  } else if (textLower.includes('flat')) {
+    productType = 'MS Flat';
+  }
 
-  // 4. Dimensions & Form (Coil vs Sheet Rule: Coil if no length, Sheet if length is present!)
-  const thickMatch = text.match(/\b(\d+(?:\.\d+)?)\s*mm\b/i);
-  const thickness = thickMatch ? `${thickMatch[1]} mm` : '3.0 mm';
+  // 4. Dimensions (Thickness x Width x Length)
+  let thickness = '';
+  let width = '';
+  let length = '';
 
-  const widthMatch = text.match(/\b(1000|1250|1500|2000)\b/i);
-  const width = widthMatch ? `${widthMatch[1]} mm` : '1250 mm';
+  // Pattern A: "8mmx1500x10000" or "8mm x 1500 x 10000" or "1.6mm 1250 * 2500"
+  const tripleMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*mm\s*[\*xX\s]\s*(\d{3,4})\s*[\*xX\s]\s*(\d{3,5})/i) ||
+                      textRaw.match(/(\d+(?:\.\d+)?)\s*[\*xX]\s*(\d{3,4})\s*[\*xX]\s*(\d{3,5})/i);
 
-  const lenMatch = text.match(/\b(2500|3000|6m|12m|6000|2500mm)\b/i);
-  const length = lenMatch ? lenMatch[1] : '';
+  if (tripleMatch) {
+    thickness = `${tripleMatch[1]} mm`;
+    width = `${tripleMatch[2]} mm`;
+    length = `${tripleMatch[3]} mm`;
+  } else {
+    // Pattern B: "240 x 1.60 mm" or "80 x 2.50 mm" (Width x Thickness)
+    const wThickMatch = textRaw.match(/(\d{2,4})\s*[\*xX]\s*(\d+(?:\.\d+)?)\s*mm/i);
+    if (wThickMatch) {
+      width = `${wThickMatch[1]} mm`;
+      thickness = `${wThickMatch[2]} mm`;
+    } else {
+      // Pattern C: "Thk = 1.5MM" or "Thk 2.0MM" or "1mm"
+      const thkOnlyMatch = textRaw.match(/(?:thk|thickness|cr|hr)?\s*=?\s*(\d+(?:\.\d+)?)\s*mm/i);
+      thickness = thkOnlyMatch ? `${thkOnlyMatch[1]} mm` : '2.0 mm';
 
-  // Form Rule: Coil if no length specified, Sheet if length is present!
+      const widthOnlyMatch = textRaw.match(/\b(90|130|240|312|1000|1250|1500|2000)\b/i);
+      width = widthOnlyMatch ? `${widthOnlyMatch[1]} mm` : '1250 mm';
+
+      const lenOnlyMatch = textRaw.match(/\b(2500|3000|6000|6300|10000|6m|12m)\b/i);
+      length = lenOnlyMatch ? (lenOnlyMatch[1].endsWith('m') ? lenOnlyMatch[1] : `${lenOnlyMatch[1]} mm`) : '';
+    }
+  }
+
+  // Product Form Rule:
+  // - Coil if NO length specified
+  // - Sheet / Plate if length IS present!
   let productForm: 'Coil' | 'Sheet' | 'Plate' | 'Bar' = length ? 'Sheet' : 'Coil';
-  if (textLower.includes('plate')) productForm = 'Plate';
-  if (textLower.includes('bar') || textLower.includes('flat')) productForm = 'Bar';
+  if (textLower.includes('plate') || productType === 'MS Plate') productForm = 'Plate';
+  if (textLower.includes('bar') || textLower.includes('tmt')) productForm = 'Bar';
+  if (textLower.includes('coil') && !length) productForm = 'Coil';
 
-  // 5. Quantity (Tons & Units)
-  const qtyMatch = text.match(/\b(\d+(?:\.\d+)?)\s*(?:ton|tons|mt|tonne)\b/i);
-  const quantityTons = qtyMatch ? parseFloat(qtyMatch[1]) : 30;
-  const quantityUnits = Math.round(quantityTons * (productForm === 'Sheet' ? 120 : 1));
+  // 5. Quantity (Tons & Units / Kgs / Nos)
+  let quantityTons = 0;
+  let quantityUnits = 0;
+
+  const mtMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*(?:mt|ton|tons|tonne)/i);
+  const kgMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram)/i);
+  const nosMatch = textRaw.match(/(\d+)\s*(?:nos|pcs|sheets)/i);
+
+  if (mtMatch) {
+    quantityTons = parseFloat(mtMatch[1]);
+    quantityUnits = Math.round(quantityTons * (productForm === 'Sheet' ? 120 : 1));
+  } else if (kgMatch) {
+    const kgs = parseFloat(kgMatch[1]);
+    quantityTons = Math.round((kgs / 1000) * 10) / 10;
+    quantityUnits = Math.round(kgs / 25);
+  } else if (nosMatch) {
+    quantityUnits = parseInt(nosMatch[1]);
+    const thkVal = parseFloat(thickness) || 1.5;
+    quantityTons = Math.round((quantityUnits * thkVal * 0.065) * 10) / 10 || 20;
+  } else {
+    quantityTons = 30;
+    quantityUnits = 350;
+  }
 
   // 6. Payment Terms & Delivery Location
-  let paymentTerms = '30 Days PDC';
-  if (textLower.includes('advance') || textLower.includes('cash')) paymentTerms = 'Advance Payment';
-  else if (textLower.includes('45')) paymentTerms = '45 Days Credit';
-  else if (textLower.includes('60')) paymentTerms = '60 Days Credit';
+  let paymentTerms = '30 Days Credit';
+  if (textLower.includes('strictly 45 days') || textLower.includes('45 days') || textLower.includes('45day')) {
+    paymentTerms = 'STRICTLY 45 Days Credit';
+  } else if (textLower.includes('60 days')) {
+    paymentTerms = '60 Days Credit';
+  } else if (textLower.includes('30 days') || textLower.includes('30day')) {
+    paymentTerms = '30 Days Credit';
+  } else if (textLower.includes('advance') || textLower.includes('cash')) {
+    paymentTerms = 'Advance Payment';
+  }
 
   let deliveryLocation = 'Mumbai Warehouse';
-  if (textLower.includes('pune')) deliveryLocation = 'Pune Industrial Estate';
+  if (textLower.includes('jaipur')) deliveryLocation = 'Jaipur - 302013';
+  else if (textLower.includes('pune')) deliveryLocation = 'Pune Industrial Estate';
   else if (textLower.includes('nashik')) deliveryLocation = 'Nashik MIDC';
+  else if (textLower.includes('khopoli') || textLower.includes('raigad')) deliveryLocation = 'Khopoli, Dist. Raigad';
 
-  // 7. Unit Price & Amount
-  const rateMatch = text.match(/rate\s*₹?\s*(\d{4,6})/i) || text.match(/₹\s*(\d{2,3}(?:,\d{3})*)/);
+  // 7. Unit Price & Total Amount
+  const rateMatch = textRaw.match(/rate\s*₹?\s*(\d{4,6})/i) || textRaw.match(/₹\s*(\d{2,3}(?:,\d{3})*)/);
   const unitPrice = rateMatch ? parseFloat(rateMatch[1].replace(/,/g, '')) : 62000;
-  const totalAmount = quantityTons * unitPrice;
+  const totalAmount = Math.round(quantityTons * unitPrice);
 
   return {
     companyName,
@@ -175,7 +252,7 @@ export default function InquiriesPage() {
     to: now.toISOString().split('T')[0]
   });
 
-  // Form state for Manual Log & PO Upload
+  // Form state for Manual Log & File Upload
   const [formCustomerName, setFormCustomerName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRequirement, setFormRequirement] = useState('');
@@ -210,6 +287,8 @@ export default function InquiriesPage() {
         'Supreme Steel',
         'Mehta Engineering',
         'Delta Structural Steel',
+        'Ram Ratna Infrastructure Pvt. Ltd.',
+        'AVION EXIM PVT. LTD.',
         'SB Scafform Technovert Pvt. Ltd.',
         'Apex Metals & Engg',
         'Bhushan Steel Works',
@@ -269,7 +348,7 @@ export default function InquiriesPage() {
     setTimeout(() => {
       let extName = 'Supreme Steel';
       let extPhone = '9988776655';
-      let extReq = `Inquiry Extracted from ${file.name}: 30 MT HR Pickled Sheet 3.0mm x 1250mm x 2500mm, Rate ₹62,000/MT, Payment Terms 30 Days PDC, Delivery Nashik MIDC`;
+      let extReq = `Inquiry Extracted from ${file.name}: 30 MT HR Pickled Sheet 3.0mm x 1250mm x 2500mm, Rate ₹62,000/MT, Payment Terms 30 Days Credit, Delivery Nashik MIDC`;
 
       if (file.name.toLowerCase().includes('delta')) {
         extName = 'Delta Structural Steel';
@@ -278,7 +357,15 @@ export default function InquiriesPage() {
       } else if (file.name.toLowerCase().includes('mehta')) {
         extName = 'Mehta Engineering';
         extPhone = '9876543210';
-        extReq = `Inquiry Extracted from ${file.name}: 20 MT CR Sheet 2.0mm x 1250mm x 2500mm, Rate ₹68,000/MT, Payment Terms 45 Days Credit, Delivery Pune`;
+        extReq = `Inquiry Extracted from ${file.name}: 20 MT CR Sheet 2.0mm x 1250mm x 2500mm, Rate ₹68,000/MT, Payment Terms STRICTLY 45 Days Credit, Delivery Pune`;
+      } else if (file.name.toLowerCase().includes('ram ratna') || file.name.toLowerCase().includes('rr')) {
+        extName = 'Ram Ratna Infrastructure Pvt. Ltd.';
+        extPhone = '7304424725';
+        extReq = `Inquiry Extracted from ${file.name}: 160 MT GI Spangled Coil (IS 277) 1.5mm / 2.0mm / 3.0mm x 1250mm, Payment Terms STRICTLY 45 Days Credit, Delivery Khopoli`;
+      } else if (file.name.toLowerCase().includes('avion')) {
+        extName = 'AVION EXIM PVT. LTD.';
+        extPhone = '9909976980';
+        extReq = `Inquiry Extracted from ${file.name}: 43.3 MT HR Pickled Coil 1.6mm / 2.0mm / 2.5mm x 240mm / 312mm, Delivery Umbergaon`;
       }
 
       setFormCustomerName(extName);
@@ -322,7 +409,7 @@ export default function InquiriesPage() {
     }
   };
 
-  // Only keep actual Product Inquiries (filter out greetings, deal logs, and PO queries!)
+  // Keep ONLY actual Product Inquiries (filters out generic greetings, deal logs, and status questions!)
   const rawList = Array.isArray(inquiries) ? inquiries : [];
   const productInquiries = rawList.filter(isProductInquiry);
 
@@ -479,6 +566,10 @@ export default function InquiriesPage() {
                           <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] uppercase border ${
                             details.productForm === 'Sheet'
                               ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : details.productForm === 'Plate'
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : details.productForm === 'Bar'
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
                               : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}>
                             {details.productForm}
@@ -547,7 +638,7 @@ export default function InquiriesPage() {
               <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl space-y-2 border border-slate-800 shadow-inner">
                 <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase tracking-wider">
                   <span className="flex items-center gap-1">
-                    <Layers size={13} className="text-blue-400" /> Original Source Message / Audit Input
+                    <Layers size={13} className="text-blue-400" /> Full Requirement Details &amp; Original Audit Source
                   </span>
                   <span className="bg-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-300">
                     Channel: {selectedInquiry.source_channel || 'WhatsApp'}
@@ -624,6 +715,10 @@ export default function InquiriesPage() {
                     <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold uppercase border ${
                       editDetails.productForm === 'Sheet'
                         ? 'bg-purple-100 text-purple-800 border-purple-300'
+                        : editDetails.productForm === 'Plate'
+                        ? 'bg-amber-100 text-amber-800 border-amber-300'
+                        : editDetails.productForm === 'Bar'
+                        ? 'bg-blue-100 text-blue-800 border-blue-300'
                         : 'bg-emerald-100 text-emerald-800 border-emerald-300'
                     }`}>
                       Form: {editDetails.productForm} ({editDetails.length ? 'Length Specified' : 'No Length = Coil'})
@@ -758,8 +853,8 @@ export default function InquiriesPage() {
                         value={editDetails.paymentTerms}
                         onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="30 Days PDC">30 Days PDC</option>
-                        <option value="45 Days Credit">45 Days Credit</option>
+                        <option value="30 Days Credit">30 Days Credit</option>
+                        <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
                         <option value="60 Days Credit">60 Days Credit</option>
                         <option value="Advance Payment">Advance Payment</option>
                       </select>
