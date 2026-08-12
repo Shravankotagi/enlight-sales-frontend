@@ -19,6 +19,7 @@ interface InquiryItem {
   source_channel?: string;
   media_urls?: string[];
   overall_confidence?: number;
+  ai_extraction_json?: any;
   created_at: string;
 }
 
@@ -291,21 +292,43 @@ export default function InquiriesPage() {
     setSelectedInquiry(inq);
     const parsed = parseInquiryText(inq.raw_text || '', inq);
     setEditDetails(parsed);
-    setIsEditing(false);
-    setSaveSuccess(false);
+    const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
+    setIsEditing(!isConfirmedState);
+    setSaveSuccess(isConfirmedState);
   };
 
   const handleSaveDrawerDetails = async () => {
     if (!selectedInquiry || !editDetails) return;
     try {
       setSubmitting(true);
-      await inquiriesApi.updateStatus(selectedInquiry.id, 'processed');
+      const baseAmt = editDetails.totalAmount;
+      const gstAmt = Math.round(baseAmt * 0.18);
+      const grandAmt = Math.round(baseAmt * 1.18);
+
+      const summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Spec: ${editDetails.thickness} ${editDetails.width ? `x ${editDetails.width}` : ''}. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, 18% GST: ₹${gstAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+
+      await inquiriesApi.updateStatus(selectedInquiry.id, 'confirmed', {
+        ...editDetails,
+        requirement: summaryRequirement,
+        totalAmount: baseAmt,
+        gstAmount: gstAmt,
+        grandTotal: grandAmt,
+      });
+
       setSaveSuccess(true);
-      setTimeout(() => {
-        setSaveSuccess(false);
-        setSelectedInquiry(null);
-        fetchMonthlyInquiries();
-      }, 1000);
+      setIsEditing(false);
+      setSelectedInquiry({
+        ...selectedInquiry,
+        status: 'confirmed',
+        sender_name: editDetails.companyName,
+        customer_name: editDetails.companyName,
+        sender_phone: editDetails.customerPhone,
+        customer_phone: editDetails.customerPhone,
+        raw_text: summaryRequirement,
+        ai_extraction_json: { ...editDetails, totalAmount: baseAmt, gstAmount: gstAmt, grandTotal: grandAmt },
+      });
+
+      fetchMonthlyInquiries();
     } catch (err) {
       console.error('Error saving inquiry details:', err);
       alert('Failed to save inquiry changes.');
@@ -908,13 +931,31 @@ export default function InquiriesPage() {
                       </tr>
                     </tbody>
                     <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
-                      <tr>
-                        <td className="px-4 py-3 font-bold border-r border-slate-200">Total: {editDetails.quantityTons} MT</td>
-                        <td colSpan={2} className="px-4 py-3 text-right font-bold uppercase text-slate-600 border-r border-slate-200">
-                          Total Amount:
+                      <tr className="border-b border-slate-200 text-xs">
+                        <td className="px-4 py-2 font-bold border-r border-slate-200 text-slate-700">Base Subtotal (Excl. GST)</td>
+                        <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-slate-500 border-r border-slate-200">
+                          Base Material Amount:
                         </td>
-                        <td className="px-4 py-3 text-right font-extrabold text-emerald-800 text-sm">
-                          ₹{editDetails.totalAmount.toLocaleString('en-IN')} + GST
+                        <td className="px-4 py-2 text-right font-bold text-slate-800 font-mono">
+                          ₹{editDetails.totalAmount.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                      <tr className="border-b border-slate-200 text-xs bg-indigo-50/50">
+                        <td className="px-4 py-2 font-bold border-r border-slate-200 text-indigo-900">GST @ 18%</td>
+                        <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">
+                          Applicable 18% GST:
+                        </td>
+                        <td className="px-4 py-2 text-right font-bold text-indigo-800 font-mono">
+                          + ₹{Math.round(editDetails.totalAmount * 0.18).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                      <tr className="bg-emerald-100/90 text-emerald-950 font-black">
+                        <td className="px-4 py-3 font-extrabold border-r border-emerald-300">Total: {editDetails.quantityTons} MT</td>
+                        <td colSpan={2} className="px-4 py-3 text-right font-black uppercase tracking-wide border-r border-emerald-300 text-xs">
+                          GRAND TOTAL AMOUNT (INCL. 18% GST):
+                        </td>
+                        <td className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
+                          ₹{Math.round(editDetails.totalAmount * 1.18).toLocaleString('en-IN')}
                         </td>
                       </tr>
                     </tfoot>
@@ -946,7 +987,7 @@ export default function InquiriesPage() {
                           <option value="30 Days Credit">30 Days Credit</option>
                           <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
                           <option value="60 Days Credit">60 Days Credit</option>
-                          <option value="Advance Payment">Advance Payment</option>
+                          <option value="100% Advance / Payment">100% Advance / Payment</option>
                         </select>
                       ) : (
                         <span className="font-bold text-purple-900 block">{editDetails.paymentTerms}</span>
@@ -982,14 +1023,18 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
-                disabled={submitting}
+                disabled={submitting || ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase())}
                 onClick={handleSaveDrawerDetails}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+                className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
+                  ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || saveSuccess
+                    ? 'bg-emerald-600 text-white cursor-default opacity-95'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}>
                 {submitting ? (
                   <RefreshCw size={16} className="animate-spin" />
-                ) : saveSuccess ? (
+                ) : ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || saveSuccess ? (
                   <>
-                    <Check size={16} /> Interpretation Saved &amp; Confirmed!
+                    <Check size={16} /> Inquiry Confirmed &amp; Saved ✓
                   </>
                 ) : (
                   <>

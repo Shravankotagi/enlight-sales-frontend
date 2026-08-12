@@ -82,7 +82,7 @@ export const inquiriesApi = {
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),
-  updateStatus: (id: string, status: string) => API.patch(`/inquiries/${id}/status`, { status }),
+  updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
   sendQuotation: (id: string, data: any) => API.post(`/inquiries/${id}/send-quotation`, data),
   parseDocument: (data: { file_base64: string; mime_type: string }) => API.post('/inquiries/parse-document', data),
 };
