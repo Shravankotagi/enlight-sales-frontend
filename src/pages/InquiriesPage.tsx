@@ -245,7 +245,14 @@ export default function InquiriesPage() {
   const [formRequirement, setFormRequirement] = useState('');
   const [formInquiryType, setFormInquiryType] = useState('Product Requirement');
   const [poFileName, setPoFileName] = useState('');
+  const [poFileBase64, setPoFileBase64] = useState<string | null>(null);
+  const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
+
+  const isPdf = (url: string) => {
+    if (!url) return false;
+    return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
+  };
 
   const fetchMonthlyInquiries = async () => {
     try {
@@ -300,6 +307,7 @@ export default function InquiriesPage() {
 
   const handleOpenDrawer = (inq: InquiryItem) => {
     setSelectedInquiry(inq);
+    setDrawerFileBase64(null);
     const parsed = parseInquiryText(inq.raw_text || '', inq);
     setEditDetails(parsed);
     const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
@@ -307,6 +315,19 @@ export default function InquiriesPage() {
     setIsEditing(!isConfirmedState);
     setSaveSuccess(isConfirmedState);
     setIsQuotationSent(isQuotedState);
+  };
+
+  const handleDrawerFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const base64String = evt.target?.result as string;
+      if (base64String) {
+        setDrawerFileBase64(base64String);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Extract attachment filename from raw_text like "[Inquiry Attachment: file.jpg]"
@@ -428,12 +449,15 @@ export default function InquiriesPage() {
 
       const summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Spec: ${editDetails.thickness} ${editDetails.width ? `x ${editDetails.width}` : ''}. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, 18% GST: ₹${gstAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
 
+      const mediaUrlsPayload = drawerFileBase64 ? [drawerFileBase64] : (selectedInquiry.media_urls || []);
+
       await inquiriesApi.updateStatus(selectedInquiry.id, 'confirmed', {
         ...editDetails,
         requirement: summaryRequirement,
         totalAmount: baseAmt,
         gstAmount: gstAmt,
         grandTotal: grandAmt,
+        media_urls: mediaUrlsPayload,
       });
 
       setSaveSuccess(true);
@@ -446,8 +470,10 @@ export default function InquiriesPage() {
         sender_phone: editDetails.customerPhone,
         customer_phone: editDetails.customerPhone,
         raw_text: summaryRequirement,
+        media_urls: mediaUrlsPayload,
         ai_extraction_json: { ...editDetails, totalAmount: baseAmt, gstAmount: gstAmt, grandTotal: grandAmt },
       });
+      setDrawerFileBase64(null);
 
       fetchMonthlyInquiries();
     } catch (err) {
@@ -475,6 +501,7 @@ export default function InquiriesPage() {
         }
 
         const cleanBase64 = base64String.replace(/^data:[^;]+;base64,/, '');
+        setPoFileBase64(base64String);
 
         // 1. Try Backend Gemini Vision API Route
         try {
@@ -575,6 +602,7 @@ export default function InquiriesPage() {
         inquiry_type: formInquiryType,
         status: 'review',
         overall_confidence: 0.95,
+        media_urls: poFileBase64 ? [poFileBase64] : [],
       });
 
       setShowModal(false);
@@ -583,6 +611,7 @@ export default function InquiriesPage() {
       setFormRequirement('');
       setFormInquiryType('Product Requirement');
       setPoFileName('');
+      setPoFileBase64(null);
 
       fetchMonthlyInquiries();
     } catch (err) {
@@ -861,59 +890,97 @@ export default function InquiriesPage() {
                   </p>
 
                   {/* Inline Image Viewer — shows actual shared image/document */}
-                  {selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0 ? (
+                  {(selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) || drawerFileBase64 ? (
                     <div className="pt-3 border-t border-slate-800 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
-                          <ImageIcon size={13} /> Attached Document / Image
+                          <ImageIcon size={13} /> {drawerFileBase64 ? 'Newly Attached Document' : 'Attached Document / Image'}
                         </span>
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => setImageViewerUrl(selectedInquiry.media_urls![0])}
+                            onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
                             className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
                             <ZoomIn size={12} /> Full Screen
                           </button>
-                          <a
-                            href={selectedInquiry.media_urls[0]}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
-                            <ExternalLink size={12} /> Open Original
-                          </a>
+                          {drawerFileBase64 ? (
+                            <button
+                              onClick={() => setDrawerFileBase64(null)}
+                              className="px-2 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
+                              Remove
+                            </button>
+                          ) : selectedInquiry.media_urls?.[0]?.startsWith('http') ? (
+                            <a
+                              href={selectedInquiry.media_urls[0]}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
+                              <ExternalLink size={12} /> Open Original
+                            </a>
+                          ) : null}
                         </div>
                       </div>
                       <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                        <img
-                          src={selectedInquiry.media_urls[0]}
-                          alt="Inquiry attachment"
-                          className="w-full max-h-64 object-contain cursor-zoom-in"
-                          onClick={() => setImageViewerUrl(selectedInquiry.media_urls![0])}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
+                        {isPdf(drawerFileBase64 || selectedInquiry.media_urls![0]) ? (
+                          <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+                            <FileText size={40} className="text-red-500" />
+                            <div>
+                              <p className="text-xs font-bold text-slate-200">PDF Document Attached</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">Click Full Screen to view or download</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <img
+                            src={drawerFileBase64 || selectedInquiry.media_urls![0]}
+                            alt="Inquiry attachment"
+                            className="w-full max-h-64 object-contain cursor-zoom-in"
+                            onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        )}
                       </div>
-                      {selectedInquiry.media_urls.length > 1 && (
-                        <p className="text-[11px] text-slate-500">+{selectedInquiry.media_urls.length - 1} more attachment(s)</p>
+                      {drawerFileBase64 && (
+                        <p className="text-[10px] text-amber-400 font-semibold animate-pulse text-center">
+                          ⚠️ Click "Save & Confirm Inquiry" below to store this document permanently.
+                        </p>
                       )}
                     </div>
                   ) : (() => {
                     const attachName = extractAttachmentName(selectedInquiry.raw_text || '');
-                    return attachName ? (
+                    return (
                       <div className="pt-3 border-t border-slate-800 space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
                             <FileCheck size={13} /> Attached Document
                           </span>
-                          <span className="text-[11px] text-slate-500">URL not stored in DB</span>
+                          <span className="text-[11px] text-slate-500">Not saved in DB yet</span>
                         </div>
-                        <div className="flex items-center gap-2.5 bg-slate-800/60 rounded-xl p-3 border border-slate-700">
-                          <FileText size={20} className="text-blue-400 flex-shrink-0" />
+                        <div className="flex items-center justify-between gap-2.5 bg-slate-800/60 rounded-xl p-3 border border-slate-700">
+                          <div className="flex items-center gap-2.5">
+                            <FileText size={20} className="text-blue-400 flex-shrink-0" />
+                            <div>
+                              <p className="text-xs font-bold text-slate-200">{attachName || 'Document file'}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                {attachName ? 'Document referenced. Attach file to view inline.' : 'Attach a document file.'}
+                              </p>
+                            </div>
+                          </div>
                           <div>
-                            <p className="text-xs font-bold text-slate-200">{attachName}</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">File was uploaded during inquiry creation</p>
+                            <input
+                              type="file"
+                              id="drawer-file-upload"
+                              className="hidden"
+                              accept="image/*,application/pdf"
+                              onChange={handleDrawerFileUpload}
+                            />
+                            <button
+                              onClick={() => document.getElementById('drawer-file-upload')?.click()}
+                              className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors whitespace-nowrap">
+                              Attach File
+                            </button>
                           </div>
                         </div>
                       </div>
-                    ) : null;
+                    );
                   })()}
                 </div>
               </div>
