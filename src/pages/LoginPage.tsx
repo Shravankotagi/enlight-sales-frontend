@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const rawBackend = import.meta.env.VITE_BACKEND_URL ||
+const BACKEND = import.meta.env.VITE_BACKEND_URL ||
   'https://enlight-sales-backend-production.up.railway.app';
-const BACKEND = rawBackend.replace(/\/+$/, '');
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -18,48 +17,24 @@ export default function LoginPage() {
   const [devOtp, setDevOtp] = useState('');
 
   const handleRequestOtp = async () => {
-    if (!phone || phone.replace(/\D/g, '').length < 10) {
-      setError('Enter a valid 10-digit phone number');
+    if (!phone || phone.length < 10) {
+      setError('Enter a valid phone number');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const cleanDigits = phone.replace(/\D/g, '').slice(-10);
-      const phonePayload = `91${cleanDigits}`;
       const res = await fetch(`${BACKEND}/auth/request-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phonePayload }),
+        body: JSON.stringify({ phone: `91${phone.replace(/\D/g, '').slice(-10)}` }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || 'Failed to send OTP');
+      if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
       if (data.data?.dev_otp) setDevOtp(data.data.dev_otp);
       setStep('otp');
     } catch (err: any) {
-      console.error('OTP Request Error:', err);
-      if (err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('failed to fetch'))) {
-        setError('Connection error. Retrying request...');
-        // Retry once automatically
-        try {
-          const cleanDigits = phone.replace(/\D/g, '').slice(-10);
-          const res = await fetch(`${BACKEND}/auth/request-otp`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: `91${cleanDigits}` }),
-          });
-          const data = await res.json();
-          if (res.ok) {
-            if (data.data?.dev_otp) setDevOtp(data.data.dev_otp);
-            setStep('otp');
-            setError('');
-            return;
-          }
-        } catch (_) {}
-        setError('Server connecting... Please click "Send OTP on WhatsApp" again.');
-      } else {
-        setError(err.message || 'Failed to request OTP');
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -82,19 +57,11 @@ export default function LoginPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to verify OTP');
+      if (!res.ok) throw new Error(data.error || 'Invalid OTP');
       login(data.data.token, data.data.employee);
-      if (data.data.employee.role === 'admin') {
-        navigate('/admin');
-      } else {
-        navigate('/home');
-      }
+      navigate('/');
     } catch (err: any) {
-      if (err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('failed to fetch'))) {
-        setError('Server connecting... Please try verifying OTP again.');
-      } else {
-        setError(err.message || 'Failed to verify OTP');
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }

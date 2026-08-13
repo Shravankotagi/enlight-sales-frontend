@@ -83,8 +83,8 @@ export const inquiriesApi = {
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),
   updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
-  sendQuotation: (id: string, data: any) => API.post(`/inquiries/${id}/send-quotation`, data),
-  parseDocument: (data: { file_base64: string; mime_type: string }) => API.post('/inquiries/parse-document', data),
+  sendQuotation: (id: string, payload: any) => API.post(`/inquiries/send-quotation/${id}`, payload),
+  parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
 };
 
 export const reportsApi = {
@@ -97,7 +97,6 @@ export const reportsApi = {
 export const employeesApi = {
   getAll: () => API.get('/employees'),
 };
-
 
 export const pricingApi = {
   getToday: () => API.get('/pricing/today'),
