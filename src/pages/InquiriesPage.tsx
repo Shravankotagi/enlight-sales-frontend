@@ -309,6 +309,115 @@ export default function InquiriesPage() {
     setIsQuotationSent(isQuotedState);
   };
 
+  // Extract attachment filename from raw_text like "[Inquiry Attachment: file.jpg]"
+  const extractAttachmentName = (rawText: string): string | null => {
+    const match = rawText.match(/\[Inquiry Attachment:\s*([^\]]+)\]/);
+    return match ? match[1].trim() : null;
+  };
+
+  const handlePrintQuotation = (inq: InquiryItem, details: ExtractedDetails) => {
+    const gst = Math.round(details.totalAmount * 0.18);
+    const grand = Math.round(details.totalAmount * 1.18);
+    const refId = inq.id.slice(0, 12).toUpperCase();
+    const dateStr = new Date(inq.created_at).toLocaleDateString('en-IN');
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Quotation - ${details.companyName}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
+    h1 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+    .subtitle { font-size: 12px; color: #64748b; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .card { padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; }
+    .name { font-size: 15px; font-weight: 800; margin-bottom: 3px; }
+    .meta { font-size: 12px; color: #64748b; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+    th { background: #1e293b; color: white; padding: 10px 14px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    th:last-child { text-align: right; }
+    td { padding: 12px 14px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+    td:last-child { text-align: right; }
+    .qty { font-size: 14px; font-weight: 800; color: #2563eb; }
+    .product { font-weight: 700; }
+    .spec { font-size: 11px; color: #64748b; margin-top: 3px; font-family: monospace; }
+    .form-badge { display: inline-block; background: #dcfce7; color: #15803d; border: 1px solid #86efac; padding: 1px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-left: 8px; text-transform: uppercase; }
+    .amount { font-size: 14px; font-weight: 800; color: #059669; }
+    .subtotal-row td { background: #f8fafc; font-weight: 600; font-size: 12px; }
+    .gst-row td { background: #eef2ff; font-weight: 600; font-size: 12px; color: #4338ca; }
+    .total-row td { background: #d1fae5; font-weight: 900; font-size: 14px; color: #065f46; }
+    .terms { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 14px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+    .term-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
+    .term-val { font-size: 12px; font-weight: 700; }
+    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Price Quotation</h1>
+  <p class="subtitle">Enlight Metals Pvt. Ltd. &bull; Ref: ${refId} &bull; Date: ${dateStr}</p>
+  <div class="grid">
+    <div class="card">
+      <div class="label">Bill To</div>
+      <div class="name">${details.companyName}</div>
+      <div class="meta">Phone: ${details.customerPhone}</div>
+      <div class="meta">Delivery: ${details.deliveryLocation}</div>
+    </div>
+    <div class="card">
+      <div class="label">From</div>
+      <div class="name">Enlight Metals Pvt. Ltd.</div>
+      <div class="meta">Mumbai, Maharashtra</div>
+      <div class="meta">GST Registered Supplier</div>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:18%">Quantity</th>
+        <th style="width:40%">Description &amp; Specifications</th>
+        <th style="width:20%">Unit Price (&#8377;)</th>
+        <th style="width:22%">Amount (&#8377;)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><div class="qty">${details.quantityTons} MT</div><div style="font-size:11px;color:#94a3b8">(${details.quantityUnits} nos)</div></td>
+        <td><div class="product">${details.productType} <span class="form-badge">Form: ${details.productForm}</span></div><div class="spec">Spec: ${details.thickness} ${details.width ? 'x ' + details.width : ''}</div></td>
+        <td>&#8377;${details.unitPrice.toLocaleString('en-IN')}/MT</td>
+        <td class="amount">&#8377;${details.totalAmount.toLocaleString('en-IN')}</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr class="subtotal-row">
+        <td>Subtotal (Excl. GST)</td>
+        <td colspan="2" style="text-align:right">Base Material Amount:</td>
+        <td>&#8377;${details.totalAmount.toLocaleString('en-IN')}</td>
+      </tr>
+      <tr class="gst-row">
+        <td>GST @ 18%</td>
+        <td colspan="2" style="text-align:right">Applicable 18% GST:</td>
+        <td>+ &#8377;${gst.toLocaleString('en-IN')}</td>
+      </tr>
+      <tr class="total-row">
+        <td>Total: ${details.quantityTons} MT</td>
+        <td colspan="2" style="text-align:right;font-size:11px">GRAND TOTAL AMOUNT (INCL. 18% GST):</td>
+        <td>&#8377;${grand.toLocaleString('en-IN')}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="terms">
+    <div><div class="term-label">Delivery Address</div><div class="term-val">${details.deliveryLocation}</div></div>
+    <div><div class="term-label">Payment Terms</div><div class="term-val" style="color:#7c3aed">${details.paymentTerms}</div></div>
+    <div><div class="term-label">Inquiry Date</div><div class="term-val">${dateStr}</div></div>
+  </div>
+  <div class="footer">This is a system-generated quotation from Enlight Sales OS. Prices are subject to change.</div>
+  <script>window.onload = function() { window.print(); window.onafterprint = function() { window.close(); }; };<\/script>
+</body>
+</html>`;
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
   const handleSaveDrawerDetails = async () => {
     if (!selectedInquiry || !editDetails) return;
     try {
@@ -752,7 +861,7 @@ export default function InquiriesPage() {
                   </p>
 
                   {/* Inline Image Viewer — shows actual shared image/document */}
-                  {selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0 && (
+                  {selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0 ? (
                     <div className="pt-3 border-t border-slate-800 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
@@ -769,58 +878,43 @@ export default function InquiriesPage() {
                             target="_blank"
                             rel="noreferrer"
                             className="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
-                            <ExternalLink size={12} /> Open Tab
+                            <ExternalLink size={12} /> Open Original
                           </a>
                         </div>
                       </div>
-                      {/* Actual image display */}
                       <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                        {selectedInquiry.media_urls[0].match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                          <img
-                            src={selectedInquiry.media_urls[0]}
-                            alt="Inquiry attachment"
-                            className="w-full max-h-64 object-contain cursor-zoom-in"
-                            onClick={() => setImageViewerUrl(selectedInquiry.media_urls![0])}
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ) : selectedInquiry.media_urls[0].match(/\.pdf$/i) ? (
-                          <div className="flex items-center justify-center py-6 gap-3">
-                            <FileCheck size={28} className="text-red-400" />
-                            <div>
-                              <p className="text-white text-xs font-bold">PDF Document Attached</p>
-                              <p className="text-slate-400 text-[11px]">Click "Open Tab" to view the PDF</p>
-                            </div>
-                          </div>
-                        ) : (
-                          // Try loading as image anyway (WhatsApp media URLs)
-                          <img
-                            src={selectedInquiry.media_urls[0]}
-                            alt="Inquiry attachment"
-                            className="w-full max-h-64 object-contain cursor-zoom-in"
-                            onClick={() => setImageViewerUrl(selectedInquiry.media_urls![0])}
-                            onError={(e) => {
-                              const parent = (e.target as HTMLImageElement).parentElement;
-                              if (parent) parent.innerHTML = `<div class="flex items-center justify-center py-6 gap-2 text-slate-400"><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span class="text-xs">Media stored — click Open Tab to view</span></div>`;
-                            }}
-                          />
-                        )}
+                        <img
+                          src={selectedInquiry.media_urls[0]}
+                          alt="Inquiry attachment"
+                          className="w-full max-h-64 object-contain cursor-zoom-in"
+                          onClick={() => setImageViewerUrl(selectedInquiry.media_urls![0])}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
                       </div>
                       {selectedInquiry.media_urls.length > 1 && (
-                        <p className="text-[11px] text-slate-500">
-                          +{selectedInquiry.media_urls.length - 1} more attachment(s)
-                        </p>
+                        <p className="text-[11px] text-slate-500">+{selectedInquiry.media_urls.length - 1} more attachment(s)</p>
                       )}
                     </div>
-                  )}
-
-                  {/* No media but text mentions document */}
-                  {(!selectedInquiry.media_urls || selectedInquiry.media_urls.length === 0) &&
-                    selectedInquiry.raw_text?.toLowerCase().includes('document') && (
-                    <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
-                      <FileCheck size={14} className="text-slate-500" />
-                      <span className="text-xs text-slate-400">Document referenced — file URL not stored</span>
-                    </div>
-                  )}
+                  ) : (() => {
+                    const attachName = extractAttachmentName(selectedInquiry.raw_text || '');
+                    return attachName ? (
+                      <div className="pt-3 border-t border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
+                            <FileCheck size={13} /> Attached Document
+                          </span>
+                          <span className="text-[11px] text-slate-500">URL not stored in DB</span>
+                        </div>
+                        <div className="flex items-center gap-2.5 bg-slate-800/60 rounded-xl p-3 border border-slate-700">
+                          <FileText size={20} className="text-blue-400 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-slate-200">{attachName}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">File was uploaded during inquiry creation</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               </div>
 
@@ -1198,9 +1292,9 @@ export default function InquiriesPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => handlePrintQuotation(quotationViewInquiry, quotationViewDetails)}
                   className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5">
-                  <Printer size={13} /> Print
+                  <Printer size={13} /> Print / Save PDF
                 </button>
                 <button
                   onClick={() => setShowQuotationView(false)}
