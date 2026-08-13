@@ -42,17 +42,16 @@ interface ExtractedDetails {
 
 const cleanProductType = (pt: string): string => {
   if (!pt) return 'Hot Rolled';
-  const clean = pt.replace(/\bHR\s*\(([^)]+)\)/i, '$1')
-                  .replace(/\bCR\s*\(([^)]+)\)/i, '$1')
-                  .replace(/^HR\b\s*/i, 'Hot Rolled ')
-                  .replace(/^CR\b\s*/i, 'Cold Rolled ')
-                  .replace(/^HR$/i, 'Hot Rolled')
-                  .replace(/^CR$/i, 'Cold Rolled')
-                  .trim();
-  if (clean === 'Hot Rolled' || clean === 'Cold Rolled') return clean;
-  if (clean.toLowerCase().includes('hot rolled')) return 'Hot Rolled';
-  if (clean.toLowerCase().includes('cold rolled')) return 'Cold Rolled';
-  return clean;
+  const str = String(pt).trim();
+  if (/\b(hr|hot\s*rolled)\b/i.test(str)) {
+    if (/pickled/i.test(str)) return 'Hot Rolled Pickled & Oiled';
+    return 'Hot Rolled';
+  }
+  if (/\b(cr|cold\s*rolled)\b/i.test(str)) return 'Cold Rolled';
+  if (/gi|spangled/i.test(str)) return 'GI Spangled (IS 277)';
+  if (/tmt|rebar/i.test(str)) return 'TMT Rebar';
+  if (/ms\s*plate|plate/i.test(str)) return 'MS Plate';
+  return str;
 };
 
 /**
@@ -137,20 +136,23 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     (phoneMatch ? phoneMatch[1] : '9123456789');
 
   // 3. Product Type
-  let productType = 'Hot Rolled';
-  if (textLower.includes('cr') || textLower.includes('cold rolled')) {
-    productType = 'Cold Rolled';
-  } else if (textLower.includes('hr pickled') || textLower.includes('pickled')) {
-    productType = 'Hot Rolled Pickled & Oiled';
-  } else if (textLower.includes('hr') || textLower.includes('hot rolled')) {
-    productType = 'Hot Rolled';
-  } else if (textLower.includes('is 277') || textLower.includes('spangled') || textLower.includes('gi')) {
-    productType = 'GI Spangled (IS 277)';
-  } else if (textLower.includes('tmt') || textLower.includes('rebar')) {
-    productType = 'TMT Rebar';
-  } else if (textLower.includes('ms plate') || textLower.includes('plate')) {
-    productType = 'MS Plate';
+  let rawPt = aiJson?.productType || aiJson?.sku_text || aiJson?.line_items?.[0]?.sku_text || '';
+  if (!rawPt) {
+    if (textLower.includes('cr') || textLower.includes('cold rolled')) {
+      rawPt = 'Cold Rolled';
+    } else if (textLower.includes('hr pickled') || textLower.includes('pickled')) {
+      rawPt = 'Hot Rolled Pickled & Oiled';
+    } else if (textLower.includes('hr') || textLower.includes('hot rolled')) {
+      rawPt = 'Hot Rolled';
+    } else if (textLower.includes('is 277') || textLower.includes('spangled') || textLower.includes('gi')) {
+      rawPt = 'GI Spangled (IS 277)';
+    } else if (textLower.includes('tmt') || textLower.includes('rebar')) {
+      rawPt = 'TMT Rebar';
+    } else if (textLower.includes('ms plate') || textLower.includes('plate')) {
+      rawPt = 'MS Plate';
+    }
   }
+  const productType = cleanProductType(rawPt || 'Hot Rolled');
 
   // 4. Dimensions
   let thickness = '';
