@@ -172,7 +172,6 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                   <th className="px-4 py-3 text-center w-12">#</th>
                   <th className="px-4 py-3">Material / Product Description</th>
                   <th className="px-4 py-3 text-right">Quantity (MT)</th>
-                  <th className="px-4 py-3 text-right">Unit Rate (₹/MT)</th>
                   <th className="px-4 py-3 text-right">Total Amount (₹)</th>
                 </tr>
               </thead>
@@ -182,14 +181,12 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                     const qty = Number(item.quantity || 0);
                     const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
                     const amt = Number(item.amount || (qty * rate) || totalAmount || 0);
-                    const calcRate = rate || (qty > 0 ? Math.round(amt / qty) : 0);
 
                     return (
                       <tr key={i} className="hover:bg-slate-50">
                         <td className="px-4 py-3 text-center text-slate-500 font-medium">{i + 1}</td>
                         <td className="px-4 py-3 font-semibold text-slate-900">{item.sku_text || 'Metal Products'}</td>
                         <td className="px-4 py-3 text-right font-mono font-medium">{qty ? `${qty} MT` : '-'}</td>
-                        <td className="px-4 py-3 text-right font-mono text-slate-600">{calcRate ? `₹${calcRate.toLocaleString('en-IN')}` : '-'}</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-900">₹{amt.toLocaleString('en-IN')}</td>
                       </tr>
                     );
@@ -199,7 +196,6 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                     <td className="px-4 py-3 text-center text-slate-500 font-medium">1</td>
                     <td className="px-4 py-3 font-semibold text-slate-900">Industrial Metal Supply Order Requirement</td>
                     <td className="px-4 py-3 text-right font-mono font-medium">Bulk Order</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-600">Standard Rate</td>
                     <td className="px-4 py-3 text-right font-bold text-slate-900">
                       ₹{Number(totalAmount).toLocaleString('en-IN')}
                     </td>
