@@ -70,7 +70,15 @@ const cleanProductType = (pt: string): string => {
  * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
  */
 function isProductInquiry(inq: InquiryItem): boolean {
-  if (inq.source_channel === 'web_dashboard') return true;
+  if (
+    inq.status === 'confirmed' ||
+    inq.status === 'quoted' ||
+    inq.status === 'processed' ||
+    inq.status === 'won' ||
+    inq.source_channel === 'web_dashboard'
+  ) {
+    return true;
+  }
   const text = (inq.raw_text || '').trim();
   const textLower = text.toLowerCase();
   if (!text) return false;
