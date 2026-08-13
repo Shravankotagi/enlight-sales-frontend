@@ -177,16 +177,15 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </div>
           </div>
 
-          {/* Quotation Line Items Table */}
+          {/* Quotation Line Items Table (4 Columns - Unit Rate Removed) */}
           <div className="border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
             <table className="w-full text-left text-sm border-collapse">
               <thead className="bg-slate-900 text-white text-xs font-semibold uppercase tracking-wider">
                 <tr className="divide-x divide-slate-700 border-b border-slate-800">
                   <th className="px-3 py-3 text-center w-[6%]">#</th>
-                  <th className="px-4 py-3 w-[44%]">Material Description &amp; Specifications</th>
-                  <th className="px-4 py-3 text-right w-[16%]">Quantity (MT)</th>
-                  <th className="px-4 py-3 text-right w-[17%]">Unit Rate (₹/MT)</th>
-                  <th className="px-4 py-3 text-right w-[17%]">Amount (₹)</th>
+                  <th className="px-4 py-3 w-[54%]">Material Description &amp; Specifications</th>
+                  <th className="px-4 py-3 text-right w-[20%]">Quantity (MT)</th>
+                  <th className="px-4 py-3 text-right w-[20%]">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -201,9 +200,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-900">
                     {details.quantityTons} MT
                     <span className="block text-[11px] text-slate-400 font-normal">({details.quantityUnits} units)</span>
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-mono text-slate-700">
-                    ₹{details.unitPrice.toLocaleString('en-IN')}
                   </td>
                   <td className="px-4 py-3.5 text-right font-black text-slate-900">
                     ₹{details.totalAmount.toLocaleString('en-IN')}
