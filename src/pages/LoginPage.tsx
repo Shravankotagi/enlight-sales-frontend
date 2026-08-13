@@ -34,7 +34,11 @@ export default function LoginPage() {
       if (data.data?.dev_otp) setDevOtp(data.data.dev_otp);
       setStep('otp');
     } catch (err: any) {
-      setError(err.message);
+      if (err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('failed to fetch'))) {
+        setError('Server waking up... Please wait 5 seconds and click "Send OTP on WhatsApp" again.');
+      } else {
+        setError(err.message || 'Failed to request OTP');
+      }
     } finally {
       setLoading(false);
     }
@@ -57,6 +61,7 @@ export default function LoginPage() {
         }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to verify OTP');
       login(data.data.token, data.data.employee);
       if (data.data.employee.role === 'admin') {
         navigate('/admin');
@@ -64,7 +69,11 @@ export default function LoginPage() {
         navigate('/home');
       }
     } catch (err: any) {
-      setError(err.message);
+      if (err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('failed to fetch'))) {
+        setError('Server connecting... Please try verifying OTP again.');
+      } else {
+        setError(err.message || 'Failed to verify OTP');
+      }
     } finally {
       setLoading(false);
     }
