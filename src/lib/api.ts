@@ -1,8 +1,10 @@
 import axios from 'axios';
 
+const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const defaultBackend = isLocal ? 'http://localhost:3000' : 'https://enlight-sales-backend-production.up.railway.app';
+
 const API = axios.create({
-  baseURL: import.meta.env.VITE_BACKEND_URL ||
-    'https://enlight-sales-backend-production.up.railway.app',
+  baseURL: import.meta.env.VITE_BACKEND_URL || defaultBackend,
   headers: { 'Content-Type': 'application/json' }
 });
 
@@ -82,8 +84,9 @@ export const inquiriesApi = {
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),
-  updateStatus: (id: string, status: string) => API.patch(`/inquiries/${id}/status`, { status }),
-  sendQuotation: (id: string, data: any) => API.post(`/inquiries/${id}/send-quotation`, data),
+  updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
+  sendQuotation: (id: string, payload: any) => API.post(`/inquiries/send-quotation/${id}`, payload),
+  parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
 };
 
 export const reportsApi = {
@@ -96,7 +99,6 @@ export const reportsApi = {
 export const employeesApi = {
   getAll: () => API.get('/employees'),
 };
-
 
 export const pricingApi = {
   getToday: () => API.get('/pricing/today'),
