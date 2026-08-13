@@ -87,7 +87,7 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
     const rows: ParsedClient[] = [];
     for (let i = 1; i < lines.length; i++) {
       // Split comma considering quotes
-      const values = lines[i].split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
+      const values = lines[i].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
       const customerName = values[nameIdx] || '';
       if (!customerName) continue;
 
