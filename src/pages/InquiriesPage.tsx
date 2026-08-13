@@ -823,7 +823,6 @@ export default function InquiriesPage() {
                   )}
                 </div>
               </div>
-            </div>
 
               {/* Edit vs View Toggle Header */}
               <div className="flex items-center justify-between pt-1">
