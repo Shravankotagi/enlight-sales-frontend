@@ -40,6 +40,21 @@ interface ExtractedDetails {
   deliveryLocation: string;
 }
 
+const cleanProductType = (pt: string): string => {
+  if (!pt) return 'Hot Rolled';
+  const clean = pt.replace(/\bHR\s*\(([^)]+)\)/i, '$1')
+                  .replace(/\bCR\s*\(([^)]+)\)/i, '$1')
+                  .replace(/^HR\b\s*/i, 'Hot Rolled ')
+                  .replace(/^CR\b\s*/i, 'Cold Rolled ')
+                  .replace(/^HR$/i, 'Hot Rolled')
+                  .replace(/^CR$/i, 'Cold Rolled')
+                  .trim();
+  if (clean === 'Hot Rolled' || clean === 'Cold Rolled') return clean;
+  if (clean.toLowerCase().includes('hot rolled')) return 'Hot Rolled';
+  if (clean.toLowerCase().includes('cold rolled')) return 'Cold Rolled';
+  return clean;
+};
+
 /**
  * Filter function to ensure ONLY actual Product Inquiries appear in this tab.
  * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
@@ -122,13 +137,13 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     (phoneMatch ? phoneMatch[1] : '9123456789');
 
   // 3. Product Type
-  let productType = 'HR (Hot Rolled)';
+  let productType = 'Hot Rolled';
   if (textLower.includes('cr') || textLower.includes('cold rolled')) {
-    productType = 'CR (Cold Rolled)';
+    productType = 'Cold Rolled';
   } else if (textLower.includes('hr pickled') || textLower.includes('pickled')) {
-    productType = 'HR Pickled & Oiled';
+    productType = 'Hot Rolled Pickled & Oiled';
   } else if (textLower.includes('hr') || textLower.includes('hot rolled')) {
-    productType = 'HR (Hot Rolled)';
+    productType = 'Hot Rolled';
   } else if (textLower.includes('is 277') || textLower.includes('spangled') || textLower.includes('gi')) {
     productType = 'GI Spangled (IS 277)';
   } else if (textLower.includes('tmt') || textLower.includes('rebar')) {
@@ -780,7 +795,7 @@ export default function InquiriesPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                          {details.productType}
+                          {cleanProductType(details.productType)}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-xs">
@@ -1079,7 +1094,7 @@ export default function InquiriesPage() {
                           ) : (
                             <div>
                               <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                                <span>{editDetails.productType}</span>
+                                <span>{cleanProductType(editDetails.productType)}</span>
                                 <span className={`px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border ${
                                   editDetails.productForm === 'Sheet'
                                     ? 'bg-purple-100 text-purple-800 border-purple-300'
@@ -1377,7 +1392,7 @@ export default function InquiriesPage() {
                       </td>
                       <td className="px-4 py-4 border-r border-slate-200">
                         <div className="font-bold text-slate-900 flex items-center gap-2">
-                          {quotationViewDetails.productType}
+                          {cleanProductType(quotationViewDetails.productType)}
                           <span className="px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border bg-emerald-100 text-emerald-800 border-emerald-300">
                             Form: {quotationViewDetails.productForm}
                           </span>
