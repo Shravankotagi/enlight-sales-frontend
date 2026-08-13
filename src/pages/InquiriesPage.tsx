@@ -99,15 +99,14 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const textLower = textRaw.toLowerCase();
   const aiJson = inq?.ai_extraction_json || {};
 
-  // 1. Customer / Company Name (Strict Priority to inq.sender_name / inq.customer_name)
+  // 1. Customer / Company Name (Priority to AI extracted customer name and customer record, NOT salesperson)
   let companyName =
-    inq?.sender_name ||
-    inq?.customer_name ||
     aiJson.customer_name ||
     aiJson.customer?.name ||
+    inq?.customer_name ||
     '';
 
-  if (!companyName || companyName === 'Customer' || companyName === 'Apex Metals & Engg' || companyName === 'Web Customer') {
+  if (!companyName || companyName === 'Customer' || companyName === 'Apex Metals & Engg' || companyName === 'Web Customer' || companyName.toLowerCase() === 'max') {
     if (textLower.includes('delta')) {
       companyName = 'Delta Structural Steel';
     } else if (textLower.includes('mehta')) {
@@ -122,18 +121,24 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
       companyName = 'SB Scafform Technovert Pvt. Ltd.';
     } else {
       const match = textRaw.match(/(?:from|customer|company|client|pvt\.?\s*ltd\.?|ltd\.?|infra|steel|engineering|industries)\s+([A-Z0-9\s&.-]{3,35})/i);
-      companyName = match ? match[1].trim() : (inq?.sender_name || inq?.customer_name || 'Customer Inquiry');
+      if (match && match[1].trim().toLowerCase() !== 'max') {
+        companyName = match[1].trim();
+      } else {
+        companyName = inq?.customer_name || 'Customer Inquiry';
+      }
     }
   }
 
-  // 2. Customer Phone Number
+  // 2. Customer Phone Number (Priority to AI extracted customer phone and text match, NOT salesperson phone)
   const phoneMatch = textRaw.match(/\b([6-9]\d{9})\b/) || textRaw.match(/\+91[-\s]?([6-9]\d{9})\b/);
-  const customerPhone =
-    inq?.sender_phone ||
-    inq?.customer_phone ||
+  let customerPhone =
     aiJson.contact_phone ||
     aiJson.customer?.phone ||
-    (phoneMatch ? phoneMatch[1] : '9123456789');
+    (phoneMatch ? phoneMatch[1] : '');
+
+  if (!customerPhone || customerPhone === inq?.sender_phone || customerPhone === '918262937458') {
+    customerPhone = inq?.customer_phone || (phoneMatch ? phoneMatch[1] : '9123456789');
+  }
 
   // 3. Product Type
   let rawPt = aiJson?.productType || aiJson?.sku_text || aiJson?.line_items?.[0]?.sku_text || '';
