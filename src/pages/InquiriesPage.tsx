@@ -1090,44 +1090,29 @@ export default function InquiriesPage() {
                         <tr className="hover:bg-blue-50/30">
                           <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 text-center">1</td>
                           <td className="px-4 py-3.5 border-r border-slate-200">
-                            {isEditing ? (
-                              <div className="space-y-2">
-                                <input
-                                  type="text"
-                                  value={editDetails.productType}
-                                  onChange={(e) => setEditDetails({ ...editDetails, productType: e.target.value })}
-                                  placeholder="Product Type (CR / HR / HR Pickled)"
-                                  className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
-                                />
-                                <div className="grid grid-cols-3 gap-1">
-                                  <input type="text" placeholder="Thk" value={editDetails.thickness} onChange={(e) => setEditDetails({ ...editDetails, thickness: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
-                                  <input type="text" placeholder="Width" value={editDetails.width} onChange={(e) => setEditDetails({ ...editDetails, width: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
-                                  <input type="text" placeholder="Length" value={editDetails.length} onChange={(e) => { const l = e.target.value; setEditDetails({ ...editDetails, length: l, productForm: l.trim() ? 'Sheet' : 'Coil' }); }} className="px-2 py-1 border rounded text-[11px] font-mono" />
-                                </div>
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={editDetails.productType}
+                                onChange={(e) => setEditDetails({ ...editDetails, productType: e.target.value })}
+                                placeholder="Product Type (CR / HR / HR Pickled)"
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
+                              />
+                              <div className="grid grid-cols-3 gap-1">
+                                <input type="text" placeholder="Thk" value={editDetails.thickness} onChange={(e) => setEditDetails({ ...editDetails, thickness: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
+                                <input type="text" placeholder="Width" value={editDetails.width} onChange={(e) => setEditDetails({ ...editDetails, width: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
+                                <input type="text" placeholder="Length" value={editDetails.length} onChange={(e) => { const l = e.target.value; setEditDetails({ ...editDetails, length: l, productForm: l.trim() ? 'Sheet' : 'Coil' }); }} className="px-2 py-1 border rounded text-[11px] font-mono" />
                               </div>
-                            ) : (
-                              <div>
-                                <div className="font-bold text-slate-900">{cleanProductType(editDetails.productType)}</div>
-                                <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                                  {editDetails.thickness} {editDetails.width ? `x ${editDetails.width}` : ''} {editDetails.length ? `x ${editDetails.length}` : ''}
-                                </div>
-                              </div>
-                            )}
+                            </div>
                           </td>
                           <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
-                            {isEditing ? (
-                              <input type="number" value={editDetails.quantityTons} onChange={(e) => { const q = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, quantityTons: q, totalAmount: Math.round(q * editDetails.unitPrice) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
-                            ) : `${editDetails.quantityTons} MT`}
+                            <input type="number" value={editDetails.quantityTons} onChange={(e) => { const q = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, quantityTons: q, totalAmount: Math.round(q * editDetails.unitPrice) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
                           </td>
                           <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
-                            {isEditing ? (
-                              <input type="number" value={editDetails.unitPrice} onChange={(e) => { const r = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, unitPrice: r, totalAmount: Math.round(editDetails.quantityTons * r) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
-                            ) : `₹${editDetails.unitPrice.toLocaleString('en-IN')}`}
+                            <input type="number" value={editDetails.unitPrice} onChange={(e) => { const r = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, unitPrice: r, totalAmount: Math.round(editDetails.quantityTons * r) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
                           </td>
                           <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
-                            {isEditing ? (
-                              <input type="number" value={editDetails.totalAmount} onChange={(e) => setEditDetails({ ...editDetails, totalAmount: parseFloat(e.target.value) || 0 })} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500" />
-                            ) : `₹${editDetails.totalAmount.toLocaleString('en-IN')}`}
+                            <input type="number" value={editDetails.totalAmount} onChange={(e) => setEditDetails({ ...editDetails, totalAmount: parseFloat(e.target.value) || 0 })} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500" />
                           </td>
                         </tr>
                       )}
@@ -1169,33 +1154,25 @@ export default function InquiriesPage() {
                   <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                     <div>
                       <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Delivery Address</span>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editDetails.deliveryLocation}
-                          onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
-                          className="w-full px-2 py-1 border rounded text-xs font-bold"
-                        />
-                      ) : (
-                        <span className="font-bold text-slate-900 block">{editDetails.deliveryLocation}</span>
-                      )}
+                      <input
+                        type="text"
+                        value={editDetails.deliveryLocation}
+                        onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
+                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
+                      />
                     </div>
 
                     <div>
                       <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Payment Terms</span>
-                      {isEditing ? (
-                        <select
-                          value={editDetails.paymentTerms}
-                          onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
-                          className="w-full px-2 py-1 border rounded text-xs font-bold">
-                          <option value="30 Days Credit">30 Days Credit</option>
-                          <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
-                          <option value="60 Days Credit">60 Days Credit</option>
-                          <option value="100% Advance / Payment">100% Advance / Payment</option>
-                        </select>
-                      ) : (
-                        <span className="font-bold text-purple-900 block">{editDetails.paymentTerms}</span>
-                      )}
+                      <select
+                        value={editDetails.paymentTerms}
+                        onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
+                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold">
+                        <option value="30 Days Credit">30 Days Credit</option>
+                        <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
+                        <option value="60 Days Credit">60 Days Credit</option>
+                        <option value="100% Advance / Payment">100% Advance / Payment</option>
+                      </select>
                     </div>
 
                     <div>
