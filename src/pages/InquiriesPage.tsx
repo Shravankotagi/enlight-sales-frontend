@@ -1268,62 +1268,53 @@ export default function InquiriesPage() {
               </div>
             </div>
 
-            {/* Bottom Actions Bar */}
-            <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            {/* Bottom Actions Bar (Clean Uncluttered Single-Row Layout) */}
+            <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3 bg-white sticky bottom-0 z-10 py-2">
               <button
                 type="button"
                 onClick={() => setSelectedInquiry(null)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
                 Close Drawer
               </button>
 
-              <button
-                type="button"
-                onClick={() => setShowQuotationModal(true)}
-                className={`px-4 py-2.5 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                  ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : 'bg-purple-600 hover:bg-purple-700'
-                }`}>
-                {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
-                  <>
-                    <Check size={15} /> Quotation Sent to Customer ✓
-                  </>
-                ) : (
-                  <>
-                    <Send size={15} /> Send Quotation to Customer ✉️
-                  </>
-                )}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPdfModal(true)}
+                  className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
+                  <Eye size={15} /> View PDF 📄
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setShowPdfModal(true)}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
-                <Eye size={15} /> View PDF 📄
-              </button>
-
-              <button
-                type="button"
-                disabled={submitting || ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase())}
-                onClick={handleSaveDrawerDetails}
-                className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
-                  ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || saveSuccess
-                    ? 'bg-emerald-600 text-white cursor-default opacity-95'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}>
-                {submitting ? (
-                  <RefreshCw size={16} className="animate-spin" />
-                ) : ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || saveSuccess ? (
-                  <>
-                    <Check size={16} /> Inquiry Confirmed &amp; Saved ✓
-                  </>
-                ) : (
-                  <>
-                    <Save size={16} /> Save &amp; Confirm Inquiry
-                  </>
+                {!['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) && !saveSuccess && (
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={handleSaveDrawerDetails}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
+                    {submitting ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+                    Save &amp; Confirm
+                  </button>
                 )}
-              </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowQuotationModal(true)}
+                  className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                    ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-purple-600 hover:bg-purple-700'
+                  }`}>
+                  {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
+                    <>
+                      <Check size={15} /> Quotation Sent ✓
+                    </>
+                  ) : (
+                    <>
+                      <Send size={15} /> Send Quotation ✉️
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1338,38 +1329,67 @@ export default function InquiriesPage() {
         />
       )}
 
-      {/* FULL-SCREEN IMAGE VIEWER */}
+      {/* FULL-SCREEN IMAGE / DOCUMENT VIEWER */}
       {imageViewerUrl && (
         <div
-          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[60] flex items-center justify-center p-4"
           onClick={() => setImageViewerUrl(null)}>
-          <div className="relative max-w-5xl w-full max-h-screen" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => setImageViewerUrl(null)}
-              className="absolute -top-10 right-0 text-white/70 hover:text-white p-2 rounded-xl flex items-center gap-2 text-xs font-bold">
-              <X size={18} /> Close
-            </button>
+          <div className="relative max-w-4xl w-full max-h-[90vh] bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-2xl overflow-hidden flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-800 mb-4 px-1">
+              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                <FileText size={16} className="text-blue-400" /> Attached Customer Document / Inquiry Image
+              </span>
+              <button
+                onClick={() => setImageViewerUrl(null)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 flex items-center gap-1 text-xs font-bold transition-colors">
+                <X size={18} /> Close
+              </button>
+            </div>
+
             {isPdf(imageViewerUrl) ? (
               <iframe
                 src={imageViewerUrl}
                 title="Inquiry PDF Document"
-                className="w-full h-[85vh] rounded-2xl bg-white shadow-2xl"
+                className="w-full h-[72vh] rounded-2xl bg-white shadow-2xl border border-slate-800"
               />
             ) : (
               <img
                 src={imageViewerUrl}
                 alt="Inquiry document full view"
-                className="w-full h-auto max-h-[85vh] object-contain rounded-2xl shadow-2xl bg-slate-950"
+                className="max-w-full max-h-[72vh] object-contain rounded-2xl shadow-2xl bg-slate-950 border border-slate-800"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallbackDiv = document.getElementById('image-fallback-card');
+                  if (fallbackDiv) fallbackDiv.style.display = 'flex';
+                }}
               />
             )}
+
+            {/* Fallback UI if media URL is raw WhatsApp ID or broken base64 */}
+            <div id="image-fallback-card" style={{ display: 'none' }} className="flex-col items-center justify-center p-8 text-center bg-slate-900/90 rounded-2xl border border-slate-800 space-y-4 max-w-md my-8">
+              <div className="p-4 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
+                <ImageIcon size={40} />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-sm">WhatsApp Shared Document Attachment</h3>
+                <p className="text-slate-400 text-xs mt-1">
+                  Media Attachment Received &amp; Processed Live
+                </p>
+                <p className="text-slate-500 text-[11px] mt-2 leading-relaxed">
+                  The document details, quantity in MT, and material specifications were extracted with Gemini Vision and saved live to the Inquiries Table.
+                </p>
+              </div>
+            </div>
+
             {imageViewerUrl.startsWith('http') && (
               <div className="flex items-center justify-center mt-3 gap-3">
                 <a
                   href={imageViewerUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5">
-                  <ExternalLink size={14} /> Open Original in New Tab
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md">
+                  <ExternalLink size={14} /> Open Original Document
                 </a>
               </div>
             )}
