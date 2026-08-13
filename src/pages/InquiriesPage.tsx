@@ -822,6 +822,18 @@ export default function InquiriesPage() {
                             </span>
                           )}
 
+                          {inq.media_urls && inq.media_urls.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setImageViewerUrl(inq.media_urls![0]);
+                              }}
+                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1">
+                              <ImageIcon size={13} /> View Document
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={(e) => {
@@ -890,95 +902,52 @@ export default function InquiriesPage() {
                     "{selectedInquiry.raw_text || 'Document received'}"
                   </p>
 
-                  {/* Inline Image Viewer — shows actual shared image/document */}
+                  {/* Clean Document Action Bar — click "View Inquiry Document" button to open modal */}
                   {(selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) || drawerFileBase64 ? (
-                    <div className="pt-3 border-t border-slate-800 space-y-2">
-                      <div className="flex items-center justify-between">
+                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
                         <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
-                          <ImageIcon size={13} /> {drawerFileBase64 ? 'Newly Attached Document' : 'Attached Document / Image'}
+                          <ImageIcon size={14} /> {drawerFileBase64 ? 'Newly Attached Document' : 'Original Document Attached'}
                         </span>
-                        <div className="flex items-center gap-2">
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {drawerFileBase64 && (
                           <button
-                            onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
-                            className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
-                            <ZoomIn size={12} /> Full Screen
+                            type="button"
+                            onClick={() => setDrawerFileBase64(null)}
+                            className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold transition-colors">
+                            Remove
                           </button>
-                          {drawerFileBase64 ? (
-                            <button
-                              onClick={() => setDrawerFileBase64(null)}
-                              className="px-2 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
-                              Remove
-                            </button>
-                          ) : selectedInquiry.media_urls?.[0]?.startsWith('http') ? (
-                            <a
-                              href={selectedInquiry.media_urls[0]}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
-                              <ExternalLink size={12} /> Open Original
-                            </a>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                        {isPdf(drawerFileBase64 || selectedInquiry.media_urls![0]) ? (
-                          <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
-                            <FileText size={40} className="text-red-500" />
-                            <div>
-                              <p className="text-xs font-bold text-slate-200">PDF Document Attached</p>
-                              <p className="text-[11px] text-slate-500 mt-0.5">Click Full Screen to view or download</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <img
-                            src={drawerFileBase64 || selectedInquiry.media_urls![0]}
-                            alt="Inquiry attachment"
-                            className="w-full max-h-64 object-contain cursor-zoom-in"
-                            onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
                         )}
+                        <button
+                          type="button"
+                          onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
+                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
+                          <Eye size={14} /> View Inquiry Document 👁️
+                        </button>
                       </div>
-                      {drawerFileBase64 && (
-                        <p className="text-[10px] text-amber-400 font-semibold animate-pulse text-center">
-                          ⚠️ Click "Save & Confirm Inquiry" below to store this document permanently.
-                        </p>
-                      )}
                     </div>
                   ) : (() => {
                     const attachName = extractAttachmentName(selectedInquiry.raw_text || '');
                     return (
-                      <div className="pt-3 border-t border-slate-800 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
-                            <FileCheck size={13} /> Attached Document
-                          </span>
-                          <span className="text-[11px] text-slate-500">Not saved in DB yet</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2.5 bg-slate-800/60 rounded-xl p-3 border border-slate-700">
-                          <div className="flex items-center gap-2.5">
-                            <FileText size={20} className="text-blue-400 flex-shrink-0" />
-                            <div>
-                              <p className="text-xs font-bold text-slate-200">{attachName || 'Document file'}</p>
-                              <p className="text-[11px] text-slate-500 mt-0.5">
-                                {attachName ? 'Document referenced. Attach file to view inline.' : 'Attach a document file.'}
-                              </p>
-                            </div>
-                          </div>
-                          <div>
-                            <input
-                              type="file"
-                              id="drawer-file-upload"
-                              className="hidden"
-                              accept="image/*,application/pdf"
-                              onChange={handleDrawerFileUpload}
-                            />
-                            <button
-                              onClick={() => document.getElementById('drawer-file-upload')?.click()}
-                              className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors whitespace-nowrap">
-                              Attach File
-                            </button>
-                          </div>
+                      <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+                        <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
+                          <FileCheck size={14} /> {attachName ? `Referenced: ${attachName}` : 'No Document Attached'}
+                        </span>
+                        <div>
+                          <input
+                            type="file"
+                            id="drawer-file-upload"
+                            className="hidden"
+                            accept="image/*,application/pdf"
+                            onChange={handleDrawerFileUpload}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById('drawer-file-upload')?.click()}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-700">
+                            <UploadCloud size={13} /> Attach Document File
+                          </button>
                         </div>
                       </div>
                     );
@@ -1321,20 +1290,30 @@ export default function InquiriesPage() {
               className="absolute -top-10 right-0 text-white/70 hover:text-white p-2 rounded-xl flex items-center gap-2 text-xs font-bold">
               <X size={18} /> Close
             </button>
-            <img
-              src={imageViewerUrl}
-              alt="Inquiry document full view"
-              className="w-full h-auto max-h-[90vh] object-contain rounded-2xl shadow-2xl"
-            />
-            <div className="flex items-center justify-center mt-3 gap-3">
-              <a
-                href={imageViewerUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5">
-                <ExternalLink size={14} /> Open Original in New Tab
-              </a>
-            </div>
+            {isPdf(imageViewerUrl) ? (
+              <iframe
+                src={imageViewerUrl}
+                title="Inquiry PDF Document"
+                className="w-full h-[85vh] rounded-2xl bg-white shadow-2xl"
+              />
+            ) : (
+              <img
+                src={imageViewerUrl}
+                alt="Inquiry document full view"
+                className="w-full h-auto max-h-[85vh] object-contain rounded-2xl shadow-2xl bg-slate-950"
+              />
+            )}
+            {imageViewerUrl.startsWith('http') && (
+              <div className="flex items-center justify-center mt-3 gap-3">
+                <a
+                  href={imageViewerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5">
+                  <ExternalLink size={14} /> Open Original in New Tab
+                </a>
+              </div>
+            )}
           </div>
         </div>
       )}
