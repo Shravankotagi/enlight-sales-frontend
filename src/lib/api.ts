@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const defaultBackend = isLocal ? 'http://localhost:4000' : 'https://enlight-sales-backend-production.up.railway.app';
+const defaultBackend = isLocal ? 'http://localhost:3000' : 'https://enlight-sales-backend-production.up.railway.app';
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_URL || defaultBackend,
