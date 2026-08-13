@@ -960,68 +960,48 @@ export default function InquiriesPage() {
                 </button>
               </div>
 
-              {/* QA & Audit Section (Original Source Message & Document File) */}
-              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl space-y-3 border border-slate-800 shadow-inner">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5 text-blue-400">
-                    <Layers size={14} /> Original Source Document &amp; Audit Input
-                  </span>
-                  <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] text-slate-300">
+              {/* QA & Audit Section — Source badge + Document action only, no raw description */}
+              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 shadow-inner">
+                <div className="flex items-center justify-between gap-2">
+                  {/* Source badge */}
+                  <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] text-slate-300 font-bold uppercase tracking-wider">
                     Source: {selectedInquiry.source_channel || 'WhatsApp'}
                   </span>
-                </div>
-                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-2">
-                  <p className="text-sm font-mono text-blue-200 leading-relaxed">
-                    "{selectedInquiry.raw_text || 'Document received'}"
-                  </p>
 
-                  {/* Clean Document Action Bar — click "View Inquiry Document" button to open modal */}
+                  {/* Document action bar */}
                   {(selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) || drawerFileBase64 ? (
-                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
-                          <ImageIcon size={14} /> {drawerFileBase64 ? 'Newly Attached Document' : 'Original Document Attached'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {drawerFileBase64 && (
-                          <button
-                            type="button"
-                            onClick={() => setDrawerFileBase64(null)}
-                            className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold transition-colors">
-                            Remove
-                          </button>
-                        )}
+                    <div className="flex items-center gap-2">
+                      {drawerFileBase64 && (
                         <button
                           type="button"
-                          onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
-                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
-                          <Eye size={14} /> View Inquiry Document 👁️
+                          onClick={() => setDrawerFileBase64(null)}
+                          className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold transition-colors">
+                          Remove
                         </button>
-                      </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
+                        <Eye size={14} /> View Inquiry Document 👁️
+                      </button>
                     </div>
                   ) : (() => {
-                    const attachName = extractAttachmentName(selectedInquiry.raw_text || '');
                     return (
-                      <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
-                        <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
-                          <FileCheck size={14} /> {attachName ? `Referenced: ${attachName}` : 'No Document Attached'}
-                        </span>
-                        <div>
-                          <input
-                            type="file"
-                            id="drawer-file-upload"
-                            className="hidden"
-                            accept="image/*,application/pdf"
-                            onChange={handleDrawerFileUpload}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById('drawer-file-upload')?.click()}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-700">
-                            <UploadCloud size={13} /> Attach Document File
-                          </button>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          id="drawer-file-upload"
+                          className="hidden"
+                          accept="image/*,application/pdf"
+                          onChange={handleDrawerFileUpload}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('drawer-file-upload')?.click()}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-700">
+                          <UploadCloud size={13} /> Attach Document File
+                        </button>
                       </div>
                     );
                   })()}
@@ -1042,48 +1022,38 @@ export default function InquiriesPage() {
                 </button>
               </div>
 
-              {/* Editable Fields Form / Structured View */}
+              {/* Editable Fields Form — Company Name, Phone always editable */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                {/* Customer Company Dropdown & Phone */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Customer / Company Name *
                     </label>
-                    {isEditing ? (
-                      <select
-                        value={editDetails.companyName}
-                        onChange={(e) => setEditDetails({ ...editDetails, companyName: e.target.value })}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                        {existingCustomers.map((cName) => (
-                          <option key={cName} value={cName}>{cName}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <Building2 size={15} className="text-blue-600" />
-                        {editDetails.companyName}
-                      </div>
-                    )}
+                    <select
+                      value={editDetails.companyName}
+                      onChange={(e) => setEditDetails({ ...editDetails, companyName: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
+                      {existingCustomers.map((cName) => (
+                        <option key={cName} value={cName}>{cName}</option>
+                      ))}
+                      {/* Allow the current value even if not in list */}
+                      {!existingCustomers.includes(editDetails.companyName) && editDetails.companyName && (
+                        <option value={editDetails.companyName}>{editDetails.companyName}</option>
+                      )}
+                    </select>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Customer Phone Number
                     </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editDetails.customerPhone}
-                        onChange={(e) => setEditDetails({ ...editDetails, customerPhone: e.target.value })}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <div className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 flex items-center gap-2">
-                        <Phone size={14} className="text-slate-400" />
-                        {editDetails.customerPhone}
-                      </div>
-                    )}
+                    <input
+                      type="text"
+                      value={editDetails.customerPhone}
+                      onChange={(e) => setEditDetails({ ...editDetails, customerPhone: e.target.value })}
+                      placeholder="e.g. 9876543210"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 </div>
 

@@ -93,7 +93,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-in fade-in duration-200"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       
       {/* Print CSS to ensure only the document sheet prints */}
       <style>{`
