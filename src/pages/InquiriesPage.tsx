@@ -1070,10 +1070,33 @@ export default function InquiriesPage() {
                           <tr key={idx} className="hover:bg-blue-50/30">
                             <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center">{idx + 1}</td>
                             <td className="px-4 py-3.5 border-r border-slate-200">
-                              <div className="font-bold text-slate-900">{item.sku_text || 'Steel Item'}</div>
-                              {item.dimensions && (
-                                <div className="text-[11px] text-slate-500 font-mono mt-0.5">Spec: {item.dimensions}</div>
-                              )}
+                              <div className="space-y-1">
+                                <input
+                                  type="text"
+                                  value={item.sku_text || ''}
+                                  onChange={(e) => {
+                                    const updated = [...editDetails.lineItems];
+                                    updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                    setEditDetails({ ...editDetails, lineItems: updated });
+                                  }}
+                                  className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                                  placeholder="Product Name / Description"
+                                />
+                                <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                                  <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
+                                  <input
+                                    type="text"
+                                    value={item.dimensions || ''}
+                                    onChange={(e) => {
+                                      const updated = [...editDetails.lineItems];
+                                      updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                      setEditDetails({ ...editDetails, lineItems: updated });
+                                    }}
+                                    className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700"
+                                    placeholder="e.g. 2.50 mm x 1250 mm"
+                                  />
+                                </div>
+                              </div>
                             </td>
                             <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
                               <input
