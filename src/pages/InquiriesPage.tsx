@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ZoomIn, ExternalLink, Package
+  ImageIcon, ZoomIn, ExternalLink, Package, Printer
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -265,7 +265,7 @@ export default function InquiriesPage() {
   // Send Quotation Email State (Resend API)
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
-  const [quotationEmail, setQuotationEmail] = useState('rishabhpm23@gmail.com');
+  const [quotationEmail, setQuotationEmail] = useState('shravankotagi314@gmail.com');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
@@ -1587,7 +1587,7 @@ export default function InquiriesPage() {
                 <input
                   type="email"
                   required
-                  placeholder="e.g. rishabhpm23@gmail.com"
+                  placeholder="e.g. shravankotagi314@gmail.com"
                   value={quotationEmail}
                   onChange={e => setQuotationEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
@@ -1595,7 +1595,7 @@ export default function InquiriesPage() {
               </div>
 
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed font-medium">
-                ⚡ <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>rishabhpm23@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
+                ⚡ <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>shravankotagi314@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
               </div>
 
               {resendNotice && (
@@ -1628,7 +1628,7 @@ export default function InquiriesPage() {
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
-                    const targetEmail = quotationEmail.trim() || 'rishabhpm23@gmail.com';
+                    const targetEmail = quotationEmail.trim() || 'shravankotagi314@gmail.com';
                     const res = await inquiriesApi.sendQuotation(selectedInquiry.id, {
                       customer_email: targetEmail,
                       customer_name: editDetails.companyName,
