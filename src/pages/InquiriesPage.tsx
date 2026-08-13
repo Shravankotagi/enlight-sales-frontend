@@ -159,8 +159,9 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   let width = '';
   let length = '';
 
-  const thkMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*mm/i);
-  thickness = thkMatch ? `${thkMatch[1]} mm` : '12.0 mm';
+  const aiDim = aiJson?.line_items?.[0]?.dimensions || aiJson?.dimensions || '';
+  const thkMatch = aiDim ? aiDim.match(/(\d+(?:\.\d+)?)\s*mm/i) : textRaw.match(/(\d+(?:\.\d+)?)\s*mm/i);
+  thickness = thkMatch ? `${thkMatch[1]} mm` : (aiDim || '12.0 mm');
 
   const wMatch = textRaw.match(/width\s*:?\s*(\d{3,4})|(\d{3,4})\s*mm\s*width/i);
   width = wMatch ? `${wMatch[1] || wMatch[2]} mm` : '1250 mm';
@@ -321,6 +322,20 @@ export default function InquiriesPage() {
   useEffect(() => {
     fetchMonthlyInquiries();
   }, [dateRange]);
+
+  // Auto-open drawer if URL contains ?id=... or ?inquiry_id=...
+  useEffect(() => {
+    if (inquiries.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const targetId = params.get('id') || params.get('inquiry_id');
+      if (targetId) {
+        const found = inquiries.find((i) => String(i.id) === targetId || String(i.id).includes(targetId));
+        if (found) {
+          handleOpenDrawer(found);
+        }
+      }
+    }
+  }, [inquiries]);
 
   const handleOpenDrawer = (inq: InquiryItem) => {
     setSelectedInquiry(inq);
