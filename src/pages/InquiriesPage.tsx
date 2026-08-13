@@ -533,7 +533,13 @@ export default function InquiriesPage() {
       const gstAmt = Math.round(baseAmt * 0.18);
       const grandAmt = Math.round(baseAmt * 1.18);
 
-      const summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Spec: ${editDetails.thickness} ${editDetails.width ? `x ${editDetails.width}` : ''}. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, 18% GST: ₹${gstAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+      let summaryRequirement = '';
+      if (editDetails.lineItems && editDetails.lineItems.length > 0) {
+        const itemStrs = editDetails.lineItems.map(item => `${item.sku_text || 'Item'}: ${item.quantity} MT @ ₹${item.rate}/MT`);
+        summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+      } else {
+        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+      }
 
       const mediaUrlsPayload = drawerFileBase64 ? [drawerFileBase64] : (selectedInquiry.media_urls || []);
 
@@ -546,9 +552,7 @@ export default function InquiriesPage() {
         media_urls: mediaUrlsPayload,
       });
 
-      setSaveSuccess(true);
-      setIsEditing(false);
-      setSelectedInquiry({
+      const updatedObj: InquiryItem = {
         ...selectedInquiry,
         status: 'confirmed',
         sender_name: editDetails.companyName,
@@ -558,8 +562,15 @@ export default function InquiriesPage() {
         raw_text: summaryRequirement,
         media_urls: mediaUrlsPayload,
         ai_extraction_json: { ...editDetails, totalAmount: baseAmt, gstAmount: gstAmt, grandTotal: grandAmt },
-      });
+      };
+
+      setSaveSuccess(true);
+      setIsEditing(false);
+      setSelectedInquiry(updatedObj);
       setDrawerFileBase64(null);
+
+      // Update in-memory inquiries list so item stays in list immediately
+      setInquiries(prev => (Array.isArray(prev) ? prev.map(item => item.id === selectedInquiry.id ? updatedObj : item) : []));
 
       fetchMonthlyInquiries();
     } catch (err) {
@@ -730,8 +741,8 @@ export default function InquiriesPage() {
       const matchesStatus =
         filterStatus === 'all' ||
         statusStr === filterStatus.toLowerCase() ||
-        (filterStatus === 'review' && ['review', 'needs_review', 'pending'].includes(statusStr)) ||
-        (filterStatus === 'processed' && ['processed', 'won', 'auto_created'].includes(statusStr));
+        (filterStatus === 'review' && ['review', 'needs_review', 'pending', 'confirmed', 'quoted'].includes(statusStr)) ||
+        (filterStatus === 'processed' && ['processed', 'won', 'auto_created', 'confirmed', 'quoted'].includes(statusStr));
 
       return matchesSearch && matchesStatus;
     } catch {
