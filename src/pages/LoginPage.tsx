@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ||
-  'https://enlight-sales-backend-production.up.railway.app';
+const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const defaultBackend = isLocal ? 'http://localhost:4000' : 'https://enlight-sales-backend-production.up.railway.app';
+const rawBackend = import.meta.env.VITE_BACKEND_URL || defaultBackend;
+const BACKEND = rawBackend.replace(/\/+$/, '');
 
 export default function LoginPage() {
   const navigate = useNavigate();
