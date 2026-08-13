@@ -822,18 +822,6 @@ export default function InquiriesPage() {
                             </span>
                           )}
 
-                          {inq.media_urls && inq.media_urls.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setImageViewerUrl(inq.media_urls![0]);
-                              }}
-                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1">
-                              <ImageIcon size={13} /> View Document
-                            </button>
-                          )}
-
                           <button
                             type="button"
                             onClick={(e) => {
