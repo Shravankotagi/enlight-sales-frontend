@@ -25,6 +25,15 @@ interface InquiryItem {
   created_at: string;
 }
 
+interface LineItemDetail {
+  sku_text: string;
+  dimensions?: string;
+  quantity: number;
+  unit?: string;
+  rate: number;
+  amount: number;
+}
+
 interface ExtractedDetails {
   companyName: string;
   customerPhone: string;
@@ -39,6 +48,7 @@ interface ExtractedDetails {
   totalAmount: number;
   paymentTerms: string;
   deliveryLocation: string;
+  lineItems: LineItemDetail[];
 }
 
 const cleanProductType = (pt: string): string => {
@@ -138,7 +148,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     (phoneMatch ? phoneMatch[1] : '');
 
   if (!customerPhone || customerPhone === inq?.sender_phone || customerPhone === '918262937458') {
-    customerPhone = inq?.customer_phone || (phoneMatch ? phoneMatch[1] : '9123456789');
+    customerPhone = inq?.customer_phone || (phoneMatch ? phoneMatch[1] : '');
   }
 
   // 3. Product Type
@@ -229,6 +239,26 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   if (textLower.includes('credit') || textLower.includes('30 days')) paymentTerms = '30 Days Credit';
   else if (textLower.includes('45 days')) paymentTerms = '45 Days Credit';
 
+  // Build lineItems from ai_extraction_json.line_items (the full multi-item array from Gemini)
+  const rawLineItems: LineItemDetail[] = [];
+  if (Array.isArray(aiJson.line_items) && aiJson.line_items.length > 0) {
+    for (const item of aiJson.line_items) {
+      rawLineItems.push({
+        sku_text: item.sku_text || item.description || '',
+        dimensions: item.dimensions || '',
+        quantity: Number(item.quantity) || 0,
+        unit: item.unit || 'MT',
+        rate: Number(item.rate) || 0,
+        amount: Number(item.amount) || Number(item.quantity) * Number(item.rate) || 0,
+      });
+    }
+  }
+
+  // Grand total from all line items if multi-item inquiry
+  const computedTotal = rawLineItems.length > 1
+    ? rawLineItems.reduce((s, i) => s + i.amount, 0)
+    : totalAmount;
+
   return {
     companyName,
     customerPhone,
@@ -240,9 +270,10 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     quantityTons,
     quantityUnits,
     unitPrice,
-    totalAmount,
+    totalAmount: computedTotal,
     paymentTerms,
-    deliveryLocation
+    deliveryLocation,
+    lineItems: rawLineItems,
   };
 }
 
@@ -788,8 +819,7 @@ export default function InquiriesPage() {
                 <th className="px-4 py-3">Received Date</th>
                 <th className="px-4 py-3">Customer / Company Name</th>
                 <th className="px-4 py-3">Customer Phone</th>
-                <th className="px-4 py-3">Product Type</th>
-                <th className="px-4 py-3">Form &amp; Dimensions</th>
+                <th className="px-4 py-3">Items Summary</th>
                 <th className="px-4 py-3">Source Channel</th>
                 <th className="px-4 py-3 text-right">Status / Actions</th>
               </tr>
@@ -797,13 +827,13 @@ export default function InquiriesPage() {
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                     Loading monthly inquiries...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                     No product inquiries found for this period.
                   </td>
                 </tr>
@@ -834,30 +864,27 @@ export default function InquiriesPage() {
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-mono">
                         <span className="flex items-center gap-1 font-semibold">
-                          <Phone size={12} className="text-slate-400" /> {details.customerPhone}
+                          <Phone size={12} className="text-slate-400" />
+                          {details.customerPhone || <span className="text-slate-300 italic">—</span>}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5">
-                        <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                          {cleanProductType(details.productType)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] uppercase border ${details.productForm === 'Sheet'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : details.productForm === 'Plate'
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : details.productForm === 'Bar'
-                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            }`}>
-                            {details.productForm}
-                          </span>
-                          <span className="text-slate-600 font-mono font-medium">
-                            {details.thickness} {details.width ? `x ${details.width}` : ''} {details.length ? `x ${details.length}` : ''}
-                          </span>
-                        </div>
+                      <td className="px-4 py-3.5 text-xs text-slate-700">
+                        {details.lineItems && details.lineItems.length > 0 ? (
+                          <div className="space-y-0.5">
+                            {details.lineItems.slice(0, 3).map((li, liIdx) => (
+                              <div key={liIdx} className="flex items-center gap-1 text-[11px]">
+                                <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">{liIdx + 1}</span>
+                                <span className="font-medium text-slate-800 truncate max-w-[160px]">{li.sku_text}</span>
+                                <span className="text-slate-400 font-mono whitespace-nowrap">{li.quantity} MT</span>
+                              </div>
+                            ))}
+                            {details.lineItems.length > 3 && (
+                              <span className="text-[10px] text-blue-500 font-semibold">+{details.lineItems.length - 3} more items</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500">{details.productType} · {details.quantityTons} MT</span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5">
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 capitalize">
@@ -1065,138 +1092,85 @@ export default function InquiriesPage() {
                   <table className="w-full text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-4 py-3 border-r border-slate-700 w-1/5">Quantity</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-2/5">Description &amp; Specifications</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-1/5">Unit Price (₹)</th>
-                        <th className="px-4 py-3 text-right w-1/5">Amount (₹)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[10%]">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[40%]">Description &amp; Specifications</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[15%]">Qty (MT)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[15%]">Rate (₹/MT)</th>
+                        <th className="px-4 py-3 text-right w-[20%]">Amount (₹)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
-                      <tr className="hover:bg-blue-50/30">
-                        <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editDetails.quantityTons}
-                              onChange={(e) => {
-                                const q = parseFloat(e.target.value) || 0;
-                                setEditDetails({
-                                  ...editDetails,
-                                  quantityTons: q,
-                                  totalAmount: Math.round(q * editDetails.unitPrice)
-                                });
-                              }}
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          ) : (
-                            <div>
-                              <span className="text-sm font-extrabold">{editDetails.quantityTons} MT</span>
-                              <span className="text-[11px] text-slate-400 block font-normal">({editDetails.quantityUnits} nos)</span>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3.5 border-r border-slate-200">
-                          {isEditing ? (
-                            <div className="space-y-2">
-                              <input
-                                type="text"
-                                value={editDetails.productType}
-                                onChange={(e) => setEditDetails({ ...editDetails, productType: e.target.value })}
-                                placeholder="Product Type (CR / HR / HR Pickled)"
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
-                              />
-                              <div className="grid grid-cols-3 gap-1">
+                      {editDetails.lineItems && editDetails.lineItems.length > 0 ? (
+                        editDetails.lineItems.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-blue-50/30">
+                            <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center">{idx + 1}</td>
+                            <td className="px-4 py-3.5 border-r border-slate-200">
+                              <div className="font-bold text-slate-900">{item.sku_text}</div>
+                              {item.dimensions && (
+                                <div className="text-[11px] text-slate-500 font-mono mt-0.5">Spec: {item.dimensions}</div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
+                              {item.quantity} {item.unit || 'MT'}
+                            </td>
+                            <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
+                              {item.rate > 0 ? `₹${item.rate.toLocaleString('en-IN')}` : '—'}
+                            </td>
+                            <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
+                              {item.amount > 0 ? `₹${item.amount.toLocaleString('en-IN')}` : '—'}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr className="hover:bg-blue-50/30">
+                          <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 text-center">1</td>
+                          <td className="px-4 py-3.5 border-r border-slate-200">
+                            {isEditing ? (
+                              <div className="space-y-2">
                                 <input
                                   type="text"
-                                  placeholder="Thk (2.0mm)"
-                                  value={editDetails.thickness}
-                                  onChange={(e) => setEditDetails({ ...editDetails, thickness: e.target.value })}
-                                  className="px-2 py-1 border rounded text-[11px] font-mono"
+                                  value={editDetails.productType}
+                                  onChange={(e) => setEditDetails({ ...editDetails, productType: e.target.value })}
+                                  placeholder="Product Type (CR / HR / HR Pickled)"
+                                  className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
                                 />
-                                <input
-                                  type="text"
-                                  placeholder="Width (1250mm)"
-                                  value={editDetails.width}
-                                  onChange={(e) => setEditDetails({ ...editDetails, width: e.target.value })}
-                                  className="px-2 py-1 border rounded text-[11px] font-mono"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="Length (2500mm)"
-                                  value={editDetails.length}
-                                  onChange={(e) => {
-                                    const l = e.target.value;
-                                    const form = l.trim() ? 'Sheet' : 'Coil';
-                                    setEditDetails({ ...editDetails, length: l, productForm: form });
-                                  }}
-                                  className="px-2 py-1 border rounded text-[11px] font-mono"
-                                />
+                                <div className="grid grid-cols-3 gap-1">
+                                  <input type="text" placeholder="Thk" value={editDetails.thickness} onChange={(e) => setEditDetails({ ...editDetails, thickness: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
+                                  <input type="text" placeholder="Width" value={editDetails.width} onChange={(e) => setEditDetails({ ...editDetails, width: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
+                                  <input type="text" placeholder="Length" value={editDetails.length} onChange={(e) => { const l = e.target.value; setEditDetails({ ...editDetails, length: l, productForm: l.trim() ? 'Sheet' : 'Coil' }); }} className="px-2 py-1 border rounded text-[11px] font-mono" />
+                                </div>
                               </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                                <span>{cleanProductType(editDetails.productType)}</span>
-                                <span className={`px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border ${editDetails.productForm === 'Sheet'
-                                    ? 'bg-purple-100 text-purple-800 border-purple-300'
-                                    : editDetails.productForm === 'Plate'
-                                      ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                      : editDetails.productForm === 'Bar'
-                                        ? 'bg-blue-100 text-blue-800 border-blue-300'
-                                        : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                  }`}>
-                                  Form: {editDetails.productForm}
-                                </span>
+                            ) : (
+                              <div>
+                                <div className="font-bold text-slate-900">{cleanProductType(editDetails.productType)}</div>
+                                <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                                  {editDetails.thickness} {editDetails.width ? `x ${editDetails.width}` : ''} {editDetails.length ? `x ${editDetails.length}` : ''}
+                                </div>
                               </div>
-                              <div className="text-[11px] text-slate-500 font-mono mt-1">
-                                Spec: {editDetails.thickness} {editDetails.width ? `x ${editDetails.width}` : ''} {editDetails.length ? `x ${editDetails.length}` : ''}
-                              </div>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-slate-800 font-mono">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editDetails.unitPrice}
-                              onChange={(e) => {
-                                const r = parseFloat(e.target.value) || 0;
-                                setEditDetails({
-                                  ...editDetails,
-                                  unitPrice: r,
-                                  totalAmount: Math.round(editDetails.quantityTons * r)
-                                });
-                              }}
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          ) : (
-                            `₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT`
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono text-sm">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editDetails.totalAmount}
-                              onChange={(e) => {
-                                const amt = parseFloat(e.target.value) || 0;
-                                setEditDetails({ ...editDetails, totalAmount: amt });
-                              }}
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          ) : (
-                            `₹${editDetails.totalAmount.toLocaleString('en-IN')}`
-                          )}
-                        </td>
-                      </tr>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
+                            {isEditing ? (
+                              <input type="number" value={editDetails.quantityTons} onChange={(e) => { const q = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, quantityTons: q, totalAmount: Math.round(q * editDetails.unitPrice) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+                            ) : `${editDetails.quantityTons} MT`}
+                          </td>
+                          <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
+                            {isEditing ? (
+                              <input type="number" value={editDetails.unitPrice} onChange={(e) => { const r = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, unitPrice: r, totalAmount: Math.round(editDetails.quantityTons * r) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+                            ) : `₹${editDetails.unitPrice.toLocaleString('en-IN')}`}
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
+                            {isEditing ? (
+                              <input type="number" value={editDetails.totalAmount} onChange={(e) => setEditDetails({ ...editDetails, totalAmount: parseFloat(e.target.value) || 0 })} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                            ) : `₹${editDetails.totalAmount.toLocaleString('en-IN')}`}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                     <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
                       <tr className="border-b border-slate-200 text-xs">
                         <td className="px-4 py-2 font-bold border-r border-slate-200 text-slate-700">Base Subtotal (Excl. GST)</td>
-                        <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-slate-500 border-r border-slate-200">
+                        <td colSpan={3} className="px-4 py-2 text-right font-bold uppercase text-slate-500 border-r border-slate-200">
                           Base Material Amount:
                         </td>
                         <td className="px-4 py-2 text-right font-bold text-slate-800 font-mono">
@@ -1205,7 +1179,7 @@ export default function InquiriesPage() {
                       </tr>
                       <tr className="border-b border-slate-200 text-xs bg-indigo-50/50">
                         <td className="px-4 py-2 font-bold border-r border-slate-200 text-indigo-900">GST @ 18%</td>
-                        <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">
+                        <td colSpan={3} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">
                           Applicable 18% GST:
                         </td>
                         <td className="px-4 py-2 text-right font-bold text-indigo-800 font-mono">
@@ -1213,9 +1187,11 @@ export default function InquiriesPage() {
                         </td>
                       </tr>
                       <tr className="bg-emerald-100/90 text-emerald-950 font-black">
-                        <td className="px-4 py-3 font-extrabold border-r border-emerald-300">Total: {editDetails.quantityTons} MT</td>
+                        <td className="px-4 py-3 font-extrabold border-r border-emerald-300" colSpan={2}>Grand Total (Incl. 18% GST)</td>
                         <td colSpan={2} className="px-4 py-3 text-right font-black uppercase tracking-wide border-r border-emerald-300 text-xs">
-                          GRAND TOTAL AMOUNT (INCL. 18% GST):
+                          {editDetails.lineItems && editDetails.lineItems.length > 0
+                            ? `${editDetails.lineItems.reduce((s,i)=>s+i.quantity,0)} MT total`
+                            : `${editDetails.quantityTons} MT`}
                         </td>
                         <td className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
                           ₹{Math.round(editDetails.totalAmount * 1.18).toLocaleString('en-IN')}
@@ -1461,29 +1437,43 @@ export default function InquiriesPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
-                    <tr>
-                      <td className="px-4 py-4 border-r border-slate-200">
-                        <span className="text-sm font-extrabold text-blue-700">{quotationViewDetails.quantityTons} MT</span>
-                        <span className="text-[11px] text-slate-400 block font-normal">({quotationViewDetails.quantityUnits} nos)</span>
-                      </td>
-                      <td className="px-4 py-4 border-r border-slate-200">
-                        <div className="font-bold text-slate-900 flex items-center gap-2">
-                          {cleanProductType(quotationViewDetails.productType)}
-                          <span className="px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border bg-emerald-100 text-emerald-800 border-emerald-300">
-                            Form: {quotationViewDetails.productForm}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-mono mt-1">
-                          Spec: {quotationViewDetails.thickness} {quotationViewDetails.width ? `x ${quotationViewDetails.width}` : ''}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 border-r border-slate-200 font-bold font-mono">
-                        ₹{quotationViewDetails.unitPrice.toLocaleString('en-IN')}/MT
-                      </td>
-                      <td className="px-4 py-4 text-right font-black text-emerald-700 font-mono text-sm">
-                        ₹{quotationViewDetails.totalAmount.toLocaleString('en-IN')}
-                      </td>
-                    </tr>
+                    {quotationViewDetails.lineItems && quotationViewDetails.lineItems.length > 0 ? (
+                      quotationViewDetails.lineItems.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="px-4 py-4 border-r border-slate-200">
+                            <span className="text-sm font-extrabold text-blue-700">{item.quantity} {item.unit || 'MT'}</span>
+                          </td>
+                          <td className="px-4 py-4 border-r border-slate-200">
+                            <div className="font-bold text-slate-900">{item.sku_text}</div>
+                            {item.dimensions && <div className="text-[11px] text-slate-500 font-mono mt-0.5">Spec: {item.dimensions}</div>}
+                          </td>
+                          <td className="px-4 py-4 border-r border-slate-200 font-bold font-mono">
+                            {item.rate > 0 ? `₹${item.rate.toLocaleString('en-IN')}/MT` : '—'}
+                          </td>
+                          <td className="px-4 py-4 text-right font-black text-emerald-700 font-mono text-sm">
+                            {item.amount > 0 ? `₹${item.amount.toLocaleString('en-IN')}` : '—'}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="px-4 py-4 border-r border-slate-200">
+                          <span className="text-sm font-extrabold text-blue-700">{quotationViewDetails.quantityTons} MT</span>
+                        </td>
+                        <td className="px-4 py-4 border-r border-slate-200">
+                          <div className="font-bold text-slate-900">{cleanProductType(quotationViewDetails.productType)}</div>
+                          <div className="text-[11px] text-slate-500 font-mono mt-1">
+                            {quotationViewDetails.thickness} {quotationViewDetails.width ? `x ${quotationViewDetails.width}` : ''}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 border-r border-slate-200 font-bold font-mono">
+                          ₹{quotationViewDetails.unitPrice.toLocaleString('en-IN')}/MT
+                        </td>
+                        <td className="px-4 py-4 text-right font-black text-emerald-700 font-mono text-sm">
+                          ₹{quotationViewDetails.totalAmount.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
                     <tr className="border-b border-slate-200 text-xs">
