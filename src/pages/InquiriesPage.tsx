@@ -614,9 +614,10 @@ export default function InquiriesPage() {
       setPoFileBase64(null);
 
       fetchMonthlyInquiries();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error logging inquiry:', err);
-      alert('Failed to log inquiry. Please try again.');
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to log inquiry. Please try again.';
+      alert(`Failed to log inquiry: ${errMsg}`);
     } finally {
       setSubmitting(false);
     }
