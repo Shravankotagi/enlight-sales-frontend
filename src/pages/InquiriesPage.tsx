@@ -82,9 +82,9 @@ function isProductInquiry(inq: InquiryItem): boolean {
     if (!hasRequirement) return false;
   }
 
-  // 5. Must contain steel/product inquiry indicators OR be a Document Upload
-  const isDocument = textLower.includes('document received') || (inq.media_urls && inq.media_urls.length > 0);
-  const hasProductKeyword = /\b(hr|cr|tmt|steel|coil|coils|sheet|sheets|plate|plates|bar|bars|beam|pipe|pipes|tons|ton|mt|kg|kgs|mm|gsm|is 277|nos|requirement|requires|need|quote|quotation|rate|asking for)\b/i.test(textLower);
+  // 5. Must contain steel/product inquiry indicators OR be a Document Upload / Attachment
+  const isDocument = textLower.includes('document received') || textLower.includes('inquiry attachment') || (inq.media_urls && inq.media_urls.length > 0);
+  const hasProductKeyword = /\b(hr|cr|tmt|steel|coil|coils|sheet|sheets|plate|plates|bar|bars|beam|pipe|pipes|tons|ton|mt|kg|kgs|mm|gsm|is 277|nos|requirement|requires|need|quote|quotation|quatation|inquiry|inquiries|rate|asking for)\b/i.test(textLower);
 
   return isDocument || hasProductKeyword;
 }
