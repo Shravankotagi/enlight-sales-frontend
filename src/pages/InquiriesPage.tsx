@@ -1070,30 +1070,10 @@ export default function InquiriesPage() {
                           <tr key={idx} className="hover:bg-blue-50/30">
                             <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center">{idx + 1}</td>
                             <td className="px-4 py-3.5 border-r border-slate-200">
-                              <div className="space-y-1">
-                                <input
-                                  type="text"
-                                  value={item.sku_text}
-                                  onChange={(e) => {
-                                    const updated = [...editDetails.lineItems];
-                                    updated[idx] = { ...updated[idx], sku_text: e.target.value };
-                                    setEditDetails({ ...editDetails, lineItems: updated });
-                                  }}
-                                  className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
-                                  placeholder="Material description"
-                                />
-                                <input
-                                  type="text"
-                                  value={item.dimensions || ''}
-                                  onChange={(e) => {
-                                    const updated = [...editDetails.lineItems];
-                                    updated[idx] = { ...updated[idx], dimensions: e.target.value };
-                                    setEditDetails({ ...editDetails, lineItems: updated });
-                                  }}
-                                  className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] font-mono text-slate-500"
-                                  placeholder="Spec (e.g. 2.5 mm x 1250 mm)"
-                                />
-                              </div>
+                              <div className="font-bold text-slate-900">{item.sku_text || 'Steel Item'}</div>
+                              {item.dimensions && (
+                                <div className="text-[11px] text-slate-500 font-mono mt-0.5">Spec: {item.dimensions}</div>
+                              )}
                             </td>
                             <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
                               <input
@@ -1105,7 +1085,7 @@ export default function InquiriesPage() {
                                   updated[idx] = { ...updated[idx], quantity: q, amount: Math.round(q * (updated[idx].rate || 0)) };
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
                                 }}
-                                className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </td>
                             <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
@@ -1118,7 +1098,7 @@ export default function InquiriesPage() {
                                   updated[idx] = { ...updated[idx], rate: r, amount: Math.round((updated[idx].quantity || 0) * r) };
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
                                 }}
-                                className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </td>
                             <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
@@ -1130,7 +1110,7 @@ export default function InquiriesPage() {
                                   updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 };
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
                                 }}
-                                className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </td>
                           </tr>
