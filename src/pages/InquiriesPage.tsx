@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  Phone, Calendar, Edit3, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ZoomIn, ExternalLink, Package, Printer
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
@@ -421,11 +421,6 @@ export default function InquiriesPage() {
     reader.readAsDataURL(file);
   };
 
-  // Extract attachment filename from raw_text like "[Inquiry Attachment: file.jpg]"
-  const extractAttachmentName = (rawText: string): string | null => {
-    const match = rawText.match(/\[Inquiry Attachment:\s*([^\]]+)\]/);
-    return match ? match[1].trim() : null;
-  };
 
   const handlePrintQuotation = (inq: InquiryItem, details: ExtractedDetails) => {
     const gst = Math.round(details.totalAmount * 0.18);
