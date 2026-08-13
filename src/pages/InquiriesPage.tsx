@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ZoomIn, Printer, ExternalLink, Package
+  ImageIcon, ZoomIn, ExternalLink, Package
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import InquiryPdfModal from '../components/InquiryPdfModal';
 
 interface InquiryItem {
   id: string;
@@ -159,17 +160,38 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   }
   const productType = cleanProductType(rawPt || 'Hot Rolled');
 
-  // 4. Dimensions
-  let thickness = '';
-  let width = '';
-  let length = '';
+  // 4. Dimensions (Thickness x Width x Length)
+  let thickness: string;
+  let width: string;
+  let length: string;
 
-  const aiDim = aiJson?.line_items?.[0]?.dimensions || aiJson?.dimensions || '';
-  const thkMatch = aiDim ? aiDim.match(/(\d+(?:\.\d+)?)\s*mm/i) : textRaw.match(/(\d+(?:\.\d+)?)\s*mm/i);
-  thickness = thkMatch ? `${thkMatch[1]} mm` : (aiDim || '12.0 mm');
+  // Pattern A: "8mmx1500x10000" or "8mm x 1500 x 10000" or "1.6mm 1250 * 2500"
+  const tripleMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*mm\s*[*xX\s]\s*(\d{3,4})\s*[*xX\s]\s*(\d{3,5})/i) ||
+    textRaw.match(/(\d+(?:\.\d+)?)\s*[*xX]\s*(\d{3,4})\s*[*xX]\s*(\d{3,5})/i);
 
-  const wMatch = textRaw.match(/width\s*:?\s*(\d{3,4})|(\d{3,4})\s*mm\s*width/i);
-  width = wMatch ? `${wMatch[1] || wMatch[2]} mm` : '1250 mm';
+  if (tripleMatch) {
+    thickness = `${tripleMatch[1]} mm`;
+    width = `${tripleMatch[2]} mm`;
+    length = `${tripleMatch[3]} mm`;
+  } else {
+    // Pattern B: "240 x 1.60 mm" or "80 x 2.50 mm" (Width x Thickness)
+    const wThickMatch = textRaw.match(/(\d{2,4})\s*[*xX]\s*(\d+(?:\.\d+)?)\s*mm/i);
+    if (wThickMatch) {
+      width = `${wThickMatch[1]} mm`;
+      thickness = `${wThickMatch[2]} mm`;
+      length = '';
+    } else {
+      // Pattern C: "Thk = 1.5MM" or "Thk 2.0MM" or "1mm"
+      const thkOnlyMatch = textRaw.match(/(?:thk|thickness|cr|hr)?\s*=?\s*(\d+(?:\.\d+)?)\s*mm/i);
+      thickness = thkOnlyMatch ? `${thkOnlyMatch[1]} mm` : '2.0 mm';
+
+      const widthOnlyMatch = textRaw.match(/\b(90|130|240|312|1000|1250|1500|2000)\b/i);
+      width = widthOnlyMatch ? `${widthOnlyMatch[1]} mm` : '1250 mm';
+
+      const lenOnlyMatch = textRaw.match(/\b(2500|3000|6000|6300|10000|6m|12m)\b/i);
+      length = lenOnlyMatch ? (lenOnlyMatch[1].endsWith('m') ? lenOnlyMatch[1] : `${lenOnlyMatch[1]} mm`) : '';
+    }
+  }
 
   // 5. Quantity (MT / Tons)
   let quantityTons = 50;
@@ -242,7 +264,8 @@ export default function InquiriesPage() {
 
   // Send Quotation Email State (Resend API)
   const [showQuotationModal, setShowQuotationModal] = useState(false);
-  const [quotationEmail, setQuotationEmail] = useState('shravankotagi314@gmail.com');
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [quotationEmail, setQuotationEmail] = useState('rishabhpm23@gmail.com');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
@@ -324,6 +347,18 @@ export default function InquiriesPage() {
     }
   };
 
+  const handleOpenDrawer = (inq: InquiryItem) => {
+    setSelectedInquiry(inq);
+    setDrawerFileBase64(null);
+    const parsed = parseInquiryText(inq.raw_text || '', inq);
+    setEditDetails(parsed);
+    const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
+    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
+    setIsEditing(!isConfirmedState);
+    setSaveSuccess(isConfirmedState);
+    setIsQuotationSent(isQuotedState);
+  };
+
   useEffect(() => {
     fetchMonthlyInquiries();
   }, [dateRange]);
@@ -341,18 +376,6 @@ export default function InquiriesPage() {
       }
     }
   }, [inquiries]);
-
-  const handleOpenDrawer = (inq: InquiryItem) => {
-    setSelectedInquiry(inq);
-    setDrawerFileBase64(null);
-    const parsed = parseInquiryText(inq.raw_text || '', inq);
-    setEditDetails(parsed);
-    const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
-    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
-    setIsEditing(!isConfirmedState);
-    setSaveSuccess(isConfirmedState);
-    setIsQuotationSent(isQuotedState);
-  };
 
   const handleDrawerFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -469,7 +492,7 @@ export default function InquiriesPage() {
     <div><div class="term-label">Inquiry Date</div><div class="term-val">${dateStr}</div></div>
   </div>
   <div class="footer">This is a system-generated quotation from Enlight Sales OS. Prices are subject to change.</div>
-  <script>window.onload = function() { window.print(); window.onafterprint = function() { window.close(); }; };<\/script>
+  <script>window.onload = function() { window.print(); window.onafterprint = function() { window.close(); }; };</script>
 </body>
 </html>`;
     const w = window.open('', '_blank', 'width=900,height=700');
@@ -685,7 +708,7 @@ export default function InquiriesPage() {
         (filterStatus === 'processed' && ['processed', 'won', 'auto_created'].includes(statusStr));
 
       return matchesSearch && matchesStatus;
-    } catch (e) {
+    } catch {
       return true;
     }
   });
@@ -745,11 +768,10 @@ export default function InquiriesPage() {
             <button
               key={st}
               onClick={() => setFilterStatus(st)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${
-                filterStatus === st
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${filterStatus === st
                   ? 'bg-blue-600 text-white shadow-2xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}>
+                }`}>
               {st === 'all' ? `All Inquiries (${filtered.length})` : st === 'review' ? 'In Review ⏳' : 'Processed 🎉'}
             </button>
           ))}
@@ -822,15 +844,14 @@ export default function InquiriesPage() {
                       </td>
                       <td className="px-4 py-3.5 text-xs">
                         <div className="flex items-center gap-1.5">
-                          <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] uppercase border ${
-                            details.productForm === 'Sheet'
+                          <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] uppercase border ${details.productForm === 'Sheet'
                               ? 'bg-purple-50 text-purple-700 border-purple-200'
                               : details.productForm === 'Plate'
-                              ? 'bg-amber-50 text-amber-800 border-amber-200'
-                              : details.productForm === 'Bar'
-                              ? 'bg-blue-50 text-blue-800 border-blue-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          }`}>
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : details.productForm === 'Bar'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}>
                             {details.productForm}
                           </span>
                           <span className="text-slate-600 font-mono font-medium">
@@ -1117,15 +1138,14 @@ export default function InquiriesPage() {
                             <div>
                               <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
                                 <span>{cleanProductType(editDetails.productType)}</span>
-                                <span className={`px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border ${
-                                  editDetails.productForm === 'Sheet'
+                                <span className={`px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border ${editDetails.productForm === 'Sheet'
                                     ? 'bg-purple-100 text-purple-800 border-purple-300'
                                     : editDetails.productForm === 'Plate'
-                                    ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                    : editDetails.productForm === 'Bar'
-                                    ? 'bg-blue-100 text-blue-800 border-blue-300'
-                                    : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                }`}>
+                                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                      : editDetails.productForm === 'Bar'
+                                        ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                        : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  }`}>
                                   Form: {editDetails.productForm}
                                 </span>
                               </div>
@@ -1278,6 +1298,13 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
+                onClick={() => setShowPdfModal(true)}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
+                <Eye size={15} /> View PDF 📄
+              </button>
+
+              <button
+                type="button"
                 disabled={submitting || ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase())}
                 onClick={handleSaveDrawerDetails}
                 className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
@@ -1302,9 +1329,16 @@ export default function InquiriesPage() {
         </div>
       )}
 
-      {/* ============================================================ */}
+      {/* Inquiry Quotation PDF Preview Modal */}
+      {showPdfModal && editDetails && selectedInquiry && (
+        <InquiryPdfModal
+          inquiry={selectedInquiry}
+          details={editDetails}
+          onClose={() => setShowPdfModal(false)}
+        />
+      )}
+
       {/* FULL-SCREEN IMAGE VIEWER */}
-      {/* ============================================================ */}
       {imageViewerUrl && (
         <div
           className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
@@ -1542,6 +1576,9 @@ export default function InquiriesPage() {
               <p className="text-slate-700 font-mono">
                 {editDetails.companyName} · {editDetails.productType} ({editDetails.productForm}) {editDetails.quantityTons} MT @ ₹{editDetails.unitPrice}/MT
               </p>
+              <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
+                📄 <span><strong>Official PDF Quotation:</strong> The formatted PDF document will be generated and attached to this email.</span>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -1550,7 +1587,7 @@ export default function InquiriesPage() {
                 <input
                   type="email"
                   required
-                  placeholder="e.g. shravankotagi314@gmail.com"
+                  placeholder="e.g. rishabhpm23@gmail.com"
                   value={quotationEmail}
                   onChange={e => setQuotationEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
@@ -1558,7 +1595,7 @@ export default function InquiriesPage() {
               </div>
 
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed font-medium">
-                ⚡ <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>shravankotagi314@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
+                ⚡ <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>rishabhpm23@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
               </div>
 
               {resendNotice && (
@@ -1570,7 +1607,7 @@ export default function InquiriesPage() {
                   resendNotice.toLowerCase().includes('success')
                     ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
                     : 'bg-rose-50 text-rose-900 border-rose-200'
-                }`}>
+                  }`}>
                   {resendNotice}
                 </div>
               )}
@@ -1591,7 +1628,7 @@ export default function InquiriesPage() {
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
-                    const targetEmail = quotationEmail.trim() || 'shravankotagi314@gmail.com';
+                    const targetEmail = quotationEmail.trim() || 'rishabhpm23@gmail.com';
                     const res = await inquiriesApi.sendQuotation(selectedInquiry.id, {
                       customer_email: targetEmail,
                       customer_name: editDetails.companyName,
@@ -1601,11 +1638,13 @@ export default function InquiriesPage() {
                     setResendNotice(msg);
                     setIsQuotationSent(true);
                     setSelectedInquiry(prev => prev ? { ...prev, status: 'quoted' } : null);
-                    setTimeout(() => {
-                      setShowQuotationModal(false);
-                      setResendNotice('');
-                      fetchMonthlyInquiries();
-                    }, 2500);
+                    if (res?.data?.email_sent !== false) {
+                      setTimeout(() => {
+                        setShowQuotationModal(false);
+                        setResendNotice('');
+                        fetchMonthlyInquiries();
+                      }, 2500);
+                    }
                   } catch (err: any) {
                     console.error('Error sending quotation:', err);
                     setResendNotice(err?.response?.data?.message || 'Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.');
