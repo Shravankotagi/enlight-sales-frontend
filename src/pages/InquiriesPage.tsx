@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye
+  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  ImageIcon, ZoomIn, Printer, ExternalLink, Package
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -222,6 +223,14 @@ export default function InquiriesPage() {
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
+
+  // Quotation View Modal (clean standalone view)
+  const [showQuotationView, setShowQuotationView] = useState(false);
+  const [quotationViewInquiry, setQuotationViewInquiry] = useState<InquiryItem | null>(null);
+  const [quotationViewDetails, setQuotationViewDetails] = useState<ExtractedDetails | null>(null);
+
+  // Full-screen image viewer
+  const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
   const now = new Date();
   const [dateRange, setDateRange] = useState<DateFilterRange>({
@@ -678,7 +687,10 @@ export default function InquiriesPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleOpenDrawer(inq);
+                              const d = parseInquiryText(inq.raw_text || '', inq);
+                              setQuotationViewInquiry(inq);
+                              setQuotationViewDetails(d);
+                              setShowQuotationView(true);
                             }}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1">
                             <Eye size={13} /> View Quotation
@@ -734,29 +746,84 @@ export default function InquiriesPage() {
                     Source: {selectedInquiry.source_channel || 'WhatsApp'}
                   </span>
                 </div>
-
                 <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-2">
                   <p className="text-sm font-mono text-blue-200 leading-relaxed">
                     "{selectedInquiry.raw_text || 'Document received'}"
                   </p>
-                  
-                  {/* Stored Document Audit Attachment View */}
-                  {(selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) || (selectedInquiry.raw_text && selectedInquiry.raw_text.toLowerCase().includes('document')) ? (
-                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                      <span className="text-xs text-slate-400 flex items-center gap-1">
-                        <FileCheck size={14} className="text-emerald-400" /> Original File Stored in Database
-                      </span>
-                      <a
-                        href={selectedInquiry.media_urls && selectedInquiry.media_urls[0] ? selectedInquiry.media_urls[0] : '#'}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs">
-                        <ShieldCheck size={14} /> View Original Document (Audit)
-                      </a>
+
+                  {/* Inline Image Viewer — shows actual shared image/document */}
+                  {selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0 && (
+                    <div className="pt-3 border-t border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
+                          <ImageIcon size={13} /> Attached Document / Image
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setImageViewerUrl(selectedInquiry.media_urls![0])}
+                            className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
+                            <ZoomIn size={12} /> Full Screen
+                          </button>
+                          <a
+                            href={selectedInquiry.media_urls[0]}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors">
+                            <ExternalLink size={12} /> Open Tab
+                          </a>
+                        </div>
+                      </div>
+                      {/* Actual image display */}
+                      <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
+                        {selectedInquiry.media_urls[0].match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                          <img
+                            src={selectedInquiry.media_urls[0]}
+                            alt="Inquiry attachment"
+                            className="w-full max-h-64 object-contain cursor-zoom-in"
+                            onClick={() => setImageViewerUrl(selectedInquiry.media_urls![0])}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : selectedInquiry.media_urls[0].match(/\.pdf$/i) ? (
+                          <div className="flex items-center justify-center py-6 gap-3">
+                            <FileCheck size={28} className="text-red-400" />
+                            <div>
+                              <p className="text-white text-xs font-bold">PDF Document Attached</p>
+                              <p className="text-slate-400 text-[11px]">Click "Open Tab" to view the PDF</p>
+                            </div>
+                          </div>
+                        ) : (
+                          // Try loading as image anyway (WhatsApp media URLs)
+                          <img
+                            src={selectedInquiry.media_urls[0]}
+                            alt="Inquiry attachment"
+                            className="w-full max-h-64 object-contain cursor-zoom-in"
+                            onClick={() => setImageViewerUrl(selectedInquiry.media_urls![0])}
+                            onError={(e) => {
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) parent.innerHTML = `<div class="flex items-center justify-center py-6 gap-2 text-slate-400"><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span class="text-xs">Media stored — click Open Tab to view</span></div>`;
+                            }}
+                          />
+                        )}
+                      </div>
+                      {selectedInquiry.media_urls.length > 1 && (
+                        <p className="text-[11px] text-slate-500">
+                          +{selectedInquiry.media_urls.length - 1} more attachment(s)
+                        </p>
+                      )}
                     </div>
-                  ) : null}
+                  )}
+
+                  {/* No media but text mentions document */}
+                  {(!selectedInquiry.media_urls || selectedInquiry.media_urls.length === 0) &&
+                    selectedInquiry.raw_text?.toLowerCase().includes('document') && (
+                    <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
+                      <FileCheck size={14} className="text-slate-500" />
+                      <span className="text-xs text-slate-400">Document referenced — file URL not stored</span>
+                    </div>
+                  )}
                 </div>
               </div>
+            </div>
 
               {/* Edit vs View Toggle Header */}
               <div className="flex items-center justify-between pt-1">
@@ -1075,6 +1142,212 @@ export default function InquiriesPage() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* FULL-SCREEN IMAGE VIEWER */}
+      {/* ============================================================ */}
+      {imageViewerUrl && (
+        <div
+          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+          onClick={() => setImageViewerUrl(null)}>
+          <div className="relative max-w-5xl w-full max-h-screen" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setImageViewerUrl(null)}
+              className="absolute -top-10 right-0 text-white/70 hover:text-white p-2 rounded-xl flex items-center gap-2 text-xs font-bold">
+              <X size={18} /> Close
+            </button>
+            <img
+              src={imageViewerUrl}
+              alt="Inquiry document full view"
+              className="w-full h-auto max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+            />
+            <div className="flex items-center justify-center mt-3 gap-3">
+              <a
+                href={imageViewerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5">
+                <ExternalLink size={14} /> Open Original in New Tab
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* CLEAN QUOTATION VIEW MODAL */}
+      {/* ============================================================ */}
+      {showQuotationView && quotationViewInquiry && quotationViewDetails && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto shadow-2xl border border-slate-200">
+            {/* Quotation Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-slate-800 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-600 rounded-xl">
+                  <Package size={20} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-white font-bold text-base">Price Quotation</h2>
+                  <p className="text-slate-400 text-[11px] font-mono mt-0.5">
+                    Enlight Metals Pvt. Ltd. · {new Date(quotationViewInquiry.created_at).toLocaleDateString('en-IN')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5">
+                  <Printer size={13} /> Print
+                </button>
+                <button
+                  onClick={() => setShowQuotationView(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-700">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Buyer & Seller Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Bill To</p>
+                  <p className="font-bold text-slate-900 text-sm">{quotationViewDetails.companyName}</p>
+                  <p className="text-xs text-slate-600 font-mono mt-0.5">📞 {quotationViewDetails.customerPhone}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">📍 {quotationViewDetails.deliveryLocation}</p>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</p>
+                  <p className="font-bold text-slate-900 text-sm">Enlight Metals Pvt. Ltd.</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Mumbai, Maharashtra</p>
+                  <p className="text-[11px] text-slate-500 font-mono mt-1">
+                    Ref: {quotationViewInquiry.id.slice(0, 12).toUpperCase()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Quotation Table */}
+              <div className="rounded-xl border border-slate-300 overflow-hidden shadow-xs">
+                <table className="w-full text-left text-xs text-slate-800 border-collapse">
+                  <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3 border-r border-slate-700 w-1/5">Quantity</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-2/5">Description & Specifications</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-1/5">Unit Price (₹)</th>
+                      <th className="px-4 py-3 text-right w-1/5">Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    <tr>
+                      <td className="px-4 py-4 border-r border-slate-200">
+                        <span className="text-sm font-extrabold text-blue-700">{quotationViewDetails.quantityTons} MT</span>
+                        <span className="text-[11px] text-slate-400 block font-normal">({quotationViewDetails.quantityUnits} nos)</span>
+                      </td>
+                      <td className="px-4 py-4 border-r border-slate-200">
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          {quotationViewDetails.productType}
+                          <span className="px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border bg-emerald-100 text-emerald-800 border-emerald-300">
+                            Form: {quotationViewDetails.productForm}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-mono mt-1">
+                          Spec: {quotationViewDetails.thickness} {quotationViewDetails.width ? `x ${quotationViewDetails.width}` : ''}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 border-r border-slate-200 font-bold font-mono">
+                        ₹{quotationViewDetails.unitPrice.toLocaleString('en-IN')}/MT
+                      </td>
+                      <td className="px-4 py-4 text-right font-black text-emerald-700 font-mono text-sm">
+                        ₹{quotationViewDetails.totalAmount.toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
+                    <tr className="border-b border-slate-200 text-xs">
+                      <td className="px-4 py-2 font-bold border-r border-slate-200 text-slate-700">Subtotal (Excl. GST)</td>
+                      <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-slate-500 border-r border-slate-200">Base Material Amount:</td>
+                      <td className="px-4 py-2 text-right font-bold text-slate-800 font-mono">
+                        ₹{quotationViewDetails.totalAmount.toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-200 text-xs bg-indigo-50/50">
+                      <td className="px-4 py-2 font-bold border-r border-slate-200 text-indigo-900">GST @ 18%</td>
+                      <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">Applicable 18% GST:</td>
+                      <td className="px-4 py-2 text-right font-bold text-indigo-800 font-mono">
+                        + ₹{Math.round(quotationViewDetails.totalAmount * 0.18).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                    <tr className="bg-emerald-100/90 text-emerald-950 font-black">
+                      <td className="px-4 py-3 font-extrabold border-r border-emerald-300">Total: {quotationViewDetails.quantityTons} MT</td>
+                      <td colSpan={2} className="px-4 py-3 text-right font-black uppercase tracking-wide border-r border-emerald-300 text-xs">Grand Total Amount (Incl. 18% GST):</td>
+                      <td className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
+                        ₹{Math.round(quotationViewDetails.totalAmount * 1.18).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+
+                {/* Commercial Terms */}
+                <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Delivery Address</span>
+                    <span className="font-bold text-slate-900">{quotationViewDetails.deliveryLocation}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Payment Terms</span>
+                    <span className="font-bold text-purple-900">{quotationViewDetails.paymentTerms}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Inquiry Date</span>
+                    <span className="font-mono font-bold text-slate-700">{new Date(quotationViewInquiry.created_at).toLocaleDateString('en-IN')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Attached Image Preview in Quotation */}
+              {quotationViewInquiry.media_urls && quotationViewInquiry.media_urls.length > 0 && (
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <ImageIcon size={13} className="text-blue-500" /> Customer's Shared Document / Image
+                    </span>
+                    <button
+                      onClick={() => setImageViewerUrl(quotationViewInquiry.media_urls![0])}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1">
+                      <ZoomIn size={12} /> View Full Size
+                    </button>
+                  </div>
+                  <img
+                    src={quotationViewInquiry.media_urls[0]}
+                    alt="Customer shared document"
+                    className="w-full max-h-48 object-contain bg-slate-100 cursor-zoom-in"
+                    onClick={() => setImageViewerUrl(quotationViewInquiry.media_urls![0])}
+                    onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
+                  />
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <button
+                  onClick={() => setShowQuotationView(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowQuotationView(false);
+                    handleOpenDrawer(quotationViewInquiry);
+                    setShowQuotationModal(true);
+                  }}
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md">
+                  <Send size={14} /> Send Quotation to Customer ✉️
+                </button>
+              </div>
             </div>
           </div>
         </div>
