@@ -948,6 +948,16 @@ const formatExtractedRequirementText = (extracted: any): string => {
   const rawList = Array.isArray(inquiries) ? inquiries : [];
   const productInquiries = rawList.filter(isProductInquiry);
 
+  const reviewCount = productInquiries.filter(i => {
+    const st = (i?.status || 'review').toLowerCase();
+    return ['review', 'needs_review', 'pending', 'new', 'draft'].includes(st);
+  }).length;
+
+  const processedCount = productInquiries.filter(i => {
+    const st = (i?.status || '').toLowerCase();
+    return ['processed', 'confirmed', 'quoted', 'won', 'auto_created', 'order_created', 'closed'].includes(st);
+  }).length;
+
   const filtered = productInquiries.filter(i => {
     try {
       const text = i?.raw_text || '';
@@ -961,12 +971,14 @@ const formatExtractedRequirementText = (extracted: any): string => {
         text.toLowerCase().includes(searchTerm.toLowerCase()) ||
         phone.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const statusStr = (i?.status || 'processed').toLowerCase();
+      const statusStr = (i?.status || 'review').toLowerCase();
+      const isReview = ['review', 'needs_review', 'pending', 'new', 'draft'].includes(statusStr);
+      const isProcessed = ['processed', 'confirmed', 'quoted', 'won', 'auto_created', 'order_created', 'closed'].includes(statusStr);
+
       const matchesStatus =
         filterStatus === 'all' ||
-        statusStr === filterStatus.toLowerCase() ||
-        (filterStatus === 'review' && ['review', 'needs_review', 'pending', 'confirmed', 'quoted'].includes(statusStr)) ||
-        (filterStatus === 'processed' && ['processed', 'won', 'auto_created', 'confirmed', 'quoted'].includes(statusStr));
+        (filterStatus === 'review' && isReview) ||
+        (filterStatus === 'processed' && isProcessed);
 
       return matchesSearch && matchesStatus;
     } catch {
@@ -1025,17 +1037,26 @@ const formatExtractedRequirementText = (extracted: any): string => {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-          {['all', 'review', 'processed'].map(st => (
-            <button
-              key={st}
-              onClick={() => setFilterStatus(st)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${filterStatus === st
-                  ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          {['all', 'review', 'processed'].map(st => {
+            const label =
+              st === 'all'
+                ? `All Inquiries (${productInquiries.length})`
+                : st === 'review'
+                ? `In Review (${reviewCount}) ⏳`
+                : `Processed (${processedCount}) 🎉`;
+            return (
+              <button
+                key={st}
+                onClick={() => setFilterStatus(st)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${
+                  filterStatus === st
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}>
-              {st === 'all' ? `All Inquiries (${filtered.length})` : st === 'review' ? 'In Review ⏳' : 'Processed 🎉'}
-            </button>
-          ))}
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
