@@ -74,6 +74,11 @@ export default function OrdersPage() {
   const [formPaymentTerms, setFormPaymentTerms] = useState('30 Days Credit');
   const [formExtractedItems, setFormExtractedItems] = useState<DealItem[]>([]);
 
+  // Commercial breakdown state
+  const [formBasicAmount, setFormBasicAmount] = useState<number>(0);
+  const [formGstAmount, setFormGstAmount] = useState<number>(0);
+  const [formGrandTotal, setFormGrandTotal] = useState<number>(0);
+
   const fetchOrders = async () => {
     try {
       setLoading(true);
@@ -143,6 +148,16 @@ export default function OrdersPage() {
             setFormPaymentTerms(extraction.payment_terms);
           }
 
+          if (extraction.basic_amount || extraction.po_basic_value) {
+            setFormBasicAmount(Number(extraction.basic_amount || extraction.po_basic_value) || 0);
+          }
+          if (extraction.gst_amount || extraction.tax_amount) {
+            setFormGstAmount(Number(extraction.gst_amount || extraction.tax_amount) || 0);
+          }
+          if (extraction.total_amount || extraction.grand_total) {
+            setFormGrandTotal(Number(extraction.total_amount || extraction.grand_total) || 0);
+          }
+
           if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
             const mappedItems: DealItem[] = extraction.line_items.map((i: any) => ({
               sku_text: i.sku_text || i.description || 'Material',
@@ -185,6 +200,28 @@ export default function OrdersPage() {
     reader.readAsDataURL(file);
   };
 
+  // Dynamic calculations
+  const basicValue =
+    formBasicAmount > 0
+      ? formBasicAmount
+      : formExtractedItems.length > 0
+      ? formExtractedItems.reduce((s, i) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0)
+      : Math.round((Number(formQuantity) || 0) * (Number(formRate) || 0));
+
+  const gstValue =
+    formGstAmount > 0
+      ? formGstAmount
+      : basicValue > 0
+      ? Math.round(basicValue * 0.18)
+      : 0;
+
+  const totalDealValue =
+    formGrandTotal > 0
+      ? formGrandTotal
+      : basicValue > 0
+      ? basicValue + gstValue
+      : 0;
+
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formCustomerName.trim()) {
@@ -208,7 +245,7 @@ export default function OrdersPage() {
         }]
       : [];
 
-    let totalVal = lineItemsToSend.reduce((s, i) => s + (i.amount || 0), 0) || computedAmt;
+    const finalOrderValue = totalDealValue > 0 ? totalDealValue : (basicValue > 0 ? basicValue : computedAmt);
 
     try {
       setSubmitting(true);
@@ -217,7 +254,7 @@ export default function OrdersPage() {
         customer_phone: formCustomerPhone.trim() || undefined,
         po_number: formPoNumber.trim() || undefined,
         po_date: formPoDate,
-        total_amount: totalVal > 0 ? totalVal : computedAmt,
+        total_amount: finalOrderValue,
         delivery_location: formDeliveryLocation.trim() || undefined,
         payment_terms: formPaymentTerms.trim() || undefined,
         line_items: lineItemsToSend,
@@ -238,6 +275,9 @@ export default function OrdersPage() {
       setFormPaymentTerms('30 Days Credit');
       setPoFileName('');
       setFormExtractedItems([]);
+      setFormBasicAmount(0);
+      setFormGstAmount(0);
+      setFormGrandTotal(0);
 
       fetchOrders();
     } catch (err: any) {
@@ -275,11 +315,6 @@ export default function OrdersPage() {
     const itemsQty = (o?.deal_items || []).reduce((iSum, i) => iSum + Number(i?.quantity || 0), 0);
     return sum + itemsQty;
   }, 0);
-
-  const displayTotal =
-    formExtractedItems.length > 0
-      ? formExtractedItems.reduce((s, i) => s + (i.amount || 0), 0)
-      : (Number(formQuantity) || 0) * (Number(formRate) || 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -450,7 +485,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Create New Order Modal (Matches Image 1 layout with Upload PO Document option) */}
+      {/* Create New Order Modal with Document Upload & Breakdown */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
@@ -466,7 +501,7 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            {/* Upload PO Document banner with Gemini OCR */}
+            {/* Upload PO Document Banner */}
             <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-blue-900 flex items-center gap-1.5 cursor-pointer">
@@ -500,7 +535,9 @@ export default function OrdersPage() {
                   required
                   placeholder="e.g. Supreme Steel"
                   value={formCustomerName}
-                  onChange={e => setFormCustomerName(e.target.value)}
+                  onChange={e => {
+                    setFormCustomerName(e.target.value);
+                  }}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -544,10 +581,15 @@ export default function OrdersPage() {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity (MT)</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.0001"
                     placeholder="e.g. 30"
                     value={formQuantity}
-                    onChange={e => setFormQuantity(e.target.value)}
+                    onChange={e => {
+                      setFormQuantity(e.target.value);
+                      setFormBasicAmount(0);
+                      setFormGstAmount(0);
+                      setFormGrandTotal(0);
+                    }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -558,7 +600,12 @@ export default function OrdersPage() {
                     type="number"
                     placeholder="e.g. 58000"
                     value={formRate}
-                    onChange={e => setFormRate(e.target.value)}
+                    onChange={e => {
+                      setFormRate(e.target.value);
+                      setFormBasicAmount(0);
+                      setFormGstAmount(0);
+                      setFormGrandTotal(0);
+                    }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -575,12 +622,32 @@ export default function OrdersPage() {
                 />
               </div>
 
-              {displayTotal > 0 && (
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 flex justify-between items-center">
-                  <p className="text-xs text-blue-700 font-medium">Estimated Total Deal Value:</p>
-                  <p className="text-lg font-bold text-blue-900">
-                    ₹{displayTotal.toLocaleString('en-IN')}
-                  </p>
+              {/* Commercial Breakdown: PO Basic Value, GST, and Total Deal Value */}
+              {basicValue > 0 && (
+                <div className="p-3.5 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 rounded-xl border border-blue-200 space-y-2">
+                  <div className="flex justify-between items-center text-xs text-slate-600">
+                    <span className="font-semibold">PO Basic Value:</span>
+                    <span className="font-mono font-bold text-slate-800">
+                      ₹{basicValue.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs text-slate-600">
+                    <span className="font-semibold">GST Value (18% / SGST+CGST):</span>
+                    <span className="font-mono font-bold text-amber-700">
+                      +₹{gstValue.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-blue-200/80 flex justify-between items-center">
+                    <div>
+                      <p className="text-xs font-bold text-blue-900">Total Deal Value (Incl. GST):</p>
+                      <p className="text-[10px] text-slate-500">
+                        Official PO amount for KRA 1 &amp; Payment Tracking
+                      </p>
+                    </div>
+                    <p className="text-lg font-bold text-blue-900 font-mono">
+                      ₹{totalDealValue.toLocaleString('en-IN')}
+                    </p>
+                  </div>
                 </div>
               )}
 
