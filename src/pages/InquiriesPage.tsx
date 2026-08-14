@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  Phone, Calendar, Edit3, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ZoomIn, ExternalLink, Package, Printer
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
@@ -948,22 +948,17 @@ const formatExtractedRequirementText = (extracted: any): string => {
   const rawList = Array.isArray(inquiries) ? inquiries : [];
   const productInquiries = rawList.filter(isProductInquiry);
   const activeInquiryList = productInquiries.length > 0 ? productInquiries : rawList;
-
-<<<<<<< HEAD
-  const reviewCount = productInquiries.filter(i => {
+  const reviewCount = activeInquiryList.filter(i => {
     const st = (i?.status || 'review').toLowerCase();
     return ['review', 'needs_review', 'pending', 'new', 'draft'].includes(st);
   }).length;
 
-  const processedCount = productInquiries.filter(i => {
+  const processedCount = activeInquiryList.filter(i => {
     const st = (i?.status || '').toLowerCase();
     return ['processed', 'confirmed', 'quoted', 'won', 'auto_created', 'order_created', 'closed'].includes(st);
   }).length;
 
-  const filtered = productInquiries.filter(i => {
-=======
   const filtered = activeInquiryList.filter(i => {
->>>>>>> new-origin/feature/chatbot
     try {
       const text = i?.raw_text || '';
       const parsed = parseInquiryText(text, i);
