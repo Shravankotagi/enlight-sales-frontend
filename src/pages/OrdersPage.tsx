@@ -314,12 +314,19 @@ function parseSafeIsoDate(dateStr?: string): string {
   // Filter orders by date range & search
   const filtered = safeOrders.filter(o => {
     if (dateRange.from && dateRange.to) {
-      const itemDate =
-        parseSafeIsoDate(o.po_date) ||
-        parseSafeIsoDate(o.won_at) ||
-        parseSafeIsoDate(o.created_at);
-      if (itemDate) {
-        if (itemDate < dateRange.from || itemDate > dateRange.to) return false;
+      const isDateInRange = (dStr?: string) => {
+        if (!dStr) return false;
+        const d = parseSafeIsoDate(dStr);
+        return Boolean(d && d >= dateRange.from! && d <= dateRange.to!);
+      };
+
+      // An order matches the date filter if won_at, created_at, OR po_date falls in range
+      const wonInRange = isDateInRange(o.won_at);
+      const createdInRange = isDateInRange(o.created_at);
+      const poInRange = isDateInRange(o.po_date);
+
+      if (!wonInRange && !createdInRange && !poInRange) {
+        return false;
       }
     }
 
