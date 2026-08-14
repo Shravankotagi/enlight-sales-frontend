@@ -60,7 +60,12 @@ export default function AssistantPage() {
     try {
       setFetchingSessions(true);
       const res = await chatbotApi.getSessions();
-      const sessionList: ChatSession[] = res.data || [];
+      const rawData = res.data;
+      const sessionList: ChatSession[] = Array.isArray(rawData?.sessions)
+        ? rawData.sessions
+        : Array.isArray(rawData)
+        ? rawData
+        : [];
       setSessions(sessionList);
       if (sessionList.length > 0 && !activeSessionId) {
         selectSession(sessionList[0].id);
@@ -82,7 +87,13 @@ export default function AssistantPage() {
       setLoading(true);
       setError(null);
       const res = await chatbotApi.getSessionMessages(sessionId);
-      setMessages(res.data || []);
+      const rawData = res.data;
+      const msgList: ChatMessage[] = Array.isArray(rawData?.messages)
+        ? rawData.messages
+        : Array.isArray(rawData)
+        ? rawData
+        : [];
+      setMessages(msgList);
     } catch (err: any) {
       console.error('Failed to load session messages:', err);
       setError('Could not load session history.');
@@ -121,7 +132,10 @@ export default function AssistantPage() {
         sessionId: activeSessionId || undefined,
       });
 
-      const { sessionId, reply } = res.data;
+      const resData = res.data?.data || res.data || {};
+      const sessionId = resData.sessionId || resData.session_id;
+      const reply = resData.reply || 'Request completed.';
+
       if (sessionId && sessionId !== activeSessionId) {
         setActiveSessionId(sessionId);
         loadSessions();
@@ -261,7 +275,7 @@ export default function AssistantPage() {
 
           {/* Session List */}
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-            {sessions.length === 0 ? (
+            {!Array.isArray(sessions) || sessions.length === 0 ? (
               <div className="p-4 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
                 No past sessions found. Start a new conversation!
               </div>
@@ -293,7 +307,7 @@ export default function AssistantPage() {
                         className={isSelected ? 'text-blue-400' : 'text-slate-500'}
                       />
                       <span className="truncate">
-                        Session #{sess.id.slice(0, 8)}
+                        Session #{sess.id ? sess.id.slice(0, 8) : 'New'}
                       </span>
                     </div>
                     <span className="text-[10px] text-slate-500 shrink-0">
@@ -321,7 +335,7 @@ export default function AssistantPage() {
         <div className="flex-1 flex flex-col bg-slate-900 overflow-hidden">
           {/* Chat Messages List */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {messages.length === 0 && !loading ? (
+            {(!Array.isArray(messages) || messages.length === 0) && !loading ? (
               <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6 my-auto">
                 <div className="p-4 bg-blue-600/10 border border-blue-500/20 rounded-2xl text-blue-400">
                   <Sparkles size={36} />
@@ -361,6 +375,7 @@ export default function AssistantPage() {
                 </div>
               </div>
             ) : (
+              Array.isArray(messages) &&
               messages.map((msg) => {
                 const isUser = msg.role === 'user';
                 return (
@@ -390,7 +405,7 @@ export default function AssistantPage() {
                       {isUser ? (
                         <p className="whitespace-pre-wrap">{msg.content}</p>
                       ) : (
-                        renderFormattedMessage(msg.content)
+                        renderFormattedMessage(msg.content || '')
                       )}
                     </div>
                   </div>
