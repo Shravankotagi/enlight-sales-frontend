@@ -334,6 +334,7 @@ export default function InquiriesPage() {
   const [poFileBase64, setPoFileBase64] = useState<string | null>(null);
   const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
+  const [formExtractedJson, setFormExtractedJson] = useState<any>(null);
 
   const isPdf = (url: string) => {
     if (!url) return false;
@@ -615,6 +616,7 @@ export default function InquiriesPage() {
 
     setPoFileName(file.name);
     setIsExtractingPo(true);
+    setFormExtractedJson(null);
 
     try {
       const reader = new FileReader();
@@ -639,19 +641,20 @@ export default function InquiriesPage() {
             if (extracted.customer_name) setFormCustomerName(extracted.customer_name);
             if (extracted.contact_phone) setFormPhone(extracted.contact_phone);
             if (extracted.requirement) setFormRequirement(extracted.requirement);
+            setFormExtractedJson(extracted);
             setFormInquiryType('Product Requirement (AI Document)');
             setIsExtractingPo(false);
             return;
           }
         } catch (apiErr) {
-          console.warn('Backend parse-document unavailable, trying client-side Gemini 3.6 Flash Vision...', apiErr);
+          console.warn('Backend parse-document unavailable, trying direct Gemini Vision...', apiErr);
         }
 
-        // 2. Direct Gemini 3.6 Flash Vision AI Call using Paid Key
+        // 2. Direct Gemini Vision API call — full structured multi-item extraction
         try {
           const apiKey = ['AQ.Ab8RN6Ibqf', 'NjPprSab_mxBA', 'ZTgLpPuRMFntq', 'kj5YAeK7fhDXPA'].join('');
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -660,7 +663,7 @@ export default function InquiriesPage() {
                   {
                     parts: [
                       {
-                        text: `You are an expert OCR document parser for steel inquiry purchase orders. Extract fields from this document image and return ONLY a valid JSON object with no markdown formatting or codeblocks:\n{\n  "customer_name": "company or customer name",\n  "contact_phone": "10-digit phone number if present",\n  "requirement": "detailed material specification, quantity in MT, rate, and delivery location"\n}`
+                        text: `You are an expert OCR parser for steel purchase inquiry documents. Extract ALL data from this document and return ONLY a valid JSON object with NO markdown, NO codeblocks, NO explanation:\n{\n  "customer_name": "company name from document header",\n  "customer_phone": "phone number if present else null",\n  "customer_gst": "GST number if present else null",\n  "customer_address": "company address if present else null",\n  "delivery_location": "delivery location",\n  "payment_terms": "payment terms",\n  "po_number": "PO/Inquiry Ref number if present else null",\n  "line_items": [\n    {\n      "sku_text": "full material description e.g. HR Coil (IS 2062 E250)",\n      "dimensions": "specs e.g. 2.50 mm x 1250 mm",\n      "quantity": numeric_quantity_in_MT,\n      "unit": "MT",\n      "rate": numeric_rate_per_MT_or_0,\n      "amount": numeric_amount_or_0\n    }\n  ],\n  "total_amount": numeric_total_or_0,\n  "overall_confidence": 0.95\n}\nExtract EVERY line item. Do not merge or skip any rows. Return ONLY the JSON.`
                       },
                       {
                         inline_data: {
@@ -680,26 +683,27 @@ export default function InquiriesPage() {
           const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanJson);
 
+          // Store the full structured extraction
+          setFormExtractedJson(parsed);
+
+          // Populate simple form fields
           if (parsed.customer_name) setFormCustomerName(parsed.customer_name);
-          if (parsed.contact_phone) setFormPhone(parsed.contact_phone);
-          if (parsed.requirement) setFormRequirement(parsed.requirement);
+          if (parsed.customer_phone) setFormPhone(parsed.customer_phone);
+
+          // Build a readable requirement summary from line items
+          if (parsed.line_items && parsed.line_items.length > 0) {
+            const reqStr = parsed.line_items
+              .map((li: any) => `${li.sku_text}${li.dimensions ? ' ' + li.dimensions : ''}: ${li.quantity} MT${li.rate ? ' @ ₹' + li.rate + '/MT' : ''}`)
+              .join('; ');
+            setFormRequirement(reqStr);
+          } else if (parsed.requirement) {
+            setFormRequirement(parsed.requirement);
+          }
           setFormInquiryType('Product Requirement (AI Document)');
         } catch (visionErr) {
           console.error('Gemini vision extraction error:', visionErr);
-          // Fallback if network blocked
-          if (file.name.toLowerCase().includes('delta')) {
-            setFormCustomerName('Delta Structural Steel');
-            setFormPhone('9123456789');
-            setFormRequirement('Hot Rolled Steel Coil (HR Coil 12mm), 50 MT, Target Rate Rs 55,000/MT, Delivery Location: Mumbai Warehouse');
-          } else if (file.name.toLowerCase().includes('mehta')) {
-            setFormCustomerName('Mehta Engineering');
-            setFormPhone('9876543210');
-            setFormRequirement('CR Sheet 2.0mm x 1250mm, 20 MT, Target Rate Rs 68,000/MT, Delivery Pune');
-          } else {
-            setFormCustomerName('Delta Structural Steel');
-            setFormPhone('9123456789');
-            setFormRequirement(`Extracted from ${file.name}: Hot Rolled Steel Coil (HR Coil 12mm), 50 MT, Rate Rs 55,000/MT, Delivery Mumbai`);
-          }
+          // Generic fallback - no hardcoded names
+          setFormRequirement(`Extracted from ${file.name}`);
         } finally {
           setIsExtractingPo(false);
         }
@@ -718,6 +722,35 @@ export default function InquiriesPage() {
 
     try {
       setSubmitting(true);
+
+      // Build ai_extraction_json from the structured extraction (if available)
+      let aiExtractionJson: any = null;
+      if (formExtractedJson) {
+        // Normalize line_items to match drawer expectations
+        const lineItems = (formExtractedJson.line_items || []).map((li: any) => ({
+          sku_text: li.sku_text || '',
+          dimensions: li.dimensions || '',
+          quantity: Number(li.quantity) || 0,
+          unit: li.unit || 'MT',
+          rate: Number(li.rate) || 0,
+          amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
+        }));
+        const totalAmount = lineItems.reduce((s: number, i: any) => s + i.amount, 0);
+        aiExtractionJson = {
+          ...formExtractedJson,
+          customer: {
+            name: formExtractedJson.customer_name || formCustomerName,
+            phone: formExtractedJson.customer_phone || formPhone,
+            gst: formExtractedJson.customer_gst || null,
+            address: formExtractedJson.customer_address || null,
+          },
+          line_items: lineItems,
+          total_amount: formExtractedJson.total_amount || totalAmount,
+          delivery_location: formExtractedJson.delivery_location || '',
+          payment_terms: formExtractedJson.payment_terms || '',
+        };
+      }
+
       await inquiriesApi.create({
         sender_name: formCustomerName,
         customer_name: formCustomerName,
@@ -728,6 +761,7 @@ export default function InquiriesPage() {
         status: 'review',
         overall_confidence: 0.95,
         media_urls: poFileBase64 ? [poFileBase64] : [],
+        ai_extraction_json: aiExtractionJson,
       });
 
       setShowModal(false);
@@ -737,6 +771,7 @@ export default function InquiriesPage() {
       setFormInquiryType('Product Requirement');
       setPoFileName('');
       setPoFileBase64(null);
+      setFormExtractedJson(null);
 
       fetchMonthlyInquiries();
     } catch (err: any) {
