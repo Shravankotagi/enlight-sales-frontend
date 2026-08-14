@@ -152,6 +152,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   // 2. Customer Phone Number (Priority to AI extracted customer phone and text match, NOT salesperson phone)
   const phoneMatch = textRaw.match(/\b([6-9]\d{9})\b/) || textRaw.match(/\+91[-\s]?([6-9]\d{9})\b/);
   let customerPhone =
+    aiJson.customer_phone ||
     aiJson.contact_phone ||
     aiJson.customer?.phone ||
     (phoneMatch ? phoneMatch[1] : '');
@@ -238,15 +239,28 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   }
   const totalAmount = Math.round(quantityTons * unitPrice);
 
-  // 7. Delivery & Payment Terms
-  let deliveryLocation = 'Mumbai Warehouse';
-  if (textLower.includes('pune')) deliveryLocation = 'Pune';
-  else if (textLower.includes('nashik')) deliveryLocation = 'Nashik';
-  else if (textLower.includes('mumbai')) deliveryLocation = 'Mumbai Warehouse';
+  // 7. Delivery & Payment Terms — read from ai_extraction_json first, then text-scan
+  let deliveryLocation =
+    aiJson.delivery_location ||
+    aiJson.customer?.address ||
+    null;
 
-  let paymentTerms = '100% Advance / Payment';
-  if (textLower.includes('credit') || textLower.includes('30 days')) paymentTerms = '30 Days Credit';
-  else if (textLower.includes('45 days')) paymentTerms = '45 Days Credit';
+  if (!deliveryLocation) {
+    if (textLower.includes('pune')) deliveryLocation = 'Pune';
+    else if (textLower.includes('nashik')) deliveryLocation = 'Nashik';
+    else if (textLower.includes('mumbai')) deliveryLocation = 'Mumbai Warehouse';
+    else deliveryLocation = '';
+  }
+
+  let paymentTerms =
+    aiJson.payment_terms ||
+    null;
+
+  if (!paymentTerms) {
+    if (textLower.includes('credit') || textLower.includes('30 days')) paymentTerms = '30 Days Credit';
+    else if (textLower.includes('45 days')) paymentTerms = '45 Days Credit';
+    else paymentTerms = '100% Advance / Payment';
+  }
 
   // Build lineItems from ai_extraction_json.line_items (the full multi-item array from Gemini)
   const rawLineItems: LineItemDetail[] = [];
