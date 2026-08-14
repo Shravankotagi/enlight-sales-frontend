@@ -692,23 +692,35 @@ export default function InquiriesPage() {
             const extracted = res.data.data;
             formExtractedJsonRef.current = extracted;
 
-            if (extracted.customer_name) {
-              setFormCustomerName(extracted.customer_name);
-              setExistingCustomers(prev => Array.from(new Set([extracted.customer_name, ...prev])));
-            } else {
-              setFormCustomerName('Customer Inquiry');
+            const cleanCustomer = (extracted.customer_name && !['null', 'n/a', 'none', 'customer inquiry', 'unknown'].includes(String(extracted.customer_name).trim().toLowerCase()))
+              ? String(extracted.customer_name).trim()
+              : '';
+            setFormCustomerName(cleanCustomer);
+            if (cleanCustomer) {
+              setExistingCustomers(prev => Array.from(new Set([cleanCustomer, ...prev])));
             }
-            if (extracted.customer_phone || extracted.contact_phone) {
-              setFormPhone(extracted.customer_phone || extracted.contact_phone);
-            }
-            if (extracted.line_items && extracted.line_items.length > 0) {
-              const reqStr = extracted.line_items
-                .map((li: any) => `${li.sku_text}${li.dimensions ? ' ' + li.dimensions : ''}: ${li.quantity} MT${li.rate ? ' @ ₹' + li.rate + '/MT' : ''}`)
-                .join('; ');
-              setFormRequirement(reqStr);
+
+            const rawPhone = extracted.customer_phone || extracted.contact_phone || '';
+            const cleanPhone = String(rawPhone).replace(/\D/g, '');
+            const validPhone = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : '';
+            setFormPhone(validPhone);
+
+            let reqStr = '';
+            if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
+              reqStr = extracted.line_items
+                .map((li: any, idx: number) => {
+                  const sku = li.sku_text || li.description || 'Material';
+                  const dims = li.dimensions ? ` (${li.dimensions})` : '';
+                  const qty = li.quantity ? `${li.quantity} ${li.unit || 'MT'}` : '';
+                  const rate = li.rate ? ` @ ₹${Number(li.rate).toLocaleString('en-IN')}/MT` : '';
+                  return `${idx + 1}. ${sku}${dims}: ${qty}${rate}`.trim();
+                })
+                .join('\n');
             } else if (extracted.requirement) {
-              setFormRequirement(extracted.requirement);
+              reqStr = extracted.requirement;
             }
+            setFormRequirement(reqStr);
+
             setFormInquiryType('Product Requirement (AI Document)');
             setIsExtractingPo(false);
             return;
@@ -753,30 +765,41 @@ export default function InquiriesPage() {
           // Store the full structured extraction in ref
           formExtractedJsonRef.current = parsed;
 
-          // Populate form fields
-          if (parsed.customer_name) {
-            setFormCustomerName(parsed.customer_name);
-            setExistingCustomers(prev => Array.from(new Set([parsed.customer_name, ...prev])));
-          } else {
-            setFormCustomerName('Customer Inquiry');
-          }
-          if (parsed.customer_phone || parsed.contact_phone) {
-            setFormPhone(parsed.customer_phone || parsed.contact_phone);
+          // Populate form fields cleanly with no dummy placeholders
+          const cleanCustomer = (parsed.customer_name && !['null', 'n/a', 'none', 'customer inquiry', 'unknown'].includes(String(parsed.customer_name).trim().toLowerCase()))
+            ? String(parsed.customer_name).trim()
+            : '';
+          setFormCustomerName(cleanCustomer);
+          if (cleanCustomer) {
+            setExistingCustomers(prev => Array.from(new Set([cleanCustomer, ...prev])));
           }
 
+          const rawPhone = parsed.customer_phone || parsed.contact_phone || '';
+          const cleanPhone = String(rawPhone).replace(/\D/g, '');
+          const validPhone = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : '';
+          setFormPhone(validPhone);
+
           // Build a readable requirement summary from line items
-          if (parsed.line_items && parsed.line_items.length > 0) {
-            const reqStr = parsed.line_items
-              .map((li: any) => `${li.sku_text}${li.dimensions ? ' ' + li.dimensions : ''}: ${li.quantity} MT${li.rate ? ' @ ₹' + li.rate + '/MT' : ''}`)
-              .join('; ');
-            setFormRequirement(reqStr);
+          let reqStr = '';
+          if (Array.isArray(parsed.line_items) && parsed.line_items.length > 0) {
+            reqStr = parsed.line_items
+              .map((li: any, idx: number) => {
+                const sku = li.sku_text || li.description || 'Material';
+                const dims = li.dimensions ? ` (${li.dimensions})` : '';
+                const qty = li.quantity ? `${li.quantity} ${li.unit || 'MT'}` : '';
+                const rate = li.rate ? ` @ ₹${Number(li.rate).toLocaleString('en-IN')}/MT` : '';
+                return `${idx + 1}. ${sku}${dims}: ${qty}${rate}`.trim();
+              })
+              .join('\n');
           } else if (parsed.requirement) {
-            setFormRequirement(parsed.requirement);
+            reqStr = parsed.requirement;
           }
+          setFormRequirement(reqStr);
+
           setFormInquiryType('Product Requirement (AI Document)');
         } catch (visionErr) {
           console.error('Gemini vision extraction error:', visionErr);
-          setFormRequirement(`Extracted from ${file.name}`);
+          setFormRequirement('');
         } finally {
           setIsExtractingPo(false);
         }
