@@ -248,10 +248,11 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   if (textLower.includes('credit') || textLower.includes('30 days')) paymentTerms = '30 Days Credit';
   else if (textLower.includes('45 days')) paymentTerms = '45 Days Credit';
 
-  // Build lineItems from ai_extraction_json.line_items (the full multi-item array from Gemini)
+  // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
   const rawLineItems: LineItemDetail[] = [];
-  if (Array.isArray(aiJson.line_items) && aiJson.line_items.length > 0) {
-    for (const item of aiJson.line_items) {
+  const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
+  if (Array.isArray(lineItemsSource) && lineItemsSource.length > 0) {
+    for (const item of lineItemsSource) {
       rawLineItems.push({
         sku_text: item.sku_text || item.description || '',
         dimensions: item.dimensions || '',
@@ -576,6 +577,7 @@ export default function InquiriesPage() {
 
       await inquiriesApi.updateStatus(selectedInquiry.id, 'confirmed', {
         ...editDetails,
+        line_items: editDetails.lineItems,
         requirement: summaryRequirement,
         totalAmount: baseAmt,
         gstAmount: gstAmt,
@@ -590,9 +592,15 @@ export default function InquiriesPage() {
         customer_name: editDetails.companyName,
         sender_phone: editDetails.customerPhone,
         customer_phone: editDetails.customerPhone,
-        raw_text: summaryRequirement,
+        raw_text: selectedInquiry.raw_text,
         media_urls: mediaUrlsPayload,
-        ai_extraction_json: { ...editDetails, totalAmount: baseAmt, gstAmount: gstAmt, grandTotal: grandAmt },
+        ai_extraction_json: {
+          ...editDetails,
+          line_items: editDetails.lineItems,
+          totalAmount: baseAmt,
+          gstAmount: gstAmt,
+          grandTotal: grandAmt,
+        },
       };
 
       setSaveSuccess(true);
