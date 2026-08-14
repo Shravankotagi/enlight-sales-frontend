@@ -73,13 +73,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
   // 0. Exclude Purchase Orders (POs belong strictly to Completed & Delivered Orders tab)
   const isPurchaseOrder =
     inq?.inquiry_type === 'purchase_order' ||
-    (inq?.raw_text || '').startsWith('[PO Document Attached') ||
-    inq?.ai_extraction_json?.is_purchase_order === true ||
-    inq?.ai_extraction_json?.inquiry_type === 'purchase_order' ||
-    (inq?.ai_extraction_json?.po_number &&
-      String(inq?.ai_extraction_json?.po_number).trim().length > 2 &&
-      inq?.ai_extraction_json?.po_number !== 'null' &&
-      inq?.ai_extraction_json?.po_number !== 'None');
+    (inq?.raw_text || '').startsWith('[PO Document Attached');
 
   if (isPurchaseOrder) {
     return false;
