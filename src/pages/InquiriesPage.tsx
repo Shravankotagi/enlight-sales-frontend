@@ -686,8 +686,9 @@ export default function InquiriesPage() {
   // Keep ONLY actual Product Inquiries (filters out generic greetings, deal logs, and status questions!)
   const rawList = Array.isArray(inquiries) ? inquiries : [];
   const productInquiries = rawList.filter(isProductInquiry);
+  const activeInquiryList = productInquiries.length > 0 ? productInquiries : rawList;
 
-  const filtered = productInquiries.filter(i => {
+  const filtered = activeInquiryList.filter(i => {
     try {
       const text = i?.raw_text || '';
       const parsed = parseInquiryText(text, i);

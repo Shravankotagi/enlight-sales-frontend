@@ -113,4 +113,12 @@ export const pricingApi = {
     API.post('/pricing/check-margin', { sku_text, quoted_price, rate_sheet_price }),
 };
 
+export const chatbotApi = {
+  sendMessage: (data: { message: string; sessionId?: string }) =>
+    API.post('/chat/message', data),
+  getSessions: () => API.get('/chat/sessions'),
+  getSessionMessages: (sessionId: string) =>
+    API.get(`/chat/sessions/${sessionId}/messages`),
+};
+
 export default API;
