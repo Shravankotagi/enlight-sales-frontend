@@ -662,6 +662,66 @@ export default function InquiriesPage() {
     }
   };
 
+const cleanNumericValue = (raw: any): number => {
+  if (typeof raw === 'number') return isNaN(raw) ? 0 : raw;
+  if (!raw) return 0;
+  const num = parseFloat(String(raw).replace(/,/g, '').replace(/[^0-9.]/g, ''));
+  return isNaN(num) ? 0 : num;
+};
+
+const extractJsonFromText = (rawText: string): any => {
+  if (!rawText) return null;
+  try {
+    const stripped = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    return JSON.parse(stripped);
+  } catch {}
+  try {
+    const firstOpen = rawText.indexOf('{');
+    const lastClose = rawText.lastIndexOf('}');
+    if (firstOpen !== -1 && lastClose > firstOpen) {
+      return JSON.parse(rawText.slice(firstOpen, lastClose + 1));
+    }
+  } catch {}
+  return null;
+};
+
+const formatExtractedRequirementText = (extracted: any): string => {
+  if (!extracted) return '';
+  const items = extracted.line_items || extracted.items || extracted.products || extracted.lineItems || [];
+  if (Array.isArray(items) && items.length > 0) {
+    const lines = items.map((li: any, idx: number) => {
+      const sku = li.sku_text || li.sku || li.material || li.description || li.product_name || li.product || 'Material';
+      const dims = li.dimensions || li.specs || li.size || '';
+      const dimsStr = dims ? ` (${dims})` : '';
+
+      const qtyNum = cleanNumericValue(li.quantity ?? li.qty ?? li.quantity_mt ?? li.quantityTons);
+      const unit = (li.unit && String(li.unit).trim()) || 'MT';
+      const qtyStr = qtyNum > 0 ? `${qtyNum} ${unit}` : (li.quantity ? String(li.quantity) : '');
+
+      const rateNum = cleanNumericValue(li.rate ?? li.target_rate ?? li.price ?? li.unitPrice);
+      const rateStr = rateNum > 0 ? ` @ ₹${rateNum.toLocaleString('en-IN')}/MT` : (li.rate ? ` @ ₹${li.rate}` : '');
+
+      return `${idx + 1}. ${sku}${dimsStr}${qtyStr ? ': ' + qtyStr : ''}${rateStr}`.trim();
+    }).filter(Boolean);
+
+    if (lines.length > 0) {
+      return lines.join('\n');
+    }
+  }
+
+  if (typeof extracted.requirement === 'string' && extracted.requirement.trim()) {
+    return extracted.requirement.trim();
+  }
+  if (typeof extracted.raw_text === 'string' && extracted.raw_text.trim()) {
+    return extracted.raw_text.trim();
+  }
+  if (typeof extracted.description === 'string' && extracted.description.trim()) {
+    return extracted.description.trim();
+  }
+
+  return '';
+};
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -682,6 +742,8 @@ export default function InquiriesPage() {
         const cleanBase64 = base64String.replace(/^data:[^;]+;base64,/, '');
         setPoFileBase64(base64String);
 
+        let extracted: any = null;
+
         // 1. Try Backend Gemini Vision API Route
         try {
           const res = await inquiriesApi.parseDocument({
@@ -689,120 +751,75 @@ export default function InquiriesPage() {
             mime_type: file.type || 'image/jpeg',
           });
           if (res.data?.success && res.data?.data) {
-            const extracted = res.data.data;
-            formExtractedJsonRef.current = extracted;
-
-            const cleanCustomer = (extracted.customer_name && !['null', 'n/a', 'none', 'customer inquiry', 'unknown'].includes(String(extracted.customer_name).trim().toLowerCase()))
-              ? String(extracted.customer_name).trim()
-              : '';
-            setFormCustomerName(cleanCustomer);
-            if (cleanCustomer) {
-              setExistingCustomers(prev => Array.from(new Set([cleanCustomer, ...prev])));
-            }
-
-            const rawPhone = extracted.customer_phone || extracted.contact_phone || '';
-            const cleanPhone = String(rawPhone).replace(/\D/g, '');
-            const validPhone = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : '';
-            setFormPhone(validPhone);
-
-            let reqStr = '';
-            if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
-              reqStr = extracted.line_items
-                .map((li: any, idx: number) => {
-                  const sku = li.sku_text || li.description || 'Material';
-                  const dims = li.dimensions ? ` (${li.dimensions})` : '';
-                  const qty = li.quantity ? `${li.quantity} ${li.unit || 'MT'}` : '';
-                  const rate = li.rate ? ` @ ₹${Number(li.rate).toLocaleString('en-IN')}/MT` : '';
-                  return `${idx + 1}. ${sku}${dims}: ${qty}${rate}`.trim();
-                })
-                .join('\n');
-            } else if (extracted.requirement) {
-              reqStr = extracted.requirement;
-            }
-            setFormRequirement(reqStr);
-
-            setFormInquiryType('Product Requirement (AI Document)');
-            setIsExtractingPo(false);
-            return;
+            extracted = res.data.data;
           }
         } catch (apiErr) {
           console.warn('Backend parse-document unavailable, trying direct Gemini Vision...', apiErr);
         }
 
-        // 2. Direct Gemini Vision API call — full structured multi-item extraction
-        try {
-          const apiKey = ['AQ.Ab8RN6Ibqf', 'NjPprSab_mxBA', 'ZTgLpPuRMFntq', 'kj5YAeK7fhDXPA'].join('');
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    parts: [
-                      {
-                        text: `You are an expert OCR parser for steel purchase inquiry documents. Extract ALL data from this document and return ONLY a valid JSON object with NO markdown, NO codeblocks, NO explanation:\n{\n  "customer_name": "company name from document header",\n  "customer_phone": "phone number if present else null",\n  "customer_gst": "GST number if present else null",\n  "customer_address": "company address if present else null",\n  "delivery_location": "delivery location",\n  "payment_terms": "payment terms",\n  "po_number": "PO/Inquiry Ref number if present else null",\n  "line_items": [\n    {\n      "sku_text": "full material description e.g. HR Coil (IS 2062 E250)",\n      "dimensions": "specs e.g. 2.50 mm x 1250 mm",\n      "quantity": numeric_quantity_in_MT,\n      "unit": "MT",\n      "rate": numeric_rate_per_MT_or_0,\n      "amount": numeric_amount_or_0\n    }\n  ],\n  "total_amount": numeric_total_or_0,\n  "overall_confidence": 0.95\n}\nExtract EVERY line item. Do not merge or skip any rows. Return ONLY the JSON.`
-                      },
-                      {
-                        inline_data: {
-                          mime_type: file.type || 'image/jpeg',
-                          data: cleanBase64,
+        // 2. Direct Gemini Vision API call if backend did not return extracted data
+        if (!extracted) {
+          try {
+            const apiKey = ['AQ.Ab8RN6Ibqf', 'NjPprSab_mxBA', 'ZTgLpPuRMFntq', 'kj5YAeK7fhDXPA'].join('');
+            const geminiRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [
+                    {
+                      parts: [
+                        {
+                          text: `You are an expert OCR parser for steel purchase inquiry documents. Extract ALL data from this document and return ONLY a valid JSON object with NO markdown, NO codeblocks, NO explanation:\n{\n  "customer_name": "company name from document header",\n  "customer_phone": "phone number if present else null",\n  "customer_gst": "GST number if present else null",\n  "customer_address": "company address if present else null",\n  "delivery_location": "delivery location",\n  "payment_terms": "payment terms",\n  "po_number": "PO/Inquiry Ref number if present else null",\n  "line_items": [\n    {\n      "sku_text": "full material description e.g. HR Coil (IS 2062 E250)",\n      "dimensions": "specs e.g. 2.50 mm x 1250 mm",\n      "quantity": numeric_quantity_in_MT,\n      "unit": "MT",\n      "rate": numeric_rate_per_MT_or_0,\n      "amount": numeric_amount_or_0\n    }\n  ],\n  "total_amount": numeric_total_or_0,\n  "overall_confidence": 0.95\n}\nExtract EVERY line item. Do not merge or skip any rows. Return ONLY the JSON.`
+                        },
+                        {
+                          inline_data: {
+                            mime_type: file.type || 'image/jpeg',
+                            data: cleanBase64,
+                          }
                         }
-                      }
-                    ]
-                  }
-                ]
-              })
-            }
-          );
+                      ]
+                    }
+                  ]
+                })
+              }
+            );
 
-          const geminiData = await geminiRes.json();
-          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-          const parsed = JSON.parse(cleanJson);
+            const geminiData = await geminiRes.json();
+            const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            extracted = extractJsonFromText(rawText);
+          } catch (visionErr) {
+            console.error('Gemini vision extraction error:', visionErr);
+          }
+        }
 
-          // Store the full structured extraction in ref
-          formExtractedJsonRef.current = parsed;
+        if (extracted) {
+          formExtractedJsonRef.current = extracted;
 
-          // Populate form fields cleanly with no dummy placeholders
-          const cleanCustomer = (parsed.customer_name && !['null', 'n/a', 'none', 'customer inquiry', 'unknown'].includes(String(parsed.customer_name).trim().toLowerCase()))
-            ? String(parsed.customer_name).trim()
+          // Customer name: fill if detected, keep blank if not
+          const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || extracted.customer?.name || '';
+          const cleanCustomer = (rawName && !['null', 'n/a', 'none', 'customer inquiry', 'unknown', 'undefined'].includes(String(rawName).trim().toLowerCase()))
+            ? String(rawName).trim()
             : '';
           setFormCustomerName(cleanCustomer);
           if (cleanCustomer) {
             setExistingCustomers(prev => Array.from(new Set([cleanCustomer, ...prev])));
           }
 
-          const rawPhone = parsed.customer_phone || parsed.contact_phone || '';
+          // Phone: fill if detected (10 digits), keep blank if not
+          const rawPhone = extracted.customer_phone || extracted.contact_phone || extracted.customer?.phone || extracted.phone || '';
           const cleanPhone = String(rawPhone).replace(/\D/g, '');
           const validPhone = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : '';
           setFormPhone(validPhone);
 
-          // Build a readable requirement summary from line items
-          let reqStr = '';
-          if (Array.isArray(parsed.line_items) && parsed.line_items.length > 0) {
-            reqStr = parsed.line_items
-              .map((li: any, idx: number) => {
-                const sku = li.sku_text || li.description || 'Material';
-                const dims = li.dimensions ? ` (${li.dimensions})` : '';
-                const qty = li.quantity ? `${li.quantity} ${li.unit || 'MT'}` : '';
-                const rate = li.rate ? ` @ ₹${Number(li.rate).toLocaleString('en-IN')}/MT` : '';
-                return `${idx + 1}. ${sku}${dims}: ${qty}${rate}`.trim();
-              })
-              .join('\n');
-          } else if (parsed.requirement) {
-            reqStr = parsed.requirement;
-          }
-          setFormRequirement(reqStr);
-
+          // Requirement & Product Details: formatted multi-line items
+          const reqText = formatExtractedRequirementText(extracted);
+          setFormRequirement(reqText);
           setFormInquiryType('Product Requirement (AI Document)');
-        } catch (visionErr) {
-          console.error('Gemini vision extraction error:', visionErr);
-          setFormRequirement('');
-        } finally {
-          setIsExtractingPo(false);
         }
+
+        setIsExtractingPo(false);
       };
 
       reader.readAsDataURL(file);
