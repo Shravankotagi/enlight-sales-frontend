@@ -288,14 +288,37 @@ export default function OrdersPage() {
     }
   };
 
+function parseSafeIsoDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  const trimmed = String(dateStr).trim();
+  // Match DD-MM-YYYY or DD/MM/YYYY
+  if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(trimmed)) {
+    const parts = trimmed.split(/[-/]/);
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  // Match YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return trimmed.slice(0, 10);
+  }
+  try {
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+  } catch (e) {}
+  return '';
+}
+
   const safeOrders = Array.isArray(orders) ? orders : [];
 
   // Filter orders by date range & search
   const filtered = safeOrders.filter(o => {
     if (dateRange.from && dateRange.to) {
-      const dateStr = o.po_date || o.created_at || o.won_at;
-      if (dateStr) {
-        const itemDate = new Date(dateStr).toISOString().split('T')[0];
+      const itemDate =
+        parseSafeIsoDate(o.po_date) ||
+        parseSafeIsoDate(o.won_at) ||
+        parseSafeIsoDate(o.created_at);
+      if (itemDate) {
         if (itemDate < dateRange.from || itemDate > dateRange.to) return false;
       }
     }
