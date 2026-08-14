@@ -70,12 +70,13 @@ const cleanProductType = (pt: string): string => {
  * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
  */
 function isProductInquiry(inq: InquiryItem): boolean {
+  const status = (inq?.status || '').toLowerCase();
   if (
-    inq.status === 'confirmed' ||
-    inq.status === 'quoted' ||
-    inq.status === 'processed' ||
-    inq.status === 'won' ||
-    inq.source_channel === 'web_dashboard'
+    status === 'confirmed' ||
+    status === 'quoted' ||
+    status === 'processed' ||
+    status === 'won' ||
+    inq?.source_channel === 'web_dashboard'
   ) {
     return true;
   }
@@ -354,7 +355,28 @@ export default function InquiriesPage() {
         list = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes?.data?.data) ? fallbackRes.data.data : []);
       }
 
-      setInquiries(list);
+      setInquiries(prev => {
+        const localList = Array.isArray(prev) ? prev : [];
+        const confirmedLocalMap = new Map(
+          localList
+            .filter(i => ['confirmed', 'quoted', 'won'].includes((i.status || '').toLowerCase()))
+            .map(i => [i.id, i])
+        );
+
+        // Merge backend list with updated local items
+        const mergedList = list.map((item: InquiryItem) => {
+          const localItem = confirmedLocalMap.get(item.id);
+          return localItem || item;
+        });
+
+        // Add local-only confirmed items that backend list didn't return
+        const backendIds = new Set(list.map((i: InquiryItem) => i.id));
+        const localOnlyConfirmed = localList.filter(
+          i => confirmedLocalMap.has(i.id) && !backendIds.has(i.id)
+        );
+
+        return [...mergedList, ...localOnlyConfirmed];
+      });
 
       // Fetch customer directory for modal dropdown (unpacks res.data.data array cleanly!)
       const custRes = await customersApi.getAll().catch(() => null);
@@ -579,8 +601,6 @@ export default function InquiriesPage() {
 
       // Update in-memory inquiries list so item stays in list immediately
       setInquiries(prev => (Array.isArray(prev) ? prev.map(item => item.id === selectedInquiry.id ? updatedObj : item) : []));
-
-      fetchMonthlyInquiries();
     } catch (err) {
       console.error('Error saving inquiry details:', err);
       alert('Failed to save inquiry changes.');
