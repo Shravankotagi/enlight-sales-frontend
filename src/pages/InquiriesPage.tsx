@@ -1010,7 +1010,7 @@ export default function InquiriesPage() {
                       <td className="px-4 py-3.5 text-xs text-slate-700">
                         {details.lineItems && details.lineItems.length > 0 ? (
                           <div className="space-y-0.5">
-                            {details.lineItems.slice(0, 3).map((li, liIdx) => (
+                            {details.lineItems.slice(0, 3).map((li: LineItemDetail, liIdx: number) => (
                               <div key={liIdx} className="flex items-center gap-1 text-[11px]">
                                 <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">{liIdx + 1}</span>
                                 <span className="font-medium text-slate-800 truncate max-w-[160px]">{li.sku_text}</span>
