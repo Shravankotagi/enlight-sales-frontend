@@ -196,10 +196,10 @@ export default function AssistantPage() {
         elements.push(
           <span
             key={`cite-${i}`}
-            className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded font-mono text-xs font-semibold my-1 mx-1 hover:bg-amber-500/20 transition-colors"
+            className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded font-mono text-xs font-semibold my-1 mx-1 hover:bg-amber-100 transition-colors shadow-2xs"
             title={`Cited Source Document: ${sourceTitle}`}
           >
-            <BookOpen size={12} className="shrink-0 text-amber-500" />
+            <BookOpen size={12} className="shrink-0 text-amber-600" />
             Source: {sourceTitle}
           </span>,
         );
@@ -213,37 +213,37 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-900 text-slate-100 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
       {/* Top Header Bar with Scope Indicator */}
-      <div className="flex items-center justify-between px-6 py-4 bg-slate-950 border-b border-slate-800">
+      <div className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl">
+          <div className="p-2 bg-blue-50 text-blue-600 border border-blue-200/60 rounded-xl shadow-2xs">
             <Sparkles size={22} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-white tracking-tight">
+              <h1 className="text-base font-bold text-gray-900 tracking-tight">
                 Enlight Sales AI Assistant
               </h1>
-              <span className="bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full text-xs font-semibold">
+              <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full text-xs font-semibold">
                 v1.0 Ready
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-gray-500">
               Conversational Sales OS & Knowledge Base RAG Assistant
             </p>
           </div>
         </div>
 
         {/* Identity & Scope Badge */}
-        <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl">
-          <Shield size={16} className="text-emerald-400 shrink-0" />
+        <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 px-3.5 py-1.5 rounded-xl">
+          <Shield size={16} className="text-emerald-600 shrink-0" />
           <div className="text-xs">
-            <span className="text-slate-400">Scope Indicator: </span>
-            <span className="font-semibold text-white">
+            <span className="text-gray-500">Scope Indicator: </span>
+            <span className="font-semibold text-gray-900">
               {activeEmployee?.name || 'Authorized User'}
             </span>
-            <span className="ml-2 uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px] font-bold">
+            <span className="ml-2 uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
               {role}
             </span>
           </div>
@@ -253,20 +253,20 @@ export default function AssistantPage() {
       {/* Main Container: Sidebar + Chat Area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar / Session History */}
-        <div className="w-72 bg-slate-950/70 border-r border-slate-800 flex flex-col p-4 space-y-4">
+        <div className="w-72 bg-gray-50/70 border-r border-gray-200 flex flex-col p-4 space-y-4">
           <button
             onClick={handleNewConversation}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-blue-600/20 active:scale-98"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all shadow-xs active:scale-98"
           >
             <Plus size={18} />
             <span>New Conversation</span>
           </button>
 
-          <div className="flex items-center justify-between px-1 text-xs font-semibold text-slate-400">
+          <div className="flex items-center justify-between px-1 text-xs font-semibold text-gray-500">
             <span>Recent Conversations</span>
             <button
               onClick={loadSessions}
-              className="p-1 hover:text-white transition-colors"
+              className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
               title="Refresh sessions"
             >
               <RefreshCw size={12} className={fetchingSessions ? 'animate-spin' : ''} />
@@ -276,7 +276,7 @@ export default function AssistantPage() {
           {/* Session List */}
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
             {!Array.isArray(sessions) || sessions.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+              <div className="p-4 text-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
                 No past sessions found. Start a new conversation!
               </div>
             ) : (
@@ -297,20 +297,20 @@ export default function AssistantPage() {
                     onClick={() => selectSession(sess.id)}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-all ${
                       isSelected
-                        ? 'bg-blue-600/20 text-white border border-blue-500/40 font-medium'
-                        : 'text-slate-300 hover:bg-slate-900 hover:text-white border border-transparent'
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200 font-semibold shadow-2xs'
+                        : 'text-gray-700 hover:bg-gray-200/60 hover:text-gray-900 border border-transparent'
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
                       <MessageSquare
                         size={14}
-                        className={isSelected ? 'text-blue-400' : 'text-slate-500'}
+                        className={isSelected ? 'text-blue-600' : 'text-gray-400'}
                       />
                       <span className="truncate">
                         Session #{sess.id ? sess.id.slice(0, 8) : 'New'}
                       </span>
                     </div>
-                    <span className="text-[10px] text-slate-500 shrink-0">
+                    <span className="text-[10px] text-gray-400 shrink-0">
                       {formattedDate}
                     </span>
                   </button>
@@ -320,31 +320,31 @@ export default function AssistantPage() {
           </div>
 
           {/* Safety & Cap Notice */}
-          <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-[11px] text-slate-400 space-y-1">
-            <div className="flex items-center gap-1.5 font-semibold text-slate-300">
-              <Shield size={13} className="text-blue-400" />
+          <div className="p-3 bg-white border border-gray-200 rounded-xl text-[11px] text-gray-600 space-y-1 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-semibold text-gray-800">
+              <Shield size={13} className="text-blue-600" />
               <span>RBAC & Cost Protection</span>
             </div>
-            <p className="text-[10px] text-slate-400 leading-tight">
+            <p className="text-[10px] text-gray-500 leading-tight">
               Data queries are dual-layer scoped to your identity. Daily Gemini spend is capped at $5.00/day.
             </p>
           </div>
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col bg-slate-900 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-slate-50/40 overflow-hidden">
           {/* Chat Messages List */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {(!Array.isArray(messages) || messages.length === 0) && !loading ? (
               <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6 my-auto">
-                <div className="p-4 bg-blue-600/10 border border-blue-500/20 rounded-2xl text-blue-400">
+                <div className="p-4 bg-blue-50 border border-blue-200/60 rounded-2xl text-blue-600 shadow-2xs">
                   <Sparkles size={36} />
                 </div>
                 <div className="space-y-2">
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="text-xl font-bold text-gray-900">
                     Welcome to Enlight Sales OS Assistant
                   </h2>
-                  <p className="text-sm text-slate-400 max-w-md mx-auto">
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
                     Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.
                   </p>
                 </div>
@@ -357,16 +357,16 @@ export default function AssistantPage() {
                       <button
                         key={idx}
                         onClick={() => handleSend(qp.text)}
-                        className="flex flex-col p-4 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-blue-500/50 rounded-xl transition-all group"
+                        className="flex flex-col p-4 bg-white hover:bg-blue-50/60 border border-gray-200 hover:border-blue-300 rounded-xl transition-all shadow-2xs group"
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <IconComp size={18} className="text-blue-400 group-hover:scale-110 transition-transform" />
-                          <ChevronRight size={14} className="text-slate-600 group-hover:text-blue-400 transition-colors" />
+                          <IconComp size={18} className="text-blue-600 group-hover:scale-110 transition-transform" />
+                          <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-600 transition-colors" />
                         </div>
-                        <span className="text-xs font-semibold text-white group-hover:text-blue-300">
+                        <span className="text-xs font-bold text-gray-900 group-hover:text-blue-700">
                           {qp.label}
                         </span>
-                        <span className="text-[11px] text-slate-400 line-clamp-2 mt-1">
+                        <span className="text-[11px] text-gray-500 line-clamp-2 mt-1">
                           {qp.text}
                         </span>
                       </button>
@@ -386,20 +386,20 @@ export default function AssistantPage() {
                     }`}
                   >
                     <div
-                      className={`p-2 rounded-xl shrink-0 ${
+                      className={`p-2 rounded-xl shrink-0 shadow-2xs ${
                         isUser
                           ? 'bg-blue-600 text-white'
-                          : 'bg-slate-800 text-blue-400 border border-slate-700'
+                          : 'bg-white border border-gray-200 text-blue-600'
                       }`}
                     >
                       {isUser ? <User size={16} /> : <Bot size={16} />}
                     </div>
 
                     <div
-                      className={`p-4 rounded-2xl text-sm ${
+                      className={`p-4 rounded-2xl text-sm shadow-2xs ${
                         isUser
-                          ? 'bg-blue-600 text-white rounded-tr-none'
-                          : 'bg-slate-950 border border-slate-800 text-slate-200 rounded-tl-none shadow-lg'
+                          ? 'bg-blue-600 text-white rounded-tr-none font-normal'
+                          : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
                       }`}
                     >
                       {isUser ? (
@@ -415,9 +415,9 @@ export default function AssistantPage() {
 
             {/* Thinking / Loading indicator */}
             {loading && (
-              <div className="flex items-center gap-3 mr-auto max-w-xs p-4 bg-slate-950 border border-slate-800 rounded-2xl rounded-tl-none">
-                <Bot size={16} className="text-blue-400 animate-pulse" />
-                <div className="flex items-center gap-1 text-xs text-slate-400">
+              <div className="flex items-center gap-3 mr-auto max-w-xs p-3.5 bg-white border border-gray-200 rounded-2xl rounded-tl-none shadow-2xs text-xs text-gray-500">
+                <Bot size={16} className="text-blue-600 animate-pulse" />
+                <div className="flex items-center gap-1 text-xs text-gray-500">
                   <span>Assistant is analyzing...</span>
                   <span className="animate-ping font-bold">.</span>
                 </div>
@@ -429,33 +429,33 @@ export default function AssistantPage() {
 
           {/* Error Banner */}
           {error && (
-            <div className="mx-6 mb-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300 flex items-center gap-2">
-              <AlertTriangle size={16} className="text-red-400 shrink-0" />
+            <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2 shadow-2xs">
+              <AlertTriangle size={16} className="text-red-500 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {/* Chat Input Bar */}
-          <div className="p-4 bg-slate-950 border-t border-slate-800">
+          <div className="p-4 bg-white border-t border-gray-200">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSend();
               }}
-              className="flex items-center gap-3 bg-slate-900 border border-slate-800 focus-within:border-blue-500 px-4 py-2.5 rounded-xl transition-all"
+              className="flex items-center gap-3 bg-gray-50 border border-gray-300 focus-within:border-blue-500 focus-within:bg-white px-4 py-2.5 rounded-xl transition-all shadow-2xs"
             >
               <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="Ask about pipeline deals, customer 360, SOP rules, churn radar..."
-                className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 outline-none"
+                className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />
               <button
                 type="submit"
                 disabled={!inputText.trim() || loading}
-                className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-all active:scale-95 shrink-0"
+                className="p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg transition-all active:scale-95 shrink-0 shadow-2xs"
               >
                 <Send size={16} />
               </button>
