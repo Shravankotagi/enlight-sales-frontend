@@ -260,7 +260,7 @@ export default function OrdersPage() {
         line_items: lineItemsToSend,
       });
 
-      toast.success('🎉 Order Confirmed & Won! KRA 1 & Payment tracking updated.');
+      toast.success('🎉 Order Confirmed & Won! Sales Achievement & Payment tracking updated.');
       setShowModal(false);
 
       // Reset form
@@ -664,7 +664,7 @@ function parseSafeIsoDate(dateStr?: string): string {
                     <div>
                       <p className="text-xs font-bold text-blue-900">Total Deal Value (Incl. GST):</p>
                       <p className="text-[10px] text-slate-500">
-                        Official PO amount for KRA 1 &amp; Payment Tracking
+                        Official PO amount for Sales Achievement & Payment Tracking
                       </p>
                     </div>
                     <p className="text-lg font-bold text-blue-900 font-mono">
