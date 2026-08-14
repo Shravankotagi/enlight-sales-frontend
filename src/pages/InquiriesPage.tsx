@@ -839,6 +839,15 @@ const formatExtractedRequirementText = (extracted: any): string => {
       extractedJson?.customer_name ||
       'Customer Inquiry';
 
+    const rawCustomerPhone =
+      formPhone.trim() ||
+      extractedJson?.customer_phone ||
+      extractedJson?.contact_phone ||
+      extractedJson?.customer?.phone ||
+      '';
+    const cleanPhoneDigits = String(rawCustomerPhone).replace(/\D/g, '');
+    const finalCustomerPhone = cleanPhoneDigits.length >= 10 ? cleanPhoneDigits.slice(-10) : rawCustomerPhone;
+
     if (!customerName) return;
 
     try {
@@ -861,14 +870,14 @@ const formatExtractedRequirementText = (extracted: any): string => {
           ...extractedJson,
           customer: {
             name: extractedJson.customer_name || customerName,
-            phone: extractedJson.customer_phone || formPhone,
+            phone: finalCustomerPhone,
             gst: extractedJson.customer_gst || null,
             address: extractedJson.customer_address || null,
           },
           companyName: extractedJson.customer_name || customerName,
           customer_name: extractedJson.customer_name || customerName,
-          customerPhone: extractedJson.customer_phone || formPhone,
-          customer_phone: extractedJson.customer_phone || formPhone,
+          customerPhone: finalCustomerPhone,
+          customer_phone: finalCustomerPhone,
           line_items: lineItems,
           lineItems: lineItems,
           total_amount: totalAmount,
@@ -887,8 +896,8 @@ const formatExtractedRequirementText = (extracted: any): string => {
       const createRes = await inquiriesApi.create({
         sender_name: customerName,
         customer_name: customerName,
-        customer_phone: formPhone,
-        sender_phone: formPhone,
+        customer_phone: finalCustomerPhone,
+        sender_phone: finalCustomerPhone,
         raw_text: rawText,
         inquiry_type: formInquiryType,
         status: 'review',
@@ -901,8 +910,8 @@ const formatExtractedRequirementText = (extracted: any): string => {
         id: createRes?.data?.id || createRes?.data?.data?.id || String(Date.now()),
         sender_name: customerName,
         customer_name: customerName,
-        customer_phone: formPhone,
-        sender_phone: formPhone,
+        customer_phone: finalCustomerPhone,
+        sender_phone: finalCustomerPhone,
         raw_text: rawText,
         inquiry_type: formInquiryType,
         status: 'review',
