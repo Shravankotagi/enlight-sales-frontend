@@ -44,6 +44,7 @@ export const dealsApi = {
   getOne: (id: string) => API.get(`/deals/${id}`),
   updateStage: (id: string, stage: string, lost_reason?: string) =>
     API.patch(`/deals/${id}/stage`, { stage, lost_reason }),
+  processPo: (data: any) => API.post('/deals/process-po', data),
 };
 
 export const customersApi = {
@@ -77,6 +78,7 @@ export const visitsApi = {
 export const ordersApi = {
   getAll: (params?: any) => API.get('/deals', { params: { ...params, stage: 'won' } }),
   create: (data: any) => API.post('/deals/order', data),
+  processPo: (data: any) => API.post('/deals/process-po', data),
 };
 
 export const inquiriesApi = {
