@@ -80,7 +80,7 @@ function BillingChart({ customer }: { customer: any }) {
 function CustomerDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['customer', id],
-    queryFn: () => customersApi.getOne(id).then(r => r.data.data),
+    queryFn: () => customersApi.getOne(id).then(r => r.data?.data ?? r.data),
   });
 
   useEffect(() => {
