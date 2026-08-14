@@ -957,7 +957,28 @@ export default function InquiriesPage() {
                 </tr>
               ) : (
                 filtered.map((inq, idx) => {
-                  const details = parseInquiryText(inq.raw_text || '', inq);
+                  const details = (() => {
+                  const ai = inq?.ai_extraction_json || {};
+                  const lineItemsSrc = ai.line_items || ai.lineItems || [];
+                  if (lineItemsSrc.length > 0) {
+                    // Use structured data directly — don't re-parse raw_text
+                    return {
+                      ...parseInquiryText(inq.raw_text || '', inq),
+                      companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || 'Customer Inquiry',
+                      customerPhone: ai.customerPhone || ai.customer_phone || ai.customer?.phone || inq.customer_phone || '',
+                      lineItems: lineItemsSrc.map((item: any) => ({
+                        sku_text: item.sku_text || item.description || '',
+                        dimensions: item.dimensions || '',
+                        quantity: Number(item.quantity) || 0,
+                        unit: item.unit || 'MT',
+                        rate: Number(item.rate) || 0,
+                        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+                      })),
+                      totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
+                    };
+                  }
+                  return parseInquiryText(inq.raw_text || '', inq);
+                })();
                   const st = (inq.status || '').toLowerCase();
                   const isQuoted = st === 'quoted';
                   const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won';
@@ -1029,9 +1050,8 @@ export default function InquiriesPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const d = parseInquiryText(inq.raw_text || '', inq);
                               setQuotationViewInquiry(inq);
-                              setQuotationViewDetails(d);
+                              setQuotationViewDetails(details);  // reuse `details` from the row
                               setShowQuotationView(true);
                             }}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1">
