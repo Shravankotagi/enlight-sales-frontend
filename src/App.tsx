@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
@@ -48,20 +48,23 @@ function AppRoutes() {
 
 function AdminRoutes() {
   const { viewingAs } = useAuth();
-  // Allow accessing Admin Overview, Pipeline or Executive Home directly even if no salesperson is selected
+  const location = useLocation();
+
+  // Allow accessing Admin Overview, Assistant, Pipeline or Executive Home directly even if no salesperson is selected
   if (
-    window.location.pathname === '/admin-dashboard' ||
-    window.location.pathname === '/assistant' ||
-    window.location.pathname === '/home' ||
-    window.location.pathname === '/pipeline' ||
-    window.location.pathname === '/'
+    location.pathname === '/admin-dashboard' ||
+    location.pathname === '/assistant' ||
+    location.pathname === '/home' ||
+    location.pathname === '/pipeline' ||
+    location.pathname === '/'
   ) return <AppRoutes />;
   if (!viewingAs) return <Navigate to="/admin" replace />;
   return <AppRoutes />;
 }
 
 function SalespersonRoutes() {
-  if (window.location.pathname === '/') return <Navigate to="/home" replace />;
+  const location = useLocation();
+  if (location.pathname === '/') return <Navigate to="/home" replace />;
   return <AppRoutes />;
 }
 
