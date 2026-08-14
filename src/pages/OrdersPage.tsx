@@ -23,7 +23,6 @@ import {
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import SalesQuotationModal from '../components/SalesQuotationModal';
 
 interface DealItem {
   id?: string;
@@ -60,7 +59,6 @@ export default function OrdersPage() {
 
   // Selected Order for Details Drawer & PO Image Viewer
   const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<Order | null>(null);
-  const [selectedQuotationOrder, setSelectedQuotationOrder] = useState<Order | null>(null);
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
 
   // AI OCR Scanning state
@@ -711,13 +709,7 @@ export default function OrdersPage() {
                     handleViewPoDocument(selectedDrawerOrder);
                   }}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
-                  <Eye size={15} /> View PO Document
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedQuotationOrder(selectedDrawerOrder)}
-                  className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
-                  <FileText size={15} /> View Official Invoice PDF 📄
+                  <Eye size={15} /> View Original PO Document
                 </button>
               </div>
             </div>
@@ -975,13 +967,6 @@ export default function OrdersPage() {
             </form>
           </div>
         </div>
-      )}
-
-      {selectedQuotationOrder && (
-        <SalesQuotationModal
-          deal={selectedQuotationOrder}
-          onClose={() => setSelectedQuotationOrder(null)}
-        />
       )}
     </div>
   );
