@@ -359,25 +359,29 @@ export default function InquiriesPage() {
 
       setInquiries(prev => {
         const localList = Array.isArray(prev) ? prev : [];
-        const confirmedLocalMap = new Map(
-          localList
-            .filter(i => ['confirmed', 'quoted', 'won'].includes((i.status || '').toLowerCase()))
-            .map(i => [i.id, i])
+        const localItemMap = new Map(
+          localList.map(i => [i.id, i])
         );
 
-        // Merge backend list with updated local items
+        // Merge backend list with updated local items, preserving local ai_extraction_json & status
         const mergedList = list.map((item: InquiryItem) => {
-          const localItem = confirmedLocalMap.get(item.id);
-          return localItem || item;
+          const localItem = localItemMap.get(item.id);
+          if (!localItem) return item;
+          const isConfirmed = ['confirmed', 'quoted', 'won'].includes((localItem.status || '').toLowerCase());
+          return {
+            ...item,
+            ...(isConfirmed ? localItem : {}),
+            ai_extraction_json: localItem.ai_extraction_json || item.ai_extraction_json,
+          };
         });
 
-        // Add local-only confirmed items that backend list didn't return
+        // Add local-only items that backend list didn't return yet
         const backendIds = new Set(list.map((i: InquiryItem) => i.id));
-        const localOnlyConfirmed = localList.filter(
-          i => confirmedLocalMap.has(i.id) && !backendIds.has(i.id)
+        const localOnlyItems = localList.filter(
+          i => !backendIds.has(i.id)
         );
 
-        return [...mergedList, ...localOnlyConfirmed];
+        return [...localOnlyItems, ...mergedList];
       });
 
       // Fetch customer directory for modal dropdown (unpacks res.data.data array cleanly!)
@@ -417,13 +421,11 @@ export default function InquiriesPage() {
     const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
     const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
 
-    // For confirmed/quoted/won: reconstruct editDetails DIRECTLY from ai_extraction_json.
-    // This freezes the displayed data — no re-parsing of raw_text, so values can never drift.
-    // Data only changes again when a salesperson manually edits and clicks Save & Confirm.
-    if (isConfirmedState && inq.ai_extraction_json) {
-      const ai = inq.ai_extraction_json as any;
-      // line_items may be stored as snake_case (from backend) or camelCase (from local state)
-      const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
+    const ai = (inq.ai_extraction_json as any) || {};
+    const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
+
+    if (lineItemsSrc.length > 0) {
+      // Has structured line items in ai_extraction_json — use directly for ALL inquiries (review, confirmed, etc.)
       const frozenLineItems = lineItemsSrc.map((item: any) => ({
         sku_text: item.sku_text || item.description || '',
         dimensions: item.dimensions || '',
@@ -432,28 +434,29 @@ export default function InquiriesPage() {
         rate: Number(item.rate) || 0,
         amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
       }));
-      const frozenTotal = ai.totalAmount ||
+      const frozenTotal = ai.total_amount || ai.totalAmount ||
         (frozenLineItems.length > 0
           ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
           : 0);
+
       setEditDetails({
-        companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || '',
-        customerPhone: ai.customerPhone || ai.customer_phone || ai.customer?.phone || inq.customer_phone || '',
-        productType: ai.productType || '',
+        companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || inq.sender_name || 'Customer Inquiry',
+        customerPhone: ai.customerPhone || ai.customer_phone || ai.customer?.phone || inq.customer_phone || inq.sender_phone || '',
+        productType: frozenLineItems[0]?.sku_text || ai.productType || 'Hot Rolled',
         thickness: ai.thickness || '',
         width: ai.width || '',
         length: ai.length || '',
         productForm: ai.productForm || 'Coil',
-        quantityTons: ai.quantityTons || 0,
+        quantityTons: frozenLineItems.reduce((s: number, i: any) => s + i.quantity, 0) || ai.quantityTons || 0,
         quantityUnits: ai.quantityUnits || 0,
-        unitPrice: ai.unitPrice || 0,
+        unitPrice: frozenLineItems[0]?.rate || ai.unitPrice || 0,
         totalAmount: frozenTotal,
-        paymentTerms: ai.paymentTerms || ai.payment_terms || '',
-        deliveryLocation: ai.deliveryLocation || ai.delivery_location || '',
+        paymentTerms: ai.payment_terms || ai.paymentTerms || '100% Advance / Payment',
+        deliveryLocation: ai.delivery_location || ai.deliveryLocation || '',
         lineItems: frozenLineItems,
       });
     } else {
-      // For new/review inquiries: parse normally from raw_text + ai_extraction_json
+      // True fallback: no structured line items in ai_extraction_json, parse raw text
       const parsed = parseInquiryText(inq.raw_text || '', inq);
       setEditDetails(parsed);
     }
@@ -793,14 +796,22 @@ export default function InquiriesPage() {
             gst: formExtractedJson.customer_gst || null,
             address: formExtractedJson.customer_address || null,
           },
+          companyName: formExtractedJson.customer_name || formCustomerName,
+          customer_name: formExtractedJson.customer_name || formCustomerName,
+          customerPhone: formExtractedJson.customer_phone || formPhone,
+          customer_phone: formExtractedJson.customer_phone || formPhone,
           line_items: lineItems,
+          lineItems: lineItems,
           total_amount: formExtractedJson.total_amount || totalAmount,
+          totalAmount: formExtractedJson.total_amount || totalAmount,
           delivery_location: formExtractedJson.delivery_location || '',
+          deliveryLocation: formExtractedJson.delivery_location || '',
           payment_terms: formExtractedJson.payment_terms || '',
+          paymentTerms: formExtractedJson.payment_terms || '',
         };
       }
 
-      await inquiriesApi.create({
+      const createRes = await inquiriesApi.create({
         sender_name: formCustomerName,
         customer_name: formCustomerName,
         customer_phone: formPhone,
@@ -813,6 +824,22 @@ export default function InquiriesPage() {
         ai_extraction_json: aiExtractionJson,
       });
 
+      const newInquiry: InquiryItem = {
+        id: createRes?.data?.id || createRes?.data?.data?.id || String(Date.now()),
+        sender_name: formCustomerName,
+        customer_name: formCustomerName,
+        customer_phone: formPhone,
+        sender_phone: formPhone,
+        raw_text: poFileName ? `[Inquiry Attachment: ${poFileName}] ${formRequirement}` : formRequirement,
+        inquiry_type: formInquiryType,
+        status: 'review',
+        source_channel: 'web_dashboard',
+        overall_confidence: 0.95,
+        media_urls: poFileBase64 ? [poFileBase64] : [],
+        ai_extraction_json: aiExtractionJson,
+        created_at: new Date().toISOString(),
+      };
+
       setShowModal(false);
       setFormCustomerName('');
       setFormPhone('');
@@ -821,6 +848,9 @@ export default function InquiriesPage() {
       setPoFileName('');
       setPoFileBase64(null);
       setFormExtractedJson(null);
+
+      // Prepend local inquiry so it appears immediately with full ai_extraction_json
+      setInquiries(prev => [newInquiry, ...(Array.isArray(prev) ? prev : [])]);
 
       fetchMonthlyInquiries();
     } catch (err: any) {
@@ -1861,16 +1891,22 @@ export default function InquiriesPage() {
             <form onSubmit={handleCreateInquiry} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Customer / Company Name *</label>
-                <select
-                  required
-                  value={formCustomerName}
-                  onChange={e => setFormCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Select Existing Customer or Type...</option>
-                  {existingCustomers.map((cName) => (
-                    <option key={cName} value={cName}>{cName}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    required
+                    type="text"
+                    list="existing-customers-list"
+                    placeholder="Type or select customer name..."
+                    value={formCustomerName}
+                    onChange={e => setFormCustomerName(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <datalist id="existing-customers-list">
+                    {existingCustomers.map((cName) => (
+                      <option key={cName} value={cName} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
 
               <div>
