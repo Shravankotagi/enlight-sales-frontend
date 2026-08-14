@@ -359,7 +359,10 @@ export default function OrdersPage() {
     if (mediaUrl) {
       setPoImageViewerUrl(mediaUrl);
     } else {
-      setSelectedQuotationOrder(ord);
+      toast('Opening full Order details and line items breakdown.', {
+        icon: '📄',
+      });
+      setSelectedDrawerOrder(ord);
     }
   };
 
@@ -450,18 +453,17 @@ export default function OrdersPage() {
                 <th className="px-4 py-3">Products &amp; Items</th>
                 <th className="px-4 py-3 text-right">Order Value (₹)</th>
                 <th className="px-4 py-3">Delivery Location</th>
-                <th className="px-4 py-3 text-right">Status</th>
                 <th className="px-4 py-3 text-center">Purchase Order</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">No orders found.</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No orders found.</td>
                 </tr>
               ) : (
                 filtered.map((ord, idx) => {
@@ -499,11 +501,6 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-600">
                         {ord.delivery_location || '-'}
-                      </td>
-                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
-                          <CheckCircle size={12} /> Won / Delivered 🎉
-                        </span>
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         <button
