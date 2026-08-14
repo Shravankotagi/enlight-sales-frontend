@@ -413,10 +413,51 @@ export default function InquiriesPage() {
   const handleOpenDrawer = (inq: InquiryItem) => {
     setSelectedInquiry(inq);
     setDrawerFileBase64(null);
-    const parsed = parseInquiryText(inq.raw_text || '', inq);
-    setEditDetails(parsed);
+
     const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
     const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
+
+    // For confirmed/quoted/won: reconstruct editDetails DIRECTLY from ai_extraction_json.
+    // This freezes the displayed data — no re-parsing of raw_text, so values can never drift.
+    // Data only changes again when a salesperson manually edits and clicks Save & Confirm.
+    if (isConfirmedState && inq.ai_extraction_json) {
+      const ai = inq.ai_extraction_json as any;
+      // line_items may be stored as snake_case (from backend) or camelCase (from local state)
+      const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
+      const frozenLineItems = lineItemsSrc.map((item: any) => ({
+        sku_text: item.sku_text || item.description || '',
+        dimensions: item.dimensions || '',
+        quantity: Number(item.quantity) || 0,
+        unit: item.unit || 'MT',
+        rate: Number(item.rate) || 0,
+        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+      }));
+      const frozenTotal = ai.totalAmount ||
+        (frozenLineItems.length > 0
+          ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
+          : 0);
+      setEditDetails({
+        companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || '',
+        customerPhone: ai.customerPhone || ai.customer_phone || ai.customer?.phone || inq.customer_phone || '',
+        productType: ai.productType || '',
+        thickness: ai.thickness || '',
+        width: ai.width || '',
+        length: ai.length || '',
+        productForm: ai.productForm || 'Coil',
+        quantityTons: ai.quantityTons || 0,
+        quantityUnits: ai.quantityUnits || 0,
+        unitPrice: ai.unitPrice || 0,
+        totalAmount: frozenTotal,
+        paymentTerms: ai.paymentTerms || ai.payment_terms || '',
+        deliveryLocation: ai.deliveryLocation || ai.delivery_location || '',
+        lineItems: frozenLineItems,
+      });
+    } else {
+      // For new/review inquiries: parse normally from raw_text + ai_extraction_json
+      const parsed = parseInquiryText(inq.raw_text || '', inq);
+      setEditDetails(parsed);
+    }
+
     setIsEditing(!isConfirmedState);
     setSaveSuccess(isConfirmedState);
     setIsQuotationSent(isQuotedState);
