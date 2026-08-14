@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
@@ -335,7 +335,7 @@ export default function InquiriesPage() {
   const [poFileBase64, setPoFileBase64] = useState<string | null>(null);
   const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
-  const [formExtractedJson, setFormExtractedJson] = useState<any>(null);
+  const formExtractedJsonRef = useRef<any>(null);
 
   const isPdf = (url: string) => {
     if (!url) return false;
@@ -668,7 +668,7 @@ export default function InquiriesPage() {
 
     setPoFileName(file.name);
     setIsExtractingPo(true);
-    setFormExtractedJson(null);
+    formExtractedJsonRef.current = null;
 
     try {
       const reader = new FileReader();
@@ -690,10 +690,25 @@ export default function InquiriesPage() {
           });
           if (res.data?.success && res.data?.data) {
             const extracted = res.data.data;
-            if (extracted.customer_name) setFormCustomerName(extracted.customer_name);
-            if (extracted.contact_phone) setFormPhone(extracted.contact_phone);
-            if (extracted.requirement) setFormRequirement(extracted.requirement);
-            setFormExtractedJson(extracted);
+            formExtractedJsonRef.current = extracted;
+
+            if (extracted.customer_name) {
+              setFormCustomerName(extracted.customer_name);
+              setExistingCustomers(prev => Array.from(new Set([extracted.customer_name, ...prev])));
+            } else {
+              setFormCustomerName('Customer Inquiry');
+            }
+            if (extracted.customer_phone || extracted.contact_phone) {
+              setFormPhone(extracted.customer_phone || extracted.contact_phone);
+            }
+            if (extracted.line_items && extracted.line_items.length > 0) {
+              const reqStr = extracted.line_items
+                .map((li: any) => `${li.sku_text}${li.dimensions ? ' ' + li.dimensions : ''}: ${li.quantity} MT${li.rate ? ' @ ₹' + li.rate + '/MT' : ''}`)
+                .join('; ');
+              setFormRequirement(reqStr);
+            } else if (extracted.requirement) {
+              setFormRequirement(extracted.requirement);
+            }
             setFormInquiryType('Product Requirement (AI Document)');
             setIsExtractingPo(false);
             return;
@@ -735,12 +750,19 @@ export default function InquiriesPage() {
           const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanJson);
 
-          // Store the full structured extraction
-          setFormExtractedJson(parsed);
+          // Store the full structured extraction in ref
+          formExtractedJsonRef.current = parsed;
 
-          // Populate simple form fields
-          if (parsed.customer_name) setFormCustomerName(parsed.customer_name);
-          if (parsed.customer_phone) setFormPhone(parsed.customer_phone);
+          // Populate form fields
+          if (parsed.customer_name) {
+            setFormCustomerName(parsed.customer_name);
+            setExistingCustomers(prev => Array.from(new Set([parsed.customer_name, ...prev])));
+          } else {
+            setFormCustomerName('Customer Inquiry');
+          }
+          if (parsed.customer_phone || parsed.contact_phone) {
+            setFormPhone(parsed.customer_phone || parsed.contact_phone);
+          }
 
           // Build a readable requirement summary from line items
           if (parsed.line_items && parsed.line_items.length > 0) {
@@ -754,7 +776,6 @@ export default function InquiriesPage() {
           setFormInquiryType('Product Requirement (AI Document)');
         } catch (visionErr) {
           console.error('Gemini vision extraction error:', visionErr);
-          // Generic fallback - no hardcoded names
           setFormRequirement(`Extracted from ${file.name}`);
         } finally {
           setIsExtractingPo(false);
@@ -770,16 +791,24 @@ export default function InquiriesPage() {
 
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formCustomerName.trim()) return;
+
+    // Read directly from ref to avoid React state batching delays
+    const extractedJson = formExtractedJsonRef.current;
+    const customerName =
+      formCustomerName.trim() ||
+      extractedJson?.customer_name ||
+      'Customer Inquiry';
+
+    if (!customerName) return;
 
     try {
       setSubmitting(true);
 
-      // Build ai_extraction_json from the structured extraction (if available)
+      // Build ai_extraction_json from the structured extraction
       let aiExtractionJson: any = null;
-      if (formExtractedJson) {
+      if (extractedJson) {
         // Normalize line_items to match drawer expectations
-        const lineItems = (formExtractedJson.line_items || []).map((li: any) => ({
+        const lineItems = (extractedJson.line_items || []).map((li: any) => ({
           sku_text: li.sku_text || '',
           dimensions: li.dimensions || '',
           quantity: Number(li.quantity) || 0,
@@ -787,36 +816,40 @@ export default function InquiriesPage() {
           rate: Number(li.rate) || 0,
           amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
         }));
-        const totalAmount = lineItems.reduce((s: number, i: any) => s + i.amount, 0);
+        const totalAmount = extractedJson.total_amount || lineItems.reduce((s: number, i: any) => s + i.amount, 0);
         aiExtractionJson = {
-          ...formExtractedJson,
+          ...extractedJson,
           customer: {
-            name: formExtractedJson.customer_name || formCustomerName,
-            phone: formExtractedJson.customer_phone || formPhone,
-            gst: formExtractedJson.customer_gst || null,
-            address: formExtractedJson.customer_address || null,
+            name: extractedJson.customer_name || customerName,
+            phone: extractedJson.customer_phone || formPhone,
+            gst: extractedJson.customer_gst || null,
+            address: extractedJson.customer_address || null,
           },
-          companyName: formExtractedJson.customer_name || formCustomerName,
-          customer_name: formExtractedJson.customer_name || formCustomerName,
-          customerPhone: formExtractedJson.customer_phone || formPhone,
-          customer_phone: formExtractedJson.customer_phone || formPhone,
+          companyName: extractedJson.customer_name || customerName,
+          customer_name: extractedJson.customer_name || customerName,
+          customerPhone: extractedJson.customer_phone || formPhone,
+          customer_phone: extractedJson.customer_phone || formPhone,
           line_items: lineItems,
           lineItems: lineItems,
-          total_amount: formExtractedJson.total_amount || totalAmount,
-          totalAmount: formExtractedJson.total_amount || totalAmount,
-          delivery_location: formExtractedJson.delivery_location || '',
-          deliveryLocation: formExtractedJson.delivery_location || '',
-          payment_terms: formExtractedJson.payment_terms || '',
-          paymentTerms: formExtractedJson.payment_terms || '',
+          total_amount: totalAmount,
+          totalAmount: totalAmount,
+          delivery_location: extractedJson.delivery_location || '',
+          deliveryLocation: extractedJson.delivery_location || '',
+          payment_terms: extractedJson.payment_terms || '',
+          paymentTerms: extractedJson.payment_terms || '',
         };
       }
 
+      const rawText = poFileName
+        ? `[Inquiry Attachment: ${poFileName}] ${formRequirement}`
+        : formRequirement;
+
       const createRes = await inquiriesApi.create({
-        sender_name: formCustomerName,
-        customer_name: formCustomerName,
+        sender_name: customerName,
+        customer_name: customerName,
         customer_phone: formPhone,
         sender_phone: formPhone,
-        raw_text: poFileName ? `[Inquiry Attachment: ${poFileName}] ${formRequirement}` : formRequirement,
+        raw_text: rawText,
         inquiry_type: formInquiryType,
         status: 'review',
         overall_confidence: 0.95,
@@ -826,11 +859,11 @@ export default function InquiriesPage() {
 
       const newInquiry: InquiryItem = {
         id: createRes?.data?.id || createRes?.data?.data?.id || String(Date.now()),
-        sender_name: formCustomerName,
-        customer_name: formCustomerName,
+        sender_name: customerName,
+        customer_name: customerName,
         customer_phone: formPhone,
         sender_phone: formPhone,
-        raw_text: poFileName ? `[Inquiry Attachment: ${poFileName}] ${formRequirement}` : formRequirement,
+        raw_text: rawText,
         inquiry_type: formInquiryType,
         status: 'review',
         source_channel: 'web_dashboard',
@@ -847,12 +880,12 @@ export default function InquiriesPage() {
       setFormInquiryType('Product Requirement');
       setPoFileName('');
       setPoFileBase64(null);
-      setFormExtractedJson(null);
+      formExtractedJsonRef.current = null;
 
       // Prepend local inquiry so it appears immediately with full ai_extraction_json
       setInquiries(prev => [newInquiry, ...(Array.isArray(prev) ? prev : [])]);
 
-      fetchMonthlyInquiries();
+      setTimeout(() => fetchMonthlyInquiries(), 2000);
     } catch (err: any) {
       console.error('Error logging inquiry:', err);
       const errMsg = err?.response?.data?.message || err?.message || 'Failed to log inquiry. Please try again.';
