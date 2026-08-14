@@ -17,6 +17,7 @@ import VisitsPage from './pages/VisitsPage';
 import OrdersPage from './pages/OrdersPage';
 import NotFoundPage from './pages/NotFoundPage';
 import AdminDashboard from './pages/AdminDashboard';
+import AssistantPage from './pages/AssistantPage';
 
 function AppRoutes() {
   const { employee } = useAuth();
@@ -26,6 +27,7 @@ function AppRoutes() {
     <Layout>
       <Routes>
         <Route path="/home" element={<HomePage />} />
+        <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/" element={<PipelinePage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
@@ -49,6 +51,7 @@ function AdminRoutes() {
   // Allow accessing Admin Overview, Pipeline or Executive Home directly even if no salesperson is selected
   if (
     window.location.pathname === '/admin-dashboard' ||
+    window.location.pathname === '/assistant' ||
     window.location.pathname === '/home' ||
     window.location.pathname === '/pipeline' ||
     window.location.pathname === '/'

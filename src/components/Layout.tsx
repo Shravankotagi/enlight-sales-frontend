@@ -2,13 +2,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, LayoutDashboard, Users, TrendingUp,
   FileText, BarChart3, Menu, X, Brain, Tag, ShieldAlert,
-  AlertTriangle, MapPin, ShoppingBag, History
+  AlertTriangle, MapPin, ShoppingBag, History, Sparkles
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { path: '/home', label: 'Home', icon: Home },
+  { path: '/assistant', label: 'AI Assistant', icon: Sparkles },
   { path: '/', label: 'Pipeline', icon: LayoutDashboard },
   { path: '/inquiries', label: 'Inquiries', icon: FileText },
   { path: '/orders', label: 'Orders', icon: ShoppingBag },
