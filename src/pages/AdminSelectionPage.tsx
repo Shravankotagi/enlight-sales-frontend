@@ -11,6 +11,10 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   UserCheck,
+  Crown,
+  Edit2,
+  Check,
+  Search,
 } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
 
@@ -36,7 +40,8 @@ interface Employee {
   manager_phone?: string | null;
 }
 
-interface AddEmployeeForm {
+interface EmployeeForm {
+  id?: string;
   name: string;
   phone: string;
   email: string;
@@ -44,24 +49,37 @@ interface AddEmployeeForm {
   employee_id: string;
   manager_id?: string;
   manager_phone?: string;
+  is_active?: boolean;
 }
+
+type RoleFilter = 'all' | 'salesperson' | 'sales_manager' | 'admin';
 
 export default function AdminSelectionPage() {
   const navigate = useNavigate();
-  const { token, employee, logout, setViewingAs, clearViewingAs, isSalesManager, isAdmin } =
-    useAuth();
+  const {
+    token,
+    employee,
+    logout,
+    setViewingAs,
+    clearViewingAs,
+    isSalesManager,
+    isAdmin,
+  } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [allManagers, setAllManagers] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
 
-  // Modal state
+  // Add / Edit Modal state
   const [showModal, setShowModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
-  const [form, setForm] = useState<AddEmployeeForm>({
+  const [form, setForm] = useState<EmployeeForm>({
     name: '',
     phone: '91',
     email: '',
@@ -81,13 +99,13 @@ export default function AdminSelectionPage() {
         const rawList = Array.isArray(data) ? data : data.data || [];
         const activeList = rawList.filter((e: Employee) => e.is_active);
 
-        // Filter managers for assignment dropdown in Admin mode
+        // Filter managers for assignment dropdown
         const managers = activeList.filter(
           (e: Employee) => e.role === 'sales_manager' || e.role === 'manager',
         );
         setAllManagers(managers);
 
-        // If Sales Manager: show only non-admin team members (excluding self in the list if desired, or showing team)
+        // If Sales Manager: show only non-admin team members assigned to them
         if (isSalesManager) {
           const team = activeList.filter(
             (e: Employee) =>
@@ -98,11 +116,8 @@ export default function AdminSelectionPage() {
           );
           setEmployees(team);
         } else {
-          // Admin sees all active non-admin employees (or all salespersons and managers)
-          const salespersons = activeList.filter(
-            (e: Employee) => e.role !== 'admin',
-          );
-          setEmployees(salespersons);
+          // Admin sees all employees including other Admins, Sales Managers, and Salespersons
+          setEmployees(activeList);
         }
       })
       .catch(() => setError('Failed to load employees'))
@@ -123,21 +138,22 @@ export default function AdminSelectionPage() {
         data.data?.next_employee_id ||
         data.next_employee_id ||
         data.data?.next_id ||
-        (typeof data.data === 'string' ? data.data : 'EMP005')
+        (typeof data.data === 'string' ? data.data : 'EMP001')
       );
     } catch {
-      return 'EMP005';
+      return 'EMP001';
     }
   };
 
-  const handleOpenModal = async () => {
+  const handleOpenAddModal = async () => {
+    setIsEditMode(false);
     setFormError('');
     setFormSuccess('');
     const nextId = await fetchNextId();
     const cleanId =
       typeof nextId === 'string'
         ? nextId
-        : nextId?.next_employee_id || 'EMP005';
+        : nextId?.next_employee_id || 'EMP001';
     setForm({
       name: '',
       phone: '91',
@@ -146,6 +162,24 @@ export default function AdminSelectionPage() {
       employee_id: cleanId,
       manager_id: '',
       manager_phone: '',
+    });
+    setShowModal(true);
+  };
+
+  const handleOpenEditModal = (emp: Employee, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditMode(true);
+    setFormError('');
+    setFormSuccess('');
+    setForm({
+      id: emp.id,
+      name: emp.name,
+      phone: emp.phone,
+      email: emp.email || '',
+      role: emp.role,
+      employee_id: emp.employee_id,
+      manager_id: emp.manager_id || '',
+      manager_phone: emp.manager_phone || '',
     });
     setShowModal(true);
   };
@@ -190,10 +224,18 @@ export default function AdminSelectionPage() {
         payload.manager_id = form.manager_id;
         const selectedMgr = allManagers.find((m) => m.id === form.manager_id);
         if (selectedMgr) payload.manager_phone = selectedMgr.phone;
+      } else {
+        payload.manager_id = null;
+        payload.manager_phone = null;
       }
 
-      const res = await fetch(`${BACKEND}/employees`, {
-        method: 'POST',
+      const url = isEditMode
+        ? `${BACKEND}/employees/${form.id}`
+        : `${BACKEND}/employees`;
+      const method = isEditMode ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -205,19 +247,53 @@ export default function AdminSelectionPage() {
 
       if (!res.ok) {
         throw new Error(
-          data.error || data.message || 'Failed to add employee',
+          data.error ||
+            data.message ||
+            `Failed to ${isEditMode ? 'update' : 'create'} account`,
         );
       }
 
+      const roleDisplay =
+        form.role === 'admin'
+          ? 'Admin'
+          : form.role === 'sales_manager'
+            ? 'Sales Manager'
+            : 'Salesperson';
+
       setFormSuccess(
-        `${form.name} added successfully! They can now login with their phone number.`,
+        isEditMode
+          ? `${form.name} (${roleDisplay}) updated successfully!`
+          : `${roleDisplay} ${form.name} created successfully! They can now log in using WhatsApp OTP.`,
       );
       fetchEmployees();
 
-      // Auto close after 2 seconds
       setTimeout(() => {
         handleCloseModal();
-      }, 2000);
+      }, 1800);
+    } catch (err: any) {
+      setFormError(err.message);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    if (!form.id) return;
+    const confirmMsg = `Are you sure you want to deactivate ${form.name}? They will no longer be able to log in.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setFormLoading(true);
+    try {
+      const res = await fetch(`${BACKEND}/employees/${form.id}/deactivate`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to deactivate account');
+      setFormSuccess(`${form.name} deactivated successfully.`);
+      fetchEmployees();
+      setTimeout(() => {
+        handleCloseModal();
+      }, 1500);
     } catch (err: any) {
       setFormError(err.message);
     } finally {
@@ -226,6 +302,12 @@ export default function AdminSelectionPage() {
   };
 
   const handleSelect = (emp: Employee) => {
+    if (emp.role === 'admin') {
+      // For Admin account selection: clear viewingAs to open full company-wide dashboard
+      clearViewingAs();
+      navigate('/home');
+      return;
+    }
     setViewingAs(emp);
     navigate('/home');
   };
@@ -245,13 +327,40 @@ export default function AdminSelectionPage() {
     : 'Admin Control Center';
   const pageSubtitle = isSalesManager
     ? `Manage and monitor your assigned sales team · ${employee?.name}`
-    : `Executive employee management and dashboard control · ${employee?.name}`;
+    : `Executive employee & admin account management · ${employee?.name}`;
+
+  // Filter accounts based on search query and role filter
+  const filteredEmployees = employees.filter((emp) => {
+    const matchesSearch =
+      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.employee_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.phone.includes(searchQuery) ||
+      (emp.email && emp.email.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    if (!matchesSearch) return false;
+
+    if (roleFilter === 'all') return true;
+    if (roleFilter === 'admin') return emp.role === 'admin';
+    if (roleFilter === 'sales_manager')
+      return emp.role === 'sales_manager' || emp.role === 'manager';
+    if (roleFilter === 'salesperson')
+      return emp.role !== 'admin' && emp.role !== 'sales_manager' && emp.role !== 'manager';
+    return true;
+  });
+
+  const adminCount = employees.filter((e) => e.role === 'admin').length;
+  const managerCount = employees.filter(
+    (e) => e.role === 'sales_manager' || e.role === 'manager',
+  ).length;
+  const salespersonCount = employees.filter(
+    (e) => e.role !== 'admin' && e.role !== 'sales_manager' && e.role !== 'manager',
+  ).length;
 
   return (
-    <div className="min-h-screen bg-slate-900 p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-slate-900 p-4 sm:p-6 font-sans">
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               <span>{pageTitle}</span>
@@ -259,7 +368,7 @@ export default function AdminSelectionPage() {
                 className={`text-xs px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider ${
                   isSalesManager
                     ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                 }`}
               >
                 {isSalesManager ? 'Sales Manager' : 'Admin'}
@@ -269,75 +378,144 @@ export default function AdminSelectionPage() {
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm px-3 py-1.5 rounded-lg hover:bg-slate-800"
+            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm px-3 py-1.5 rounded-lg hover:bg-slate-800 self-start sm:self-auto"
           >
             <LogOut size={16} />
             Logout
           </button>
         </div>
 
-        {/* Action Header */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className={`p-2.5 rounded-xl ${
-                isSalesManager ? 'bg-indigo-600' : 'bg-blue-600'
-              }`}
-            >
-              <Users size={20} className="text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">
-                {isSalesManager ? 'My Assigned Sales Team' : 'Select Salesperson / Manager'}
-              </h2>
-              <p className="text-slate-400 text-xs">
-                {isSalesManager
-                  ? 'Click any team member to view their individual metrics, or view aggregate'
-                  : 'Click on an employee to view their individual dashboard'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {isSalesManager && (
-              <button
-                onClick={handleViewTeamAggregate}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+        {/* Action Header & Filter Controls */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-2.5 rounded-xl ${
+                  isSalesManager ? 'bg-indigo-600' : 'bg-blue-600'
+                }`}
               >
-                <LayoutDashboard size={16} />
-                View Team Aggregate Dashboard
-              </button>
-            )}
+                <Users size={20} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  {isSalesManager
+                    ? 'My Assigned Sales Team'
+                    : 'Team & Admin Accounts'}
+                </h2>
+                <p className="text-slate-400 text-xs">
+                  {isSalesManager
+                    ? 'Click any team member to view their dashboard or view aggregate'
+                    : 'Select any account to view dashboard, or manage permissions'}
+                </p>
+              </div>
+            </div>
 
-            {isAdmin && (
-              <>
+            <div className="flex items-center gap-2 flex-wrap">
+              {isSalesManager && (
                 <button
-                  onClick={() => navigate('/admin-dashboard')}
-                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  onClick={handleViewTeamAggregate}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
                 >
-                  <ShieldAlert size={16} className="text-blue-400" />
-                  Go to Admin Dashboard
+                  <LayoutDashboard size={16} />
+                  View Team Aggregate Dashboard
                 </button>
-                <button
-                  onClick={() => setShowImportModal(true)}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
-                >
-                  <FileSpreadsheet size={16} />
-                  Import Clients
-                </button>
-                <button
-                  onClick={handleOpenModal}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  <UserPlus size={16} />
-                  Add Employee
-                </button>
-              </>
-            )}
+              )}
+
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={() => navigate('/admin-dashboard')}
+                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <ShieldAlert size={16} className="text-blue-400" />
+                    Admin Overview
+                  </button>
+                  <button
+                    onClick={() => setShowImportModal(true)}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                  >
+                    <FileSpreadsheet size={16} />
+                    Import Clients
+                  </button>
+                  <button
+                    onClick={handleOpenAddModal}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                  >
+                    <UserPlus size={16} />
+                    Add Employee / Admin
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Search and Role Filter Tabs (for Admin) */}
+          {isAdmin && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+              {/* Role filter buttons */}
+              <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-xl border border-slate-700/80 overflow-x-auto">
+                <button
+                  onClick={() => setRoleFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                    roleFilter === 'all'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All ({employees.length})
+                </button>
+                <button
+                  onClick={() => setRoleFilter('admin')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                    roleFilter === 'admin'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-amber-300'
+                  }`}
+                >
+                  <Crown size={12} />
+                  Admins ({adminCount})
+                </button>
+                <button
+                  onClick={() => setRoleFilter('sales_manager')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                    roleFilter === 'sales_manager'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-indigo-300'
+                  }`}
+                >
+                  Managers ({managerCount})
+                </button>
+                <button
+                  onClick={() => setRoleFilter('salesperson')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                    roleFilter === 'salesperson'
+                      ? 'bg-slate-700 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Sales Team ({salespersonCount})
+                </button>
+              </div>
+
+              {/* Search bar */}
+              <div className="relative flex-1 sm:max-w-xs">
+                <Search
+                  size={15}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, ID, phone..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Employee List */}
+        {/* Employee / Admin List */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="animate-spin text-blue-400" size={32} />
@@ -346,32 +524,24 @@ export default function AdminSelectionPage() {
           <div className="text-red-400 text-center py-10 bg-red-500/10 border border-red-500/20 rounded-xl">
             {error}
           </div>
-        ) : employees.length === 0 ? (
+        ) : filteredEmployees.length === 0 ? (
           <div className="text-center py-20 bg-slate-800/50 border border-slate-800 rounded-2xl p-8">
             <Users size={48} className="text-slate-600 mx-auto mb-4" />
             <p className="text-slate-300 font-semibold">
               {isSalesManager
                 ? 'No salespersons assigned to your team yet'
-                : 'No salespersons added yet'}
+                : 'No matching accounts found'}
             </p>
             <p className="text-slate-500 text-sm mt-1">
               {isSalesManager
                 ? 'Contact an administrator to assign sales team members under your guidance.'
-                : 'Click "Add Employee" to create sales managers and salespersons.'}
+                : 'Click "Add Employee / Admin" to create new accounts.'}
             </p>
-            {isSalesManager && (
-              <button
-                onClick={handleViewTeamAggregate}
-                className="mt-4 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all"
-              >
-                <LayoutDashboard size={16} />
-                Open My Dashboard
-              </button>
-            )}
           </div>
         ) : (
           <div className="grid gap-3">
-            {employees.map((emp) => {
+            {filteredEmployees.map((emp) => {
+              const isEmpAdmin = emp.role === 'admin';
               const isMgr =
                 emp.role === 'sales_manager' || emp.role === 'manager';
               const assignedMgr = allManagers.find(
@@ -382,64 +552,122 @@ export default function AdminSelectionPage() {
               );
 
               return (
-                <button
+                <div
                   key={emp.id}
                   onClick={() => handleSelect(emp)}
-                  className="w-full bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 hover:border-blue-500/80 rounded-xl p-4 text-left transition-all group shadow-sm"
+                  className={`w-full bg-slate-800 hover:bg-slate-700/80 border rounded-xl p-4 text-left transition-all group shadow-sm cursor-pointer flex items-center justify-between gap-4 ${
+                    isEmpAdmin
+                      ? 'border-amber-500/40 hover:border-amber-400/80'
+                      : isMgr
+                        ? 'border-indigo-500/40 hover:border-indigo-400/80'
+                        : 'border-slate-700/80 hover:border-blue-500/80'
+                  }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs ${
-                          isMgr ? 'bg-indigo-600' : 'bg-blue-600'
-                        }`}
-                      >
-                        {emp.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-white font-semibold">{emp.name}</p>
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded font-medium ${
-                              isMgr
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs ${
+                        isEmpAdmin
+                          ? 'bg-gradient-to-br from-amber-500 to-orange-600'
+                          : isMgr
+                            ? 'bg-gradient-to-br from-indigo-600 to-purple-600'
+                            : 'bg-gradient-to-br from-blue-600 to-cyan-600'
+                      }`}
+                    >
+                      {isEmpAdmin ? (
+                        <Crown size={18} />
+                      ) : (
+                        emp.name.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-white font-semibold truncate">
+                          {emp.name}
+                        </p>
+                        {emp.id === employee?.id && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30">
+                            You
+                          </span>
+                        )}
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-semibold flex items-center gap-1 ${
+                            isEmpAdmin
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : isMgr
                                 ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                                 : 'bg-slate-700 text-slate-300'
-                            }`}
-                          >
-                            {isMgr ? 'Sales Manager' : 'Salesperson'}
-                          </span>
-                        </div>
-                        <p className="text-slate-400 text-xs mt-0.5">
-                          {emp.employee_id} · +{emp.phone}
-                          {emp.email ? ` · ${emp.email}` : ''}
-                        </p>
-                        {isAdmin && assignedMgr && (
-                          <p className="text-indigo-400 text-xs mt-1 flex items-center gap-1">
-                            <UserCheck size={12} />
-                            Reporting to: <span className="font-semibold">{assignedMgr.name}</span>
-                          </p>
-                        )}
+                          }`}
+                        >
+                          {isEmpAdmin ? (
+                            <>
+                              <Crown size={11} /> Admin
+                            </>
+                          ) : isMgr ? (
+                            'Sales Manager'
+                          ) : (
+                            'Salesperson'
+                          )}
+                        </span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-500 group-hover:text-blue-400 transition-colors text-sm font-medium">
-                      <span>View Dashboard</span>
-                      <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                      <p className="text-slate-400 text-xs mt-0.5 font-mono">
+                        {emp.employee_id} · +{emp.phone}
+                        {emp.email ? ` · ${emp.email}` : ''}
+                      </p>
+                      {isAdmin && assignedMgr && (
+                        <p className="text-indigo-400 text-xs mt-1 flex items-center gap-1">
+                          <UserCheck size={12} />
+                          Reporting to:{' '}
+                          <span className="font-semibold">
+                            {assignedMgr.name}
+                          </span>
+                        </p>
+                      )}
                     </div>
                   </div>
-                </button>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => handleOpenEditModal(emp, e)}
+                        title="Edit Account Details"
+                        className="p-2 rounded-lg bg-slate-700/60 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
+                      >
+                        <Edit2 size={15} />
+                      </button>
+                    )}
+                    <div className="hidden sm:flex items-center gap-1 text-slate-400 group-hover:text-blue-400 transition-colors text-xs font-semibold pl-2">
+                      <span>{isEmpAdmin ? 'Company Overview' : 'View Dashboard'}</span>
+                      <span className="group-hover:translate-x-0.5 transition-transform">
+                        →
+                      </span>
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* Add Employee Modal */}
+      {/* Add / Edit Account Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 rounded-2xl w-full max-w-md p-6 border border-slate-700 shadow-2xl">
             {/* Modal Header */}
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">Add New Employee</h3>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                {isEditMode ? (
+                  <>
+                    <Edit2 size={18} className="text-blue-400" />
+                    Edit Account
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={18} className="text-blue-400" />
+                    Add New Employee / Admin
+                  </>
+                )}
+              </h3>
               <button
                 onClick={handleCloseModal}
                 className="text-slate-400 hover:text-white transition-colors"
@@ -450,8 +678,8 @@ export default function AdminSelectionPage() {
 
             {/* Success Message */}
             {formSuccess && (
-              <div className="mb-4 p-3 bg-green-500/20 border border-green-500/30 rounded-lg text-green-400 text-sm">
-                ✅ {formSuccess}
+              <div className="mb-4 p-3 bg-green-500/20 border border-green-500/30 rounded-lg text-green-400 text-sm flex items-center gap-2">
+                <Check size={16} /> {formSuccess}
               </div>
             )}
 
@@ -516,7 +744,7 @@ export default function AdminSelectionPage() {
                 {/* Role */}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Role <span className="text-red-400">*</span>
+                    Role & Permissions <span className="text-red-400">*</span>
                   </label>
                   <select
                     value={form.role}
@@ -525,16 +753,28 @@ export default function AdminSelectionPage() {
                     }
                     className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
                   >
-                    <option value="salesperson">Salesperson</option>
-                    <option value="sales_manager">Sales Manager</option>
+                    <option value="salesperson">💼 Salesperson (Standard Access)</option>
+                    <option value="sales_manager">👔 Sales Manager (Team Scoped Access)</option>
+                    <option value="admin">👑 Admin (Full Company Access & Management)</option>
                   </select>
                 </div>
 
-                {/* Manager Assignment (only when adding a salesperson) */}
+                {/* Notice for Admin role */}
+                {form.role === 'admin' && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 text-xs flex items-start gap-2">
+                    <Crown size={15} className="shrink-0 mt-0.5 text-amber-400" />
+                    <span>
+                      <strong>Admin Privileges:</strong> This account will have 100% full company-wide visibility, access to all module dashboards, staff creation, client imports, and settings.
+                    </span>
+                  </div>
+                )}
+
+                {/* Manager Assignment (only when role is salesperson) */}
                 {form.role === 'salesperson' && allManagers.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Assigned Sales Manager <span className="text-slate-500 text-xs">(optional)</span>
+                      Assigned Sales Manager{' '}
+                      <span className="text-slate-500 text-xs">(optional)</span>
                     </label>
                     <select
                       value={form.manager_id || ''}
@@ -577,7 +817,7 @@ export default function AdminSelectionPage() {
                     className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500 font-mono"
                   />
                   <p className="text-slate-500 text-xs mt-1">
-                    Auto-generated - edit if needed
+                    Auto-generated identifier
                   </p>
                 </div>
 
@@ -588,8 +828,18 @@ export default function AdminSelectionPage() {
                   </div>
                 )}
 
-                {/* Buttons */}
+                {/* Actions */}
                 <div className="flex gap-3 pt-2">
+                  {isEditMode && form.id !== employee?.id && (
+                    <button
+                      type="button"
+                      onClick={handleDeactivate}
+                      disabled={formLoading}
+                      className="px-3 py-2.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/30 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                    >
+                      Deactivate
+                    </button>
+                  )}
                   <button
                     onClick={handleCloseModal}
                     className="flex-1 px-4 py-2.5 border border-slate-600 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-colors"
@@ -603,10 +853,12 @@ export default function AdminSelectionPage() {
                   >
                     {formLoading ? (
                       <>
-                        <Loader2 size={14} className="animate-spin" /> Adding...
+                        <Loader2 size={14} className="animate-spin" /> Saving...
                       </>
+                    ) : isEditMode ? (
+                      'Save Changes'
                     ) : (
-                      'Save Employee'
+                      'Create Account'
                     )}
                   </button>
                 </div>
