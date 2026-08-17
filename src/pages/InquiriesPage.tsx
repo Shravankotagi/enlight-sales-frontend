@@ -356,12 +356,7 @@ export default function InquiriesPage() {
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
 
       const res = await inquiriesApi.getAll(params);
-      let list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
-
-      if (list.length === 0) {
-        const fallbackRes = await inquiriesApi.getAll({}).catch(() => null);
-        list = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes?.data?.data) ? fallbackRes.data.data : []);
-      }
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
   });
