@@ -625,17 +625,43 @@ export default function OrdersPage() {
                         <td className="px-4 py-3 text-right font-extrabold text-blue-600 font-mono">-</td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-700 font-mono">-</td>
                         <td className="px-4 py-3 text-right font-bold text-emerald-700 font-mono">
-                          ₹{Number(selectedDrawerOrder.total_amount || 0).toLocaleString('en-IN')}
+                          ₹{Math.round(Number(selectedDrawerOrder.total_amount || 0) / 1.18).toLocaleString('en-IN')}
                         </td>
                       </tr>
                     )}
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-slate-300 text-xs">
                     {(() => {
-                      const totalVal = Number(selectedDrawerOrder.total_amount || 0);
-                      const baseAmt = Math.round(totalVal / 1.18);
-                      const gstAmt = totalVal - baseAmt;
-                      const totalQty = (selectedDrawerOrder.deal_items || []).reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+                      const totalQty = (selectedDrawerOrder.deal_items || []).reduce(
+                        (s, i) => s + (Number(i.quantity) || 0),
+                        0
+                      );
+                      const itemsSubtotal = (selectedDrawerOrder.deal_items || []).reduce((s, i) => {
+                        const rateNum = Number(i.rate || 0);
+                        const qtyNum = Number(i.quantity || 0);
+                        return s + (Number(i.amount) || (rateNum > 0 && qtyNum > 0 ? Math.round(rateNum * qtyNum) : 0));
+                      }, 0);
+
+                      const rawTotalVal = Number(selectedDrawerOrder.total_amount || 0);
+
+                      let baseAmt = 0;
+                      let gstAmt = 0;
+                      let totalVal = 0;
+
+                      if (itemsSubtotal > 0) {
+                        baseAmt = itemsSubtotal;
+                        if (rawTotalVal > itemsSubtotal) {
+                          gstAmt = rawTotalVal - itemsSubtotal;
+                          totalVal = rawTotalVal;
+                        } else {
+                          gstAmt = Math.round(itemsSubtotal * 0.18);
+                          totalVal = itemsSubtotal + gstAmt;
+                        }
+                      } else if (rawTotalVal > 0) {
+                        baseAmt = Math.round(rawTotalVal / 1.18);
+                        gstAmt = rawTotalVal - baseAmt;
+                        totalVal = rawTotalVal;
+                      }
 
                       return (
                         <>
