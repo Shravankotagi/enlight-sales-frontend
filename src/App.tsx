@@ -47,19 +47,8 @@ function AppRoutes() {
 }
 
 function AdminRoutes() {
-  const { viewingAs } = useAuth();
   const location = useLocation();
-
-  // Allow accessing Admin Overview, Assistant, Pipeline or Executive Home directly even if no salesperson is selected
-  if (
-    location.pathname === '/admin-dashboard' ||
-    location.pathname === '/assistant' ||
-    location.pathname === '/home' ||
-    location.pathname === '/pipeline' ||
-    location.pathname === '/'
-  )
-    return <AppRoutes />;
-  if (!viewingAs) return <Navigate to="/admin" replace />;
+  if (location.pathname === '/') return <Navigate to="/home" replace />;
   return <AppRoutes />;
 }
 
