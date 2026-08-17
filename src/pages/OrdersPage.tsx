@@ -24,6 +24,7 @@ import {
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { useAuth } from '../context/AuthContext';
 
 interface DealItem {
   id?: string;
@@ -53,11 +54,12 @@ interface Order {
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
+  const { effectivePhone } = useAuth();
 
   const { data: rawOrders = [], isLoading: loading, refetch: fetchOrders } = useQuery<Order[]>({
-    queryKey: ['orders-list'],
+    queryKey: ['orders-list', effectivePhone],
     queryFn: async () => {
-      const res = await ordersApi.getAll();
+      const res = await ordersApi.getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined);
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
