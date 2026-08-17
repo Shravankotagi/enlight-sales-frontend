@@ -31,7 +31,10 @@ interface ChatSession {
   channel: string;
   started_at: string;
   last_active_at: string;
+  title?: string;
 }
+
+const ACTIVE_SESSION_KEY = 'enlight_active_chat_session_id';
 
 export default function AssistantPage() {
   const { employee, viewingAs } = useAuth();
@@ -60,14 +63,18 @@ export default function AssistantPage() {
     try {
       setFetchingSessions(true);
       const res = await chatbotApi.getSessions();
-      const rawData = res.data;
+      const rawData = res.data?.data || res.data || {};
       const sessionList: ChatSession[] = Array.isArray(rawData?.sessions)
         ? rawData.sessions
         : Array.isArray(rawData)
         ? rawData
         : [];
       setSessions(sessionList);
-      if (sessionList.length > 0 && !activeSessionId) {
+
+      const savedSessionId = sessionStorage.getItem(ACTIVE_SESSION_KEY);
+      if (savedSessionId && savedSessionId !== 'new' && sessionList.some((s) => s.id === savedSessionId)) {
+        selectSession(savedSessionId);
+      } else if (!savedSessionId && sessionList.length > 0) {
         selectSession(sessionList[0].id);
       }
     } catch (err: any) {
@@ -84,10 +91,11 @@ export default function AssistantPage() {
   const selectSession = async (sessionId: string) => {
     try {
       setActiveSessionId(sessionId);
+      sessionStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
       setLoading(true);
       setError(null);
       const res = await chatbotApi.getSessionMessages(sessionId);
-      const rawData = res.data;
+      const rawData = res.data?.data || res.data || {};
       const msgList: ChatMessage[] = Array.isArray(rawData?.messages)
         ? rawData.messages
         : Array.isArray(rawData)
@@ -104,6 +112,7 @@ export default function AssistantPage() {
 
   const handleNewConversation = () => {
     setActiveSessionId(null);
+    sessionStorage.setItem(ACTIVE_SESSION_KEY, 'new');
     setMessages([]);
     setError(null);
     setInputText('');
@@ -136,9 +145,27 @@ export default function AssistantPage() {
       const sessionId = resData.sessionId || resData.session_id;
       const reply = resData.reply || 'Request completed.';
 
-      if (sessionId && sessionId !== activeSessionId) {
+      const titleSnippet =
+        textToSend.length > 35
+          ? textToSend.slice(0, 35).trim() + '...'
+          : textToSend.trim();
+
+      if (sessionId) {
         setActiveSessionId(sessionId);
-        loadSessions();
+        sessionStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+
+        setSessions((prevSessions) => {
+          const existing = prevSessions.find((s) => s.id === sessionId);
+          const updatedSession: ChatSession = {
+            id: sessionId,
+            channel: 'web',
+            started_at: existing?.started_at || new Date().toISOString(),
+            last_active_at: new Date().toISOString(),
+            title: existing?.title || titleSnippet,
+          };
+          const filtered = prevSessions.filter((s) => s.id !== sessionId);
+          return [updatedSession, ...filtered];
+        });
       }
 
       const assistantMsg: ChatMessage = {
@@ -307,7 +334,7 @@ export default function AssistantPage() {
                         className={isSelected ? 'text-blue-600' : 'text-gray-400'}
                       />
                       <span className="truncate">
-                        Session #{sess.id ? sess.id.slice(0, 8) : 'New'}
+                        {sess.title || (sess.id ? `Session #${sess.id.slice(0, 8)}` : 'New Conversation')}
                       </span>
                     </div>
                     <span className="text-[10px] text-gray-400 shrink-0">
