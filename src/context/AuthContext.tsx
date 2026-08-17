@@ -1,11 +1,15 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-interface Employee {
+export interface Employee {
   id: string;
   employee_id: string;
   name: string;
   phone: string;
   role: string;
+  email?: string;
+  is_active?: boolean;
+  manager_id?: string | null;
+  manager_phone?: string | null;
 }
 
 interface AuthContextType {
@@ -17,6 +21,8 @@ interface AuthContextType {
   setViewingAs: (emp: Employee) => void;
   clearViewingAs: () => void;
   isAdmin: boolean;
+  isSalesManager: boolean;
+  isSalesperson: boolean;
   isAuthenticated: boolean;
   effectivePhone: string | null;
 }
@@ -24,8 +30,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(
-    () => sessionStorage.getItem('enlight_token')
+  const [token, setToken] = useState<string | null>(() =>
+    sessionStorage.getItem('enlight_token'),
   );
   const [employee, setEmployee] = useState<Employee | null>(() => {
     const saved = sessionStorage.getItem('enlight_employee');
@@ -62,27 +68,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setViewingAsState(null);
   };
 
-  // effectivePhone: for salesperson = their own phone
-  // for admin viewing someone = that person's phone
-  // for admin not viewing anyone = null (sees all)
+  const isAdmin = employee?.role === 'admin';
+  const isSalesManager =
+    employee?.role === 'sales_manager' || employee?.role === 'manager';
+  const isSalesperson = !isAdmin && !isSalesManager;
+
+  // effectivePhone:
+  // - Salesperson: their own phone
+  // - Admin / Sales Manager: if viewing someone specifically -> that person's phone; if not -> null (views all / team aggregate)
   const effectivePhone =
-    employee?.role === 'admin'
+    isAdmin || isSalesManager
       ? viewingAs?.phone || null
       : employee?.phone || null;
 
   return (
-    <AuthContext.Provider value={{
-      token,
-      employee,
-      viewingAs,
-      login,
-      logout,
-      setViewingAs,
-      clearViewingAs,
-      isAdmin: employee?.role === 'admin',
-      isAuthenticated: !!token && !!employee,
-      effectivePhone,
-    }}>
+    <AuthContext.Provider
+      value={{
+        token,
+        employee,
+        viewingAs,
+        login,
+        logout,
+        setViewingAs,
+        clearViewingAs,
+        isAdmin,
+        isSalesManager,
+        isSalesperson,
+        isAuthenticated: !!token && !!employee,
+        effectivePhone,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

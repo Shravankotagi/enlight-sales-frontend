@@ -57,8 +57,15 @@ function AdminRoutes() {
     location.pathname === '/home' ||
     location.pathname === '/pipeline' ||
     location.pathname === '/'
-  ) return <AppRoutes />;
+  )
+    return <AppRoutes />;
   if (!viewingAs) return <Navigate to="/admin" replace />;
+  return <AppRoutes />;
+}
+
+function SalesManagerRoutes() {
+  const location = useLocation();
+  if (location.pathname === '/') return <Navigate to="/home" replace />;
   return <AppRoutes />;
 }
 
@@ -69,9 +76,10 @@ function SalespersonRoutes() {
 }
 
 function ProtectedRoutes() {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, isSalesManager } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (isAdmin) return <AdminRoutes />;
+  if (isSalesManager) return <SalesManagerRoutes />;
   return <SalespersonRoutes />;
 }
 
