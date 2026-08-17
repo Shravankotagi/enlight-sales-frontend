@@ -6,6 +6,7 @@ import {
   Phone, Calendar, Edit3, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ZoomIn, ExternalLink, Package, Printer
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -989,6 +990,41 @@ const formatExtractedRequirementText = (extracted: any): string => {
     }
   });
 
+  const handleViewInquiryDocument = async (inq: InquiryItem) => {
+    if (drawerFileBase64) {
+      setImageViewerUrl(drawerFileBase64);
+      return;
+    }
+    let mediaUrl = inq.media_urls?.[0];
+    if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
+      setImageViewerUrl(mediaUrl);
+      return;
+    }
+
+    const toastId = toast.loading('Loading original document...');
+    try {
+      const res = await inquiriesApi.getOne(inq.id);
+      const fullInq = res?.data;
+      if (fullInq && Array.isArray(fullInq.media_urls) && fullInq.media_urls.length > 0) {
+        mediaUrl = fullInq.media_urls[0];
+        setInquiries(prev =>
+          prev.map(i => (i.id === inq.id ? { ...i, media_urls: fullInq.media_urls } : i))
+        );
+        if (selectedInquiry?.id === inq.id) {
+          setSelectedInquiry(prev => (prev ? { ...prev, media_urls: fullInq.media_urls } : null));
+        }
+        toast.dismiss(toastId);
+        setImageViewerUrl(mediaUrl || null);
+      } else {
+        toast.dismiss(toastId);
+        toast.error('No attached document found for this record.');
+      }
+    } catch (e) {
+      toast.dismiss(toastId);
+      toast.error('Could not load document.');
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header Bar */}
@@ -1255,7 +1291,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       )}
                       <button
                         type="button"
-                        onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
+                        onClick={() => handleViewInquiryDocument(selectedInquiry)}
                         className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
                         <Eye size={14} /> View Inquiry Document 👁️
                       </button>

@@ -77,12 +77,14 @@ export const visitsApi = {
 
 export const ordersApi = {
   getAll: (params?: any) => API.get('/deals', { params: { ...params, stage: 'won' } }),
+  getOne: (id: string) => API.get(`/deals/${id}`),
   create: (data: any) => API.post('/deals/order', data),
   processPo: (data: any) => API.post('/deals/process-po', data),
 };
 
 export const inquiriesApi = {
   getAll: (params?: any) => API.get('/inquiries', { params }),
+  getOne: (id: string) => API.get(`/inquiries/${id}`),
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),

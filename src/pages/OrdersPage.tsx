@@ -22,7 +22,7 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ordersApi, inquiriesApi } from '../lib/api';
+import { ordersApi, inquiriesApi, dealsApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 
 interface DealItem {
@@ -345,12 +345,28 @@ export default function OrdersPage() {
     return sum + itemsQty;
   }, 0);
 
-  const handleViewPoDocument = (ord: Order) => {
-    const mediaUrl = ord.media_urls?.[0];
-    if (mediaUrl) {
+  const handleViewPoDocument = async (ord: Order) => {
+    let mediaUrl = ord.media_urls?.[0];
+    if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
       setPoImageViewerUrl(mediaUrl);
-    } else {
-      toast.error('No original PO document image/PDF attached to this record.');
+      return;
+    }
+
+    const toastId = toast.loading('Loading original PO document...');
+    try {
+      const res = await dealsApi.getOne(ord.id);
+      const fullDeal = res?.data;
+      if (fullDeal && Array.isArray(fullDeal.media_urls) && fullDeal.media_urls.length > 0) {
+        mediaUrl = fullDeal.media_urls[0];
+        setPoImageViewerUrl(mediaUrl || null);
+        toast.dismiss(toastId);
+      } else {
+        toast.dismiss(toastId);
+        toast.error('No original PO document image/PDF attached to this record.');
+      }
+    } catch (e) {
+      toast.dismiss(toastId);
+      toast.error('Could not load PO document.');
     }
   };
 
@@ -545,7 +561,7 @@ export default function OrdersPage() {
               <div className="flex items-center gap-2 self-end sm:self-center">
                 {selectedDrawerOrder.media_urls && selectedDrawerOrder.media_urls.length > 0 && (
                   <button
-                    onClick={() => setPoImageViewerUrl(selectedDrawerOrder.media_urls![0])}
+                    onClick={() => handleViewPoDocument(selectedDrawerOrder)}
                     className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs">
                     <ImageIcon size={14} /> View Original PO Image 📄
                   </button>
