@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   X, FileText,
   Package, IndianRupee, Clock,
-  AlertCircle, Printer
+  AlertCircle, Printer, Trash2
 } from 'lucide-react';
 import SalesQuotationModal from './SalesQuotationModal';
 
@@ -45,6 +45,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   const queryClient = useQueryClient();
   const [lostReason, setLostReason] = useState('');
   const [showLostModal, setShowLostModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: dealData, isLoading } = useQuery({
     queryKey: ['deal', dealId],
@@ -70,11 +71,29 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
       queryClient.invalidateQueries({ queryKey: ['kanban'] });
       queryClient.invalidateQueries({ queryKey: ['pipeline'] });
       queryClient.invalidateQueries({ queryKey: ['deal', dealId] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       toast.success('Deal stage updated');
       setShowLostModal(false);
       onClose();
     },
     onError: () => toast.error('Failed to update stage'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => dealsApi.delete(dealId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      toast.success('Deal and all associated records deleted successfully');
+      setShowDeleteConfirm(false);
+      onClose();
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'Failed to delete deal');
+    },
   });
 
   const handleStageChange = (stage: string) => {
@@ -142,12 +161,22 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
               </>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="ml-4 p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
-          >
-            <X size={18} className="text-gray-500" />
-          </button>
+          <div className="flex items-center gap-1 ml-4">
+            <button
+              type="button"
+              title="Delete this deal permanently"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg transition-colors"
+            >
+              <Trash2 size={18} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              <X size={18} className="text-gray-500" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable content */}
@@ -462,6 +491,63 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Confirm Lost
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Permanent Delete Deal Confirmation Modal */}
+      {showDeleteConfirm && deal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[70] p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Delete Deal Permanently?</h3>
+                <p className="text-xs text-slate-500">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1.5 mb-5">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Customer:</span>
+                <span className="font-bold text-slate-900">{deal.customer_name || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Deal Ref:</span>
+                <span className="font-mono font-bold text-indigo-600">
+                  #{deal.deal_number || (deal.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+                </span>
+              </div>
+              {totalAmount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Deal Value:</span>
+                  <span className="font-bold text-emerald-600">₹{Number(totalAmount).toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
+                ⚠️ All items, payments, and metrics for this deal will be deleted from the database and dashboard.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? 'Deleting...' : 'Yes, Delete Deal'}
               </button>
             </div>
           </div>

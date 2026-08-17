@@ -44,6 +44,8 @@ export const dealsApi = {
   getOne: (id: string) => API.get(`/deals/${id}`),
   updateStage: (id: string, stage: string, lost_reason?: string) =>
     API.patch(`/deals/${id}/stage`, { stage, lost_reason }),
+  processPo: (data: any) => API.post('/deals/process-po', data),
+  delete: (id: string) => API.delete(`/deals/${id}`),
 };
 
 export const customersApi = {
@@ -76,11 +78,15 @@ export const visitsApi = {
 
 export const ordersApi = {
   getAll: (params?: any) => API.get('/deals', { params: { ...params, stage: 'won' } }),
+  getOne: (id: string) => API.get(`/deals/${id}`),
   create: (data: any) => API.post('/deals/order', data),
+  processPo: (data: any) => API.post('/deals/process-po', data),
+  delete: (id: string) => API.delete(`/deals/${id}`),
 };
 
 export const inquiriesApi = {
   getAll: (params?: any) => API.get('/inquiries', { params }),
+  getOne: (id: string) => API.get(`/inquiries/${id}`),
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),

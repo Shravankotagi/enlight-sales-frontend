@@ -61,32 +61,32 @@ export default function AdminDashboard() {
   // Queries with dynamic parameters
   const { data: monthly, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery({
     queryKey: ['admin-monthly', selectedPhone, selectedMonth, selectedYear, dateRange],
-    queryFn: () => reportsApi.getMonthly(queryParams).then(r => r.data.data),
+    queryFn: () => reportsApi.getMonthly(queryParams).then(r => r.data?.data || r.data),
   });
 
   const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
     queryKey: ['admin-funnel', selectedPhone, selectedMonth, selectedYear, dateRange],
-    queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data.data),
+    queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data?.data || r.data),
   });
 
   const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
     queryKey: ['admin-sku', selectedPhone, selectedMonth, selectedYear, dateRange],
-    queryFn: () => reportsApi.getSku(queryParams).then(r => r.data.data),
+    queryFn: () => reportsApi.getSku(queryParams).then(r => r.data?.data || r.data),
   });
 
   const { data: salesperson, isLoading: salespersonLoading, refetch: refetchSalesperson } = useQuery({
     queryKey: ['admin-salesperson', selectedMonth, selectedYear, dateRange],
-    queryFn: () => reportsApi.getSalesperson({ month: selectedMonth, year: selectedYear, from: fromDate, to: toDate }).then(r => r.data.data),
+    queryFn: () => reportsApi.getSalesperson({ month: selectedMonth, year: selectedYear, from: fromDate, to: toDate }).then(r => r.data?.data || r.data),
   });
 
   const { data: inquiries, isLoading: inquiriesLoading, refetch: refetchInquiries } = useQuery({
     queryKey: ['admin-inquiries-queue'],
-    queryFn: () => inquiriesApi.getReviewQueue().then(r => r.data),
+    queryFn: () => inquiriesApi.getReviewQueue().then(r => r.data?.data || r.data),
   });
 
   const { data: deals, isLoading: dealsLoading, refetch: refetchDeals } = useQuery({
     queryKey: ['admin-recent-deals', selectedPhone, selectedMonth, selectedYear, dateRange],
-    queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data.data),
+    queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data?.data || r.data),
   });
 
   const [isPushing, setIsPushing] = useState(false);
@@ -155,13 +155,21 @@ export default function AdminDashboard() {
 
   const spList = salesperson?.salespersons || salesperson || [];
   const reviewQueue = inquiries?.data || inquiries || [];
-  const recentDeals = (deals || []).slice(0, 6);
+  const rawDeals = Array.isArray(deals) ? deals : (Array.isArray(deals?.data) ? deals.data : []);
+  const recentDeals = rawDeals.slice(0, 6);
 
-  const totalDeals = monthly?.summary?.total_deals || 0;
-  const wonDealsCount = monthly?.summary?.won || 0;
-  const totalValue = monthly?.summary?.total_value || 0;
-  const wonValue = monthly?.summary?.won_value || 0;
-  const conversionRate = monthly?.summary?.conversion_rate || 0;
+  const wonDealsList = rawDeals.filter((d: any) => d.stage === 'won');
+  const activeDealsList = rawDeals.filter((d: any) => !['won', 'lost'].includes(d.stage));
+
+  const dealsTotalPipelineVal = activeDealsList.reduce((sum: number, d: any) => sum + (Number(d.total_amount) || 0), 0);
+  const dealsWonVal = wonDealsList.reduce((sum: number, d: any) => sum + (Number(d.total_amount) || 0), 0);
+
+  const totalDeals = rawDeals.length > 0 ? rawDeals.length : (monthly?.summary?.total_deals || 0);
+  const activeDealsCount = activeDealsList.length > 0 ? activeDealsList.length : (monthly?.summary?.deals_pending || 0);
+  const wonDealsCount = wonDealsList.length > 0 ? wonDealsList.length : (monthly?.summary?.deals_won || monthly?.summary?.won || 0);
+  const totalValue = dealsTotalPipelineVal > 0 ? dealsTotalPipelineVal : (monthly?.summary?.pipeline_value || monthly?.summary?.total_revenue || monthly?.summary?.total_value || 0);
+  const wonValue = dealsWonVal > 0 ? dealsWonVal : (monthly?.summary?.won_revenue || monthly?.summary?.won_value || monthly?.summary?.total_revenue || 0);
+  const conversionRate = totalDeals > 0 ? Math.round((wonDealsCount / totalDeals) * 100) : (monthly?.summary?.conversion_rate || 0);
 
   // Find selected salesperson specific KRA metrics from reports response
   const selectedKRA = spList.find((s: any) => s.salesperson_phone === selectedPhone);
@@ -312,7 +320,7 @@ export default function AdminDashboard() {
                 <ArrowUpRight size={12} /> +15.2%
               </span>
               <span className="text-xs text-slate-500 font-medium">
-                {totalDeals} active deals
+                {activeDealsCount || totalDeals} active deals
               </span>
             </div>
           </div>
@@ -462,7 +470,7 @@ export default function AdminDashboard() {
 
           <div className="bg-amber-50/50 p-3.5 rounded-xl border border-amber-100">
             <span className="text-xs font-semibold text-amber-700 block">Active Pipeline Deals</span>
-            <span className="text-base font-bold text-slate-900 mt-0.5 block">{totalDeals} Confirmed</span>
+            <span className="text-base font-bold text-slate-900 mt-0.5 block">{activeDealsCount || totalDeals} Confirmed</span>
           </div>
 
           <div className="bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-100">

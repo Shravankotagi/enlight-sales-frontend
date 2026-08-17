@@ -16,6 +16,15 @@ interface InquiryItem {
   created_at: string;
 }
 
+interface LineItemDetail {
+  sku_text: string;
+  dimensions?: string;
+  quantity: number;
+  unit?: string;
+  rate: number;
+  amount: number;
+}
+
 interface ExtractedDetails {
   companyName: string;
   customerPhone: string;
@@ -30,6 +39,7 @@ interface ExtractedDetails {
   totalAmount: number;
   paymentTerms: string;
   deliveryLocation: string;
+  lineItems: LineItemDetail[];
 }
 
 interface InquiryPdfModalProps {
@@ -44,10 +54,33 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   if (!inquiry || !details) return null;
 
-  const subtotal = Math.round(details.totalAmount / 1.18);
-  const gstAmount = details.totalAmount - subtotal;
+  // totalAmount = base pre-GST value; GST is 18% on top
+  const baseAmount = details.totalAmount;
+  const gstAmount = Math.round(baseAmount * 0.18);
+  const grandTotal = baseAmount + gstAmount;
+
+  // Build line items list — prefer dynamic lineItems, fall back to single item
+  const lineItems: LineItemDetail[] =
+    details.lineItems && details.lineItems.length > 0
+      ? details.lineItems
+      : [
+          {
+            sku_text: details.productType || 'Material',
+            dimensions: [details.thickness, details.width ? `x ${details.width}` : '', details.length ? `x ${details.length}` : '']
+              .filter(Boolean)
+              .join(' ')
+              .trim() || undefined,
+            quantity: details.quantityTons,
+            unit: 'MT',
+            rate: details.unitPrice,
+            amount: details.totalAmount,
+          },
+        ];
+
   const inquiryRefId = inquiry.id ? `#INQ-${inquiry.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-INQ';
-  const createdDate = inquiry.created_at ? new Date(inquiry.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
+  const createdDate = inquiry.created_at
+    ? new Date(inquiry.created_at).toLocaleDateString('en-IN')
+    : new Date().toLocaleDateString('en-IN');
 
   const handleCopyRef = () => {
     navigator.clipboard.writeText(inquiryRefId);
@@ -60,7 +93,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-in fade-in duration-200"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       
       {/* Print CSS to ensure only the document sheet prints */}
       <style>{`
@@ -165,50 +201,52 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             <div>
               <p className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Customer / Company Details</p>
               <h4 className="font-bold text-slate-900 text-base mt-0.5">{details.companyName}</h4>
-              <p className="text-slate-600 font-mono mt-0.5">Phone: {details.customerPhone}</p>
+              {details.customerPhone && (
+                <p className="text-slate-600 font-mono mt-0.5">Phone: {details.customerPhone}</p>
+              )}
               <p className="text-slate-400 mt-1">Channel Source: <span className="font-semibold text-slate-700 capitalize">{inquiry.source_channel || 'WhatsApp Bot'}</span></p>
             </div>
 
             <div className="text-left sm:text-right">
               <p className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Delivery &amp; Commercial Terms</p>
               <h4 className="font-bold text-slate-900 text-sm mt-0.5">{details.deliveryLocation}</h4>
-              <p className="text-purple-800 font-bold mt-1">Payment Terms: {details.paymentTerms}</p>
-              <p className="text-slate-500 mt-0.5">Form Specification: <span className="font-bold text-slate-800">{details.productForm}</span></p>
+              <p className="text-purple-800 font-bold mt-1">Payment Terms: {details.paymentTerms || 'As agreed'}</p>
             </div>
           </div>
 
-          {/* Quotation Line Items Table */}
+          {/* Quotation Line Items Table — Dynamic Multi-Item */}
           <div className="border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
             <table className="w-full text-left text-sm border-collapse">
               <thead className="bg-slate-900 text-white text-xs font-semibold uppercase tracking-wider">
                 <tr className="divide-x divide-slate-700 border-b border-slate-800">
                   <th className="px-3 py-3 text-center w-[6%]">#</th>
                   <th className="px-4 py-3 w-[44%]">Material Description &amp; Specifications</th>
-                  <th className="px-4 py-3 text-right w-[16%]">Quantity (MT)</th>
-                  <th className="px-4 py-3 text-right w-[17%]">Unit Rate (₹/MT)</th>
-                  <th className="px-4 py-3 text-right w-[17%]">Amount (₹)</th>
+                  <th className="px-4 py-3 text-right w-[15%]">Qty (MT)</th>
+                  <th className="px-4 py-3 text-right w-[17%]">Rate (₹/MT)</th>
+                  <th className="px-4 py-3 text-right w-[18%]">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                <tr className="hover:bg-slate-50 divide-x divide-slate-200">
-                  <td className="px-3 py-3.5 text-center text-slate-500 font-medium">1</td>
-                  <td className="px-4 py-3.5">
-                    <div className="font-bold text-slate-900">{details.productType} ({details.productForm})</div>
-                    <div className="text-xs text-slate-500 font-mono mt-0.5">
-                      Spec: {details.thickness} {details.width ? `x ${details.width}` : ''} {details.length ? `x ${details.length}` : ''}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-900">
-                    {details.quantityTons} MT
-                    <span className="block text-[11px] text-slate-400 font-normal">({details.quantityUnits} units)</span>
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-mono text-slate-700">
-                    ₹{details.unitPrice.toLocaleString('en-IN')}
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-black text-slate-900">
-                    ₹{details.totalAmount.toLocaleString('en-IN')}
-                  </td>
-                </tr>
+                {lineItems.map((item, idx) => (
+                  <tr key={idx} className={`divide-x divide-slate-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}`}>
+                    <td className="px-3 py-3.5 text-center text-slate-400 font-medium text-xs">{idx + 1}</td>
+                    <td className="px-4 py-3.5">
+                      <div className="font-bold text-slate-900 text-sm">{item.sku_text}</div>
+                      {item.dimensions && (
+                        <div className="text-xs text-slate-500 font-mono mt-0.5">Spec: {item.dimensions}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-900">
+                      {item.quantity} {item.unit || 'MT'}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono text-slate-700 text-xs">
+                      {item.rate > 0 ? `₹${item.rate.toLocaleString('en-IN')}` : '—'}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-black text-slate-900">
+                      {item.amount > 0 ? `₹${item.amount.toLocaleString('en-IN')}` : '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -224,24 +262,18 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
             <div className="w-full sm:w-80 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
               <div className="flex justify-between text-xs text-slate-600">
-                <span>Subtotal (Base Value):</span>
-                <span className="font-mono font-medium">
-                  ₹{subtotal.toLocaleString('en-IN')}
-                </span>
+                <span>Subtotal (Excl. GST):</span>
+                <span className="font-mono font-semibold">₹{baseAmount.toLocaleString('en-IN')}</span>
               </div>
 
               <div className="flex justify-between text-xs text-slate-600">
-                <span>GST (18% Estimated):</span>
-                <span className="font-mono font-medium">
-                  ₹{gstAmount.toLocaleString('en-IN')}
-                </span>
+                <span>GST @ 18%:</span>
+                <span className="font-mono font-semibold text-indigo-700">+ ₹{gstAmount.toLocaleString('en-IN')}</span>
               </div>
 
               <div className="pt-2 border-t border-slate-300 flex justify-between items-center">
-                <span className="text-sm font-bold text-slate-900">Total Quotation Amount:</span>
-                <span className="text-lg font-bold text-emerald-700 font-mono">
-                  ₹{details.totalAmount.toLocaleString('en-IN')}
-                </span>
+                <span className="text-sm font-bold text-slate-900">Grand Total (Incl. GST):</span>
+                <span className="text-lg font-bold text-emerald-700 font-mono">₹{grandTotal.toLocaleString('en-IN')}</span>
               </div>
             </div>
           </div>

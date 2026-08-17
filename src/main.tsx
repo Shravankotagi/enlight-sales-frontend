@@ -8,8 +8,13 @@ import App from './App.tsx'
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30000 }
-  }
+    queries: {
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes in-memory freshness
+      gcTime: 15 * 60 * 1000, // 15 minutes garbage collection
+      refetchOnWindowFocus: false, // Prevents unwanted re-fetching on window focus
+    },
+  },
 })
 
 createRoot(document.getElementById('root')!).render(

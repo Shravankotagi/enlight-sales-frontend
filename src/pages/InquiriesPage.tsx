@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Phone, Calendar, Edit3, Save, Check, Layers, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  Phone, Calendar, Edit3, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ZoomIn, ExternalLink, Package, Printer
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -25,6 +27,15 @@ interface InquiryItem {
   created_at: string;
 }
 
+interface LineItemDetail {
+  sku_text: string;
+  dimensions?: string;
+  quantity: number;
+  unit?: string;
+  rate: number;
+  amount: number;
+}
+
 interface ExtractedDetails {
   companyName: string;
   customerPhone: string;
@@ -39,6 +50,7 @@ interface ExtractedDetails {
   totalAmount: number;
   paymentTerms: string;
   deliveryLocation: string;
+  lineItems: LineItemDetail[];
 }
 
 const cleanProductType = (pt: string): string => {
@@ -60,7 +72,25 @@ const cleanProductType = (pt: string): string => {
  * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
  */
 function isProductInquiry(inq: InquiryItem): boolean {
-  if (inq.source_channel === 'web_dashboard') return true;
+  // 0. Exclude Purchase Orders (POs belong strictly to Completed & Delivered Orders tab)
+  const isPurchaseOrder =
+    inq?.inquiry_type === 'purchase_order' ||
+    (inq?.raw_text || '').startsWith('[PO Document Attached');
+
+  if (isPurchaseOrder) {
+    return false;
+  }
+
+  const status = (inq?.status || '').toLowerCase();
+  if (
+    status === 'confirmed' ||
+    status === 'quoted' ||
+    status === 'processed' ||
+    status === 'won' ||
+    inq?.source_channel === 'web_dashboard'
+  ) {
+    return true;
+  }
   const text = (inq.raw_text || '').trim();
   const textLower = text.toLowerCase();
   if (!text) return false;
@@ -138,7 +168,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     (phoneMatch ? phoneMatch[1] : '');
 
   if (!customerPhone || customerPhone === inq?.sender_phone || customerPhone === '918262937458') {
-    customerPhone = inq?.customer_phone || (phoneMatch ? phoneMatch[1] : '9123456789');
+    customerPhone = inq?.customer_phone || (phoneMatch ? phoneMatch[1] : '');
   }
 
   // 3. Product Type
@@ -229,6 +259,27 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   if (textLower.includes('credit') || textLower.includes('30 days')) paymentTerms = '30 Days Credit';
   else if (textLower.includes('45 days')) paymentTerms = '45 Days Credit';
 
+  // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
+  const rawLineItems: LineItemDetail[] = [];
+  const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
+  if (Array.isArray(lineItemsSource) && lineItemsSource.length > 0) {
+    for (const item of lineItemsSource) {
+      rawLineItems.push({
+        sku_text: item.sku_text || item.description || '',
+        dimensions: item.dimensions || '',
+        quantity: Number(item.quantity) || 0,
+        unit: item.unit || 'MT',
+        rate: Number(item.rate) || 0,
+        amount: Number(item.amount) || Number(item.quantity) * Number(item.rate) || 0,
+      });
+    }
+  }
+
+  // Grand total from all line items if multi-item inquiry
+  const computedTotal = rawLineItems.length > 1
+    ? rawLineItems.reduce((s, i) => s + i.amount, 0)
+    : totalAmount;
+
   return {
     companyName,
     customerPhone,
@@ -240,32 +291,28 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     quantityTons,
     quantityUnits,
     unitPrice,
-    totalAmount,
+    totalAmount: computedTotal,
     paymentTerms,
-    deliveryLocation
+    deliveryLocation,
+    lineItems: rawLineItems,
   };
 }
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
-  const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  // Selected Inquiry for Interpretation Drawer & QA Audit
-  const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
-  const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  // Send Quotation Email State (Resend API)
-  const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
   const [showPdfModal, setShowPdfModal] = useState(false);
-  const [quotationEmail, setQuotationEmail] = useState('rishabhpm23@gmail.com');
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [quotationEmail, setQuotationEmail] = useState('shravankotagi314@gmail.com');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
@@ -294,30 +341,29 @@ export default function InquiriesPage() {
   const [poFileBase64, setPoFileBase64] = useState<string | null>(null);
   const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
+  const formExtractedJsonRef = useRef<any>(null);
 
   const isPdf = (url: string) => {
     if (!url) return false;
     return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
   };
 
-  const fetchMonthlyInquiries = async () => {
-    try {
-      setLoading(true);
+  const { data: rawInquiries = [], isLoading: loading, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
+    queryKey: ['inquiries-list', dateRange],
+    queryFn: async () => {
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
 
       const res = await inquiriesApi.getAll(params);
-      let list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
+      return list;
+    },
+  });
 
-      if (list.length === 0) {
-        const fallbackRes = await inquiriesApi.getAll({});
-        list = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes?.data?.data) ? fallbackRes.data.data : []);
-      }
-
-      setInquiries(list);
-
-      // Fetch customer directory for modal dropdown (unpacks res.data.data array cleanly!)
+  const { data: rawCustomers = [] } = useQuery<string[]>({
+    queryKey: ['customer-names-list'],
+    queryFn: async () => {
       const custRes = await customersApi.getAll().catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
@@ -335,25 +381,85 @@ export default function InquiriesPage() {
         'Kirloskar Pneumatic'
       ];
 
-      const allCustomers = Array.from(new Set([...fetchedNames, ...defaultNames]));
-      setExistingCustomers(allCustomers);
-    } catch (err) {
-      console.error('Error fetching monthly inquiries:', err);
-      const fallbackRes = await inquiriesApi.getAll({}).catch(() => null);
-      const list = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes?.data?.data) ? fallbackRes.data.data : []);
-      setInquiries(list);
-    } finally {
-      setLoading(false);
+      return Array.from(new Set([...fetchedNames, ...defaultNames]));
+    },
+  });
+
+  useEffect(() => {
+    if (Array.isArray(rawInquiries)) {
+      setInquiries(prev => {
+        const localList = Array.isArray(prev) ? prev : [];
+        const localItemMap = new Map(localList.map(i => [i.id, i]));
+        const mergedList = rawInquiries.map((item: InquiryItem) => {
+          const localItem = localItemMap.get(item.id);
+          if (!localItem) return item;
+          const isConfirmed = ['confirmed', 'quoted', 'won'].includes((localItem.status || '').toLowerCase());
+          return {
+            ...item,
+            ...(isConfirmed ? localItem : {}),
+            ai_extraction_json: localItem.ai_extraction_json || item.ai_extraction_json,
+          };
+        });
+        const backendIds = new Set(rawInquiries.map((i: InquiryItem) => i.id));
+        const localOnlyItems = localList.filter(i => !backendIds.has(i.id));
+        return [...localOnlyItems, ...mergedList];
+      });
     }
-  };
+  }, [rawInquiries]);
+
+  useEffect(() => {
+    if (Array.isArray(rawCustomers) && rawCustomers.length > 0) {
+      setExistingCustomers(rawCustomers);
+    }
+  }, [rawCustomers]);
 
   const handleOpenDrawer = (inq: InquiryItem) => {
     setSelectedInquiry(inq);
     setDrawerFileBase64(null);
-    const parsed = parseInquiryText(inq.raw_text || '', inq);
-    setEditDetails(parsed);
+
     const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
     const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
+
+    const ai = (inq.ai_extraction_json as any) || {};
+    const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
+
+    if (lineItemsSrc.length > 0) {
+      // Has structured line items in ai_extraction_json — use directly for ALL inquiries (review, confirmed, etc.)
+      const frozenLineItems = lineItemsSrc.map((item: any) => ({
+        sku_text: item.sku_text || item.description || '',
+        dimensions: item.dimensions || '',
+        quantity: Number(item.quantity) || 0,
+        unit: item.unit || 'MT',
+        rate: Number(item.rate) || 0,
+        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+      }));
+      const frozenTotal = ai.total_amount || ai.totalAmount ||
+        (frozenLineItems.length > 0
+          ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
+          : 0);
+
+      setEditDetails({
+        companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || inq.sender_name || 'Customer Inquiry',
+        customerPhone: ai.customerPhone || ai.customer_phone || ai.customer?.phone || inq.customer_phone || inq.sender_phone || '',
+        productType: frozenLineItems[0]?.sku_text || ai.productType || 'Hot Rolled',
+        thickness: ai.thickness || '',
+        width: ai.width || '',
+        length: ai.length || '',
+        productForm: ai.productForm || 'Coil',
+        quantityTons: frozenLineItems.reduce((s: number, i: any) => s + i.quantity, 0) || ai.quantityTons || 0,
+        quantityUnits: ai.quantityUnits || 0,
+        unitPrice: frozenLineItems[0]?.rate || ai.unitPrice || 0,
+        totalAmount: frozenTotal,
+        paymentTerms: ai.payment_terms || ai.paymentTerms || '100% Advance / Payment',
+        deliveryLocation: ai.delivery_location || ai.deliveryLocation || '',
+        lineItems: frozenLineItems,
+      });
+    } else {
+      // True fallback: no structured line items in ai_extraction_json, parse raw text
+      const parsed = parseInquiryText(inq.raw_text || '', inq);
+      setEditDetails(parsed);
+    }
+
     setIsEditing(!isConfirmedState);
     setSaveSuccess(isConfirmedState);
     setIsQuotationSent(isQuotedState);
@@ -390,11 +496,6 @@ export default function InquiriesPage() {
     reader.readAsDataURL(file);
   };
 
-  // Extract attachment filename from raw_text like "[Inquiry Attachment: file.jpg]"
-  const extractAttachmentName = (rawText: string): string | null => {
-    const match = rawText.match(/\[Inquiry Attachment:\s*([^\]]+)\]/);
-    return match ? match[1].trim() : null;
-  };
 
   const handlePrintQuotation = (inq: InquiryItem, details: ExtractedDetails) => {
     const gst = Math.round(details.totalAmount * 0.18);
@@ -507,12 +608,19 @@ export default function InquiriesPage() {
       const gstAmt = Math.round(baseAmt * 0.18);
       const grandAmt = Math.round(baseAmt * 1.18);
 
-      const summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Spec: ${editDetails.thickness} ${editDetails.width ? `x ${editDetails.width}` : ''}. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, 18% GST: ₹${gstAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+      let summaryRequirement = '';
+      if (editDetails.lineItems && editDetails.lineItems.length > 0) {
+        const itemStrs = editDetails.lineItems.map(item => `${item.sku_text || 'Item'}: ${item.quantity} MT @ ₹${item.rate}/MT`);
+        summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+      } else {
+        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+      }
 
       const mediaUrlsPayload = drawerFileBase64 ? [drawerFileBase64] : (selectedInquiry.media_urls || []);
 
       await inquiriesApi.updateStatus(selectedInquiry.id, 'confirmed', {
         ...editDetails,
+        line_items: editDetails.lineItems,
         requirement: summaryRequirement,
         totalAmount: baseAmt,
         gstAmount: gstAmt,
@@ -520,22 +628,31 @@ export default function InquiriesPage() {
         media_urls: mediaUrlsPayload,
       });
 
-      setSaveSuccess(true);
-      setIsEditing(false);
-      setSelectedInquiry({
+      const updatedObj: InquiryItem = {
         ...selectedInquiry,
         status: 'confirmed',
         sender_name: editDetails.companyName,
         customer_name: editDetails.companyName,
         sender_phone: editDetails.customerPhone,
         customer_phone: editDetails.customerPhone,
-        raw_text: summaryRequirement,
+        raw_text: selectedInquiry.raw_text,
         media_urls: mediaUrlsPayload,
-        ai_extraction_json: { ...editDetails, totalAmount: baseAmt, gstAmount: gstAmt, grandTotal: grandAmt },
-      });
+        ai_extraction_json: {
+          ...editDetails,
+          line_items: editDetails.lineItems,
+          totalAmount: baseAmt,
+          gstAmount: gstAmt,
+          grandTotal: grandAmt,
+        },
+      };
+
+      setSaveSuccess(true);
+      setIsEditing(false);
+      setSelectedInquiry(updatedObj);
       setDrawerFileBase64(null);
 
-      fetchMonthlyInquiries();
+      // Update in-memory inquiries list so item stays in list immediately
+      setInquiries(prev => (Array.isArray(prev) ? prev.map(item => item.id === selectedInquiry.id ? updatedObj : item) : []));
     } catch (err) {
       console.error('Error saving inquiry details:', err);
       alert('Failed to save inquiry changes.');
@@ -544,12 +661,73 @@ export default function InquiriesPage() {
     }
   };
 
+const cleanNumericValue = (raw: any): number => {
+  if (typeof raw === 'number') return isNaN(raw) ? 0 : raw;
+  if (!raw) return 0;
+  const num = parseFloat(String(raw).replace(/,/g, '').replace(/[^0-9.]/g, ''));
+  return isNaN(num) ? 0 : num;
+};
+
+const extractJsonFromText = (rawText: string): any => {
+  if (!rawText) return null;
+  try {
+    const stripped = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    return JSON.parse(stripped);
+  } catch {}
+  try {
+    const firstOpen = rawText.indexOf('{');
+    const lastClose = rawText.lastIndexOf('}');
+    if (firstOpen !== -1 && lastClose > firstOpen) {
+      return JSON.parse(rawText.slice(firstOpen, lastClose + 1));
+    }
+  } catch {}
+  return null;
+};
+
+const formatExtractedRequirementText = (extracted: any): string => {
+  if (!extracted) return '';
+  const items = extracted.line_items || extracted.items || extracted.products || extracted.lineItems || [];
+  if (Array.isArray(items) && items.length > 0) {
+    const lines = items.map((li: any, idx: number) => {
+      const sku = li.sku_text || li.sku || li.material || li.description || li.product_name || li.product || 'Material';
+      const dims = li.dimensions || li.specs || li.size || '';
+      const dimsStr = dims ? ` (${dims})` : '';
+
+      const qtyNum = cleanNumericValue(li.quantity ?? li.qty ?? li.quantity_mt ?? li.quantityTons);
+      const unit = (li.unit && String(li.unit).trim()) || 'MT';
+      const qtyStr = qtyNum > 0 ? `${qtyNum} ${unit}` : (li.quantity ? String(li.quantity) : '');
+
+      const rateNum = cleanNumericValue(li.rate ?? li.target_rate ?? li.price ?? li.unitPrice);
+      const rateStr = rateNum > 0 ? ` @ ₹${rateNum.toLocaleString('en-IN')}/MT` : (li.rate ? ` @ ₹${li.rate}` : '');
+
+      return `${idx + 1}. ${sku}${dimsStr}${qtyStr ? ': ' + qtyStr : ''}${rateStr}`.trim();
+    }).filter(Boolean);
+
+    if (lines.length > 0) {
+      return lines.join('\n');
+    }
+  }
+
+  if (typeof extracted.requirement === 'string' && extracted.requirement.trim()) {
+    return extracted.requirement.trim();
+  }
+  if (typeof extracted.raw_text === 'string' && extracted.raw_text.trim()) {
+    return extracted.raw_text.trim();
+  }
+  if (typeof extracted.description === 'string' && extracted.description.trim()) {
+    return extracted.description.trim();
+  }
+
+  return '';
+};
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setPoFileName(file.name);
     setIsExtractingPo(true);
+    formExtractedJsonRef.current = null;
 
     try {
       const reader = new FileReader();
@@ -563,6 +741,8 @@ export default function InquiriesPage() {
         const cleanBase64 = base64String.replace(/^data:[^;]+;base64,/, '');
         setPoFileBase64(base64String);
 
+        let extracted: any = null;
+
         // 1. Try Backend Gemini Vision API Route
         try {
           const res = await inquiriesApi.parseDocument({
@@ -570,74 +750,75 @@ export default function InquiriesPage() {
             mime_type: file.type || 'image/jpeg',
           });
           if (res.data?.success && res.data?.data) {
-            const extracted = res.data.data;
-            if (extracted.customer_name) setFormCustomerName(extracted.customer_name);
-            if (extracted.contact_phone) setFormPhone(extracted.contact_phone);
-            if (extracted.requirement) setFormRequirement(extracted.requirement);
-            setFormInquiryType('Product Requirement (AI Document)');
-            setIsExtractingPo(false);
-            return;
+            extracted = res.data.data;
           }
         } catch (apiErr) {
-          console.warn('Backend parse-document unavailable, trying client-side Gemini 3.6 Flash Vision...', apiErr);
+          console.warn('Backend parse-document unavailable, trying direct Gemini Vision...', apiErr);
         }
 
-        // 2. Direct Gemini 3.6 Flash Vision AI Call using Paid Key
-        try {
-          const apiKey = ['AQ.Ab8RN6Ibqf', 'NjPprSab_mxBA', 'ZTgLpPuRMFntq', 'kj5YAeK7fhDXPA'].join('');
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    parts: [
-                      {
-                        text: `You are an expert OCR document parser for steel inquiry purchase orders. Extract fields from this document image and return ONLY a valid JSON object with no markdown formatting or codeblocks:\n{\n  "customer_name": "company or customer name",\n  "contact_phone": "10-digit phone number if present",\n  "requirement": "detailed material specification, quantity in MT, rate, and delivery location"\n}`
-                      },
-                      {
-                        inline_data: {
-                          mime_type: file.type || 'image/jpeg',
-                          data: cleanBase64,
+        // 2. Direct Gemini Vision API call if backend did not return extracted data
+        if (!extracted) {
+          try {
+            const apiKey = ['AQ.Ab8RN6Ibqf', 'NjPprSab_mxBA', 'ZTgLpPuRMFntq', 'kj5YAeK7fhDXPA'].join('');
+            const geminiRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [
+                    {
+                      parts: [
+                        {
+                          text: `You are an expert OCR parser for steel purchase inquiry documents. Extract ALL data from this document and return ONLY a valid JSON object with NO markdown, NO codeblocks, NO explanation:\n{\n  "customer_name": "company name from document header",\n  "customer_phone": "phone number if present else null",\n  "customer_gst": "GST number if present else null",\n  "customer_address": "company address if present else null",\n  "delivery_location": "delivery location",\n  "payment_terms": "payment terms",\n  "po_number": "PO/Inquiry Ref number if present else null",\n  "line_items": [\n    {\n      "sku_text": "full material description e.g. HR Coil (IS 2062 E250)",\n      "dimensions": "specs e.g. 2.50 mm x 1250 mm",\n      "quantity": numeric_quantity_in_MT,\n      "unit": "MT",\n      "rate": numeric_rate_per_MT_or_0,\n      "amount": numeric_amount_or_0\n    }\n  ],\n  "total_amount": numeric_total_or_0,\n  "overall_confidence": 0.95\n}\nExtract EVERY line item. Do not merge or skip any rows. Return ONLY the JSON.`
+                        },
+                        {
+                          inline_data: {
+                            mime_type: file.type || 'image/jpeg',
+                            data: cleanBase64,
+                          }
                         }
-                      }
-                    ]
-                  }
-                ]
-              })
-            }
-          );
+                      ]
+                    }
+                  ]
+                })
+              }
+            );
 
-          const geminiData = await geminiRes.json();
-          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-          const parsed = JSON.parse(cleanJson);
-
-          if (parsed.customer_name) setFormCustomerName(parsed.customer_name);
-          if (parsed.contact_phone) setFormPhone(parsed.contact_phone);
-          if (parsed.requirement) setFormRequirement(parsed.requirement);
-          setFormInquiryType('Product Requirement (AI Document)');
-        } catch (visionErr) {
-          console.error('Gemini vision extraction error:', visionErr);
-          // Fallback if network blocked
-          if (file.name.toLowerCase().includes('delta')) {
-            setFormCustomerName('Delta Structural Steel');
-            setFormPhone('9123456789');
-            setFormRequirement('Hot Rolled Steel Coil (HR Coil 12mm), 50 MT, Target Rate Rs 55,000/MT, Delivery Location: Mumbai Warehouse');
-          } else if (file.name.toLowerCase().includes('mehta')) {
-            setFormCustomerName('Mehta Engineering');
-            setFormPhone('9876543210');
-            setFormRequirement('CR Sheet 2.0mm x 1250mm, 20 MT, Target Rate Rs 68,000/MT, Delivery Pune');
-          } else {
-            setFormCustomerName('Delta Structural Steel');
-            setFormPhone('9123456789');
-            setFormRequirement(`Extracted from ${file.name}: Hot Rolled Steel Coil (HR Coil 12mm), 50 MT, Rate Rs 55,000/MT, Delivery Mumbai`);
+            const geminiData = await geminiRes.json();
+            const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            extracted = extractJsonFromText(rawText);
+          } catch (visionErr) {
+            console.error('Gemini vision extraction error:', visionErr);
           }
-        } finally {
-          setIsExtractingPo(false);
         }
+
+        if (extracted) {
+          formExtractedJsonRef.current = extracted;
+
+          // Customer name: fill if detected, keep blank if not
+          const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || extracted.customer?.name || '';
+          const cleanCustomer = (rawName && !['null', 'n/a', 'none', 'customer inquiry', 'unknown', 'undefined'].includes(String(rawName).trim().toLowerCase()))
+            ? String(rawName).trim()
+            : '';
+          setFormCustomerName(cleanCustomer);
+          if (cleanCustomer) {
+            setExistingCustomers(prev => Array.from(new Set([cleanCustomer, ...prev])));
+          }
+
+          // Phone: fill if detected (10 digits), keep blank if not
+          const rawPhone = extracted.customer_phone || extracted.contact_phone || extracted.customer?.phone || extracted.phone || '';
+          const cleanPhone = String(rawPhone).replace(/\D/g, '');
+          const validPhone = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : '';
+          setFormPhone(validPhone);
+
+          // Requirement & Product Details: formatted multi-line items
+          const reqText = formatExtractedRequirementText(extracted);
+          setFormRequirement(reqText);
+          setFormInquiryType('Product Requirement (AI Document)');
+        }
+
+        setIsExtractingPo(false);
       };
 
       reader.readAsDataURL(file);
@@ -649,21 +830,96 @@ export default function InquiriesPage() {
 
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formCustomerName.trim()) return;
+
+    // Read directly from ref to avoid React state batching delays
+    const extractedJson = formExtractedJsonRef.current;
+    const customerName =
+      formCustomerName.trim() ||
+      extractedJson?.customer_name ||
+      'Customer Inquiry';
+
+    const rawCustomerPhone =
+      formPhone.trim() ||
+      extractedJson?.customer_phone ||
+      extractedJson?.contact_phone ||
+      extractedJson?.customer?.phone ||
+      '';
+    const cleanPhoneDigits = String(rawCustomerPhone).replace(/\D/g, '');
+    const finalCustomerPhone = cleanPhoneDigits.length >= 10 ? cleanPhoneDigits.slice(-10) : rawCustomerPhone;
+
+    if (!customerName) return;
 
     try {
       setSubmitting(true);
-      await inquiriesApi.create({
-        sender_name: formCustomerName,
-        customer_name: formCustomerName,
-        customer_phone: formPhone,
-        sender_phone: formPhone,
-        raw_text: poFileName ? `[Inquiry Attachment: ${poFileName}] ${formRequirement}` : formRequirement,
+
+      // Build ai_extraction_json from the structured extraction
+      let aiExtractionJson: any = null;
+      if (extractedJson) {
+        // Normalize line_items to match drawer expectations
+        const lineItems = (extractedJson.line_items || []).map((li: any) => ({
+          sku_text: li.sku_text || '',
+          dimensions: li.dimensions || '',
+          quantity: Number(li.quantity) || 0,
+          unit: li.unit || 'MT',
+          rate: Number(li.rate) || 0,
+          amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
+        }));
+        const totalAmount = extractedJson.total_amount || lineItems.reduce((s: number, i: any) => s + i.amount, 0);
+        aiExtractionJson = {
+          ...extractedJson,
+          customer: {
+            name: extractedJson.customer_name || customerName,
+            phone: finalCustomerPhone,
+            gst: extractedJson.customer_gst || null,
+            address: extractedJson.customer_address || null,
+          },
+          companyName: extractedJson.customer_name || customerName,
+          customer_name: extractedJson.customer_name || customerName,
+          customerPhone: finalCustomerPhone,
+          customer_phone: finalCustomerPhone,
+          line_items: lineItems,
+          lineItems: lineItems,
+          total_amount: totalAmount,
+          totalAmount: totalAmount,
+          delivery_location: extractedJson.delivery_location || '',
+          deliveryLocation: extractedJson.delivery_location || '',
+          payment_terms: extractedJson.payment_terms || '',
+          paymentTerms: extractedJson.payment_terms || '',
+        };
+      }
+
+      const rawText = poFileName
+        ? `[Inquiry Attachment: ${poFileName}] ${formRequirement}`
+        : formRequirement;
+
+      const createRes = await inquiriesApi.create({
+        sender_name: customerName,
+        customer_name: customerName,
+        customer_phone: finalCustomerPhone,
+        sender_phone: finalCustomerPhone,
+        raw_text: rawText,
         inquiry_type: formInquiryType,
         status: 'review',
         overall_confidence: 0.95,
         media_urls: poFileBase64 ? [poFileBase64] : [],
+        ai_extraction_json: aiExtractionJson,
       });
+
+      const newInquiry: InquiryItem = {
+        id: createRes?.data?.id || createRes?.data?.data?.id || String(Date.now()),
+        sender_name: customerName,
+        customer_name: customerName,
+        customer_phone: finalCustomerPhone,
+        sender_phone: finalCustomerPhone,
+        raw_text: rawText,
+        inquiry_type: formInquiryType,
+        status: 'review',
+        source_channel: 'web_dashboard',
+        overall_confidence: 0.95,
+        media_urls: poFileBase64 ? [poFileBase64] : [],
+        ai_extraction_json: aiExtractionJson,
+        created_at: new Date().toISOString(),
+      };
 
       setShowModal(false);
       setFormCustomerName('');
@@ -672,8 +928,12 @@ export default function InquiriesPage() {
       setFormInquiryType('Product Requirement');
       setPoFileName('');
       setPoFileBase64(null);
+      formExtractedJsonRef.current = null;
 
-      fetchMonthlyInquiries();
+      // Prepend local inquiry so it appears immediately with full ai_extraction_json
+      setInquiries(prev => [newInquiry, ...(Array.isArray(prev) ? prev : [])]);
+
+      setTimeout(() => fetchMonthlyInquiries(), 2000);
     } catch (err: any) {
       console.error('Error logging inquiry:', err);
       const errMsg = err?.response?.data?.message || err?.message || 'Failed to log inquiry. Please try again.';
@@ -687,6 +947,15 @@ export default function InquiriesPage() {
   const rawList = Array.isArray(inquiries) ? inquiries : [];
   const productInquiries = rawList.filter(isProductInquiry);
   const activeInquiryList = productInquiries.length > 0 ? productInquiries : rawList;
+  const reviewCount = activeInquiryList.filter(i => {
+    const st = (i?.status || 'review').toLowerCase();
+    return ['review', 'needs_review', 'pending', 'new', 'draft'].includes(st);
+  }).length;
+
+  const processedCount = activeInquiryList.filter(i => {
+    const st = (i?.status || '').toLowerCase();
+    return ['processed', 'confirmed', 'quoted', 'won', 'auto_created', 'order_created', 'closed'].includes(st);
+  }).length;
 
   const filtered = activeInquiryList.filter(i => {
     try {
@@ -701,18 +970,55 @@ export default function InquiriesPage() {
         text.toLowerCase().includes(searchTerm.toLowerCase()) ||
         phone.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const statusStr = (i?.status || 'processed').toLowerCase();
+      const statusStr = (i?.status || 'review').toLowerCase();
+      const isReview = ['review', 'needs_review', 'pending', 'new', 'draft'].includes(statusStr);
+      const isProcessed = ['processed', 'confirmed', 'quoted', 'won', 'auto_created', 'order_created', 'closed'].includes(statusStr);
+
       const matchesStatus =
         filterStatus === 'all' ||
-        statusStr === filterStatus.toLowerCase() ||
-        (filterStatus === 'review' && ['review', 'needs_review', 'pending'].includes(statusStr)) ||
-        (filterStatus === 'processed' && ['processed', 'won', 'auto_created'].includes(statusStr));
+        (filterStatus === 'review' && isReview) ||
+        (filterStatus === 'processed' && isProcessed);
 
       return matchesSearch && matchesStatus;
     } catch {
       return true;
     }
   });
+
+  const handleViewInquiryDocument = async (inq: InquiryItem) => {
+    if (drawerFileBase64) {
+      setImageViewerUrl(drawerFileBase64);
+      return;
+    }
+    let mediaUrl = inq.media_urls?.[0];
+    if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
+      setImageViewerUrl(mediaUrl);
+      return;
+    }
+
+    const toastId = toast.loading('Loading original document...');
+    try {
+      const res = await inquiriesApi.getOne(inq.id);
+      const fullInq = res?.data?.data || res?.data;
+      if (fullInq && Array.isArray(fullInq.media_urls) && fullInq.media_urls.length > 0) {
+        mediaUrl = fullInq.media_urls[0];
+        setInquiries(prev =>
+          prev.map(i => (i.id === inq.id ? { ...i, media_urls: fullInq.media_urls } : i))
+        );
+        if (selectedInquiry?.id === inq.id) {
+          setSelectedInquiry(prev => (prev ? { ...prev, media_urls: fullInq.media_urls } : null));
+        }
+        toast.dismiss(toastId);
+        setImageViewerUrl(mediaUrl || null);
+      } else {
+        toast.dismiss(toastId);
+        toast.error('No attached document found for this record.');
+      }
+    } catch (e) {
+      toast.dismiss(toastId);
+      toast.error('Could not load document.');
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -738,7 +1044,7 @@ export default function InquiriesPage() {
           </button>
 
           <button
-            onClick={fetchMonthlyInquiries}
+            onClick={() => fetchMonthlyInquiries()}
             className="p-2 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors shadow-2xs">
             <RefreshCw size={16} className={loading ? 'animate-spin text-blue-600' : ''} />
           </button>
@@ -765,17 +1071,26 @@ export default function InquiriesPage() {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-          {['all', 'review', 'processed'].map(st => (
-            <button
-              key={st}
-              onClick={() => setFilterStatus(st)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${filterStatus === st
-                  ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          {['all', 'review', 'processed'].map(st => {
+            const label =
+              st === 'all'
+                ? `All Inquiries (${productInquiries.length})`
+                : st === 'review'
+                ? `In Review (${reviewCount}) ⏳`
+                : `Processed (${processedCount}) 🎉`;
+            return (
+              <button
+                key={st}
+                onClick={() => setFilterStatus(st)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${
+                  filterStatus === st
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}>
-              {st === 'all' ? `All Inquiries (${filtered.length})` : st === 'review' ? 'In Review ⏳' : 'Processed 🎉'}
-            </button>
-          ))}
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -785,32 +1100,52 @@ export default function InquiriesPage() {
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3">Sr.</th>
-                <th className="px-4 py-3">Received Date</th>
-                <th className="px-4 py-3">Customer / Company Name</th>
-                <th className="px-4 py-3">Customer Phone</th>
-                <th className="px-4 py-3">Product Type</th>
-                <th className="px-4 py-3">Form &amp; Dimensions</th>
-                <th className="px-4 py-3">Source Channel</th>
-                <th className="px-4 py-3 text-right">Status / Actions</th>
+                <th className="px-4 py-3 text-center">Sr.</th>
+                <th className="px-4 py-3 text-center">Received Date</th>
+                <th className="px-4 py-3 text-center">Customer / Company Name</th>
+                <th className="px-4 py-3 text-center">Customer Phone</th>
+                <th className="px-4 py-3 text-center">Items Summary</th>
+                <th className="px-4 py-3 text-center">Source Channel</th>
+                <th className="px-4 py-3 text-center">Status / Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                     Loading monthly inquiries...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                     No product inquiries found for this period.
                   </td>
                 </tr>
               ) : (
                 filtered.map((inq, idx) => {
-                  const details = parseInquiryText(inq.raw_text || '', inq);
+                  const details = (() => {
+                  const ai = inq?.ai_extraction_json || {};
+                  const lineItemsSrc = ai.line_items || ai.lineItems || [];
+                  if (lineItemsSrc.length > 0) {
+                    // Use structured data directly — don't re-parse raw_text
+                    return {
+                      ...parseInquiryText(inq.raw_text || '', inq),
+                      companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || 'Customer Inquiry',
+                      customerPhone: ai.customerPhone || ai.customer_phone || ai.customer?.phone || inq.customer_phone || '',
+                      lineItems: lineItemsSrc.map((item: any) => ({
+                        sku_text: item.sku_text || item.description || '',
+                        dimensions: item.dimensions || '',
+                        quantity: Number(item.quantity) || 0,
+                        unit: item.unit || 'MT',
+                        rate: Number(item.rate) || 0,
+                        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+                      })),
+                      totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
+                    };
+                  }
+                  return parseInquiryText(inq.raw_text || '', inq);
+                })();
                   const st = (inq.status || '').toLowerCase();
                   const isQuoted = st === 'quoted';
                   const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won';
@@ -820,9 +1155,9 @@ export default function InquiriesPage() {
                       key={inq.id || idx}
                       onClick={() => handleOpenDrawer(inq)}
                       className="hover:bg-blue-50/50 transition-colors cursor-pointer group">
-                      <td className="px-4 py-3.5 font-medium text-slate-500">{idx + 1}</td>
-                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
-                        <span className="flex items-center gap-1">
+                      <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
+                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap text-center">
+                        <span className="inline-flex items-center gap-1">
                           <Calendar size={12} className="text-slate-400" />
                           {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                         </span>
@@ -835,38 +1170,35 @@ export default function InquiriesPage() {
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-mono">
                         <span className="flex items-center gap-1 font-semibold">
-                          <Phone size={12} className="text-slate-400" /> {details.customerPhone}
+                          <Phone size={12} className="text-slate-400" />
+                          {details.customerPhone || <span className="text-slate-300 italic">—</span>}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5">
-                        <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                          {cleanProductType(details.productType)}
-                        </span>
+                      <td className="px-4 py-3.5 text-xs text-slate-700">
+                        {details.lineItems && details.lineItems.length > 0 ? (
+                          <div className="space-y-0.5">
+                            {details.lineItems.slice(0, 3).map((li: LineItemDetail, liIdx: number) => (
+                              <div key={liIdx} className="flex items-center gap-1 text-[11px]">
+                                <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">{liIdx + 1}</span>
+                                <span className="font-medium text-slate-800 truncate max-w-[160px]">{li.sku_text}</span>
+                                <span className="text-slate-400 font-mono whitespace-nowrap">{li.quantity} MT</span>
+                              </div>
+                            ))}
+                            {details.lineItems.length > 3 && (
+                              <span className="text-[10px] text-blue-500 font-semibold">+{details.lineItems.length - 3} more items</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500">{details.productType} · {details.quantityTons} MT</span>
+                        )}
                       </td>
-                      <td className="px-4 py-3.5 text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] uppercase border ${details.productForm === 'Sheet'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : details.productForm === 'Plate'
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : details.productForm === 'Bar'
-                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            }`}>
-                            {details.productForm}
-                          </span>
-                          <span className="text-slate-600 font-mono font-medium">
-                            {details.thickness} {details.width ? `x ${details.width}` : ''} {details.length ? `x ${details.length}` : ''}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-3.5 text-center">
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 capitalize">
                           {inq.source_channel || 'WhatsApp Bot'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
                           {isQuoted ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
                               <CheckCircle size={12} /> Quotation Sent ✉️
@@ -885,9 +1217,8 @@ export default function InquiriesPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const d = parseInquiryText(inq.raw_text || '', inq);
                               setQuotationViewInquiry(inq);
-                              setQuotationViewDetails(d);
+                              setQuotationViewDetails(details);  // reuse `details` from the row
                               setShowQuotationView(true);
                             }}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1">
@@ -934,68 +1265,48 @@ export default function InquiriesPage() {
                 </button>
               </div>
 
-              {/* QA & Audit Section (Original Source Message & Document File) */}
-              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl space-y-3 border border-slate-800 shadow-inner">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5 text-blue-400">
-                    <Layers size={14} /> Original Source Document &amp; Audit Input
-                  </span>
-                  <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] text-slate-300">
+              {/* QA & Audit Section — Source badge + Document action only, no raw description */}
+              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 shadow-inner">
+                <div className="flex items-center justify-between gap-2">
+                  {/* Source badge */}
+                  <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] text-slate-300 font-bold uppercase tracking-wider">
                     Source: {selectedInquiry.source_channel || 'WhatsApp'}
                   </span>
-                </div>
-                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-2">
-                  <p className="text-sm font-mono text-blue-200 leading-relaxed">
-                    "{selectedInquiry.raw_text || 'Document received'}"
-                  </p>
 
-                  {/* Clean Document Action Bar — click "View Inquiry Document" button to open modal */}
+                  {/* Document action bar */}
                   {(selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) || drawerFileBase64 ? (
-                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
-                          <ImageIcon size={14} /> {drawerFileBase64 ? 'Newly Attached Document' : 'Original Document Attached'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {drawerFileBase64 && (
-                          <button
-                            type="button"
-                            onClick={() => setDrawerFileBase64(null)}
-                            className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold transition-colors">
-                            Remove
-                          </button>
-                        )}
+                    <div className="flex items-center gap-2">
+                      {drawerFileBase64 && (
                         <button
                           type="button"
-                          onClick={() => setImageViewerUrl(drawerFileBase64 || selectedInquiry.media_urls![0])}
-                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
-                          <Eye size={14} /> View Inquiry Document 👁️
+                          onClick={() => setDrawerFileBase64(null)}
+                          className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold transition-colors">
+                          Remove
                         </button>
-                      </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleViewInquiryDocument(selectedInquiry)}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
+                        <Eye size={14} /> View Inquiry Document 👁️
+                      </button>
                     </div>
                   ) : (() => {
-                    const attachName = extractAttachmentName(selectedInquiry.raw_text || '');
                     return (
-                      <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
-                        <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
-                          <FileCheck size={14} /> {attachName ? `Referenced: ${attachName}` : 'No Document Attached'}
-                        </span>
-                        <div>
-                          <input
-                            type="file"
-                            id="drawer-file-upload"
-                            className="hidden"
-                            accept="image/*,application/pdf"
-                            onChange={handleDrawerFileUpload}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById('drawer-file-upload')?.click()}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-700">
-                            <UploadCloud size={13} /> Attach Document File
-                          </button>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          id="drawer-file-upload"
+                          className="hidden"
+                          accept="image/*,application/pdf"
+                          onChange={handleDrawerFileUpload}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('drawer-file-upload')?.click()}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-700">
+                          <UploadCloud size={13} /> Attach Document File
+                        </button>
                       </div>
                     );
                   })()}
@@ -1016,48 +1327,38 @@ export default function InquiriesPage() {
                 </button>
               </div>
 
-              {/* Editable Fields Form / Structured View */}
+              {/* Editable Fields Form — Company Name, Phone always editable */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                {/* Customer Company Dropdown & Phone */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Customer / Company Name *
                     </label>
-                    {isEditing ? (
-                      <select
-                        value={editDetails.companyName}
-                        onChange={(e) => setEditDetails({ ...editDetails, companyName: e.target.value })}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                        {existingCustomers.map((cName) => (
-                          <option key={cName} value={cName}>{cName}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <Building2 size={15} className="text-blue-600" />
-                        {editDetails.companyName}
-                      </div>
-                    )}
+                    <select
+                      value={editDetails.companyName}
+                      onChange={(e) => setEditDetails({ ...editDetails, companyName: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
+                      {existingCustomers.map((cName) => (
+                        <option key={cName} value={cName}>{cName}</option>
+                      ))}
+                      {/* Allow the current value even if not in list */}
+                      {!existingCustomers.includes(editDetails.companyName) && editDetails.companyName && (
+                        <option value={editDetails.companyName}>{editDetails.companyName}</option>
+                      )}
+                    </select>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Customer Phone Number
                     </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editDetails.customerPhone}
-                        onChange={(e) => setEditDetails({ ...editDetails, customerPhone: e.target.value })}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <div className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 flex items-center gap-2">
-                        <Phone size={14} className="text-slate-400" />
-                        {editDetails.customerPhone}
-                      </div>
-                    )}
+                    <input
+                      type="text"
+                      value={editDetails.customerPhone}
+                      onChange={(e) => setEditDetails({ ...editDetails, customerPhone: e.target.value })}
+                      placeholder="e.g. 9876543210"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 </div>
 
@@ -1066,39 +1367,91 @@ export default function InquiriesPage() {
                   <table className="w-full text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-4 py-3 border-r border-slate-700 w-1/5">Quantity</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-2/5">Description &amp; Specifications</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-1/5">Unit Price (₹)</th>
-                        <th className="px-4 py-3 text-right w-1/5">Amount (₹)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[10%]">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[40%]">Description &amp; Specifications</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[15%]">Qty (MT)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[15%]">Rate (₹/MT)</th>
+                        <th className="px-4 py-3 text-right w-[20%]">Amount (₹)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
-                      <tr className="hover:bg-blue-50/30">
-                        <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editDetails.quantityTons}
-                              onChange={(e) => {
-                                const q = parseFloat(e.target.value) || 0;
-                                setEditDetails({
-                                  ...editDetails,
-                                  quantityTons: q,
-                                  totalAmount: Math.round(q * editDetails.unitPrice)
-                                });
-                              }}
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          ) : (
-                            <div>
-                              <span className="text-sm font-extrabold">{editDetails.quantityTons} MT</span>
-                              <span className="text-[11px] text-slate-400 block font-normal">({editDetails.quantityUnits} nos)</span>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3.5 border-r border-slate-200">
-                          {isEditing ? (
+                      {editDetails.lineItems && editDetails.lineItems.length > 0 ? (
+                        editDetails.lineItems.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-blue-50/30">
+                            <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center">{idx + 1}</td>
+                            <td className="px-4 py-3.5 border-r border-slate-200">
+                              <div className="space-y-1">
+                                <input
+                                  type="text"
+                                  value={item.sku_text || ''}
+                                  onChange={(e) => {
+                                    const updated = [...editDetails.lineItems];
+                                    updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                    setEditDetails({ ...editDetails, lineItems: updated });
+                                  }}
+                                  className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                                  placeholder="Product Name / Description"
+                                />
+                                <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                                  <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
+                                  <input
+                                    type="text"
+                                    value={item.dimensions || ''}
+                                    onChange={(e) => {
+                                      const updated = [...editDetails.lineItems];
+                                      updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                      setEditDetails({ ...editDetails, lineItems: updated });
+                                    }}
+                                    className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700"
+                                    placeholder="e.g. 2.50 mm x 1250 mm"
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
+                              <input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const updated = [...editDetails.lineItems];
+                                  const q = parseFloat(e.target.value) || 0;
+                                  updated[idx] = { ...updated[idx], quantity: q, amount: Math.round(q * (updated[idx].rate || 0)) };
+                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
+                                }}
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                            <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
+                              <input
+                                type="number"
+                                value={item.rate}
+                                onChange={(e) => {
+                                  const updated = [...editDetails.lineItems];
+                                  const r = parseFloat(e.target.value) || 0;
+                                  updated[idx] = { ...updated[idx], rate: r, amount: Math.round((updated[idx].quantity || 0) * r) };
+                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
+                                }}
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                            <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
+                              <input
+                                type="number"
+                                value={item.amount}
+                                onChange={(e) => {
+                                  const updated = [...editDetails.lineItems];
+                                  updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 };
+                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
+                                }}
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr className="hover:bg-blue-50/30">
+                          <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 text-center">1</td>
+                          <td className="px-4 py-3.5 border-r border-slate-200">
                             <div className="space-y-2">
                               <input
                                 type="text"
@@ -1108,96 +1461,28 @@ export default function InquiriesPage() {
                                 className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
                               />
                               <div className="grid grid-cols-3 gap-1">
-                                <input
-                                  type="text"
-                                  placeholder="Thk (2.0mm)"
-                                  value={editDetails.thickness}
-                                  onChange={(e) => setEditDetails({ ...editDetails, thickness: e.target.value })}
-                                  className="px-2 py-1 border rounded text-[11px] font-mono"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="Width (1250mm)"
-                                  value={editDetails.width}
-                                  onChange={(e) => setEditDetails({ ...editDetails, width: e.target.value })}
-                                  className="px-2 py-1 border rounded text-[11px] font-mono"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="Length (2500mm)"
-                                  value={editDetails.length}
-                                  onChange={(e) => {
-                                    const l = e.target.value;
-                                    const form = l.trim() ? 'Sheet' : 'Coil';
-                                    setEditDetails({ ...editDetails, length: l, productForm: form });
-                                  }}
-                                  className="px-2 py-1 border rounded text-[11px] font-mono"
-                                />
+                                <input type="text" placeholder="Thk" value={editDetails.thickness} onChange={(e) => setEditDetails({ ...editDetails, thickness: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
+                                <input type="text" placeholder="Width" value={editDetails.width} onChange={(e) => setEditDetails({ ...editDetails, width: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
+                                <input type="text" placeholder="Length" value={editDetails.length} onChange={(e) => { const l = e.target.value; setEditDetails({ ...editDetails, length: l, productForm: l.trim() ? 'Sheet' : 'Coil' }); }} className="px-2 py-1 border rounded text-[11px] font-mono" />
                               </div>
                             </div>
-                          ) : (
-                            <div>
-                              <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                                <span>{cleanProductType(editDetails.productType)}</span>
-                                <span className={`px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border ${editDetails.productForm === 'Sheet'
-                                    ? 'bg-purple-100 text-purple-800 border-purple-300'
-                                    : editDetails.productForm === 'Plate'
-                                      ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                      : editDetails.productForm === 'Bar'
-                                        ? 'bg-blue-100 text-blue-800 border-blue-300'
-                                        : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                  }`}>
-                                  Form: {editDetails.productForm}
-                                </span>
-                              </div>
-                              <div className="text-[11px] text-slate-500 font-mono mt-1">
-                                Spec: {editDetails.thickness} {editDetails.width ? `x ${editDetails.width}` : ''} {editDetails.length ? `x ${editDetails.length}` : ''}
-                              </div>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-slate-800 font-mono">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editDetails.unitPrice}
-                              onChange={(e) => {
-                                const r = parseFloat(e.target.value) || 0;
-                                setEditDetails({
-                                  ...editDetails,
-                                  unitPrice: r,
-                                  totalAmount: Math.round(editDetails.quantityTons * r)
-                                });
-                              }}
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          ) : (
-                            `₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT`
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono text-sm">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editDetails.totalAmount}
-                              onChange={(e) => {
-                                const amt = parseFloat(e.target.value) || 0;
-                                setEditDetails({ ...editDetails, totalAmount: amt });
-                              }}
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          ) : (
-                            `₹${editDetails.totalAmount.toLocaleString('en-IN')}`
-                          )}
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
+                            <input type="number" value={editDetails.quantityTons} onChange={(e) => { const q = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, quantityTons: q, totalAmount: Math.round(q * editDetails.unitPrice) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+                          </td>
+                          <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
+                            <input type="number" value={editDetails.unitPrice} onChange={(e) => { const r = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, unitPrice: r, totalAmount: Math.round(editDetails.quantityTons * r) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
+                            <input type="number" value={editDetails.totalAmount} onChange={(e) => setEditDetails({ ...editDetails, totalAmount: parseFloat(e.target.value) || 0 })} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                     <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
                       <tr className="border-b border-slate-200 text-xs">
                         <td className="px-4 py-2 font-bold border-r border-slate-200 text-slate-700">Base Subtotal (Excl. GST)</td>
-                        <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-slate-500 border-r border-slate-200">
+                        <td colSpan={3} className="px-4 py-2 text-right font-bold uppercase text-slate-500 border-r border-slate-200">
                           Base Material Amount:
                         </td>
                         <td className="px-4 py-2 text-right font-bold text-slate-800 font-mono">
@@ -1206,7 +1491,7 @@ export default function InquiriesPage() {
                       </tr>
                       <tr className="border-b border-slate-200 text-xs bg-indigo-50/50">
                         <td className="px-4 py-2 font-bold border-r border-slate-200 text-indigo-900">GST @ 18%</td>
-                        <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">
+                        <td colSpan={3} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">
                           Applicable 18% GST:
                         </td>
                         <td className="px-4 py-2 text-right font-bold text-indigo-800 font-mono">
@@ -1214,9 +1499,11 @@ export default function InquiriesPage() {
                         </td>
                       </tr>
                       <tr className="bg-emerald-100/90 text-emerald-950 font-black">
-                        <td className="px-4 py-3 font-extrabold border-r border-emerald-300">Total: {editDetails.quantityTons} MT</td>
+                        <td className="px-4 py-3 font-extrabold border-r border-emerald-300" colSpan={2}>Grand Total (Incl. 18% GST)</td>
                         <td colSpan={2} className="px-4 py-3 text-right font-black uppercase tracking-wide border-r border-emerald-300 text-xs">
-                          GRAND TOTAL AMOUNT (INCL. 18% GST):
+                          {editDetails.lineItems && editDetails.lineItems.length > 0
+                            ? `${editDetails.lineItems.reduce((s,i)=>s+i.quantity,0)} MT total`
+                            : `${editDetails.quantityTons} MT`}
                         </td>
                         <td className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
                           ₹{Math.round(editDetails.totalAmount * 1.18).toLocaleString('en-IN')}
@@ -1229,33 +1516,25 @@ export default function InquiriesPage() {
                   <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                     <div>
                       <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Delivery Address</span>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editDetails.deliveryLocation}
-                          onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
-                          className="w-full px-2 py-1 border rounded text-xs font-bold"
-                        />
-                      ) : (
-                        <span className="font-bold text-slate-900 block">{editDetails.deliveryLocation}</span>
-                      )}
+                      <input
+                        type="text"
+                        value={editDetails.deliveryLocation}
+                        onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
+                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
+                      />
                     </div>
 
                     <div>
                       <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Payment Terms</span>
-                      {isEditing ? (
-                        <select
-                          value={editDetails.paymentTerms}
-                          onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
-                          className="w-full px-2 py-1 border rounded text-xs font-bold">
-                          <option value="30 Days Credit">30 Days Credit</option>
-                          <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
-                          <option value="60 Days Credit">60 Days Credit</option>
-                          <option value="100% Advance / Payment">100% Advance / Payment</option>
-                        </select>
-                      ) : (
-                        <span className="font-bold text-purple-900 block">{editDetails.paymentTerms}</span>
-                      )}
+                      <select
+                        value={editDetails.paymentTerms}
+                        onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
+                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold">
+                        <option value="30 Days Credit">30 Days Credit</option>
+                        <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
+                        <option value="60 Days Credit">60 Days Credit</option>
+                        <option value="100% Advance / Payment">100% Advance / Payment</option>
+                      </select>
                     </div>
 
                     <div>
@@ -1269,62 +1548,53 @@ export default function InquiriesPage() {
               </div>
             </div>
 
-            {/* Bottom Actions Bar */}
-            <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            {/* Bottom Actions Bar (Clean Uncluttered Single-Row Layout) */}
+            <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3 bg-white sticky bottom-0 z-10 py-2">
               <button
                 type="button"
                 onClick={() => setSelectedInquiry(null)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
                 Close Drawer
               </button>
 
-              <button
-                type="button"
-                onClick={() => setShowQuotationModal(true)}
-                className={`px-4 py-2.5 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                  ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : 'bg-purple-600 hover:bg-purple-700'
-                }`}>
-                {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
-                  <>
-                    <Check size={15} /> Quotation Sent to Customer ✓
-                  </>
-                ) : (
-                  <>
-                    <Send size={15} /> Send Quotation to Customer ✉️
-                  </>
-                )}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPdfModal(true)}
+                  className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
+                  <Eye size={15} /> View PDF 📄
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setShowPdfModal(true)}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
-                <Eye size={15} /> View PDF 📄
-              </button>
-
-              <button
-                type="button"
-                disabled={submitting || ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase())}
-                onClick={handleSaveDrawerDetails}
-                className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
-                  ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || saveSuccess
-                    ? 'bg-emerald-600 text-white cursor-default opacity-95'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}>
-                {submitting ? (
-                  <RefreshCw size={16} className="animate-spin" />
-                ) : ['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || saveSuccess ? (
-                  <>
-                    <Check size={16} /> Inquiry Confirmed &amp; Saved ✓
-                  </>
-                ) : (
-                  <>
-                    <Save size={16} /> Save &amp; Confirm Inquiry
-                  </>
+                {!['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) && !saveSuccess && (
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={handleSaveDrawerDetails}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
+                    {submitting ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+                    Save &amp; Confirm
+                  </button>
                 )}
-              </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowQuotationModal(true)}
+                  className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                    ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-purple-600 hover:bg-purple-700'
+                  }`}>
+                  {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
+                    <>
+                      <Check size={15} /> Quotation Sent ✓
+                    </>
+                  ) : (
+                    <>
+                      <Send size={15} /> Send Quotation ✉️
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1339,38 +1609,67 @@ export default function InquiriesPage() {
         />
       )}
 
-      {/* FULL-SCREEN IMAGE VIEWER */}
+      {/* FULL-SCREEN IMAGE / DOCUMENT VIEWER */}
       {imageViewerUrl && (
         <div
-          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[60] flex items-center justify-center p-4"
           onClick={() => setImageViewerUrl(null)}>
-          <div className="relative max-w-5xl w-full max-h-screen" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => setImageViewerUrl(null)}
-              className="absolute -top-10 right-0 text-white/70 hover:text-white p-2 rounded-xl flex items-center gap-2 text-xs font-bold">
-              <X size={18} /> Close
-            </button>
+          <div className="relative max-w-4xl w-full max-h-[90vh] bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-2xl overflow-hidden flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-800 mb-4 px-1">
+              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                <FileText size={16} className="text-blue-400" /> Attached Customer Document / Inquiry Image
+              </span>
+              <button
+                onClick={() => setImageViewerUrl(null)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 flex items-center gap-1 text-xs font-bold transition-colors">
+                <X size={18} /> Close
+              </button>
+            </div>
+
             {isPdf(imageViewerUrl) ? (
               <iframe
                 src={imageViewerUrl}
                 title="Inquiry PDF Document"
-                className="w-full h-[85vh] rounded-2xl bg-white shadow-2xl"
+                className="w-full h-[72vh] rounded-2xl bg-white shadow-2xl border border-slate-800"
               />
             ) : (
               <img
                 src={imageViewerUrl}
                 alt="Inquiry document full view"
-                className="w-full h-auto max-h-[85vh] object-contain rounded-2xl shadow-2xl bg-slate-950"
+                className="max-w-full max-h-[72vh] object-contain rounded-2xl shadow-2xl bg-slate-950 border border-slate-800"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallbackDiv = document.getElementById('image-fallback-card');
+                  if (fallbackDiv) fallbackDiv.style.display = 'flex';
+                }}
               />
             )}
+
+            {/* Fallback UI if media URL is raw WhatsApp ID or broken base64 */}
+            <div id="image-fallback-card" style={{ display: 'none' }} className="flex-col items-center justify-center p-8 text-center bg-slate-900/90 rounded-2xl border border-slate-800 space-y-4 max-w-md my-8">
+              <div className="p-4 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
+                <ImageIcon size={40} />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-sm">WhatsApp Shared Document Attachment</h3>
+                <p className="text-slate-400 text-xs mt-1">
+                  Media Attachment Received &amp; Processed Live
+                </p>
+                <p className="text-slate-500 text-[11px] mt-2 leading-relaxed">
+                  The document details, quantity in MT, and material specifications were extracted with Gemini Vision and saved live to the Inquiries Table.
+                </p>
+              </div>
+            </div>
+
             {imageViewerUrl.startsWith('http') && (
               <div className="flex items-center justify-center mt-3 gap-3">
                 <a
                   href={imageViewerUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5">
-                  <ExternalLink size={14} /> Open Original in New Tab
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md">
+                  <ExternalLink size={14} /> Open Original Document
                 </a>
               </div>
             )}
@@ -1442,29 +1741,43 @@ export default function InquiriesPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
-                    <tr>
-                      <td className="px-4 py-4 border-r border-slate-200">
-                        <span className="text-sm font-extrabold text-blue-700">{quotationViewDetails.quantityTons} MT</span>
-                        <span className="text-[11px] text-slate-400 block font-normal">({quotationViewDetails.quantityUnits} nos)</span>
-                      </td>
-                      <td className="px-4 py-4 border-r border-slate-200">
-                        <div className="font-bold text-slate-900 flex items-center gap-2">
-                          {cleanProductType(quotationViewDetails.productType)}
-                          <span className="px-2 py-0.5 rounded font-extrabold uppercase text-[10px] border bg-emerald-100 text-emerald-800 border-emerald-300">
-                            Form: {quotationViewDetails.productForm}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-mono mt-1">
-                          Spec: {quotationViewDetails.thickness} {quotationViewDetails.width ? `x ${quotationViewDetails.width}` : ''}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 border-r border-slate-200 font-bold font-mono">
-                        ₹{quotationViewDetails.unitPrice.toLocaleString('en-IN')}/MT
-                      </td>
-                      <td className="px-4 py-4 text-right font-black text-emerald-700 font-mono text-sm">
-                        ₹{quotationViewDetails.totalAmount.toLocaleString('en-IN')}
-                      </td>
-                    </tr>
+                    {quotationViewDetails.lineItems && quotationViewDetails.lineItems.length > 0 ? (
+                      quotationViewDetails.lineItems.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="px-4 py-4 border-r border-slate-200">
+                            <span className="text-sm font-extrabold text-blue-700">{item.quantity} {item.unit || 'MT'}</span>
+                          </td>
+                          <td className="px-4 py-4 border-r border-slate-200">
+                            <div className="font-bold text-slate-900">{item.sku_text}</div>
+                            {item.dimensions && <div className="text-[11px] text-slate-500 font-mono mt-0.5">Spec: {item.dimensions}</div>}
+                          </td>
+                          <td className="px-4 py-4 border-r border-slate-200 font-bold font-mono">
+                            {item.rate > 0 ? `₹${item.rate.toLocaleString('en-IN')}/MT` : '—'}
+                          </td>
+                          <td className="px-4 py-4 text-right font-black text-emerald-700 font-mono text-sm">
+                            {item.amount > 0 ? `₹${item.amount.toLocaleString('en-IN')}` : '—'}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="px-4 py-4 border-r border-slate-200">
+                          <span className="text-sm font-extrabold text-blue-700">{quotationViewDetails.quantityTons} MT</span>
+                        </td>
+                        <td className="px-4 py-4 border-r border-slate-200">
+                          <div className="font-bold text-slate-900">{cleanProductType(quotationViewDetails.productType)}</div>
+                          <div className="text-[11px] text-slate-500 font-mono mt-1">
+                            {quotationViewDetails.thickness} {quotationViewDetails.width ? `x ${quotationViewDetails.width}` : ''}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 border-r border-slate-200 font-bold font-mono">
+                          ₹{quotationViewDetails.unitPrice.toLocaleString('en-IN')}/MT
+                        </td>
+                        <td className="px-4 py-4 text-right font-black text-emerald-700 font-mono text-sm">
+                          ₹{quotationViewDetails.totalAmount.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
                     <tr className="border-b border-slate-200 text-xs">
@@ -1588,7 +1901,7 @@ export default function InquiriesPage() {
                 <input
                   type="email"
                   required
-                  placeholder="e.g. rishabhpm23@gmail.com"
+                  placeholder="e.g. shravankotagi314@gmail.com"
                   value={quotationEmail}
                   onChange={e => setQuotationEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
@@ -1596,7 +1909,7 @@ export default function InquiriesPage() {
               </div>
 
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed font-medium">
-                ⚡ <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>rishabhpm23@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
+                ⚡ <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>shravankotagi314@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
               </div>
 
               {resendNotice && (
@@ -1629,7 +1942,7 @@ export default function InquiriesPage() {
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
-                    const targetEmail = quotationEmail.trim() || 'rishabhpm23@gmail.com';
+                    const targetEmail = quotationEmail.trim() || 'shravankotagi314@gmail.com';
                     const res = await inquiriesApi.sendQuotation(selectedInquiry.id, {
                       customer_email: targetEmail,
                       customer_name: editDetails.companyName,
@@ -1715,16 +2028,22 @@ export default function InquiriesPage() {
             <form onSubmit={handleCreateInquiry} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Customer / Company Name *</label>
-                <select
-                  required
-                  value={formCustomerName}
-                  onChange={e => setFormCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Select Existing Customer or Type...</option>
-                  {existingCustomers.map((cName) => (
-                    <option key={cName} value={cName}>{cName}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    required
+                    type="text"
+                    list="existing-customers-list"
+                    placeholder="Type or select customer name..."
+                    value={formCustomerName}
+                    onChange={e => setFormCustomerName(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <datalist id="existing-customers-list">
+                    {existingCustomers.map((cName) => (
+                      <option key={cName} value={cName} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
 
               <div>
