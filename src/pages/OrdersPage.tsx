@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag,
   Plus,
@@ -51,8 +52,18 @@ interface Order {
 }
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const { data: rawOrders = [], isLoading: loading, refetch: fetchOrders } = useQuery<Order[]>({
+    queryKey: ['orders-list'],
+    queryFn: async () => {
+      const res = await ordersApi.getAll();
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    },
+  });
+
+  const orders: Order[] = Array.isArray(rawOrders) ? rawOrders : [];
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -94,25 +105,6 @@ export default function OrdersPage() {
     if (!url) return false;
     return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
   };
-
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      const res = await ordersApi.getAll();
-      const raw = res?.data;
-      const list = Array.isArray(raw) ? raw : raw?.data && Array.isArray(raw.data) ? raw.data : [];
-      setOrders(list);
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-      setOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -296,6 +288,7 @@ export default function OrdersPage() {
       setPoFileName('');
       setFormUploadedBase64(null);
 
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       fetchOrders();
     } catch (err: any) {
       console.error('Error creating order:', err);
@@ -377,7 +370,7 @@ export default function OrdersPage() {
         <div className="flex flex-wrap items-center gap-2">
           <DateFilterControl onChange={setDateRange} />
           <button
-            onClick={fetchOrders}
+            onClick={() => fetchOrders()}
             className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
             title="Refresh">
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />

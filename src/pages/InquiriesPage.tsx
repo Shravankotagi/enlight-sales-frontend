@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
@@ -299,22 +300,17 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 export default function InquiriesPage() {
   const navigate = useNavigate();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
-  const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  // Selected Inquiry for Interpretation Drawer & QA Audit
-  const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
-  const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  // Send Quotation Email State (Resend API)
-  const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [quotationEmail, setQuotationEmail] = useState('shravankotagi314@gmail.com');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
@@ -351,9 +347,9 @@ export default function InquiriesPage() {
     return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
   };
 
-  const fetchMonthlyInquiries = async () => {
-    try {
-      setLoading(true);
+  const { data: rawInquiries = [], isLoading: loading, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
+    queryKey: ['inquiries-list', dateRange],
+    queryFn: async () => {
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
@@ -362,38 +358,16 @@ export default function InquiriesPage() {
       let list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
 
       if (list.length === 0) {
-        const fallbackRes = await inquiriesApi.getAll({});
+        const fallbackRes = await inquiriesApi.getAll({}).catch(() => null);
         list = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes?.data?.data) ? fallbackRes.data.data : []);
       }
+      return list;
+    },
+  });
 
-      setInquiries(prev => {
-        const localList = Array.isArray(prev) ? prev : [];
-        const localItemMap = new Map(
-          localList.map(i => [i.id, i])
-        );
-
-        // Merge backend list with updated local items, preserving local ai_extraction_json & status
-        const mergedList = list.map((item: InquiryItem) => {
-          const localItem = localItemMap.get(item.id);
-          if (!localItem) return item;
-          const isConfirmed = ['confirmed', 'quoted', 'won'].includes((localItem.status || '').toLowerCase());
-          return {
-            ...item,
-            ...(isConfirmed ? localItem : {}),
-            ai_extraction_json: localItem.ai_extraction_json || item.ai_extraction_json,
-          };
-        });
-
-        // Add local-only items that backend list didn't return yet
-        const backendIds = new Set(list.map((i: InquiryItem) => i.id));
-        const localOnlyItems = localList.filter(
-          i => !backendIds.has(i.id)
-        );
-
-        return [...localOnlyItems, ...mergedList];
-      });
-
-      // Fetch customer directory for modal dropdown (unpacks res.data.data array cleanly!)
+  const { data: rawCustomers = [] } = useQuery<string[]>({
+    queryKey: ['customer-names-list'],
+    queryFn: async () => {
       const custRes = await customersApi.getAll().catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
@@ -411,17 +385,37 @@ export default function InquiriesPage() {
         'Kirloskar Pneumatic'
       ];
 
-      const allCustomers = Array.from(new Set([...fetchedNames, ...defaultNames]));
-      setExistingCustomers(allCustomers);
-    } catch (err) {
-      console.error('Error fetching monthly inquiries:', err);
-      const fallbackRes = await inquiriesApi.getAll({}).catch(() => null);
-      const list = Array.isArray(fallbackRes?.data) ? fallbackRes.data : (Array.isArray(fallbackRes?.data?.data) ? fallbackRes.data.data : []);
-      setInquiries(list);
-    } finally {
-      setLoading(false);
+      return Array.from(new Set([...fetchedNames, ...defaultNames]));
+    },
+  });
+
+  useEffect(() => {
+    if (Array.isArray(rawInquiries)) {
+      setInquiries(prev => {
+        const localList = Array.isArray(prev) ? prev : [];
+        const localItemMap = new Map(localList.map(i => [i.id, i]));
+        const mergedList = rawInquiries.map((item: InquiryItem) => {
+          const localItem = localItemMap.get(item.id);
+          if (!localItem) return item;
+          const isConfirmed = ['confirmed', 'quoted', 'won'].includes((localItem.status || '').toLowerCase());
+          return {
+            ...item,
+            ...(isConfirmed ? localItem : {}),
+            ai_extraction_json: localItem.ai_extraction_json || item.ai_extraction_json,
+          };
+        });
+        const backendIds = new Set(rawInquiries.map((i: InquiryItem) => i.id));
+        const localOnlyItems = localList.filter(i => !backendIds.has(i.id));
+        return [...localOnlyItems, ...mergedList];
+      });
     }
-  };
+  }, [rawInquiries]);
+
+  useEffect(() => {
+    if (Array.isArray(rawCustomers) && rawCustomers.length > 0) {
+      setExistingCustomers(rawCustomers);
+    }
+  }, [rawCustomers]);
 
   const handleOpenDrawer = (inq: InquiryItem) => {
     setSelectedInquiry(inq);
@@ -1019,7 +1013,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
           </button>
 
           <button
-            onClick={fetchMonthlyInquiries}
+            onClick={() => fetchMonthlyInquiries()}
             className="p-2 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors shadow-2xs">
             <RefreshCw size={16} className={loading ? 'animate-spin text-blue-600' : ''} />
           </button>
