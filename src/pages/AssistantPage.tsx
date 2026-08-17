@@ -18,6 +18,7 @@ import {
   Users,
   Search,
 } from 'lucide-react';
+import KnowledgeBaseModal from '../components/KnowledgeBaseModal';
 
 interface ChatMessage {
   id: string;
@@ -45,6 +46,7 @@ export default function AssistantPage() {
   const [loading, setLoading] = useState(false);
   const [fetchingSessions, setFetchingSessions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [kbModalOpen, setKbModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeEmployee = viewingAs || employee;
@@ -262,17 +264,31 @@ export default function AssistantPage() {
           </div>
         </div>
 
-        {/* Identity & Scope Badge */}
-        <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 px-3.5 py-1.5 rounded-xl">
-          <Shield size={16} className="text-emerald-600 shrink-0" />
-          <div className="text-xs">
-            <span className="text-gray-500">Scope Indicator: </span>
-            <span className="font-semibold text-gray-900">
-              {activeEmployee?.name || 'Authorized User'}
-            </span>
-            <span className="ml-2 uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
-              {role}
-            </span>
+        {/* Header Right: Knowledge Base Action + Scope Badge */}
+        <div className="flex items-center gap-3">
+          {isManagerOrAdmin && (
+            <button
+              onClick={() => setKbModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+              title="Upload and manage Knowledge Base documents & vectors"
+            >
+              <BookOpen size={14} className="text-blue-600" />
+              <span>Manage Knowledge Base</span>
+            </button>
+          )}
+
+          {/* Identity & Scope Badge */}
+          <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 px-3.5 py-1.5 rounded-xl">
+            <Shield size={16} className="text-emerald-600 shrink-0" />
+            <div className="text-xs">
+              <span className="text-gray-500">Scope Indicator: </span>
+              <span className="font-semibold text-gray-900">
+                {activeEmployee?.name || 'Authorized User'}
+              </span>
+              <span className="ml-2 uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
+                {role}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -490,6 +506,13 @@ export default function AssistantPage() {
           </div>
         </div>
       </div>
+
+      {/* Knowledge Base Management Modal */}
+      <KnowledgeBaseModal
+        isOpen={kbModalOpen}
+        onClose={() => setKbModalOpen(false)}
+        isAdmin={isManagerOrAdmin}
+      />
     </div>
   );
 }

@@ -121,4 +121,15 @@ export const chatbotApi = {
     API.get(`/chat/sessions/${sessionId}/messages`),
 };
 
+export const kbApi = {
+  listDocuments: () => API.get('/chat/kb/documents'),
+  uploadDocument: (data: {
+    title: string;
+    content: string;
+    visibilityRole: string;
+    sourceFileUrl?: string;
+  }) => API.post('/chat/kb/upload', data),
+  deleteDocument: (id: string) => API.delete(`/chat/kb/documents/${id}`),
+};
+
 export default API;
