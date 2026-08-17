@@ -45,6 +45,7 @@ export const dealsApi = {
   updateStage: (id: string, stage: string, lost_reason?: string) =>
     API.patch(`/deals/${id}/stage`, { stage, lost_reason }),
   processPo: (data: any) => API.post('/deals/process-po', data),
+  delete: (id: string) => API.delete(`/deals/${id}`),
 };
 
 export const customersApi = {
@@ -80,6 +81,7 @@ export const ordersApi = {
   getOne: (id: string) => API.get(`/deals/${id}`),
   create: (data: any) => API.post('/deals/order', data),
   processPo: (data: any) => API.post('/deals/process-po', data),
+  delete: (id: string) => API.delete(`/deals/${id}`),
 };
 
 export const inquiriesApi = {
