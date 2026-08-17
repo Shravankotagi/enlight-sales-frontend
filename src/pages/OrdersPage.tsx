@@ -357,10 +357,7 @@ export default function OrdersPage() {
     if (mediaUrl) {
       setPoImageViewerUrl(mediaUrl);
     } else {
-      toast('Opening full Order details and line items breakdown.', {
-        icon: '📄',
-      });
-      setSelectedDrawerOrder(ord);
+      toast.error('No original PO document image/PDF attached to this record.');
     }
   };
 
