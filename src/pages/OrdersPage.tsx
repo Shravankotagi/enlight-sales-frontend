@@ -450,13 +450,13 @@ export default function OrdersPage() {
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3">Sr.</th>
-                <th className="px-4 py-3">Order Date</th>
-                <th className="px-4 py-3">PO Number</th>
-                <th className="px-4 py-3">Customer Name</th>
-                <th className="px-4 py-3">Products &amp; Items</th>
-                <th className="px-4 py-3 text-right">Order Value (₹)</th>
-                <th className="px-4 py-3">Delivery Location</th>
+                <th className="px-4 py-3 text-center">Sr.</th>
+                <th className="px-4 py-3 text-center">Order Date</th>
+                <th className="px-4 py-3 text-center">PO Number</th>
+                <th className="px-4 py-3 text-center">Customer Name</th>
+                <th className="px-4 py-3 text-center">Products &amp; Items</th>
+                <th className="px-4 py-3 text-center">Order Value (₹)</th>
+                <th className="px-4 py-3 text-center">Delivery Location</th>
                 <th className="px-4 py-3 text-center">Purchase Order</th>
               </tr>
             </thead>
@@ -482,11 +482,11 @@ export default function OrdersPage() {
                       onClick={() => setSelectedDrawerOrder(ord)}
                       className="hover:bg-blue-50/80 transition-colors cursor-pointer group select-none"
                       title="Click anywhere on row to view full Order Details in table format">
-                      <td className="px-4 py-3.5 font-medium text-slate-500">{idx + 1}</td>
-                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                      <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
+                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap text-center">
                         {ord.po_date || (ord.created_at ? new Date(ord.created_at).toLocaleDateString('en-IN') : '-')}
                       </td>
-                      <td className="px-4 py-3.5 font-mono text-xs text-blue-700 font-semibold">
+                      <td className="px-4 py-3.5 font-mono text-xs text-blue-700 font-semibold text-center">
                         <span className="inline-flex items-center gap-1.5 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-md border border-blue-200 group-hover:border-blue-600 transition-all font-bold shadow-2xs">
                           <FileText size={13} /> {ord.po_number || 'PO-2026-AUTO'}
                         </span>
@@ -583,12 +583,12 @@ export default function OrdersPage() {
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider text-[11px]">
                     <tr>
-                      <th className="px-4 py-3">Sr.</th>
-                      <th className="px-4 py-3">Material Description &amp; SKU</th>
-                      <th className="px-4 py-3">Dimensions / Specs</th>
-                      <th className="px-4 py-3 text-right">Quantity</th>
-                      <th className="px-4 py-3 text-right">Unit Rate (₹/MT)</th>
-                      <th className="px-4 py-3 text-right">Line Amount (₹)</th>
+                      <th className="px-4 py-3 text-center">Sr.</th>
+                      <th className="px-4 py-3 text-center">Material Description &amp; SKU</th>
+                      <th className="px-4 py-3 text-center">Dimensions / Specs</th>
+                      <th className="px-4 py-3 text-center">Quantity</th>
+                      <th className="px-4 py-3 text-center">Unit Rate (₹/MT)</th>
+                      <th className="px-4 py-3 text-center">Line Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">

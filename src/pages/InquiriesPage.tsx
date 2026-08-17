@@ -1105,13 +1105,13 @@ const formatExtractedRequirementText = (extracted: any): string => {
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3">Sr.</th>
-                <th className="px-4 py-3">Received Date</th>
-                <th className="px-4 py-3">Customer / Company Name</th>
-                <th className="px-4 py-3">Customer Phone</th>
-                <th className="px-4 py-3">Items Summary</th>
-                <th className="px-4 py-3">Source Channel</th>
-                <th className="px-4 py-3 text-right">Status / Actions</th>
+                <th className="px-4 py-3 text-center">Sr.</th>
+                <th className="px-4 py-3 text-center">Received Date</th>
+                <th className="px-4 py-3 text-center">Customer / Company Name</th>
+                <th className="px-4 py-3 text-center">Customer Phone</th>
+                <th className="px-4 py-3 text-center">Items Summary</th>
+                <th className="px-4 py-3 text-center">Source Channel</th>
+                <th className="px-4 py-3 text-center">Status / Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -1160,9 +1160,9 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       key={inq.id || idx}
                       onClick={() => handleOpenDrawer(inq)}
                       className="hover:bg-blue-50/50 transition-colors cursor-pointer group">
-                      <td className="px-4 py-3.5 font-medium text-slate-500">{idx + 1}</td>
-                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
-                        <span className="flex items-center gap-1">
+                      <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
+                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap text-center">
+                        <span className="inline-flex items-center gap-1">
                           <Calendar size={12} className="text-slate-400" />
                           {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                         </span>
@@ -1197,13 +1197,13 @@ const formatExtractedRequirementText = (extracted: any): string => {
                           <span className="text-slate-500">{details.productType} · {details.quantityTons} MT</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-3.5 text-center">
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 capitalize">
                           {inq.source_channel || 'WhatsApp Bot'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
                           {isQuoted ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
                               <CheckCircle size={12} /> Quotation Sent ✉️

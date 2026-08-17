@@ -53,7 +53,7 @@ function DealCard({ deal, onStageChange, onSelect, onDelete }: {
               e.stopPropagation();
               onDelete(deal);
             }}
-            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
           >
             <Trash2 size={13} />
           </button>
