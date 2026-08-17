@@ -19,6 +19,7 @@ import {
   Search,
 } from 'lucide-react';
 import KnowledgeBaseModal from '../components/KnowledgeBaseModal';
+import MarkdownMessage from '../components/MarkdownMessage';
 
 interface ChatMessage {
   id: string;
@@ -207,39 +208,7 @@ export default function AssistantPage() {
         { label: 'Sales SOP Guidelines', text: 'Search the Knowledge Base for discount rules and quotation policies.', icon: Search },
       ];
 
-  // Parse citation tags in assistant replies: e.g. [Source: Sales SOP 2026]
-  const renderFormattedMessage = (text: string) => {
-    const citationRegex = /\[Source:\s*([^\]]+)\]/g;
-    const parts = text.split(citationRegex);
 
-    if (parts.length === 1) {
-      return <p className="whitespace-pre-wrap leading-relaxed">{text}</p>;
-    }
-
-    const elements: any[] = [];
-    let i = 0;
-    while (i < parts.length) {
-      elements.push(<span key={`text-${i}`}>{parts[i]}</span>);
-      if (i + 1 < parts.length) {
-        const sourceTitle = parts[i + 1];
-        elements.push(
-          <span
-            key={`cite-${i}`}
-            className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded font-mono text-xs font-semibold my-1 mx-1 hover:bg-amber-100 transition-colors shadow-2xs"
-            title={`Cited Source Document: ${sourceTitle}`}
-          >
-            <BookOpen size={12} className="shrink-0 text-amber-600" />
-            Source: {sourceTitle}
-          </span>,
-        );
-        i += 2;
-      } else {
-        i += 1;
-      }
-    }
-
-    return <div className="whitespace-pre-wrap leading-relaxed">{elements}</div>;
-  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
@@ -448,7 +417,7 @@ export default function AssistantPage() {
                       {isUser ? (
                         <p className="whitespace-pre-wrap">{msg.content}</p>
                       ) : (
-                        renderFormattedMessage(msg.content || '')
+                        <MarkdownMessage content={msg.content || ''} />
                       )}
                     </div>
                   </div>
