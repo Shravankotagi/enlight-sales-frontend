@@ -355,7 +355,7 @@ export default function OrdersPage() {
     const toastId = toast.loading('Loading original PO document...');
     try {
       const res = await dealsApi.getOne(ord.id);
-      const fullDeal = res?.data;
+      const fullDeal = res?.data?.data || res?.data;
       if (fullDeal && Array.isArray(fullDeal.media_urls) && fullDeal.media_urls.length > 0) {
         mediaUrl = fullDeal.media_urls[0];
         setPoImageViewerUrl(mediaUrl || null);

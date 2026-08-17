@@ -1004,7 +1004,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
     const toastId = toast.loading('Loading original document...');
     try {
       const res = await inquiriesApi.getOne(inq.id);
-      const fullInq = res?.data;
+      const fullInq = res?.data?.data || res?.data;
       if (fullInq && Array.isArray(fullInq.media_urls) && fullInq.media_urls.length > 0) {
         mediaUrl = fullInq.media_urls[0];
         setInquiries(prev =>
