@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 const navItems = [
   { path: '/home', label: 'Home', icon: Home },
   { path: '/assistant', label: 'AI Assistant', icon: Sparkles },
-  { path: '/', label: 'Pipeline', icon: LayoutDashboard },
+  { path: '/pipeline', label: 'Pipeline', icon: LayoutDashboard },
   { path: '/inquiries', label: 'Inquiries', icon: FileText },
   { path: '/orders', label: 'Orders', icon: ShoppingBag },
   { path: '/customers', label: 'Customers', icon: Users },
@@ -73,8 +73,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   const isActive = (path: string) => {
-    if (path === '/') return location.pathname === '/';
-    return location.pathname.startsWith(path);
+    if (path === '/pipeline') return location.pathname === '/pipeline' || location.pathname === '/';
+    return location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
   };
 
   return (
