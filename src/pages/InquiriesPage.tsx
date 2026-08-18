@@ -390,10 +390,13 @@ export default function InquiriesPage() {
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
   const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-    to: now.toISOString().split('T')[0]
+    from: firstDayOfMonth,
+    to: lastDayOfMonth,
   });
 
   // Form state for Manual Log & File Upload
@@ -464,9 +467,7 @@ export default function InquiriesPage() {
             ai_extraction_json: localItem.ai_extraction_json || item.ai_extraction_json,
           };
         });
-        const backendIds = new Set(rawInquiries.map((i: InquiryItem) => i.id));
-        const localOnlyItems = localList.filter(i => !backendIds.has(i.id));
-        return [...localOnlyItems, ...mergedList];
+        return mergedList;
       });
     }
   }, [rawInquiries]);
@@ -1024,6 +1025,27 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
   const filtered = activeInquiryList.filter(i => {
     try {
+      if (dateRange.from && dateRange.to) {
+        const parseSafeIso = (dStr?: string) => {
+          if (!dStr) return '';
+          try {
+            const trimmed = String(dStr).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+            const d = new Date(trimmed);
+            if (isNaN(d.getTime())) return '';
+            return d.toISOString().split('T')[0];
+          } catch {
+            return '';
+          }
+        };
+        const inqDate = parseSafeIso(i?.created_at);
+        if (inqDate) {
+          const fromDate = dateRange.from.split('T')[0];
+          const toDate = dateRange.to.split('T')[0];
+          if (inqDate < fromDate || inqDate > toDate) return false;
+        }
+      }
+
       const text = i?.raw_text || '';
       const parsed = parseInquiryText(text, i);
       const name = parsed.companyName || i?.customer_name || i?.sender_name || '';
