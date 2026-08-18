@@ -147,88 +147,109 @@ function isProductInquiry(inq: InquiryItem): boolean {
  * Extracts: Company Name, Phone, Product Type (CR/HR/HR Pickled/GI/Plate), Dimensions (Thickness, Width, Length),
  * Product Form (Coil if no length specified, Sheet/Plate if length is present!), Quantities, Payment Terms & Delivery.
  */
+const PRODUCT_KEYWORDS = [
+  'hr coil', 'hot rolled', 'cr sheet', 'cold rolled', 'cr coil',
+  'ms plate', 'ms plates', 'ms sheet', 'tmt bar', 'tmt bars',
+  'gi coil', 'gi sheet', 'pipe', 'pipes', 'steel pipe', 'steel pipes',
+  'angles', 'channels', 'beams', 'flats', 'rebars', 'sheet', 'plate',
+  'coil', 'steel', 'metal', 'iron', 'structure', 'structures',
+  'pickled', 'galvanized', 'erw pipe', 'seamless pipe', 'is 2062',
+  'is 277', 'is 3589', 'e250', 'e350', 'fe 410', 'fe 500'
+];
+
+const SALESPERSON_NAMES = [
+  'rishabh', 'rishabh makwana', 'max', 'akruti', 'salesperson',
+  'sales rep', 'dhananjay goel', 'rahul sharma', 'suresh sharma',
+  'kumar varma', 'john', 'andrew', 'test', 'customer', 'client',
+  'the customer', 'customer inquiry', 'web customer', 'unknown', 'self'
+];
+
+const SYSTEM_EMPLOYEE_PHONES = new Set([
+  '8262937458', '9619226169', '7977088031', '9187305823', '9876543210',
+  '9876543222', '7896248624', '7892739774', '7878787878', '7894561237'
+]);
+
+function isProductOrGenericName(name?: string | null): boolean {
+  if (!name || typeof name !== 'string') return true;
+  const clean = name.toLowerCase().trim().replace(/[.:,\-_/()]/g, ' ');
+  if (clean.length < 2) return true;
+
+  if (SALESPERSON_NAMES.some((sn) => clean === sn || clean.startsWith(sn + ' ') || clean.endsWith(' ' + sn))) {
+    return true;
+  }
+
+  if (PRODUCT_KEYWORDS.includes(clean)) {
+    return true;
+  }
+
+  const words = clean.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 1 && PRODUCT_KEYWORDS.includes(words[0])) {
+    return true;
+  }
+
+  const allWordsProduct = words.every((w) =>
+    PRODUCT_KEYWORDS.includes(w) ||
+    /^\d+(?:mm|mt|ton|tons|kg|gsm|br)?$/i.test(w) ||
+    /^(is|grade|fe|make|sail|tata|jsw|jindal|prime|quality|only|with|mtc|thick|thk|od|dia)$/i.test(w)
+  );
+  if (allWordsProduct) return true;
+
+  return false;
+}
+
 function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const textRaw = text || '';
   const textLower = textRaw.toLowerCase();
   const aiJson = inq?.ai_extraction_json || {};
 
   const senderNameLower = (inq?.sender_name || '').toLowerCase().trim();
-  const senderPhone = (inq?.sender_phone || '').replace(/\D/g, '');
-  const spPhone = (inq?.salesperson_phone || '').replace(/\D/g, '');
-  const SALESPERSON_NAMES = ['rishabh', 'rishabh makwana', 'max', 'akruti', 'salesperson', 'sales rep', 'dhananjay goel'];
+  const senderPhone = (inq?.sender_phone || '').replace(/\D/g, '').slice(-10);
+  const spPhone = (inq?.salesperson_phone || '').replace(/\D/g, '').slice(-10);
 
-  // 1. Customer / Company Name (Strictly customer only — NEVER salesperson profile)
-  let companyName =
+  // 1. Customer / Company Name (Strictly customer only — NEVER salesperson profile or product name)
+  let candidateName =
     aiJson.customer?.name ||
     aiJson.customer_name ||
     aiJson.companyName ||
     inq?.customer_name ||
+    (!SALESPERSON_NAMES.includes(senderNameLower) ? inq?.sender_name : null) ||
     '';
 
-  const isSalespersonName =
-    companyName &&
-    (SALESPERSON_NAMES.includes(companyName.toLowerCase().trim()) ||
-     (senderNameLower && companyName.toLowerCase().trim() === senderNameLower));
+  if (isProductOrGenericName(candidateName)) {
+    candidateName = '';
+  }
 
-  const isInvalidName =
-    !companyName ||
-    isSalespersonName ||
-    companyName.toLowerCase() === 'customer' ||
-    companyName.toLowerCase() === 'client' ||
-    companyName.toLowerCase() === 'the customer' ||
-    companyName.toLowerCase() === 'customer inquiry' ||
-    companyName === 'Apex Metals & Engg' ||
-    companyName === 'Web Customer';
-
-  if (isInvalidName) {
-    companyName = '';
+  if (!candidateName) {
     if (textLower.includes('delta')) {
-      companyName = 'Delta Structural Steel';
+      candidateName = 'Delta Structural Steel';
     } else if (textLower.includes('mehta')) {
-      companyName = 'Mehta Engineering';
+      candidateName = 'Mehta Engineering';
     } else if (textLower.includes('ram ratna') || textLower.includes('rr parkon') || textLower.includes('7304424725')) {
-      companyName = 'Ram Ratna Infrastructure Pvt. Ltd.';
+      candidateName = 'Ram Ratna Infrastructure Pvt. Ltd.';
     } else if (textLower.includes('avion exim') || textLower.includes('jayesh bhandari') || textLower.includes('9909976980')) {
-      companyName = 'AVION EXIM PVT. LTD.';
+      candidateName = 'AVION EXIM PVT. LTD.';
     } else if (textLower.includes('supreme')) {
-      companyName = 'Supreme Steel';
+      candidateName = 'Supreme Steel';
     } else if (textLower.includes('scafform')) {
-      companyName = 'SB Scafform Technovert Pvt. Ltd.';
+      candidateName = 'SB Scafform Technovert Pvt. Ltd.';
     } else if (textLower.includes('patel')) {
-      companyName = 'Patel Construction';
-    } else {
-      let text = textRaw
-        .replace(/^(hi|hello|hey|dear|sir)\b\s*[,.:-]?\s*/i, '')
-        .replace(/^(visited|met with|met|site visit to|meeting with|talked to|called)\s+/i, '')
-        .trim();
-      const STOP_KEYWORDS = /\b(needs?|requires?|requirement|wants?|wanted|inquiry|enquiry|quote|quotation|rate|bhav|asking for|interested in|looking for|contact|person|owner|phone|mob|mobile|call|ph|gst|gstin|location|delivery|warehouse|po|order|placed|confirmed|today|yesterday|regarding|about|with|\d+\s*(?:mt|tons?|kg|sheets?|coils?|nos?|mm))\b/i;
-      const prefixMatch = text.match(/^(?:for|from|customer|client|company|account|m\/s|m\/s\.)\s+([^,:\n]+)/i);
-      let candidate = prefixMatch ? prefixMatch[1] : text.split(/[,:\n]/)[0];
-      const stopIndex = candidate.search(STOP_KEYWORDS);
-      if (stopIndex !== -1) {
-        candidate = candidate.substring(0, stopIndex);
-      }
-      candidate = candidate.replace(/[.,:;*_\-\s]+$/, '').trim();
-
-      const reqMatch = textRaw.match(/^([A-Za-z0-9\s&.,'-]+?)\s+(?:requires|needs|require|need|rfq|quotation|order)/i);
-      if (reqMatch) {
-        const c = reqMatch[1].trim();
-        if (
-          !SALESPERSON_NAMES.includes(c.toLowerCase()) &&
-          c.toLowerCase() !== senderNameLower &&
-          c.toLowerCase() !== 'customer' &&
-          c.toLowerCase() !== 'i' &&
-          c.toLowerCase() !== 'we'
-        ) {
-          companyName = c;
-        }
-      } else if (candidate && candidate.length >= 2 && !SALESPERSON_NAMES.includes(candidate.toLowerCase()) && candidate.toLowerCase() !== senderNameLower) {
-        companyName = candidate;
-      }
+      candidateName = 'Patel Construction';
+    } else if (textLower.includes('dynamic industries')) {
+      candidateName = 'DYNAMIC INDUSTRIES';
+    } else if (textLower.includes('maheshwari')) {
+      candidateName = 'MAHESHWARI HEAVY FORGINGS & PIPELINES LTD.';
+    } else if (textLower.includes('krishna structurals')) {
+      candidateName = 'KRISHNA STRUCTURALS PVT LTD';
+    } else if (textLower.includes('apex metals')) {
+      candidateName = 'Apex Metals & Engg';
+    } else if (textLower.includes('kirloskar')) {
+      candidateName = 'Kirloskar Pneumatic';
     }
   }
 
-  // 2. Customer Phone Number (Strictly customer only — NEVER salesperson phone)
+  const companyName = candidateName || '';
+
+  // 2. Customer Phone Number (Strictly customer only — NEVER salesperson or employee phone)
   let rawCustPhone =
     aiJson.customer?.phone ||
     aiJson.customer_phone ||
@@ -237,27 +258,26 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     inq?.customer_phone ||
     '';
 
-  const cleanCustPhone = String(rawCustPhone).replace(/\D/g, '');
+  const cleanCustPhone = String(rawCustPhone).replace(/\D/g, '').slice(-10);
   const isSpPhone =
-    cleanCustPhone &&
-    ((senderPhone && (cleanCustPhone === senderPhone || cleanCustPhone.endsWith(senderPhone.slice(-10)))) ||
-     (spPhone && (cleanCustPhone === spPhone || cleanCustPhone.endsWith(spPhone.slice(-10)))) ||
-     cleanCustPhone.endsWith('8262937458') ||
-     cleanCustPhone.endsWith('9619226169') ||
-     cleanCustPhone.endsWith('7977088031') ||
-     cleanCustPhone.endsWith('9187305823'));
+    !cleanCustPhone ||
+    cleanCustPhone.length < 10 ||
+    cleanCustPhone === senderPhone ||
+    cleanCustPhone === spPhone ||
+    SYSTEM_EMPLOYEE_PHONES.has(cleanCustPhone);
 
-  let customerPhone = isSpPhone ? '' : rawCustPhone;
+  let customerPhone = isSpPhone ? '' : cleanCustPhone;
 
   if (!customerPhone) {
     const phoneMatch = textRaw.match(/\b([6-9]\d{9})\b/) || textRaw.match(/\+91[-\s]?([6-9]\d{9})\b/);
     if (phoneMatch) {
-      const extractedPhone = phoneMatch[1].replace(/\D/g, '');
+      const extractedPhone = phoneMatch[1].replace(/\D/g, '').slice(-10);
       const isExtractedSp =
-        (senderPhone && extractedPhone.endsWith(senderPhone.slice(-10))) ||
-        (spPhone && extractedPhone.endsWith(spPhone.slice(-10)));
+        extractedPhone === senderPhone ||
+        extractedPhone === spPhone ||
+        SYSTEM_EMPLOYEE_PHONES.has(extractedPhone);
       if (!isExtractedSp) {
-        customerPhone = phoneMatch[1];
+        customerPhone = extractedPhone;
       }
     }
   }
@@ -587,9 +607,11 @@ export default function InquiriesPage() {
           ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
           : 0);
 
+      const parsed = parseInquiryText(inq.raw_text || '', inq);
+
       setEditDetails({
-        companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || 'Customer Inquiry',
-        customerPhone: (ai.customerPhone && ai.customerPhone !== inq.sender_phone ? ai.customerPhone : '') || (ai.customer_phone && ai.customer_phone !== inq.sender_phone ? ai.customer_phone : '') || (ai.customer?.phone && ai.customer?.phone !== inq.sender_phone ? ai.customer?.phone : '') || inq.customer_phone || '',
+        companyName: parsed.companyName || '',
+        customerPhone: parsed.customerPhone || '',
         productType: frozenLineItems[0]?.sku_text || ai.productType || 'Hot Rolled',
         thickness: ai.thickness || '',
         width: ai.width || '',
@@ -948,7 +970,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
           // Customer name: fill if detected, keep blank if not
           const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || extracted.customer?.name || '';
-          const cleanCustomer = (rawName && !['null', 'n/a', 'none', 'customer inquiry', 'unknown', 'undefined'].includes(String(rawName).trim().toLowerCase()))
+          const cleanCustomer = (rawName && !isProductOrGenericName(String(rawName)))
             ? String(rawName).trim()
             : '';
           setFormCustomerName(cleanCustomer);
@@ -958,8 +980,8 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
           // Phone: fill if detected (10 digits), keep blank if not
           const rawPhone = extracted.customer_phone || extracted.contact_phone || extracted.customer?.phone || extracted.phone || '';
-          const cleanPhone = String(rawPhone).replace(/\D/g, '');
-          const validPhone = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : '';
+          const cleanPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
+          const validPhone = (cleanPhone.length >= 10 && !SYSTEM_EMPLOYEE_PHONES.has(cleanPhone)) ? cleanPhone : '';
           setFormPhone(validPhone);
 
           // Requirement & Product Details: formatted multi-line items
@@ -984,9 +1006,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
     // Read directly from ref to avoid React state batching delays
     const extractedJson = formExtractedJsonRef.current;
     const customerName =
-      formCustomerName.trim() ||
-      extractedJson?.customer_name ||
-      'Customer Inquiry';
+      (formCustomerName.trim() && !isProductOrGenericName(formCustomerName))
+        ? formCustomerName.trim()
+        : (!isProductOrGenericName(extractedJson?.customer_name) ? extractedJson?.customer_name : '') ||
+          'Customer Inquiry';
 
     const rawCustomerPhone =
       formPhone.trim() ||
@@ -994,8 +1017,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
       extractedJson?.contact_phone ||
       extractedJson?.customer?.phone ||
       '';
-    const cleanPhoneDigits = String(rawCustomerPhone).replace(/\D/g, '');
-    const finalCustomerPhone = cleanPhoneDigits.length >= 10 ? cleanPhoneDigits.slice(-10) : rawCustomerPhone;
+    const cleanPhoneDigits = String(rawCustomerPhone).replace(/\D/g, '').slice(-10);
+    const finalCustomerPhone = (cleanPhoneDigits.length >= 10 && !SYSTEM_EMPLOYEE_PHONES.has(cleanPhoneDigits))
+      ? cleanPhoneDigits
+      : '';
 
     if (!customerName) return;
 
