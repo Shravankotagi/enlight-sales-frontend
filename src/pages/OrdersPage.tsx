@@ -336,9 +336,9 @@ export default function OrdersPage() {
   const filtered = safeOrders.filter(o => {
     if (dateRange.from && dateRange.to) {
       const effectiveDate =
-        parseSafeIsoDate(o?.po_date) ||
         parseSafeIsoDate(o?.won_at) ||
-        parseSafeIsoDate(o?.created_at);
+        parseSafeIsoDate(o?.created_at) ||
+        parseSafeIsoDate(o?.po_date);
 
       if (effectiveDate) {
         const fromDate = dateRange.from.split('T')[0];
@@ -504,7 +504,9 @@ export default function OrdersPage() {
                       title="Click anywhere on row to view full Order Details in table format">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
                       <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap text-center">
-                        {ord.po_date || (ord.created_at ? new Date(ord.created_at).toLocaleDateString('en-IN') : '-')}
+                        {ord.won_at
+                          ? new Date(ord.won_at).toLocaleDateString('en-IN')
+                          : (ord.created_at ? new Date(ord.created_at).toLocaleDateString('en-IN') : ord.po_date || '-')}
                       </td>
                       <td className="px-4 py-3.5 font-mono text-xs text-blue-700 font-semibold text-center">
                         <span className="inline-flex items-center gap-1.5 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-md border border-blue-200 group-hover:border-blue-600 transition-all font-bold shadow-2xs">
@@ -662,12 +664,23 @@ export default function OrdersPage() {
 
                       const rawTotalVal = Number(selectedDrawerOrder.total_amount || 0);
 
-                      // Base Material Subtotal is strictly pre-GST material value
-                      const baseAmt = itemsSubtotal > 0 ? itemsSubtotal : (rawTotalVal > 0 ? rawTotalVal : 0);
-                      // GST (18%) is strictly calculated forward on top of base material subtotal
-                      const gstAmt = Math.round(baseAmt * 0.18);
-                      // Total Order Value is base material subtotal + 18% GST
-                      const totalVal = baseAmt + gstAmt;
+                      let baseAmt = 0;
+                      let gstAmt = 0;
+                      let totalVal = 0;
+
+                      if (itemsSubtotal > 0) {
+                        baseAmt = itemsSubtotal;
+                        // Forward GST (18%) on pre-GST base material subtotal
+                        gstAmt = Math.round(baseAmt * 0.18 * 100) / 100;
+                        totalVal =
+                          rawTotalVal > 0 && Math.abs(rawTotalVal - (baseAmt + gstAmt)) < 1
+                            ? rawTotalVal
+                            : Math.round((baseAmt + gstAmt) * 100) / 100;
+                      } else if (rawTotalVal > 0) {
+                        totalVal = rawTotalVal;
+                        baseAmt = Math.round((totalVal / 1.18) * 100) / 100;
+                        gstAmt = Math.round((totalVal - baseAmt) * 100) / 100;
+                      }
 
                       return (
                         <>
