@@ -28,7 +28,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/home" element={<HomePage />} />
         <Route path="/assistant" element={<AssistantPage />} />
-        <Route path="/" element={<PipelinePage />} />
+        <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
         <Route path="/orders" element={<OrdersPage />} />

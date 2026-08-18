@@ -623,7 +623,7 @@ export default function HomePage() {
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           {[
-            { label: 'Sales Pipeline', path: '/', icon: Activity },
+            { label: 'Sales Pipeline', path: '/pipeline', icon: Activity },
             { label: 'Inquiries Log', path: '/inquiries', icon: FileText },
             { label: 'Orders Won', path: '/orders', icon: ShoppingBag },
             { label: 'Customer Visits', path: '/visits', icon: Users },

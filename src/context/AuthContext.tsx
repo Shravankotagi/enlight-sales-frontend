@@ -45,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (newToken: string, newEmployee: Employee) => {
     sessionStorage.setItem('enlight_token', newToken);
     sessionStorage.setItem('enlight_employee', JSON.stringify(newEmployee));
+    sessionStorage.removeItem('enlight_active_chat_session_id');
     setToken(newToken);
     setEmployee(newEmployee);
   };
@@ -53,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem('enlight_token');
     sessionStorage.removeItem('enlight_employee');
     sessionStorage.removeItem('enlight_viewing_as');
+    sessionStorage.removeItem('enlight_active_chat_session_id');
     setToken(null);
     setEmployee(null);
     setViewingAsState(null);
@@ -60,11 +62,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setViewingAs = (emp: Employee) => {
     sessionStorage.setItem('enlight_viewing_as', JSON.stringify(emp));
+    sessionStorage.removeItem('enlight_active_chat_session_id');
     setViewingAsState(emp);
   };
 
   const clearViewingAs = () => {
     sessionStorage.removeItem('enlight_viewing_as');
+    sessionStorage.removeItem('enlight_active_chat_session_id');
     setViewingAsState(null);
   };
 

@@ -18,6 +18,8 @@ import {
   Users,
   Search,
 } from 'lucide-react';
+import KnowledgeBaseModal from '../components/KnowledgeBaseModal';
+import MarkdownMessage from '../components/MarkdownMessage';
 
 interface ChatMessage {
   id: string;
@@ -31,7 +33,10 @@ interface ChatSession {
   channel: string;
   started_at: string;
   last_active_at: string;
+  title?: string;
 }
+
+const ACTIVE_SESSION_KEY = 'enlight_active_chat_session_id';
 
 export default function AssistantPage() {
   const { employee, viewingAs } = useAuth();
@@ -42,6 +47,7 @@ export default function AssistantPage() {
   const [loading, setLoading] = useState(false);
   const [fetchingSessions, setFetchingSessions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [kbModalOpen, setKbModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeEmployee = viewingAs || employee;
@@ -60,14 +66,18 @@ export default function AssistantPage() {
     try {
       setFetchingSessions(true);
       const res = await chatbotApi.getSessions();
-      const rawData = res.data;
+      const rawData = res.data?.data || res.data || {};
       const sessionList: ChatSession[] = Array.isArray(rawData?.sessions)
         ? rawData.sessions
         : Array.isArray(rawData)
         ? rawData
         : [];
       setSessions(sessionList);
-      if (sessionList.length > 0 && !activeSessionId) {
+
+      const savedSessionId = sessionStorage.getItem(ACTIVE_SESSION_KEY);
+      if (savedSessionId && savedSessionId !== 'new' && sessionList.some((s) => s.id === savedSessionId)) {
+        selectSession(savedSessionId);
+      } else if (!savedSessionId && sessionList.length > 0) {
         selectSession(sessionList[0].id);
       }
     } catch (err: any) {
@@ -84,10 +94,11 @@ export default function AssistantPage() {
   const selectSession = async (sessionId: string) => {
     try {
       setActiveSessionId(sessionId);
+      sessionStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
       setLoading(true);
       setError(null);
       const res = await chatbotApi.getSessionMessages(sessionId);
-      const rawData = res.data;
+      const rawData = res.data?.data || res.data || {};
       const msgList: ChatMessage[] = Array.isArray(rawData?.messages)
         ? rawData.messages
         : Array.isArray(rawData)
@@ -104,6 +115,7 @@ export default function AssistantPage() {
 
   const handleNewConversation = () => {
     setActiveSessionId(null);
+    sessionStorage.setItem(ACTIVE_SESSION_KEY, 'new');
     setMessages([]);
     setError(null);
     setInputText('');
@@ -136,9 +148,27 @@ export default function AssistantPage() {
       const sessionId = resData.sessionId || resData.session_id;
       const reply = resData.reply || 'Request completed.';
 
-      if (sessionId && sessionId !== activeSessionId) {
+      const titleSnippet =
+        textToSend.length > 35
+          ? textToSend.slice(0, 35).trim() + '...'
+          : textToSend.trim();
+
+      if (sessionId) {
         setActiveSessionId(sessionId);
-        loadSessions();
+        sessionStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+
+        setSessions((prevSessions) => {
+          const existing = prevSessions.find((s) => s.id === sessionId);
+          const updatedSession: ChatSession = {
+            id: sessionId,
+            channel: 'web',
+            started_at: existing?.started_at || new Date().toISOString(),
+            last_active_at: new Date().toISOString(),
+            title: existing?.title || titleSnippet,
+          };
+          const filtered = prevSessions.filter((s) => s.id !== sessionId);
+          return [updatedSession, ...filtered];
+        });
       }
 
       const assistantMsg: ChatMessage = {
@@ -178,39 +208,7 @@ export default function AssistantPage() {
         { label: 'Sales SOP Guidelines', text: 'Search the Knowledge Base for discount rules and quotation policies.', icon: Search },
       ];
 
-  // Parse citation tags in assistant replies: e.g. [Source: Sales SOP 2026]
-  const renderFormattedMessage = (text: string) => {
-    const citationRegex = /\[Source:\s*([^\]]+)\]/g;
-    const parts = text.split(citationRegex);
 
-    if (parts.length === 1) {
-      return <p className="whitespace-pre-wrap leading-relaxed">{text}</p>;
-    }
-
-    const elements: any[] = [];
-    let i = 0;
-    while (i < parts.length) {
-      elements.push(<span key={`text-${i}`}>{parts[i]}</span>);
-      if (i + 1 < parts.length) {
-        const sourceTitle = parts[i + 1];
-        elements.push(
-          <span
-            key={`cite-${i}`}
-            className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded font-mono text-xs font-semibold my-1 mx-1 hover:bg-amber-100 transition-colors shadow-2xs"
-            title={`Cited Source Document: ${sourceTitle}`}
-          >
-            <BookOpen size={12} className="shrink-0 text-amber-600" />
-            Source: {sourceTitle}
-          </span>,
-        );
-        i += 2;
-      } else {
-        i += 1;
-      }
-    }
-
-    return <div className="whitespace-pre-wrap leading-relaxed">{elements}</div>;
-  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
@@ -235,17 +233,31 @@ export default function AssistantPage() {
           </div>
         </div>
 
-        {/* Identity & Scope Badge */}
-        <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 px-3.5 py-1.5 rounded-xl">
-          <Shield size={16} className="text-emerald-600 shrink-0" />
-          <div className="text-xs">
-            <span className="text-gray-500">Scope Indicator: </span>
-            <span className="font-semibold text-gray-900">
-              {activeEmployee?.name || 'Authorized User'}
-            </span>
-            <span className="ml-2 uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
-              {role}
-            </span>
+        {/* Header Right: Knowledge Base Action + Scope Badge */}
+        <div className="flex items-center gap-3">
+          {isManagerOrAdmin && (
+            <button
+              onClick={() => setKbModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+              title="Upload and manage Knowledge Base documents & vectors"
+            >
+              <BookOpen size={14} className="text-blue-600" />
+              <span>Manage Knowledge Base</span>
+            </button>
+          )}
+
+          {/* Identity & Scope Badge */}
+          <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 px-3.5 py-1.5 rounded-xl">
+            <Shield size={16} className="text-emerald-600 shrink-0" />
+            <div className="text-xs">
+              <span className="text-gray-500">Scope Indicator: </span>
+              <span className="font-semibold text-gray-900">
+                {activeEmployee?.name || 'Authorized User'}
+              </span>
+              <span className="ml-2 uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
+                {role}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -307,7 +319,7 @@ export default function AssistantPage() {
                         className={isSelected ? 'text-blue-600' : 'text-gray-400'}
                       />
                       <span className="truncate">
-                        Session #{sess.id ? sess.id.slice(0, 8) : 'New'}
+                        {sess.title || (sess.id ? `Session #${sess.id.slice(0, 8)}` : 'New Conversation')}
                       </span>
                     </div>
                     <span className="text-[10px] text-gray-400 shrink-0">
@@ -405,7 +417,7 @@ export default function AssistantPage() {
                       {isUser ? (
                         <p className="whitespace-pre-wrap">{msg.content}</p>
                       ) : (
-                        renderFormattedMessage(msg.content || '')
+                        <MarkdownMessage content={msg.content || ''} />
                       )}
                     </div>
                   </div>
@@ -463,6 +475,13 @@ export default function AssistantPage() {
           </div>
         </div>
       </div>
+
+      {/* Knowledge Base Management Modal */}
+      <KnowledgeBaseModal
+        isOpen={kbModalOpen}
+        onClose={() => setKbModalOpen(false)}
+        isAdmin={isManagerOrAdmin}
+      />
     </div>
   );
 }

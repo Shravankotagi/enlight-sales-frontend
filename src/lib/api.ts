@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const defaultBackend = isLocal ? 'http://localhost:3000' : 'https://enlight-sales-backend-production.up.railway.app';
+const defaultBackend = isLocal ? 'http://localhost:3001' : 'https://enlight-sales-backend-production.up.railway.app';
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_URL || defaultBackend,
@@ -125,6 +125,17 @@ export const chatbotApi = {
   getSessions: () => API.get('/chat/sessions'),
   getSessionMessages: (sessionId: string) =>
     API.get(`/chat/sessions/${sessionId}/messages`),
+};
+
+export const kbApi = {
+  listDocuments: () => API.get('/chat/kb/documents'),
+  uploadDocument: (data: {
+    title: string;
+    content: string;
+    visibilityRole: string;
+    sourceFileUrl?: string;
+  }) => API.post('/chat/kb/upload', data),
+  deleteDocument: (id: string) => API.delete(`/chat/kb/documents/${id}`),
 };
 
 export default API;
