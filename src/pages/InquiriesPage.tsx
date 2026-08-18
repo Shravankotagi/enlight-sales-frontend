@@ -50,17 +50,16 @@ interface ExtractedDetails {
   totalAmount: number;
   paymentTerms: string;
   deliveryLocation: string;
+  deliveryDate: string;
   lineItems: LineItemDetail[];
 }
 
 const cleanProductType = (pt: string): string => {
   if (!pt) return 'Hot Rolled';
   const str = String(pt).trim();
-  if (/\b(hr|hot\s*rolled)\b/i.test(str)) {
-    if (/pickled/i.test(str)) return 'Hot Rolled Pickled & Oiled';
-    return 'Hot Rolled';
-  }
-  if (/\b(cr|cold\s*rolled)\b/i.test(str)) return 'Cold Rolled';
+  if (/\b(hr\s*pickled|pickled)\b/i.test(str)) return 'Hot Rolled Pickled & Oiled';
+  if (/\b(hr|hot\s*rolled)\b/i.test(str)) return 'Hot Rolled';
+  if (/\b(cr|cold\s*rolled|cr\s*sheet|cr\s*coil)\b/i.test(str)) return 'Cold Rolled';
   if (/gi|spangled/i.test(str)) return 'GI Spangled (IS 277)';
   if (/tmt|rebar/i.test(str)) return 'TMT Rebar';
   if (/ms\s*plate|plate/i.test(str)) return 'MS Plate';
@@ -130,9 +129,10 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const textLower = textRaw.toLowerCase();
   const aiJson = inq?.ai_extraction_json || {};
 
-  // 1. Customer / Company Name (Priority to AI extracted customer name and customer record, NOT salesperson)
+  // 1. Customer / Company Name (Priority to AI extracted customer name and customer record, NEVER salesperson)
   let companyName =
     aiJson.customer_name ||
+    aiJson.companyName ||
     aiJson.customer?.name ||
     inq?.customer_name ||
     '';
@@ -151,49 +151,56 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     } else if (textLower.includes('scafform')) {
       companyName = 'SB Scafform Technovert Pvt. Ltd.';
     } else {
-      const match = textRaw.match(/(?:from|customer|company|client|pvt\.?\s*ltd\.?|ltd\.?|infra|steel|engineering|industries)\s+([A-Z0-9\s&.-]{3,35})/i);
-      if (match && match[1].trim().toLowerCase() !== 'max') {
-        companyName = match[1].trim();
+      // Look for company preceding "requires", "needs", "inquiry", "rfq", "po", "order"
+      const reqMatch = textRaw.match(/^([A-Z0-9\s&.-]{2,40}?)\s+(?:requires|require|needs|need|inquiry|rfq|po|order|want)\b/i) ||
+        textRaw.match(/(?:inquiry\s+from|order\s+from|rfq\s+from|from)\s+([A-Z0-9\s&.-]{2,40}?)(?:\s+requires|\s+needs|\s+for|\s+before|\.|$)/i) ||
+        textRaw.match(/(?:customer|company|client|pvt\.?\s*ltd\.?|ltd\.?|infra|steel|engineering|industries)\s+([A-Z0-9\s&.-]{3,35})/i);
+
+      if (reqMatch && reqMatch[1].trim().toLowerCase() !== 'max' && reqMatch[1].trim().toLowerCase() !== 'customer') {
+        companyName = reqMatch[1].trim();
       } else {
         companyName = inq?.customer_name || 'Customer Inquiry';
       }
     }
   }
 
-  // 2. Customer Phone Number (Priority to AI extracted customer phone and text match, NOT salesperson phone)
+  // 2. Customer Phone Number (Priority to AI extracted customer phone and text match, NEVER salesperson phone)
   const phoneMatch = textRaw.match(/\b([6-9]\d{9})\b/) || textRaw.match(/\+91[-\s]?([6-9]\d{9})\b/);
   let customerPhone =
     aiJson.contact_phone ||
+    aiJson.customerPhone ||
+    aiJson.customer_phone ||
     aiJson.customer?.phone ||
-    (phoneMatch ? phoneMatch[1] : '');
+    inq?.customer_phone ||
+    '';
 
-  if (!customerPhone || customerPhone === inq?.sender_phone || customerPhone === '918262937458') {
+  if (customerPhone === inq?.sender_phone || customerPhone === '918262937458' || customerPhone === '919619226169') {
     customerPhone = inq?.customer_phone || (phoneMatch ? phoneMatch[1] : '');
   }
 
   // 3. Product Type
   let rawPt = aiJson?.productType || aiJson?.sku_text || aiJson?.line_items?.[0]?.sku_text || '';
   if (!rawPt) {
-    if (textLower.includes('cr') || textLower.includes('cold rolled')) {
-      rawPt = 'Cold Rolled';
-    } else if (textLower.includes('hr pickled') || textLower.includes('pickled')) {
+    if (/\b(hr\s*pickled|pickled)\b/i.test(textLower)) {
       rawPt = 'Hot Rolled Pickled & Oiled';
-    } else if (textLower.includes('hr') || textLower.includes('hot rolled')) {
+    } else if (/\b(hr|hot\s*rolled)\b/i.test(textLower)) {
       rawPt = 'Hot Rolled';
-    } else if (textLower.includes('is 277') || textLower.includes('spangled') || textLower.includes('gi')) {
+    } else if (/\b(cr|cold\s*rolled|cr\s*sheet|cr\s*coil)\b/i.test(textLower)) {
+      rawPt = 'Cold Rolled';
+    } else if (/\b(is\s*277|spangled|gi)\b/i.test(textLower)) {
       rawPt = 'GI Spangled (IS 277)';
-    } else if (textLower.includes('tmt') || textLower.includes('rebar')) {
+    } else if (/\b(tmt|rebar)\b/i.test(textLower)) {
       rawPt = 'TMT Rebar';
-    } else if (textLower.includes('ms plate') || textLower.includes('plate')) {
+    } else if (/\b(ms\s*plate|plate)\b/i.test(textLower)) {
       rawPt = 'MS Plate';
     }
   }
   const productType = cleanProductType(rawPt || 'Hot Rolled');
 
-  // 4. Dimensions (Thickness x Width x Length)
-  let thickness: string;
-  let width: string;
-  let length: string;
+  // 4. Dimensions (Thickness x Width x Length) — extract only what is stated
+  let thickness = '';
+  let width = '';
+  let length = '';
 
   // Pattern A: "8mmx1500x10000" or "8mm x 1500 x 10000" or "1.6mm 1250 * 2500"
   const tripleMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*mm\s*[*xX\s]\s*(\d{3,4})\s*[*xX\s]\s*(\d{3,5})/i) ||
@@ -211,20 +218,20 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
       thickness = `${wThickMatch[2]} mm`;
       length = '';
     } else {
-      // Pattern C: "Thk = 1.5MM" or "Thk 2.0MM" or "1mm"
-      const thkOnlyMatch = textRaw.match(/(?:thk|thickness|cr|hr)?\s*=?\s*(\d+(?:\.\d+)?)\s*mm/i);
-      thickness = thkOnlyMatch ? `${thkOnlyMatch[1]} mm` : '2.0 mm';
+      // Pattern C: "8mm" or "Thk = 1.5MM" or "Thk 2.0MM"
+      const thkOnlyMatch = textRaw.match(/(?:thk|thickness|cr|hr|coil|sheet|plate)?\s*=?\s*(\d+(?:\.\d+)?)\s*mm/i);
+      thickness = thkOnlyMatch ? `${thkOnlyMatch[1]} mm` : (aiJson.thickness || '');
 
-      const widthOnlyMatch = textRaw.match(/\b(90|130|240|312|1000|1250|1500|2000)\b/i);
-      width = widthOnlyMatch ? `${widthOnlyMatch[1]} mm` : '1250 mm';
+      const widthOnlyMatch = textRaw.match(/\b(90|130|240|312|1000|1250|1500|2000)\s*(?:mm|width)\b/i);
+      width = widthOnlyMatch ? `${widthOnlyMatch[1]} mm` : (aiJson.width || '');
 
-      const lenOnlyMatch = textRaw.match(/\b(2500|3000|6000|6300|10000|6m|12m)\b/i);
-      length = lenOnlyMatch ? (lenOnlyMatch[1].endsWith('m') ? lenOnlyMatch[1] : `${lenOnlyMatch[1]} mm`) : '';
+      const lenOnlyMatch = textRaw.match(/\b(2500|3000|6000|6300|10000|6m|12m)\s*(?:mm|length)?\b/i);
+      length = lenOnlyMatch ? (lenOnlyMatch[1].endsWith('m') ? lenOnlyMatch[1] : `${lenOnlyMatch[1]} mm`) : (aiJson.length || '');
     }
   }
 
   // 5. Quantity (MT / Tons)
-  let quantityTons = 50;
+  let quantityTons = 25;
   const mtMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*(?:mt|ton|tons|tonne)/i);
   if (mtMatch) {
     quantityTons = parseFloat(mtMatch[1]);
@@ -237,27 +244,83 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   const quantityUnits = Math.round(quantityTons * 7);
 
-  // 6. Unit Price & Total Amount
+  // 6. Unit Price & Total Amount (Strict active rate sheet lookup)
   const rateMatch =
-    textRaw.match(/(?:rate|price|rs\.?|₹)\s*:?\s*₹?\s*(\d{2,3}(?:,\d{3})*|\d{4,6})/i) ||
-    textRaw.match(/55,?000|62,?000|58,?000|65,?000/);
+    textRaw.match(/(?:rate|price|rs\.?|₹)\s*:?\s*₹?\s*(\d{2,3}(?:,\d{3})*|\d{4,6})/i);
 
-  let unitPrice = 55000;
-  if (rateMatch) {
+  let unitPrice = 0;
+  if (aiJson.unitPrice && Number(aiJson.unitPrice) > 0) {
+    unitPrice = Number(aiJson.unitPrice);
+  } else if (aiJson.line_items?.[0]?.rate && Number(aiJson.line_items[0].rate) > 0) {
+    unitPrice = Number(aiJson.line_items[0].rate);
+  } else if (rateMatch) {
     const rawVal = rateMatch[1] ? rateMatch[1].replace(/,/g, '') : rateMatch[0].replace(/,/g, '');
-    unitPrice = parseFloat(rawVal) || 55000;
+    unitPrice = parseFloat(rawVal) || 0;
   }
+
+  if (unitPrice === 0) {
+    // Official Rate Sheet Prices:
+    // HR Coil 8mm = 52,000 | HR Coil 6mm = 51,500 | MS Sheet 2mm = 54,000 | CR Sheets = 55,000 | MS Plates = 53,000
+    if (productType.toLowerCase().includes('cr') || productType.toLowerCase().includes('cold rolled')) {
+      unitPrice = 55000;
+    } else if (productType.toLowerCase().includes('ms plate') || productType.toLowerCase().includes('plate')) {
+      unitPrice = 53000;
+    } else if (productType.toLowerCase().includes('ms sheet')) {
+      unitPrice = 54000;
+    } else {
+      unitPrice = 52000; // HR Coil 8mm rate
+    }
+  }
+
   const totalAmount = Math.round(quantityTons * unitPrice);
 
-  // 7. Delivery & Payment Terms
-  let deliveryLocation = 'Mumbai Warehouse';
-  if (textLower.includes('pune')) deliveryLocation = 'Pune';
-  else if (textLower.includes('nashik')) deliveryLocation = 'Nashik';
-  else if (textLower.includes('mumbai')) deliveryLocation = 'Mumbai Warehouse';
+  // 7. Delivery Location (Capture only what is stated, never append "Warehouse")
+  let deliveryLocation = aiJson.delivery_location || aiJson.deliveryLocation || '';
+  if (!deliveryLocation) {
+    const locMatch = textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z\s]+?)(?:\s+before|\s+by|\s+on|\s+within|\.|$)/i);
+    if (locMatch) {
+      deliveryLocation = locMatch[1].trim();
+    } else if (textLower.includes('pune')) {
+      deliveryLocation = 'Pune';
+    } else if (textLower.includes('nashik')) {
+      deliveryLocation = 'Nashik';
+    } else if (textLower.includes('mumbai')) {
+      deliveryLocation = 'Mumbai';
+    }
+  }
 
-  let paymentTerms = '100% Advance / Payment';
-  if (textLower.includes('credit') || textLower.includes('30 days')) paymentTerms = '30 Days Credit';
-  else if (textLower.includes('45 days')) paymentTerms = '45 Days Credit';
+  // 8. Delivery Date (Capture target date e.g. "before 25 August" -> "2026-08-25")
+  let deliveryDate = aiJson.delivery_date || aiJson.deliveryDate || '';
+  if (!deliveryDate) {
+    const dateMatch = textRaw.match(/(?:before|by|on|delivery\s+date|delivery\s+before|delivery\s+by)\s+(\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|\d{4}-\d{2}-\d{2}|\d{2}[-/]\d{2}[-/]\d{4})/i);
+    if (dateMatch) {
+      const rawDateStr = dateMatch[1].trim();
+      const monthMap: { [k: string]: string } = {
+        jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+        jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+        january: '01', february: '02', march: '03', april: '04', june: '06',
+        july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
+      };
+      const parts = rawDateStr.toLowerCase().split(/\s+/);
+      if (parts.length === 2) {
+        const day = parts[0].replace(/\D/g, '').padStart(2, '0');
+        const mKey = parts[1].replace(/[^a-z]/g, '');
+        const month = monthMap[mKey] || '08';
+        deliveryDate = `2026-${month}-${day}`;
+      } else {
+        deliveryDate = rawDateStr;
+      }
+    }
+  }
+
+  // 9. Payment Terms (Keep blank if not explicitly in prompt)
+  let paymentTerms = aiJson.payment_terms || aiJson.paymentTerms || '';
+  if (!paymentTerms) {
+    if (textLower.includes('100% advance') || textLower.includes('advance')) paymentTerms = '100% Advance / Payment';
+    else if (textLower.includes('30 days') || textLower.includes('30-day')) paymentTerms = '30 Days Credit';
+    else if (textLower.includes('45 days') || textLower.includes('45-day')) paymentTerms = '45 Days Credit';
+    else paymentTerms = '';
+  }
 
   // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
   const rawLineItems: LineItemDetail[] = [];
@@ -276,7 +339,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   }
 
   // Grand total from all line items if multi-item inquiry
-  const computedTotal = rawLineItems.length > 1
+  const computedTotal = rawLineItems.length > 0
     ? rawLineItems.reduce((s, i) => s + i.amount, 0)
     : totalAmount;
 
@@ -294,6 +357,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     totalAmount: computedTotal,
     paymentTerms,
     deliveryLocation,
+    deliveryDate,
     lineItems: rawLineItems,
   };
 }
@@ -439,8 +503,8 @@ export default function InquiriesPage() {
           : 0);
 
       setEditDetails({
-        companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || inq.sender_name || 'Customer Inquiry',
-        customerPhone: ai.customerPhone || ai.customer_phone || ai.customer?.phone || inq.customer_phone || inq.sender_phone || '',
+        companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || 'Customer Inquiry',
+        customerPhone: (ai.customerPhone && ai.customerPhone !== inq.sender_phone ? ai.customerPhone : '') || (ai.customer_phone && ai.customer_phone !== inq.sender_phone ? ai.customer_phone : '') || (ai.customer?.phone && ai.customer?.phone !== inq.sender_phone ? ai.customer?.phone : '') || inq.customer_phone || '',
         productType: frozenLineItems[0]?.sku_text || ai.productType || 'Hot Rolled',
         thickness: ai.thickness || '',
         width: ai.width || '',
@@ -450,8 +514,9 @@ export default function InquiriesPage() {
         quantityUnits: ai.quantityUnits || 0,
         unitPrice: frozenLineItems[0]?.rate || ai.unitPrice || 0,
         totalAmount: frozenTotal,
-        paymentTerms: ai.payment_terms || ai.paymentTerms || '100% Advance / Payment',
+        paymentTerms: ai.payment_terms || ai.paymentTerms || '',
         deliveryLocation: ai.delivery_location || ai.deliveryLocation || '',
+        deliveryDate: ai.delivery_date || ai.deliveryDate || '',
         lineItems: frozenLineItems,
       });
     } else {
@@ -1513,14 +1578,26 @@ const formatExtractedRequirementText = (extracted: any): string => {
                   </table>
 
                   {/* Commercial Terms Footer (Matching Img1 Layout) */}
-                  <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
                     <div>
                       <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Delivery Address</span>
                       <input
                         type="text"
                         value={editDetails.deliveryLocation}
                         onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
+                        placeholder="e.g. Mumbai"
                         className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Target Delivery Date</span>
+                      <input
+                        type="text"
+                        value={editDetails.deliveryDate}
+                        onChange={(e) => setEditDetails({ ...editDetails, deliveryDate: e.target.value })}
+                        placeholder="e.g. 2026-08-25"
+                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold font-mono text-blue-700"
                       />
                     </div>
 
@@ -1530,6 +1607,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         value={editDetails.paymentTerms}
                         onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
                         className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold">
+                        <option value="">— Not Specified —</option>
                         <option value="30 Days Credit">30 Days Credit</option>
                         <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
                         <option value="60 Days Credit">60 Days Credit</option>
@@ -1539,7 +1617,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
                     <div>
                       <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Inquiry Received Date</span>
-                      <span className="font-mono font-bold text-slate-700 block">
+                      <span className="font-mono font-bold text-slate-700 block mt-1">
                         {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
                       </span>
                     </div>
