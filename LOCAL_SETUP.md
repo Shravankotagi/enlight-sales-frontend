@@ -12,9 +12,9 @@ The Enlight Sales OS consists of 3 synchronized modules working together:
 
 | Module | Location | Purpose | Local Port | Detailed Guide |
 | :--- | :--- | :--- | :--- | :--- |
-| **Central Backend** | `/backend` | Manages database records, user authentication, KRA calculations, and Zoho Bigin CRM sync. | `http://localhost:3001` | [backend/README.md](backend/README.md) |
+| **Central Backend** | `/backend` | Manages database records, user authentication, KRA calculations, and Zoho Bigin CRM sync. | `http://localhost:3000` | [backend/README.md](backend/README.md) |
 | **Web Dashboard** | `/frontend` | Executive web portal for sales tracking, order generation, metal price sheets, and reports. | `http://localhost:5173` | [frontend/README.md](frontend/README.md) |
-| **WhatsApp AI Bot** | `/bot` | Automated AI assistant powered by Google Gemini 1.5 Flash Lite that processes sales messages from WhatsApp. | `http://localhost:3000` | [bot/README.md](bot/README.md) |
+| **WhatsApp AI Bot** | `/bot` | Automated AI assistant powered by Google Gemini 1.5 Flash Lite that processes sales messages from WhatsApp. | `http://localhost:3001` | [bot/README.md](bot/README.md) |
 
 ---
 
@@ -59,7 +59,7 @@ Create `.env` inside `backend/`:
 Environment File Contents (`backend/.env`):
 ```env
 # Server Port
-PORT=3001
+PORT=3000
 NODE_ENV=development
 
 # Database Connection (Supabase)
@@ -94,7 +94,7 @@ Create `.env` inside `frontend/`:
 Environment File Contents (`frontend/.env`):
 ```env
 # URL of your running backend server
-VITE_BACKEND_URL=http://localhost:3001
+VITE_BACKEND_URL=http://localhost:3000
 ```
 
 ---
@@ -115,22 +115,26 @@ Create `.env` inside `bot/`:
 
 Environment File Contents (`bot/.env`):
 ```env
-# Server Port
-PORT=3000
+# Server Configuration
+PORT=3001
+NODE_ENV=development
 
-# Supabase Database Connection
+# Central Backend Connection
+CENTRAL_BACKEND_URL=http://localhost:3000
+
+# Database Connection (Supabase)
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-secret-key
 
 # Google Gemini AI Key
-GEMINI_API_KEY=your_google_gemini_api_key
+GEMINI_API_KEY=your_gemini_api_key_here
 
-# Meta WhatsApp Cloud API Credentials
-WHATSAPP_TOKEN=your_whatsapp_meta_access_token
-WHATSAPP_PHONE_NUMBER_ID=your_whatsapp_phone_number_id
-WHATSAPP_VERIFY_TOKEN=enlight_whatsapp_verify_token_2026
+# Meta WhatsApp Webhook Verification Token
+WHATSAPP_TOKEN=your_meta_system_user_permanent_token
+WHATSAPP_PHONE_NUMBER_ID=your_meta_phone_number_id
+WHATSAPP_VERIFY_TOKEN=enlight_verify_123
 
-# Zoho Bigin Integration Credentials
+# Zoho Bigin CRM Credentials
 ZOHO_CLIENT_ID=your_zoho_client_id
 ZOHO_CLIENT_SECRET=your_zoho_client_secret
 ZOHO_REFRESH_TOKEN=your_zoho_refresh_token
@@ -149,7 +153,7 @@ Open **3 separate command windows** (Command Prompt / PowerShell on Windows, or 
   npm install
   npm run start:dev
   ```
-✅ **Success Indicator:** Shows `[NestApplication] Nest application successfully started` on `http://localhost:3001`.
+✅ **Success Indicator:** Shows `[NestApplication] Nest application successfully started` on `http://localhost:3000`.
 
 ---
 
@@ -169,9 +173,9 @@ Open **3 separate command windows** (Command Prompt / PowerShell on Windows, or 
   ```bash
   cd bot
   npm install
-  npm start
+  npm run start
   ```
-✅ **Success Indicator:** Shows `Bot server running on port 3000`.
+✅ **Success Indicator:** Shows `Bot server running on port 3001`.
 
 ---
 
