@@ -56,10 +56,25 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
 
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: 'this_month',
+    from: firstDayOfMonth,
+    to: lastDayOfMonth,
+  });
+
   const { data: rawOrders = [], isLoading: loading, refetch: fetchOrders } = useQuery<Order[]>({
-    queryKey: ['orders-list', effectivePhone],
+    queryKey: ['orders-list', effectivePhone, dateRange],
     queryFn: async () => {
-      const res = await ordersApi.getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined);
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (dateRange.from) params.from = dateRange.from;
+      if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
+
+      const res = await ordersApi.getAll(params);
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
@@ -77,13 +92,6 @@ export default function OrdersPage() {
   // AI OCR Scanning state
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [poFileName, setPoFileName] = useState('');
-
-  const now = new Date();
-  const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-    to: now.toISOString().split('T')[0],
-  });
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -303,8 +311,19 @@ export default function OrdersPage() {
   const parseSafeIsoDate = (dateStr?: string) => {
     if (!dateStr) return '';
     try {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-      const d = new Date(dateStr);
+      const trimmed = String(dateStr).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+      // Check for DD/MM/YYYY or DD-MM-YYYY
+      const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      if (dmyMatch) {
+        const day = dmyMatch[1].padStart(2, '0');
+        const month = dmyMatch[2].padStart(2, '0');
+        const year = dmyMatch[3];
+        return `${year}-${month}-${day}`;
+      }
+
+      const d = new Date(trimmed);
       if (isNaN(d.getTime())) return '';
       return d.toISOString().split('T')[0];
     } catch {
@@ -316,18 +335,17 @@ export default function OrdersPage() {
 
   const filtered = safeOrders.filter(o => {
     if (dateRange.from && dateRange.to) {
-      const isDateInRange = (dStr?: string) => {
-        if (!dStr) return false;
-        const d = parseSafeIsoDate(dStr);
-        return Boolean(d && d >= dateRange.from! && d <= dateRange.to!);
-      };
+      const effectiveDate =
+        parseSafeIsoDate(o?.po_date) ||
+        parseSafeIsoDate(o?.won_at) ||
+        parseSafeIsoDate(o?.created_at);
 
-      const wonInRange = isDateInRange(o.won_at);
-      const createdInRange = isDateInRange(o.created_at);
-      const poInRange = isDateInRange(o.po_date);
-
-      if (!wonInRange && !createdInRange && !poInRange) {
-        return false;
+      if (effectiveDate) {
+        const fromDate = dateRange.from.split('T')[0];
+        const toDate = dateRange.to.split('T')[0];
+        if (effectiveDate < fromDate || effectiveDate > toDate) {
+          return false;
+        }
       }
     }
 

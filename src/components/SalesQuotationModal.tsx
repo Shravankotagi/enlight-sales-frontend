@@ -19,6 +19,7 @@ interface QuotationDeal {
   po_date?: string;
   total_amount?: number;
   delivery_location?: string;
+  payment_terms?: string;
   created_at?: string;
   deal_items?: DealItem[];
   deal_number?: string;
@@ -34,13 +35,22 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
 
   if (!deal) return null;
 
-  const totalAmount = deal.total_amount || deal.deal_items?.reduce((s, item) => {
-    const rate = item.rate || item.quoted_price || item.price_per_mt || 0;
-    return s + (item.amount || rate * (item.quantity || 0));
-  }, 0) || 0;
+  const itemsSubtotal = (deal.deal_items || []).reduce((s, item) => {
+    const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
+    const qty = Number(item.quantity || 0);
+    return s + (Number(item.amount) || (rate > 0 && qty > 0 ? Math.round(rate * qty) : 0));
+  }, 0);
 
-  const subtotal = Math.round(totalAmount / 1.18);
-  const gstAmount = totalAmount - subtotal;
+  // Base Subtotal is strictly pre-GST material value
+  const subtotal = itemsSubtotal > 0
+    ? itemsSubtotal
+    : (deal.total_amount ? Number(deal.total_amount) : 0);
+
+  // GST (18%) is strictly calculated forward on top of base subtotal
+  const gstAmount = Math.round(subtotal * 0.18);
+  // Total Order Value is base subtotal + 18% GST
+  const grandTotal = subtotal + gstAmount;
+
   const dealRefId = deal.id ? `#${deal.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-DEAL';
   const poNumber = deal.po_number || `PO-${new Date().getFullYear()}-AUTO`;
   const orderDate = deal.po_date || (deal.created_at ? new Date(deal.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
@@ -180,7 +190,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                   deal.deal_items.map((item, i) => {
                     const qty = Number(item.quantity || 0);
                     const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
-                    const amt = Number(item.amount || (qty * rate) || totalAmount || 0);
+                    const amt = Number(item.amount || (qty * rate) || subtotal || 0);
 
                     return (
                       <tr key={i} className="hover:bg-slate-50">
@@ -197,7 +207,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                     <td className="px-4 py-3 font-semibold text-slate-900">Industrial Metal Supply Order Requirement</td>
                     <td className="px-4 py-3 text-right font-mono font-medium">Bulk Order</td>
                     <td className="px-4 py-3 text-right font-bold text-slate-900">
-                      ₹{Number(totalAmount).toLocaleString('en-IN')}
+                      ₹{Number(subtotal).toLocaleString('en-IN')}
                     </td>
                   </tr>
                 )}
@@ -210,7 +220,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
             <div className="text-xs text-slate-500 max-w-sm space-y-1">
               <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>
               <p>1. Material meets IS 2062 / IS 1786 prime metal standards.</p>
-              <p>2. Payment terms: 100% as per agreed commercial contract.</p>
+              <p>2. Payment terms: {deal.payment_terms || '100% as per agreed commercial contract'}.</p>
               <p>3. Official computer-generated quotation from Enlight Metals OS.</p>
             </div>
 
@@ -223,16 +233,16 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
               </div>
 
               <div className="flex justify-between text-xs text-slate-600">
-                <span>GST (18% Estimated):</span>
+                <span>GST (18% Forward):</span>
                 <span className="font-mono font-medium">
-                  ₹{gstAmount.toLocaleString('en-IN')}
+                  + ₹{gstAmount.toLocaleString('en-IN')}
                 </span>
               </div>
 
               <div className="pt-2 border-t border-slate-300 flex justify-between items-center">
                 <span className="text-sm font-bold text-slate-900">Total Order Value:</span>
                 <span className="text-lg font-bold text-emerald-600 font-mono">
-                  ₹{Number(totalAmount).toLocaleString('en-IN')}
+                  ₹{grandTotal.toLocaleString('en-IN')}
                 </span>
               </div>
             </div>

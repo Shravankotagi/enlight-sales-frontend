@@ -152,8 +152,12 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const textLower = textRaw.toLowerCase();
   const aiJson = inq?.ai_extraction_json || {};
 
-  // 1. Customer / Company Name (Priority to AI extracted customer name and customer record, NOT salesperson)
-  const SALESPERSON_NAMES = ['rishabh', 'rishabh makwana', 'max', 'akruti', 'salesperson', 'sales rep'];
+  const senderNameLower = (inq?.sender_name || '').toLowerCase().trim();
+  const senderPhone = (inq?.sender_phone || '').replace(/\D/g, '');
+  const spPhone = (inq?.salesperson_phone || '').replace(/\D/g, '');
+  const SALESPERSON_NAMES = ['rishabh', 'rishabh makwana', 'max', 'akruti', 'salesperson', 'sales rep', 'dhananjay goel'];
+
+  // 1. Customer / Company Name (Strictly customer only — NEVER salesperson profile)
   let companyName =
     aiJson.customer?.name ||
     aiJson.customer_name ||
@@ -161,15 +165,23 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     inq?.customer_name ||
     '';
 
-  const isInvalidName = !companyName || 
-    companyName.toLowerCase() === 'customer' || 
-    companyName.toLowerCase() === 'client' || 
-    companyName.toLowerCase() === 'the customer' || 
-    companyName === 'Apex Metals & Engg' || 
-    companyName === 'Web Customer' || 
-    SALESPERSON_NAMES.includes(companyName.toLowerCase().trim());
+  const isSalespersonName =
+    companyName &&
+    (SALESPERSON_NAMES.includes(companyName.toLowerCase().trim()) ||
+     (senderNameLower && companyName.toLowerCase().trim() === senderNameLower));
+
+  const isInvalidName =
+    !companyName ||
+    isSalespersonName ||
+    companyName.toLowerCase() === 'customer' ||
+    companyName.toLowerCase() === 'client' ||
+    companyName.toLowerCase() === 'the customer' ||
+    companyName.toLowerCase() === 'customer inquiry' ||
+    companyName === 'Apex Metals & Engg' ||
+    companyName === 'Web Customer';
 
   if (isInvalidName) {
+    companyName = '';
     if (textLower.includes('delta')) {
       companyName = 'Delta Structural Steel';
     } else if (textLower.includes('mehta')) {
@@ -198,26 +210,56 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
       }
       candidate = candidate.replace(/[.,:;*_\-\s]+$/, '').trim();
 
-      if (candidate && candidate.length >= 2 && !SALESPERSON_NAMES.includes(candidate.toLowerCase())) {
+      const reqMatch = textRaw.match(/^([A-Za-z0-9\s&.,'-]+?)\s+(?:requires|needs|require|need|rfq|quotation|order)/i);
+      if (reqMatch) {
+        const c = reqMatch[1].trim();
+        if (
+          !SALESPERSON_NAMES.includes(c.toLowerCase()) &&
+          c.toLowerCase() !== senderNameLower &&
+          c.toLowerCase() !== 'customer' &&
+          c.toLowerCase() !== 'i' &&
+          c.toLowerCase() !== 'we'
+        ) {
+          companyName = c;
+        }
+      } else if (candidate && candidate.length >= 2 && !SALESPERSON_NAMES.includes(candidate.toLowerCase()) && candidate.toLowerCase() !== senderNameLower) {
         companyName = candidate;
-      } else {
-        companyName = inq?.source_channel === 'web_dashboard' ? (inq?.sender_name || 'Customer Inquiry') : 'Customer Inquiry';
       }
     }
   }
 
-  // 2. Customer Phone Number (Priority to AI extracted customer phone and text match, NEVER salesperson phone)
-  const phoneMatch = textRaw.match(/\b([6-9]\d{9})\b/) || textRaw.match(/\+91[-\s]?([6-9]\d{9})\b/);
-  let customerPhone =
+  // 2. Customer Phone Number (Strictly customer only — NEVER salesperson phone)
+  let rawCustPhone =
     aiJson.customer?.phone ||
     aiJson.customer_phone ||
     aiJson.contact_phone ||
     aiJson.customerPhone ||
     inq?.customer_phone ||
-    (phoneMatch ? phoneMatch[1] : '');
+    '';
 
-  if (customerPhone === inq?.sender_phone || customerPhone === inq?.salesperson_phone || customerPhone === '918262937458' || customerPhone === '919619226169' || customerPhone === '917977088031') {
-    customerPhone = (phoneMatch && phoneMatch[1] !== inq?.sender_phone ? phoneMatch[1] : (inq?.customer_phone && inq.customer_phone !== inq?.sender_phone ? inq.customer_phone : ''));
+  const cleanCustPhone = String(rawCustPhone).replace(/\D/g, '');
+  const isSpPhone =
+    cleanCustPhone &&
+    ((senderPhone && (cleanCustPhone === senderPhone || cleanCustPhone.endsWith(senderPhone.slice(-10)))) ||
+     (spPhone && (cleanCustPhone === spPhone || cleanCustPhone.endsWith(spPhone.slice(-10)))) ||
+     cleanCustPhone.endsWith('8262937458') ||
+     cleanCustPhone.endsWith('9619226169') ||
+     cleanCustPhone.endsWith('7977088031') ||
+     cleanCustPhone.endsWith('9187305823'));
+
+  let customerPhone = isSpPhone ? '' : rawCustPhone;
+
+  if (!customerPhone) {
+    const phoneMatch = textRaw.match(/\b([6-9]\d{9})\b/) || textRaw.match(/\+91[-\s]?([6-9]\d{9})\b/);
+    if (phoneMatch) {
+      const extractedPhone = phoneMatch[1].replace(/\D/g, '');
+      const isExtractedSp =
+        (senderPhone && extractedPhone.endsWith(senderPhone.slice(-10))) ||
+        (spPhone && extractedPhone.endsWith(spPhone.slice(-10)));
+      if (!isExtractedSp) {
+        customerPhone = phoneMatch[1];
+      }
+    }
   }
 
   // 3. Product Type
@@ -432,10 +474,13 @@ export default function InquiriesPage() {
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
   const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-    to: now.toISOString().split('T')[0]
+    from: firstDayOfMonth,
+    to: lastDayOfMonth,
   });
 
   // Form state for Manual Log & File Upload
@@ -506,9 +551,7 @@ export default function InquiriesPage() {
             ai_extraction_json: localItem.ai_extraction_json || item.ai_extraction_json,
           };
         });
-        const backendIds = new Set(rawInquiries.map((i: InquiryItem) => i.id));
-        const localOnlyItems = localList.filter(i => !backendIds.has(i.id));
-        return [...localOnlyItems, ...mergedList];
+        return mergedList;
       });
     }
   }, [rawInquiries]);
@@ -1066,10 +1109,31 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
   const filtered = activeInquiryList.filter(i => {
     try {
+      if (dateRange.from && dateRange.to) {
+        const parseSafeIso = (dStr?: string) => {
+          if (!dStr) return '';
+          try {
+            const trimmed = String(dStr).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+            const d = new Date(trimmed);
+            if (isNaN(d.getTime())) return '';
+            return d.toISOString().split('T')[0];
+          } catch {
+            return '';
+          }
+        };
+        const inqDate = parseSafeIso(i?.created_at);
+        if (inqDate) {
+          const fromDate = dateRange.from.split('T')[0];
+          const toDate = dateRange.to.split('T')[0];
+          if (inqDate < fromDate || inqDate > toDate) return false;
+        }
+      }
+
       const text = i?.raw_text || '';
       const parsed = parseInquiryText(text, i);
-      const name = parsed.companyName || i?.customer_name || i?.sender_name || '';
-      const phone = parsed.customerPhone || i?.customer_phone || i?.sender_phone || '';
+      const name = parsed.companyName || '';
+      const phone = parsed.customerPhone || '';
 
       const matchesSearch =
         !searchTerm.trim() ||
@@ -1100,44 +1164,22 @@ const formatExtractedRequirementText = (extracted: any): string => {
     let mediaUrl = inq.media_urls?.[0];
     if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
       setImageViewerUrl(mediaUrl);
-      return;
-    }
-
-    const toastId = toast.loading('Loading original document...');
-    try {
-      const res = await inquiriesApi.getOne(inq.id);
-      const fullInq = res?.data?.data || res?.data;
-      if (fullInq && Array.isArray(fullInq.media_urls) && fullInq.media_urls.length > 0) {
-        mediaUrl = fullInq.media_urls[0];
-        setInquiries(prev =>
-          prev.map(i => (i.id === inq.id ? { ...i, media_urls: fullInq.media_urls } : i))
-        );
-        if (selectedInquiry?.id === inq.id) {
-          setSelectedInquiry(prev => (prev ? { ...prev, media_urls: fullInq.media_urls } : null));
-        }
-        toast.dismiss(toastId);
-        setImageViewerUrl(mediaUrl || null);
-      } else {
-        toast.dismiss(toastId);
-        toast.error('No attached document found for this record.');
-      }
-    } catch (e) {
-      toast.dismiss(toastId);
-      toast.error('Could not load document.');
+    } else {
+      toast.error('No attached document found for this inquiry.');
     }
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-6 animate-fade-in pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <FileText className="text-blue-600" size={28} />
-            Customer Product Inquiries
+            Inquiries &amp; Quotations Management
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            AI Multi-Format Interpretation (Text, Image, PDF) with QA Audit &amp; Customer Pre-fill
+          <p className="text-slate-500 text-sm mt-1">
+            Automated RFQ extraction, pricing computation, PDF quotation generation, and dispatch tracking.
           </p>
         </div>
 
@@ -1204,10 +1246,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
       {/* Main Inquiries Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              <tr>
-                <th className="px-4 py-3 text-center">Sr.</th>
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-center">#</th>
                 <th className="px-4 py-3 text-center">Received Date</th>
                 <th className="px-4 py-3 text-center">Customer / Company Name</th>
                 <th className="px-4 py-3 text-center">Customer Phone</th>
@@ -1232,27 +1274,27 @@ const formatExtractedRequirementText = (extracted: any): string => {
               ) : (
                 filtered.map((inq, idx) => {
                   const details = (() => {
-                  const ai = inq?.ai_extraction_json || {};
-                  const lineItemsSrc = ai.line_items || ai.lineItems || [];
-                  if (lineItemsSrc.length > 0) {
-                    // Use structured data directly — don't re-parse raw_text
-                    return {
-                      ...parseInquiryText(inq.raw_text || '', inq),
-                      companyName: ai.companyName || ai.customer?.name || ai.customer_name || inq.customer_name || 'Customer Inquiry',
-                      customerPhone: ai.customerPhone || ai.customer_phone || ai.customer?.phone || inq.customer_phone || '',
-                      lineItems: lineItemsSrc.map((item: any) => ({
-                        sku_text: item.sku_text || item.description || '',
-                        dimensions: item.dimensions || '',
-                        quantity: Number(item.quantity) || 0,
-                        unit: item.unit || 'MT',
-                        rate: Number(item.rate) || 0,
-                        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
-                      })),
-                      totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
-                    };
-                  }
-                  return parseInquiryText(inq.raw_text || '', inq);
-                })();
+                    const parsed = parseInquiryText(inq.raw_text || '', inq);
+                    const ai = inq?.ai_extraction_json || {};
+                    const lineItemsSrc = ai.line_items || ai.lineItems || [];
+                    if (lineItemsSrc.length > 0) {
+                      return {
+                        ...parsed,
+                        companyName: parsed.companyName,
+                        customerPhone: parsed.customerPhone,
+                        lineItems: lineItemsSrc.map((item: any) => ({
+                          sku_text: item.sku_text || item.description || '',
+                          dimensions: item.dimensions || '',
+                          quantity: Number(item.quantity) || 0,
+                          unit: item.unit || 'MT',
+                          rate: Number(item.rate) || 0,
+                          amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+                        })),
+                        totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
+                      };
+                    }
+                    return parsed;
+                  })();
                   const st = (inq.status || '').toLowerCase();
                   const isQuoted = st === 'quoted';
                   const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won';
@@ -1272,7 +1314,11 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       <td className="px-4 py-3.5 font-bold text-slate-900">
                         <span className="flex items-center gap-1.5 text-blue-700 group-hover:underline">
                           <Building2 size={15} className="text-blue-600 flex-shrink-0" />
-                          {details.companyName}
+                          {details.companyName ? (
+                            details.companyName
+                          ) : (
+                            <span className="text-amber-600 font-medium italic text-[11px]">(Customer not specified)</span>
+                          )}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-mono">

@@ -20,30 +20,47 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
   const now = new Date();
   const [preset, setPreset] = useState<FilterPreset>(initialPreset);
   const [showCustom, setShowCustom] = useState(initialPreset === 'custom');
+
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0];
+
   const [customFrom, setCustomFrom] = useState(
     new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString().split('T')[0]
   );
-  const [customTo, setCustomTo] = useState(now.toISOString().split('T')[0]);
+  const [customTo, setCustomTo] = useState(todayStr);
 
   const handleSelectPreset = (newPreset: FilterPreset) => {
     setPreset(newPreset);
-    const todayStr = now.toISOString().split('T')[0];
 
     if (newPreset === '7_days') {
       const fromStr = new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString().split('T')[0];
       setShowCustom(false);
       onChange({ preset: '7_days', from: fromStr, to: todayStr });
     } else if (newPreset === '14_days') {
-      const fromStr = new Date(now.getTime() - 15 * 24 * 3600 * 1000).toISOString().split('T')[0];
+      const fromStr = new Date(now.getTime() - 14 * 24 * 3600 * 1000).toISOString().split('T')[0];
       setShowCustom(false);
       onChange({ preset: '14_days', from: fromStr, to: todayStr });
     } else if (newPreset === 'this_month') {
-      const fromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
       setShowCustom(false);
-      onChange({ preset: 'this_month', from: fromStr, to: todayStr });
+      onChange({ preset: 'this_month', from: firstDayOfMonth, to: lastDayOfMonth });
     } else if (newPreset === 'custom') {
       setShowCustom(true);
       onChange({ preset: 'custom', from: customFrom, to: customTo });
+    }
+  };
+
+  const handleCustomFromChange = (newFrom: string) => {
+    setCustomFrom(newFrom);
+    if (newFrom && customTo) {
+      onChange({ preset: 'custom', from: newFrom, to: customTo });
+    }
+  };
+
+  const handleCustomToChange = (newTo: string) => {
+    setCustomTo(newTo);
+    if (customFrom && newTo) {
+      onChange({ preset: 'custom', from: customFrom, to: newTo });
     }
   };
 
@@ -75,14 +92,14 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
           <input
             type="date"
             value={customFrom}
-            onChange={e => setCustomFrom(e.target.value)}
+            onChange={e => handleCustomFromChange(e.target.value)}
             className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
           />
           <span className="text-slate-400 font-medium">to</span>
           <input
             type="date"
             value={customTo}
-            onChange={e => setCustomTo(e.target.value)}
+            onChange={e => handleCustomToChange(e.target.value)}
             className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
           />
           <button
