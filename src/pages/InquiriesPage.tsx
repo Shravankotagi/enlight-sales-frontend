@@ -131,13 +131,23 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const aiJson = inq?.ai_extraction_json || {};
 
   // 1. Customer / Company Name (Priority to AI extracted customer name and customer record, NOT salesperson)
+  const SALESPERSON_NAMES = ['rishabh', 'rishabh makwana', 'max', 'akruti', 'salesperson', 'sales rep'];
   let companyName =
-    aiJson.customer_name ||
     aiJson.customer?.name ||
+    aiJson.customer_name ||
+    aiJson.companyName ||
     inq?.customer_name ||
     '';
 
-  if (!companyName || companyName === 'Customer' || companyName === 'Apex Metals & Engg' || companyName === 'Web Customer' || companyName.toLowerCase() === 'max') {
+  const isInvalidName = !companyName || 
+    companyName.toLowerCase() === 'customer' || 
+    companyName.toLowerCase() === 'client' || 
+    companyName.toLowerCase() === 'the customer' || 
+    companyName === 'Apex Metals & Engg' || 
+    companyName === 'Web Customer' || 
+    SALESPERSON_NAMES.includes(companyName.toLowerCase().trim());
+
+  if (isInvalidName) {
     if (textLower.includes('delta')) {
       companyName = 'Delta Structural Steel';
     } else if (textLower.includes('mehta')) {
@@ -150,12 +160,26 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
       companyName = 'Supreme Steel';
     } else if (textLower.includes('scafform')) {
       companyName = 'SB Scafform Technovert Pvt. Ltd.';
+    } else if (textLower.includes('patel')) {
+      companyName = 'Patel Construction';
     } else {
-      const match = textRaw.match(/(?:from|customer|company|client|pvt\.?\s*ltd\.?|ltd\.?|infra|steel|engineering|industries)\s+([A-Z0-9\s&.-]{3,35})/i);
-      if (match && match[1].trim().toLowerCase() !== 'max') {
-        companyName = match[1].trim();
+      let text = textRaw
+        .replace(/^(hi|hello|hey|dear|sir)\b\s*[,.:-]?\s*/i, '')
+        .replace(/^(visited|met with|met|site visit to|meeting with|talked to|called)\s+/i, '')
+        .trim();
+      const STOP_KEYWORDS = /\b(needs?|requires?|requirement|wants?|wanted|inquiry|enquiry|quote|quotation|rate|bhav|asking for|interested in|looking for|contact|person|owner|phone|mob|mobile|call|ph|gst|gstin|location|delivery|warehouse|po|order|placed|confirmed|today|yesterday|regarding|about|with|\d+\s*(?:mt|tons?|kg|sheets?|coils?|nos?|mm))\b/i;
+      const prefixMatch = text.match(/^(?:for|from|customer|client|company|account|m\/s|m\/s\.)\s+([^,:\n]+)/i);
+      let candidate = prefixMatch ? prefixMatch[1] : text.split(/[,:\n]/)[0];
+      const stopIndex = candidate.search(STOP_KEYWORDS);
+      if (stopIndex !== -1) {
+        candidate = candidate.substring(0, stopIndex);
+      }
+      candidate = candidate.replace(/[.,:;*_\-\s]+$/, '').trim();
+
+      if (candidate && candidate.length >= 2 && !SALESPERSON_NAMES.includes(candidate.toLowerCase())) {
+        companyName = candidate;
       } else {
-        companyName = inq?.customer_name || 'Customer Inquiry';
+        companyName = inq?.source_channel === 'web_dashboard' ? (inq?.sender_name || 'Customer Inquiry') : 'Customer Inquiry';
       }
     }
   }
@@ -163,12 +187,13 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   // 2. Customer Phone Number (Priority to AI extracted customer phone and text match, NOT salesperson phone)
   const phoneMatch = textRaw.match(/\b([6-9]\d{9})\b/) || textRaw.match(/\+91[-\s]?([6-9]\d{9})\b/);
   let customerPhone =
-    aiJson.contact_phone ||
     aiJson.customer?.phone ||
-    (phoneMatch ? phoneMatch[1] : '');
+    aiJson.customer_phone ||
+    aiJson.contact_phone ||
+    (phoneMatch ? phoneMatch[1] : (inq?.customer_phone || ''));
 
-  if (!customerPhone || customerPhone === inq?.sender_phone || customerPhone === '918262937458') {
-    customerPhone = inq?.customer_phone || (phoneMatch ? phoneMatch[1] : '');
+  if (customerPhone === inq?.sender_phone || customerPhone === inq?.salesperson_phone || customerPhone === '918262937458' || customerPhone === '919619226169' || customerPhone === '917977088031') {
+    customerPhone = (phoneMatch && phoneMatch[1] !== inq?.sender_phone ? phoneMatch[1] : (inq?.customer_phone && inq.customer_phone !== inq?.sender_phone ? inq.customer_phone : ''));
   }
 
   // 3. Product Type
