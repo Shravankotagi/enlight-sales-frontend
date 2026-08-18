@@ -264,8 +264,8 @@ export default function VisitsPage() {
               ) : (
                 filtered.map((v, idx) => {
                   const outcomeLower = getNormalizedOutcome(v);
-                  const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || '+91 98765 43210';
-                  const loc = v.location || (v as any).city || (v as any).customer_address || 'Mumbai';
+                  const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
+                  const loc = v.location || (v as any).city || (v as any).customer_address || '-';
 
                   return (
                     <tr key={v.id || idx} className="hover:bg-slate-50/80 transition-colors">
