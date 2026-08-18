@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const defaultBackend = isLocal ? 'http://localhost:3001' : 'https://enlight-sales-backend-production.up.railway.app';
+const defaultBackend = isLocal ? 'http://localhost:3000' : 'https://enlight-sales-backend-production.up.railway.app';
 const rawBackend = import.meta.env.VITE_BACKEND_URL || defaultBackend;
 const BACKEND = rawBackend.replace(/\/+$/, '');
 
