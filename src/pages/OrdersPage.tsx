@@ -24,6 +24,7 @@ import {
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { useAuth } from '../context/AuthContext';
 
 interface DealItem {
   id?: string;
@@ -53,11 +54,12 @@ interface Order {
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
+  const { effectivePhone } = useAuth();
 
   const { data: rawOrders = [], isLoading: loading, refetch: fetchOrders } = useQuery<Order[]>({
-    queryKey: ['orders-list'],
+    queryKey: ['orders-list', effectivePhone],
     queryFn: async () => {
-      const res = await ordersApi.getAll();
+      const res = await ordersApi.getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined);
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
@@ -92,7 +94,7 @@ export default function OrdersPage() {
   const [formQuantity, setFormQuantity] = useState('');
   const [formRate, setFormRate] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
-  const [formPaymentTerms, setFormPaymentTerms] = useState('30 Days Credit');
+  const [formPaymentTerms, setFormPaymentTerms] = useState('');
   const [formExtractedItems, setFormExtractedItems] = useState<DealItem[]>([]);
   const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
 
@@ -264,7 +266,7 @@ export default function OrdersPage() {
         po_date: formPoDate || undefined,
         total_amount: finalOrderValue,
         delivery_location: formDeliveryLocation.trim() || undefined,
-        payment_terms: formPaymentTerms.trim() || '30 Days Credit',
+        payment_terms: formPaymentTerms.trim() || undefined,
         line_items: lineItemsToSend,
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
@@ -280,7 +282,7 @@ export default function OrdersPage() {
       setFormQuantity('');
       setFormRate('');
       setFormDeliveryLocation('');
-      setFormPaymentTerms('30 Days Credit');
+      setFormPaymentTerms('');
       setFormExtractedItems([]);
       setFormBasicAmount(0);
       setFormGstAmount(0);
@@ -630,10 +632,24 @@ export default function OrdersPage() {
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-slate-300 text-xs">
                     {(() => {
-                      const totalVal = Number(selectedDrawerOrder.total_amount || 0);
-                      const baseAmt = Math.round(totalVal / 1.18);
-                      const gstAmt = totalVal - baseAmt;
-                      const totalQty = (selectedDrawerOrder.deal_items || []).reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+                      const totalQty = (selectedDrawerOrder.deal_items || []).reduce(
+                        (s, i) => s + (Number(i.quantity) || 0),
+                        0
+                      );
+                      const itemsSubtotal = (selectedDrawerOrder.deal_items || []).reduce((s, i) => {
+                        const rateNum = Number(i.rate || 0);
+                        const qtyNum = Number(i.quantity || 0);
+                        return s + (Number(i.amount) || (rateNum > 0 && qtyNum > 0 ? Math.round(rateNum * qtyNum) : 0));
+                      }, 0);
+
+                      const rawTotalVal = Number(selectedDrawerOrder.total_amount || 0);
+
+                      // Base Material Subtotal is strictly pre-GST material value
+                      const baseAmt = itemsSubtotal > 0 ? itemsSubtotal : (rawTotalVal > 0 ? rawTotalVal : 0);
+                      // GST (18%) is strictly calculated forward on top of base material subtotal
+                      const gstAmt = Math.round(baseAmt * 0.18);
+                      // Total Order Value is base material subtotal + 18% GST
+                      const totalVal = baseAmt + gstAmt;
 
                       return (
                         <>
@@ -677,7 +693,7 @@ export default function OrdersPage() {
                 <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Delivery Location</span>
-                  <span className="font-semibold text-slate-800">{selectedDrawerOrder.delivery_location || 'Warehouse / As per PO'}</span>
+                  <span className="font-semibold text-slate-800">{selectedDrawerOrder.delivery_location || '-'}</span>
                 </div>
               </div>
 
@@ -685,7 +701,7 @@ export default function OrdersPage() {
                 <CreditCard size={16} className="text-slate-400 mt-0.5 shrink-0" />
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Payment Terms</span>
-                  <span className="font-semibold text-purple-700">{selectedDrawerOrder.payment_terms || '30 Days Credit'}</span>
+                  <span className="font-semibold text-purple-700">{selectedDrawerOrder.payment_terms || '-'}</span>
                 </div>
               </div>
 

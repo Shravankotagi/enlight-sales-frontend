@@ -129,7 +129,7 @@ export default function HomePage() {
     const itemsTonnage = (o.deal_items || []).reduce((iSum: number, item: any) => iSum + Number(item.quantity || 0), 0);
     return acc + itemsTonnage;
   }, 0);
-  const totalTonnageSupplied = calculatedTonnage > 0 ? calculatedTonnage : 75;
+  const totalTonnageSupplied = calculatedTonnage;
 
   const todayStr = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -503,35 +503,43 @@ export default function HomePage() {
             </button>
           </div>
 
-          <div className="space-y-4 flex-1">
-            {topCustomers.map((cust, idx) => {
-              const pct = Math.min(100, Math.round((cust.val / grandTotalCustomerVal) * 100));
-              return (
-                <div key={idx} className="space-y-1.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-600" />
-                      {cust.name}
-                    </span>
-                    <span className="font-mono font-bold text-slate-900">
-                      ₹{cust.val.toLocaleString('en-IN')}
-                    </span>
+          <div className="space-y-4 flex-1 flex flex-col justify-center">
+            {topCustomers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center text-slate-400">
+                <Users size={28} className="text-slate-300 mb-2" />
+                <p className="text-xs font-medium text-slate-600">No customer orders yet</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Top customer billing will appear here.</p>
+              </div>
+            ) : (
+              topCustomers.map((cust, idx) => {
+                const pct = Math.min(100, Math.round((cust.val / grandTotalCustomerVal) * 100));
+                return (
+                  <div key={idx} className="space-y-1.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-600" />
+                        {cust.name}
+                      </span>
+                      <span className="font-mono font-bold text-slate-900">
+                        ₹{cust.val.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Customer Growth Rate</span>
             <span className="font-bold text-emerald-600 flex items-center gap-1">
-              <ArrowUpRight size={14} /> +20% Retained
+              <ArrowUpRight size={14} /> {topCustomers.length > 0 ? '+20% Retained' : '0% Retained'}
             </span>
           </div>
         </div>

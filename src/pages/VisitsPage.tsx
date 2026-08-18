@@ -8,10 +8,17 @@ interface CustomerVisit {
   customer_name: string;
   person_met?: string;
   contact_phone?: string;
+  contact_no?: string;
   location?: string;
+  customer_address?: string;
   outcome?: 'positive' | 'neutral' | 'negative' | string;
   remarks?: string;
+  raw_remarks?: string;
+  material_requirement?: string;
+  requirement?: string;
   follow_up_action?: string;
+  follow_up?: string;
+  followup?: string;
   visited_at: string;
 }
 
@@ -112,7 +119,10 @@ export default function VisitsPage() {
       (v?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.person_met || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.remarks || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (v?.customer_address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v?.remarks || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v?.follow_up_action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesOutcome = filterOutcome === 'all' || (v?.outcome || '').toLowerCase() === filterOutcome.toLowerCase();
     return matchesSearch && matchesOutcome;
   });
@@ -264,8 +274,38 @@ export default function VisitsPage() {
               ) : (
                 filtered.map((v, idx) => {
                   const outcomeLower = getNormalizedOutcome(v);
-                  const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || '+91 98765 43210';
-                  const loc = v.location || (v as any).city || (v as any).customer_address || 'Mumbai';
+                  const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
+                  const loc = v.location || (v as any).city || (v as any).customer_address || '-';
+                  const rawRemarks = v.raw_remarks || v.remarks || '';
+
+                  // Structured Requirement Extraction
+                  const reqMatch =
+                    v.material_requirement ||
+                    (v as any).requirement ||
+                    rawRemarks.match(/\[Requirement:\s*([^\]]+)\]/i)?.[1] ||
+                    rawRemarks.match(/\[Interests:\s*([^\]]+)\]/i)?.[1] ||
+                    null;
+
+                  // Follow-up Action Extraction
+                  const followUp =
+                    v.follow_up_action ||
+                    (v as any).follow_up ||
+                    (v as any).followup ||
+                    rawRemarks.match(/\[FollowUp:\s*([^\]]+)\]/i)?.[1] ||
+                    rawRemarks.match(/\[Follow-up:\s*([^\]]+)\]/i)?.[1] ||
+                    (rawRemarks.match(/\[Interests:\s*([^\]]+)\]/i)?.[1]
+                      ? `Follow-up on ${rawRemarks.match(/\[Interests:\s*([^\]]+)\]/i)?.[1]} requirement`
+                      : null) ||
+                    '-';
+
+                  // Clean Remarks (strip bracket metadata tags for clear, human-readable display)
+                  const cleanRemarks =
+                    rawRemarks
+                      .replace(
+                        /\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi,
+                        '',
+                      )
+                      .trim() || rawRemarks || '-';
 
                   return (
                     <tr key={v.id || idx} className="hover:bg-slate-50/80 transition-colors">
@@ -273,21 +313,23 @@ export default function VisitsPage() {
                       <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
                         {v.visited_at ? new Date(v.visited_at).toLocaleDateString('en-IN') : '-'}
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-slate-900">{v.customer_name || 'Customer'}</td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 font-medium">
+                      <td className="px-4 py-3.5 font-semibold text-slate-900 whitespace-normal break-words min-w-[130px]">
+                        {v.customer_name || 'Customer'}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-slate-700 font-medium whitespace-normal break-words min-w-[130px]">
                         <span className="flex items-center gap-1.5">
-                          <User size={13} className="text-slate-400" />
-                          {v.person_met || 'Contact Person'}
+                          <User size={13} className="text-slate-400 shrink-0" />
+                          {v.person_met && v.person_met !== 'null' ? v.person_met : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-600 font-mono">
+                      <td className="px-4 py-3.5 text-xs text-slate-600 font-mono whitespace-nowrap">
                         <span className="flex items-center gap-1">
-                          <Phone size={12} className="text-slate-400" /> {phone}
+                          <Phone size={12} className="text-slate-400 shrink-0" /> {phone}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700">
+                      <td className="px-4 py-3.5 text-xs text-slate-700 whitespace-normal break-words min-w-[100px]">
                         <span className="flex items-center gap-1">
-                          <Map size={12} className="text-slate-400" /> {loc}
+                          <Map size={12} className="text-slate-400 shrink-0" /> {loc}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 whitespace-nowrap">
@@ -305,11 +347,26 @@ export default function VisitsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-600 max-w-xs truncate" title={v.remarks}>
-                        {v.remarks || '-'}
+                      <td className="px-4 py-3.5 text-xs whitespace-normal break-words leading-relaxed min-w-[240px]">
+                        {reqMatch && (
+                          <div className="mb-1">
+                            <span className="inline-flex items-center gap-1 font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md text-[11px]">
+                              📦 {reqMatch}
+                            </span>
+                          </div>
+                        )}
+                        <p className="text-slate-700 whitespace-normal break-words leading-relaxed">
+                          {cleanRemarks}
+                        </p>
                       </td>
-                      <td className="px-4 py-3.5 text-xs font-medium text-blue-600 max-w-xs truncate" title={v.follow_up_action}>
-                        {v.follow_up_action || '-'}
+                      <td className="px-4 py-3.5 text-xs whitespace-normal break-words leading-relaxed min-w-[180px]">
+                        {followUp && followUp !== '-' ? (
+                          <span className="font-semibold text-blue-700 bg-blue-50/90 border border-blue-200/90 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 text-xs whitespace-normal break-words">
+                            📅 {followUp}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">-</span>
+                        )}
                       </td>
                     </tr>
                   );

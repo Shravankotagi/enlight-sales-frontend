@@ -233,6 +233,15 @@ function KRACard({ number, label, data, onClick }: {
 function KRASheetView({ sheet }: { sheet: any }) {
   if (!sheet) return null;
 
+  let achievedValue = sheet.achieved;
+  if (sheet.number === 4 && sheet.rows && sheet.rows.length > 0) {
+    const wonCount = sheet.rows.filter((r: any) =>
+      String(r.order_status || '').toLowerCase().includes('won')
+    ).length;
+    const rate = Math.min(100, Math.round((wonCount / sheet.rows.length) * 100));
+    achievedValue = `${rate}%`;
+  }
+
   return (
     <div className="bg-white border-2 border-gray-300 rounded-xl overflow-hidden shadow-sm font-sans">
       {/* Outer Title Banner */}
@@ -253,7 +262,7 @@ function KRASheetView({ sheet }: { sheet: any }) {
         <div className="py-2.5 px-3 font-semibold">{sheet.number}</div>
         <div className="py-2.5 px-3 font-bold text-gray-800">{sheet.title?.split(':')[1]?.trim() || sheet.title}</div>
         <div className="py-2.5 px-3 text-gray-700">{sheet.target}</div>
-        <div className="py-2.5 px-3 font-extrabold text-blue-700">{sheet.achieved}</div>
+        <div className="py-2.5 px-3 font-extrabold text-blue-700">{achievedValue}</div>
       </div>
 
       {/* Explanation Banner */}
