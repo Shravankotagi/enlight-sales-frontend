@@ -71,52 +71,75 @@ const cleanProductType = (pt: string): string => {
  * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
  */
 function isProductInquiry(inq: InquiryItem): boolean {
+  if (!inq) return false;
+  const rawText = (inq?.raw_text || '').trim();
+  const textLower = rawText.toLowerCase();
+  const aiJson = (inq?.ai_extraction_json as any) || {};
+
   // 0. Exclude Purchase Orders (POs belong strictly to Completed & Delivered Orders tab)
   const isPurchaseOrder =
     inq?.inquiry_type === 'purchase_order' ||
-    (inq?.raw_text || '').startsWith('[PO Document Attached');
+    rawText.startsWith('[PO Document Attached:');
+  if (isPurchaseOrder) return false;
 
-  if (isPurchaseOrder) {
-    return false;
-  }
+  // 1. Document attachment or direct file upload
+  const isDocument =
+    rawText.startsWith('[Inquiry Attachment:') ||
+    rawText.startsWith('[Inquiry Document Attached]') ||
+    (Array.isArray(inq.media_urls) && inq.media_urls.length > 0 && inq.media_urls[0] !== 'attached_document');
+  if (isDocument) return true;
 
-  const status = (inq?.status || '').toLowerCase();
+  // 2. Extracted line items with product & quantity is genuine
+  const lineItemsSrc = aiJson.line_items || aiJson.lineItems || [];
   if (
-    status === 'confirmed' ||
-    status === 'quoted' ||
-    status === 'processed' ||
-    status === 'won' ||
-    inq?.source_channel === 'web_dashboard'
+    Array.isArray(lineItemsSrc) &&
+    lineItemsSrc.length > 0 &&
+    lineItemsSrc.some(
+      (i: any) =>
+        (Number(i.quantity) > 0 || Number(i.quantity_tons) > 0) &&
+        (i.sku_text || i.product_name || i.product || i.description),
+    )
   ) {
     return true;
   }
-  const text = (inq.raw_text || '').trim();
-  const textLower = text.toLowerCase();
-  if (!text) return false;
 
-  // 1. Exclude single numbers or short greetings like "hii", "2", "1", "hello"
-  if (/^\d{1,3}$/.test(text)) return false;
-  if (/^(hii+|hello|hy|hey|ok|thanks|thank you|yes|no)$/i.test(text)) return false;
-
-  // 2. Exclude deal stage updates and deal status logs like "delta deal is won", "Mehta Engineering deal lost", "#DEAL-4DCEB7"
-  if (/^#deal-[a-f0-9]+$/i.test(text)) return false;
-  if (/\b(deal is won|deal lost|deal closed|won deal|lost deal|marked as won|marked as lost)\b/i.test(textLower)) return false;
-
-  // 3. Exclude queries asking for PO numbers or payment status updates like "can you share the PO number", "paid advance", "RTGS"
-  if (/\b(can you share|po number|show my|what is the|where is the|login link|portal link|dashboard link)\b/i.test(textLower)) return false;
-  if (/\b(paid|advance|cheque|rtgs|neft|upi|balance|outstanding|payment received)\b/i.test(textLower)) return false;
-
-  // 4. Exclude sales visit logs without a specific product requirement
-  if (textLower.startsWith('met with') || textLower.startsWith('visited')) {
-    const hasRequirement = /\b(requirement|requires|need|tons|mt|coil|sheet|plate|tmt)\b/i.test(textLower);
-    if (!hasRequirement) return false;
+  // 3. Web Dashboard manual inquiry
+  if (inq?.source_channel === 'web_dashboard' && rawText.length > 0) {
+    return true;
   }
 
-  // 5. Must contain steel/product inquiry indicators OR be a Document Upload / Attachment
-  const isDocument = textLower.includes('document received') || textLower.includes('inquiry attachment') || (inq.media_urls && inq.media_urls.length > 0);
-  const hasProductKeyword = /\b(hr|cr|tmt|steel|coil|coils|sheet|sheets|plate|plates|bar|bars|beam|pipe|pipes|tons|ton|mt|kg|kgs|mm|gsm|is 277|nos|requirement|requires|need|quote|quotation|quatation|inquiry|inquiries|rate|asking for)\b/i.test(textLower);
+  // 4. Reject conversational questions, chatbot queries, commands, visit logs, and payments
+  const NON_INQUIRY_PATTERNS = [
+    /^(hi|hello|hey|namaste)\b/i,
+    /^(show|list|tell|what|how|why|where|can you|give me|is there|which customers|now show|change|has )\b/i,
+    /\b(policy|moq|sop|guideline|portal|login|dashboard)\b/i,
+    /^(visited|met with|site visit|meeting with)\b/i,
+    /^new customer\b/i,
+    /^(deal|we have won|won the|lost the|paid|advance)\b/i,
+    /\b(paid\s+₹?|paid\s+rs|advance\s+via|via\s+cheque|via\s+rtgs|via\s+neft)\b/i,
+    /^#deal-\w+/i,
+    /^\d+$/,
+    /^this is the new inquiry$/i,
+    /^we have received a new inquiry/i,
+    /^document received$/i,
+    /^ded$/i,
+    /\b(reported rust|rust on)\b/i,
+  ];
 
-  return isDocument || hasProductKeyword;
+  if (NON_INQUIRY_PATTERNS.some((p) => p.test(textLower))) {
+    return false;
+  }
+
+  // 5. Must have steel/product keyword or explicit MT/tons
+  const hasMetalKeyword =
+    /\b(mt|tons?|kg|coils?|sheets?|plates?|rebar|tmt|steel|hr|cr|gp|gc|pipe|tube)\b/i.test(
+      textLower,
+    );
+  if (!hasMetalKeyword && !aiJson.customer?.name && !aiJson.customer_name) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -1027,10 +1050,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
     }
   };
 
-  // Keep ONLY actual Product Inquiries (filters out generic greetings, deal logs, and status questions!)
+  // Keep ONLY actual Product Inquiries (filters out generic chat greetings, deal logs, and status questions!)
   const rawList = Array.isArray(inquiries) ? inquiries : [];
   const productInquiries = rawList.filter(isProductInquiry);
-  const activeInquiryList = productInquiries.length > 0 ? productInquiries : rawList;
+  const activeInquiryList = productInquiries;
   const reviewCount = activeInquiryList.filter(i => {
     const st = (i?.status || 'review').toLowerCase();
     return ['review', 'needs_review', 'pending', 'new', 'draft'].includes(st);
