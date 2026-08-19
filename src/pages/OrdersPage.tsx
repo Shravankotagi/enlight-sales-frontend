@@ -20,6 +20,7 @@ import {
   Package,
   ExternalLink,
   ImageIcon,
+  User,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi } from '../lib/api';
@@ -40,6 +41,7 @@ interface Order {
   id: string;
   customer_name: string;
   customer_phone?: string;
+  salesperson_phone?: string;
   po_number?: string;
   po_date?: string;
   total_amount?: number;
@@ -719,7 +721,7 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div className="flex items-start gap-2">
                 <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
                 <div>
@@ -742,6 +744,16 @@ export default function OrdersPage() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Order Won Date</span>
                   <span className="font-mono font-bold text-slate-800">
                     {selectedDrawerOrder.won_at ? new Date(selectedDrawerOrder.won_at).toLocaleString('en-IN') : (selectedDrawerOrder.created_at ? new Date(selectedDrawerOrder.created_at).toLocaleString('en-IN') : '-')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <User size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Salesperson</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {selectedDrawerOrder.salesperson_phone || '-'}
                   </span>
                 </div>
               </div>

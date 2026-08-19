@@ -17,6 +17,7 @@ interface InquiryItem {
   customer_name?: string;
   customer_phone?: string;
   sender_phone?: string;
+  salesperson_phone?: string;
   raw_text?: string;
   inquiry_type?: string;
   status?: string;
@@ -1736,6 +1737,44 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Requirements & Salesperson Details Section */}
+                  <div className="p-4 bg-slate-100/70 border-t border-slate-200 space-y-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block mb-1">
+                          👤 Salesperson Assigned
+                        </span>
+                        <span className="font-semibold text-slate-800 bg-white px-2.5 py-1 rounded-lg border border-slate-200 inline-block font-mono">
+                          {selectedInquiry.salesperson_phone || selectedInquiry.sender_name || 'Assigned Rep'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block mb-1">
+                          ⚡ Status / Corrective Action Taken
+                        </span>
+                        <span className="font-semibold text-slate-800 bg-white px-2.5 py-1 rounded-lg border border-slate-200 inline-block">
+                          {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase())
+                            ? 'Quotation Generated & Dispatched ✉️'
+                            : ['confirmed', 'processed'].includes((selectedInquiry.status || '').toLowerCase())
+                            ? 'Confirmed & Order Processed 🎉'
+                            : 'In Review — Pending Confirmation ⏳'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {selectedInquiry.raw_text && (
+                      <div>
+                        <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block mb-1">
+                          📝 Customer Inquiry Requirements &amp; Message (Full Text)
+                        </span>
+                        <div className="bg-white p-3 rounded-xl border border-slate-200 text-slate-800 font-sans text-xs leading-relaxed whitespace-pre-wrap select-text">
+                          {selectedInquiry.raw_text}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
