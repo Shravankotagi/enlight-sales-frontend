@@ -1196,6 +1196,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
     } catch {
       return true;
     }
+  }).sort((a, b) => {
+    const timeA = new Date(a.created_at || 0).getTime();
+    const timeB = new Date(b.created_at || 0).getTime();
+    return timeB - timeA;
   });
 
   const handleViewInquiryDocument = async (inq: InquiryItem) => {

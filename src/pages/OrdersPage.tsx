@@ -83,7 +83,6 @@ export default function OrdersPage() {
     },
   });
 
-  const orders: Order[] = Array.isArray(rawOrders) ? rawOrders : [];
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -334,37 +333,43 @@ export default function OrdersPage() {
     }
   };
 
-  const safeOrders = Array.isArray(orders) ? orders : [];
+  const safeOrders: Order[] = Array.isArray(rawOrders) ? rawOrders : [];
 
-  const filtered = safeOrders.filter(o => {
-    if (dateRange.from && dateRange.to) {
-      const effectiveDate =
-        parseSafeIsoDate(o?.won_at) ||
-        parseSafeIsoDate(o?.created_at) ||
-        parseSafeIsoDate(o?.po_date);
+  const filtered = safeOrders
+    .filter((o: Order) => {
+      if (dateRange.from && dateRange.to) {
+        const effectiveDate =
+          parseSafeIsoDate(o?.created_at) ||
+          parseSafeIsoDate(o?.won_at) ||
+          parseSafeIsoDate(o?.po_date);
 
-      if (effectiveDate) {
-        const fromDate = dateRange.from.split('T')[0];
-        const toDate = dateRange.to.split('T')[0];
-        if (effectiveDate < fromDate || effectiveDate > toDate) {
-          return false;
+        if (effectiveDate) {
+          const fromDate = dateRange.from.split('T')[0];
+          const toDate = dateRange.to.split('T')[0];
+          if (effectiveDate < fromDate || effectiveDate > toDate) {
+            return false;
+          }
         }
       }
-    }
 
-    const itemsStr = (o?.deal_items || []).map(i => i?.sku_text || '').join(' ');
-    return (
-      (o?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o?.po_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o?.delivery_location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      itemsStr.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+      const itemsStr = (o?.deal_items || []).map((i: any) => i?.sku_text || '').join(' ');
+      return (
+        (o?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (o?.po_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (o?.delivery_location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        itemsStr.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    })
+    .sort((a: Order, b: Order) => {
+      const timeA = new Date(a.created_at || a.won_at || 0).getTime();
+      const timeB = new Date(b.created_at || b.won_at || 0).getTime();
+      return timeB - timeA;
+    });
 
   const totalOrders = filtered.length;
-  const totalRevenue = filtered.reduce((sum, o) => sum + Number(o?.total_amount || 0), 0);
-  const totalTonnage = filtered.reduce((sum, o) => {
-    const itemsQty = (o?.deal_items || []).reduce((iSum, i) => {
+  const totalRevenue = filtered.reduce((sum: number, o: Order) => sum + Number(o?.total_amount || 0), 0);
+  const totalTonnage = filtered.reduce((sum: number, o: Order) => {
+    const itemsQty = (o?.deal_items || []).reduce((iSum: number, i: any) => {
       const q = Number(i?.quantity || 0);
       const u = (i?.unit || 'MT').toUpperCase().trim();
       const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
@@ -512,9 +517,14 @@ export default function OrdersPage() {
                       title="Click anywhere on row to view full Order Details in table format">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
                       <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap text-center">
-                        {ord.won_at
-                          ? new Date(ord.won_at).toLocaleDateString('en-IN')
-                          : (ord.created_at ? new Date(ord.created_at).toLocaleDateString('en-IN') : ord.po_date || '-')}
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar size={12} className="text-slate-400" />
+                          {ord.created_at
+                            ? new Date(ord.created_at).toLocaleString('en-IN')
+                            : (ord.won_at
+                                ? new Date(ord.won_at).toLocaleString('en-IN')
+                                : (ord.po_date || '-'))}
+                        </span>
                       </td>
                       <td className="px-4 py-3.5 font-mono text-xs text-blue-700 font-semibold text-center">
                         <span className="inline-flex items-center gap-1.5 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-md border border-blue-200 group-hover:border-blue-600 transition-all font-bold shadow-2xs">
@@ -580,7 +590,7 @@ export default function OrdersPage() {
                     </span>
                   )}
                   <span className="flex items-center gap-1">
-                    <Calendar size={13} className="text-slate-400" /> PO Date: {selectedDrawerOrder.po_date || new Date(selectedDrawerOrder.created_at).toLocaleDateString('en-IN')}
+                    <Calendar size={13} className="text-slate-400" /> Order Date &amp; Time: {selectedDrawerOrder.created_at ? new Date(selectedDrawerOrder.created_at).toLocaleString('en-IN') : (selectedDrawerOrder.won_at ? new Date(selectedDrawerOrder.won_at).toLocaleString('en-IN') : selectedDrawerOrder.po_date || '-')}
                   </span>
                   <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                     PO Ref: {selectedDrawerOrder.po_number || 'PO-2026-AUTO'}
