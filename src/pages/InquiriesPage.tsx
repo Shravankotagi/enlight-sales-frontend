@@ -76,27 +76,31 @@ function isProductInquiry(inq: InquiryItem): boolean {
   const textLower = rawText.toLowerCase();
   const aiJson = (inq?.ai_extraction_json as any) || {};
 
-  // 0. All official inquiry and PO channels are genuine and mandatorily logged
+  // 0. Exclude Purchase Orders (POs belong strictly to the Orders tab)
+  const isPurchaseOrder =
+    inq?.inquiry_type === 'purchase_order' ||
+    inq?.source_channel === 'whatsapp_po' ||
+    rawText.startsWith('[PO Document Attached:');
+  if (isPurchaseOrder) return false;
+
+  // 1. All official genuine inquiry channels
   if (
     inq?.inquiry_type === 'inquiry' ||
-    inq?.inquiry_type === 'purchase_order' ||
     inq?.source_channel === 'whatsapp_text' ||
     inq?.source_channel === 'whatsapp_image' ||
-    inq?.source_channel === 'whatsapp_po' ||
     inq?.source_channel === 'web_dashboard'
   ) {
     return true;
   }
 
-  // 1. Document attachment or direct file upload
+  // 2. Document attachment or direct file upload
   const isDocument =
     rawText.startsWith('[Inquiry Attachment:') ||
-    rawText.startsWith('[PO Document Attached:') ||
     rawText.startsWith('[Inquiry Document Attached]') ||
     (Array.isArray(inq.media_urls) && inq.media_urls.length > 0 && inq.media_urls[0] !== 'attached_document');
   if (isDocument) return true;
 
-  // 2. Extracted line items with product & quantity is genuine
+  // 3. Extracted line items with product & quantity is genuine
   const lineItemsSrc = aiJson.line_items || aiJson.lineItems || [];
   if (
     Array.isArray(lineItemsSrc) &&
@@ -110,12 +114,12 @@ function isProductInquiry(inq: InquiryItem): boolean {
     return true;
   }
 
-  // 3. Web Dashboard manual inquiry
+  // 4. Web Dashboard manual inquiry
   if (inq?.source_channel === 'web_dashboard' && rawText.length > 0) {
     return true;
   }
 
-  // 4. Reject conversational questions, chatbot queries, commands, visit logs, and payments
+  // 5. Reject conversational questions, chatbot queries, commands, visit logs, and payments
   const NON_INQUIRY_PATTERNS = [
     /^(hi|hello|hey|namaste)\b/i,
     /^(show|list|tell|what|how|why|where|can you|give me|is there|which customers|now show|change|has )\b/i,
@@ -137,7 +141,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
     return false;
   }
 
-  // 5. Must have steel/product keyword or explicit MT/tons
+  // 6. Must have steel/product keyword or explicit MT/tons
   const hasMetalKeyword =
     /\b(mt|tons?|kg|coils?|sheets?|plates?|rebar|tmt|steel|hr|cr|gp|gc|pipe|tube)\b/i.test(
       textLower,
