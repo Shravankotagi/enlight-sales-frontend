@@ -176,7 +176,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                 <tr>
                   <th className="px-4 py-3 text-center w-12">#</th>
                   <th className="px-4 py-3">Material / Product Description</th>
-                  <th className="px-4 py-3 text-right">Quantity (MT)</th>
+                  <th className="px-4 py-3 text-right">Quantity</th>
                   <th className="px-4 py-3 text-right">Total Amount (₹)</th>
                 </tr>
               </thead>
@@ -191,7 +191,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                       <tr key={i} className="hover:bg-slate-50">
                         <td className="px-4 py-3 text-center text-slate-500 font-medium">{i + 1}</td>
                         <td className="px-4 py-3 font-semibold text-slate-900">{item.sku_text || 'Metal Products'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-medium">{qty ? `${qty} MT` : '-'}</td>
+                        <td className="px-4 py-3 text-right font-mono font-medium">{qty ? `${qty} ${item.unit || 'MT'}` : '-'}</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-900">₹{amt.toLocaleString('en-IN')}</td>
                       </tr>
                     );

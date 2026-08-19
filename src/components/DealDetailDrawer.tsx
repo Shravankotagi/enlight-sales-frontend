@@ -375,7 +375,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                               <p className="text-xs text-gray-500">{calculated.quantity} {item.unit || 'MT'}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-xs font-semibold text-gray-800">₹{calculated.rate.toLocaleString('en-IN')}/MT</p>
+                              <p className="text-xs font-semibold text-gray-800">₹{calculated.rate.toLocaleString('en-IN')}/{calculated.unit || 'MT'}</p>
                               <p className="text-xs text-gray-500">₹{calculated.amount.toLocaleString('en-IN')}</p>
                             </div>
                           </div>

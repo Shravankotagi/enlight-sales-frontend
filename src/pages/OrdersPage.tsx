@@ -364,7 +364,12 @@ export default function OrdersPage() {
   const totalOrders = filtered.length;
   const totalRevenue = filtered.reduce((sum, o) => sum + Number(o?.total_amount || 0), 0);
   const totalTonnage = filtered.reduce((sum, o) => {
-    const itemsQty = (o?.deal_items || []).reduce((iSum, i) => iSum + Number(i?.quantity || 0), 0);
+    const itemsQty = (o?.deal_items || []).reduce((iSum, i) => {
+      const q = Number(i?.quantity || 0);
+      const u = (i?.unit || 'MT').toUpperCase().trim();
+      const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
+      return iSum + inMt;
+    }, 0);
     return sum + itemsQty;
   }, 0);
 
@@ -659,7 +664,6 @@ export default function OrdersPage() {
                         lineItems: selectedDrawerOrder.deal_items || [],
                         basic_amount: Number(selectedDrawerOrder.total_amount || 0),
                       });
-                      const totalQty = pricing.totalQuantity;
                       const baseAmt = pricing.subtotal;
                       const gstAmt = pricing.gstAmount;
                       const totalVal = pricing.grandTotal;
@@ -671,7 +675,7 @@ export default function OrdersPage() {
                               Base Material Subtotal (Excl. GST)
                             </td>
                             <td className="px-4 py-2 text-right font-bold text-blue-700 font-mono">
-                              {totalQty > 0 ? `${totalQty} MT` : ''}
+                              {pricing.formattedQuantity || (pricing.totalQuantity > 0 ? `${pricing.totalQuantity} ${pricing.unit || 'MT'}` : '')}
                             </td>
                             <td colSpan={2} className="px-4 py-2 text-right font-bold text-slate-800 font-mono">
                               ₹{baseAmt.toLocaleString('en-IN')}

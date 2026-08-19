@@ -223,8 +223,8 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 <tr className="divide-x divide-slate-700 border-b border-slate-800">
                   <th className="px-3 py-3 text-center w-[6%]">#</th>
                   <th className="px-4 py-3 w-[44%]">Material Description &amp; Specifications</th>
-                  <th className="px-4 py-3 text-right w-[15%]">Qty (MT)</th>
-                  <th className="px-4 py-3 text-right w-[17%]">Rate (₹/MT)</th>
+                  <th className="px-4 py-3 text-right w-[15%]">Quantity</th>
+                  <th className="px-4 py-3 text-right w-[17%]">Rate (₹)</th>
                   <th className="px-4 py-3 text-right w-[18%]">Amount (₹)</th>
                 </tr>
               </thead>
