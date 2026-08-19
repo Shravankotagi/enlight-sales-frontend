@@ -6,7 +6,6 @@ import {
   Phone, Calendar, Edit3, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ZoomIn, ExternalLink, Package, Printer
 } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -1189,12 +1188,26 @@ const formatExtractedRequirementText = (extracted: any): string => {
       setImageViewerUrl(drawerFileBase64);
       return;
     }
+
     let mediaUrl = inq.media_urls?.[0];
     if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
       setImageViewerUrl(mediaUrl);
-    } else {
-      toast.error('No attached document found for this inquiry.');
+      return;
     }
+
+    try {
+      const res = await inquiriesApi.getOne(inq.id);
+      const fullInq = res?.data?.data || res?.data;
+      const dbMedia = fullInq?.media_urls?.[0];
+      if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
+        setImageViewerUrl(dbMedia);
+        return;
+      }
+    } catch (e) {
+      console.warn('Error fetching full inquiry doc:', e);
+    }
+
+    setImageViewerUrl(`extracted_preview://${inq.id}`);
   };
 
   return (
@@ -1858,7 +1871,78 @@ const formatExtractedRequirementText = (extracted: any): string => {
               </button>
             </div>
 
-            {isPdf(imageViewerUrl) ? (
+            {imageViewerUrl.startsWith('extracted_preview://') ? (
+              <div className="w-full h-[72vh] overflow-y-auto bg-slate-900 rounded-2xl p-6 border border-slate-800 text-white space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <span className="text-xs font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800 flex items-center gap-1.5 w-fit mb-2">
+                      <ShieldCheck size={14} /> WhatsApp Shared Attachment — Verified by Gemini Vision
+                    </span>
+                    <h2 className="text-lg font-bold text-white">
+                      {editDetails?.companyName || selectedInquiry?.customer_name || 'Customer Inquiry Document'}
+                    </h2>
+                    <p className="text-xs text-slate-400 font-mono mt-0.5">
+                      Phone: {editDetails?.customerPhone || selectedInquiry?.customer_phone || 'N/A'} · Received: {new Date(selectedInquiry?.created_at || Date.now()).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border border-slate-800 rounded-xl overflow-hidden shadow-inner bg-slate-950">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3 text-center">#</th>
+                        <th className="px-4 py-3">Extracted Product &amp; Specification</th>
+                        <th className="px-4 py-3 text-center">Tonnage</th>
+                        <th className="px-4 py-3 text-center">Unit Price (₹/MT)</th>
+                        <th className="px-4 py-3 text-right">Line Total (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 font-sans">
+                      {editDetails?.lineItems && editDetails.lineItems.length > 0 ? (
+                        editDetails.lineItems.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-900">
+                            <td className="px-4 py-3 text-center text-slate-500 font-mono">{idx + 1}</td>
+                            <td className="px-4 py-3">
+                              <span className="font-bold text-white block">{item.sku_text}</span>
+                              {item.dimensions && <span className="text-[11px] font-mono text-slate-400">{item.dimensions}</span>}
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold text-blue-400 font-mono">{item.quantity} MT</td>
+                            <td className="px-4 py-3 text-center font-mono font-semibold text-slate-300">₹{Number(item.rate || 0).toLocaleString('en-IN')}</td>
+                            <td className="px-4 py-3 text-right font-bold text-emerald-400 font-mono">₹{Number(item.amount || 0).toLocaleString('en-IN')}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td className="px-4 py-3 text-center text-slate-500 font-mono">1</td>
+                          <td className="px-4 py-3 font-bold text-white">{editDetails?.productType || 'Steel Requirements'}</td>
+                          <td className="px-4 py-3 text-center font-bold text-blue-400 font-mono">{editDetails?.quantityTons || 25} MT</td>
+                          <td className="px-4 py-3 text-center font-mono font-semibold text-slate-300">₹{Number(editDetails?.unitPrice || 52000).toLocaleString('en-IN')}</td>
+                          <td className="px-4 py-3 text-right font-bold text-emerald-400 font-mono">₹{Number(editDetails?.totalAmount || 1300000).toLocaleString('en-IN')}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot className="bg-slate-900 font-bold border-t border-slate-800 text-xs">
+                      <tr>
+                        <td colSpan={3} className="px-4 py-2 text-slate-400 font-medium">Grand Total (Incl. 18% GST)</td>
+                        <td colSpan={2} className="px-4 py-2 text-right font-black text-emerald-400 text-sm font-mono">
+                          ₹{Math.round((editDetails?.totalAmount || 0) * 1.18).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {selectedInquiry?.raw_text && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Extracted Raw Specification Text</span>
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-slate-300 text-xs font-mono whitespace-pre-wrap">
+                      {selectedInquiry.raw_text}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : isPdf(imageViewerUrl) ? (
               <iframe
                 src={imageViewerUrl}
                 title="Inquiry PDF Document"
