@@ -76,15 +76,22 @@ function isProductInquiry(inq: InquiryItem): boolean {
   const textLower = rawText.toLowerCase();
   const aiJson = (inq?.ai_extraction_json as any) || {};
 
-  // 0. Exclude Purchase Orders (POs belong strictly to Completed & Delivered Orders tab)
-  const isPurchaseOrder =
+  // 0. All official inquiry and PO channels are genuine and mandatorily logged
+  if (
+    inq?.inquiry_type === 'inquiry' ||
     inq?.inquiry_type === 'purchase_order' ||
-    rawText.startsWith('[PO Document Attached:');
-  if (isPurchaseOrder) return false;
+    inq?.source_channel === 'whatsapp_text' ||
+    inq?.source_channel === 'whatsapp_image' ||
+    inq?.source_channel === 'whatsapp_po' ||
+    inq?.source_channel === 'web_dashboard'
+  ) {
+    return true;
+  }
 
   // 1. Document attachment or direct file upload
   const isDocument =
     rawText.startsWith('[Inquiry Attachment:') ||
+    rawText.startsWith('[PO Document Attached:') ||
     rawText.startsWith('[Inquiry Document Attached]') ||
     (Array.isArray(inq.media_urls) && inq.media_urls.length > 0 && inq.media_urls[0] !== 'attached_document');
   if (isDocument) return true;
@@ -96,7 +103,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
     lineItemsSrc.length > 0 &&
     lineItemsSrc.some(
       (i: any) =>
-        (Number(i.quantity) > 0 || Number(i.quantity_tons) > 0) &&
+        (Number(i.quantity) > 0 || Number(i.quantity_tons) > 0 || Number(i.quantity_mt) > 0) &&
         (i.sku_text || i.product_name || i.product || i.description),
     )
   ) {
@@ -135,7 +142,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
     /\b(mt|tons?|kg|coils?|sheets?|plates?|rebar|tmt|steel|hr|cr|gp|gc|pipe|tube)\b/i.test(
       textLower,
     );
-  if (!hasMetalKeyword && !aiJson.customer?.name && !aiJson.customer_name) {
+  if (!hasMetalKeyword && !aiJson.customer?.name && !aiJson.customer_name && !inq?.customer_name) {
     return false;
   }
 
@@ -1387,13 +1394,31 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 capitalize">
-                          {inq.source_channel || 'WhatsApp Bot'}
+                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
+                          (inq.source_channel === 'whatsapp_text' || (!inq.media_urls?.length && inq.source_channel === 'whatsapp'))
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : (inq.source_channel === 'whatsapp_po' || inq.inquiry_type === 'purchase_order')
+                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                            : inq.source_channel === 'web_dashboard'
+                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                            : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                        }`}>
+                          {(inq.source_channel === 'whatsapp_text' || (!inq.media_urls?.length && inq.source_channel === 'whatsapp'))
+                            ? 'WhatsApp Text 💬'
+                            : (inq.source_channel === 'whatsapp_po' || inq.inquiry_type === 'purchase_order')
+                            ? 'WhatsApp PO 📑'
+                            : inq.source_channel === 'web_dashboard'
+                            ? 'Dashboard Entry 💻'
+                            : 'WhatsApp RFQ 📑'}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-2">
-                          {isQuoted ? (
+                          {(inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                              <CheckCircle size={12} /> PO Confirmed 📑
+                            </span>
+                          ) : isQuoted ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
                               <CheckCircle size={12} /> Quotation Sent ✉️
                             </span>
