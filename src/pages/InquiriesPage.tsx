@@ -1949,17 +1949,19 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 className="w-full h-[72vh] rounded-2xl bg-white shadow-2xl border border-slate-800"
               />
             ) : (
-              <img
-                src={imageViewerUrl}
-                alt="Inquiry document full view"
-                className="max-w-full max-h-[72vh] object-contain rounded-2xl shadow-2xl bg-slate-950 border border-slate-800"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const fallbackDiv = document.getElementById('image-fallback-card');
-                  if (fallbackDiv) fallbackDiv.style.display = 'flex';
-                }}
-              />
+              <div className="w-full h-[76vh] flex items-center justify-center bg-slate-950/80 rounded-2xl p-2 overflow-auto">
+                <img
+                  src={imageViewerUrl}
+                  alt="Inquiry document full view"
+                  className="max-w-full max-h-[74vh] object-contain rounded-xl shadow-2xl bg-white border border-slate-700"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const fallbackDiv = document.getElementById('image-fallback-card');
+                    if (fallbackDiv) fallbackDiv.style.display = 'flex';
+                  }}
+                />
+              </div>
             )}
 
             {/* Fallback UI if media URL is raw WhatsApp ID or broken base64 */}
