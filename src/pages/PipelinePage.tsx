@@ -223,12 +223,15 @@ export default function PipelinePage() {
         <div className="flex flex-wrap items-center gap-4">
           {pipelineData && (
             <div className="flex gap-4 border-r pr-4 border-gray-200">
-              {pipelineData.map((s: any) => (
-                <div key={s.stage} className="text-center">
-                  <p className="text-base font-bold text-gray-800">{s.count}</p>
-                  <p className="text-[10px] text-gray-500 capitalize">{s.stage.replace('_', ' ')}</p>
-                </div>
-              ))}
+              {pipelineData.map((s: any) => {
+                const stageLabel = s.stage === 'new_inquiry' ? 'New Inquiry' : s.stage.replace('_', ' ');
+                return (
+                  <div key={s.stage} className="text-center">
+                    <p className="text-base font-bold text-gray-800">{s.count}</p>
+                    <p className="text-[10px] text-gray-500 capitalize">{stageLabel}</p>
+                  </div>
+                );
+              })}
             </div>
           )}
 
