@@ -9,6 +9,7 @@ import {
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
+import { useAuth } from '../context/AuthContext';
 
 interface InquiryItem {
   id: string;
@@ -481,6 +482,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
+  const { effectivePhone } = useAuth();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -533,9 +535,10 @@ export default function InquiriesPage() {
   };
 
   const { data: rawInquiries = [], isLoading: loading, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
-    queryKey: ['inquiries-list', dateRange],
+    queryKey: ['inquiries-list', effectivePhone, dateRange],
     queryFn: async () => {
       const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
 
