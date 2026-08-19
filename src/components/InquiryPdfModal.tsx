@@ -48,6 +48,8 @@ interface InquiryPdfModalProps {
   onClose: () => void;
 }
 
+import { calculateGst, calculateGrandTotal } from '../utils/pricingEngine';
+
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
   const [copiedRef, setCopiedRef] = useState(false);
   const [logoError, setLogoError] = useState(false);
@@ -56,8 +58,8 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   // totalAmount = base pre-GST value; GST is 18% on top
   const baseAmount = details.totalAmount;
-  const gstAmount = Math.round(baseAmount * 0.18);
-  const grandTotal = baseAmount + gstAmount;
+  const gstAmount = calculateGst(baseAmount);
+  const grandTotal = calculateGrandTotal(baseAmount);
 
   // Build line items list — prefer dynamic lineItems, fall back to single item
   const lineItems: LineItemDetail[] =

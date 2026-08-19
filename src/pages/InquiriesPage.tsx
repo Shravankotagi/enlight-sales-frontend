@@ -10,6 +10,12 @@ import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
 import { useAuth } from '../context/AuthContext';
+import {
+  calculateGst,
+  calculateGrandTotal,
+  calculateLineItems,
+  calculateSubtotal,
+} from '../utils/pricingEngine';
 
 interface InquiryItem {
   id: string;
@@ -441,24 +447,19 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   }
 
   // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
-  const rawLineItems: LineItemDetail[] = [];
   const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
-  if (Array.isArray(lineItemsSource) && lineItemsSource.length > 0) {
-    for (const item of lineItemsSource) {
-      rawLineItems.push({
-        sku_text: item.sku_text || item.description || '',
-        dimensions: item.dimensions || '',
-        quantity: Number(item.quantity) || 0,
-        unit: item.unit || 'MT',
-        rate: Number(item.rate) || 0,
-        amount: Number(item.amount) || Number(item.quantity) * Number(item.rate) || 0,
-      });
-    }
-  }
+  const rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => ({
+    sku_text: item.sku_text || item.description || '',
+    dimensions: item.dimensions || '',
+    quantity: item.quantity,
+    unit: item.unit || 'MT',
+    rate: item.rate,
+    amount: item.amount,
+  }));
 
   // Grand total from all line items if multi-item inquiry
   const computedTotal = rawLineItems.length > 0
-    ? rawLineItems.reduce((s, i) => s + i.amount, 0)
+    ? calculateSubtotal(rawLineItems)
     : totalAmount;
 
   return {
@@ -2137,14 +2138,14 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       <td className="px-4 py-2 font-bold border-r border-slate-200 text-indigo-900">GST @ 18%</td>
                       <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">Applicable 18% GST:</td>
                       <td className="px-4 py-2 text-right font-bold text-indigo-800 font-mono">
-                        + ₹{Math.round(quotationViewDetails.totalAmount * 0.18).toLocaleString('en-IN')}
+                        + ₹{calculateGst(quotationViewDetails.totalAmount).toLocaleString('en-IN')}
                       </td>
                     </tr>
                     <tr className="bg-emerald-100/90 text-emerald-950 font-black">
                       <td className="px-4 py-3 font-extrabold border-r border-emerald-300">Total: {quotationViewDetails.quantityTons} MT</td>
                       <td colSpan={2} className="px-4 py-3 text-right font-black uppercase tracking-wide border-r border-emerald-300 text-xs">Grand Total Amount (Incl. 18% GST):</td>
                       <td className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
-                        ₹{Math.round(quotationViewDetails.totalAmount * 1.18).toLocaleString('en-IN')}
+                        ₹{calculateGrandTotal(quotationViewDetails.totalAmount).toLocaleString('en-IN')}
                       </td>
                     </tr>
                   </tfoot>

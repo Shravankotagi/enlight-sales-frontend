@@ -7,6 +7,10 @@ import {
   AlertCircle, Printer, Trash2
 } from 'lucide-react';
 import SalesQuotationModal from './SalesQuotationModal';
+import {
+  calculatePricingSummary,
+  calculateLineItem,
+} from '../utils/pricingEngine';
 
 
 import toast from 'react-hot-toast';
@@ -360,17 +364,19 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                   <div className="mt-2 border rounded-xl overflow-hidden">
                     <div className="p-3 space-y-3">
                       {deal.deal_items.map((item: any, i: number) => {
-                        const rate = item.quoted_price || item.price_per_mt || item.rate || 0;
-                        const amount = rate * (item.quantity || 0);
+                        const calculated = calculateLineItem({
+                          ...item,
+                          rate: item.quoted_price || item.price_per_mt || item.rate || 0,
+                        });
                         return (
                           <div key={item.id || `item-${i}`} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-medium text-gray-800 truncate">{item.sku_text}</p>
-                              <p className="text-xs text-gray-500">{item.quantity} {item.unit}</p>
+                              <p className="text-xs text-gray-500">{calculated.quantity} {item.unit || 'MT'}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-xs font-semibold text-gray-800">₹{Number(rate).toLocaleString('en-IN')}/MT</p>
-                              <p className="text-xs text-gray-500">₹{Number(amount).toLocaleString('en-IN')}</p>
+                              <p className="text-xs font-semibold text-gray-800">₹{calculated.rate.toLocaleString('en-IN')}/MT</p>
+                              <p className="text-xs text-gray-500">₹{calculated.amount.toLocaleString('en-IN')}</p>
                             </div>
                           </div>
                         );
@@ -378,22 +384,25 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
 
                       {/* Quote totals */}
                       {(() => {
-                        const qTotal = deal.deal_items.reduce((sum: number, item: any) =>
-                          sum + ((item.quoted_price || item.price_per_mt || item.rate || 0) * (item.quantity || 0)), 0);
-                        const qGst = qTotal * 0.18;
+                        const pricing = calculatePricingSummary(
+                          deal.deal_items.map((i: any) => ({
+                            ...i,
+                            rate: i.quoted_price || i.price_per_mt || i.rate || 0,
+                          }))
+                        );
                         return (
                           <div className="border-t pt-3 space-y-1">
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Subtotal</span>
-                              <span>₹{Number(qTotal).toLocaleString('en-IN')}</span>
+                              <span>₹{pricing.subtotal.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">GST 18%</span>
-                              <span>₹{Number(qGst).toLocaleString('en-IN')}</span>
+                              <span>₹{pricing.gstAmount.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between text-sm font-bold">
                               <span>Grand Total</span>
-                              <span className="text-blue-700">₹{Number(qTotal + qGst).toLocaleString('en-IN')}</span>
+                              <span className="text-blue-700">₹{pricing.grandTotal.toLocaleString('en-IN')}</span>
                             </div>
                           </div>
                         );

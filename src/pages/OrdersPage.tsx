@@ -26,6 +26,7 @@ import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
+import { calculatePricingSummary } from '../utils/pricingEngine';
 
 interface DealItem {
   id?: string;
@@ -654,35 +655,14 @@ export default function OrdersPage() {
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-slate-300 text-xs">
                     {(() => {
-                      const totalQty = (selectedDrawerOrder.deal_items || []).reduce(
-                        (s, i) => s + (Number(i.quantity) || 0),
-                        0
-                      );
-                      const itemsSubtotal = (selectedDrawerOrder.deal_items || []).reduce((s, i) => {
-                        const rateNum = Number(i.rate || 0);
-                        const qtyNum = Number(i.quantity || 0);
-                        return s + (Number(i.amount) || (rateNum > 0 && qtyNum > 0 ? Math.round(rateNum * qtyNum) : 0));
-                      }, 0);
-
-                      const rawTotalVal = Number(selectedDrawerOrder.total_amount || 0);
-
-                      let baseAmt = 0;
-                      let gstAmt = 0;
-                      let totalVal = 0;
-
-                      if (itemsSubtotal > 0) {
-                        baseAmt = itemsSubtotal;
-                        // Forward GST (18%) on pre-GST base material subtotal
-                        gstAmt = Math.round(baseAmt * 0.18 * 100) / 100;
-                        totalVal =
-                          rawTotalVal > 0 && Math.abs(rawTotalVal - (baseAmt + gstAmt)) < 1
-                            ? rawTotalVal
-                            : Math.round((baseAmt + gstAmt) * 100) / 100;
-                      } else if (rawTotalVal > 0) {
-                        totalVal = rawTotalVal;
-                        baseAmt = Math.round((totalVal / 1.18) * 100) / 100;
-                        gstAmt = Math.round((totalVal - baseAmt) * 100) / 100;
-                      }
+                      const pricing = calculatePricingSummary({
+                        lineItems: selectedDrawerOrder.deal_items || [],
+                        basic_amount: Number(selectedDrawerOrder.total_amount || 0),
+                      });
+                      const totalQty = pricing.totalQuantity;
+                      const baseAmt = pricing.subtotal;
+                      const gstAmt = pricing.gstAmount;
+                      const totalVal = pricing.grandTotal;
 
                       return (
                         <>

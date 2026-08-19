@@ -30,26 +30,21 @@ interface SalesQuotationModalProps {
   onClose: () => void;
 }
 
+import { calculatePricingSummary } from '../utils/pricingEngine';
+
 export default function SalesQuotationModal({ deal, onClose }: SalesQuotationModalProps) {
   const [copiedPo, setCopiedPo] = useState(false);
 
   if (!deal) return null;
 
-  const itemsSubtotal = (deal.deal_items || []).reduce((s, item) => {
-    const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
-    const qty = Number(item.quantity || 0);
-    return s + (Number(item.amount) || (rate > 0 && qty > 0 ? Math.round(rate * qty) : 0));
-  }, 0);
+  const pricing = calculatePricingSummary({
+    lineItems: deal.deal_items || [],
+    basic_amount: deal.total_amount ? Number(deal.total_amount) : 0,
+  });
 
-  // Base Subtotal is strictly pre-GST material value
-  const subtotal = itemsSubtotal > 0
-    ? itemsSubtotal
-    : (deal.total_amount ? Number(deal.total_amount) : 0);
-
-  // GST (18%) is strictly calculated forward on top of base subtotal
-  const gstAmount = Math.round(subtotal * 0.18);
-  // Total Order Value is base subtotal + 18% GST
-  const grandTotal = subtotal + gstAmount;
+  const subtotal = pricing.subtotal;
+  const gstAmount = pricing.gstAmount;
+  const grandTotal = pricing.grandTotal;
 
   const dealRefId = deal.id ? `#${deal.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-DEAL';
   const poNumber = deal.po_number || `PO-${new Date().getFullYear()}-AUTO`;
