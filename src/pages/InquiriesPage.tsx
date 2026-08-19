@@ -1408,23 +1408,23 @@ const formatExtractedRequirementText = (extracted: any): string => {
                             : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
                         }`}>
                           {(inq.source_channel === 'whatsapp_text' || (!inq.media_urls?.length && inq.source_channel === 'whatsapp'))
-                            ? 'WhatsApp Text 💬'
+                            ? 'WhatsApp Text '
                             : (inq.source_channel === 'whatsapp_po' || inq.inquiry_type === 'purchase_order')
-                            ? 'WhatsApp PO 📑'
+                            ? 'WhatsApp PO '
                             : inq.source_channel === 'web_dashboard'
-                            ? 'Dashboard Entry 💻'
-                            : 'WhatsApp RFQ 📑'}
+                            ? 'Dashboard Entry'
+                            : 'WhatsApp'}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-2">
                           {(inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                              <CheckCircle size={12} /> PO Confirmed 📑
+                              <CheckCircle size={12} /> PO Confirmed 
                             </span>
                           ) : isQuoted ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                              <CheckCircle size={12} /> Quotation Sent ✉️
+                              <CheckCircle size={12} /> Quotation Sent 
                             </span>
                           ) : isConfirmed ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
@@ -1432,7 +1432,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                              <Clock size={12} /> Review &amp; Edit ✍️
+                              <Clock size={12} /> Review &amp; Edit 
                             </span>
                           )}
 
