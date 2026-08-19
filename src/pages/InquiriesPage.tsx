@@ -1025,7 +1025,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
       (formCustomerName.trim() && !isProductOrGenericName(formCustomerName))
         ? formCustomerName.trim()
         : (!isProductOrGenericName(extractedJson?.customer_name) ? extractedJson?.customer_name : '') ||
-          'Customer Inquiry';
+          '';
 
     const rawCustomerPhone =
       formPhone.trim() ||
@@ -1369,11 +1369,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       <td className="px-4 py-3.5 font-bold text-slate-900">
                         <span className="flex items-center gap-1.5 text-blue-700 group-hover:underline">
                           <Building2 size={15} className="text-blue-600 flex-shrink-0" />
-                          {details.companyName ? (
-                            details.companyName
-                          ) : (
-                            <span className="text-amber-600 font-medium italic text-[11px]">(Customer not specified)</span>
-                          )}
+                          {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-mono">
