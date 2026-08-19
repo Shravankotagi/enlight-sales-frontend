@@ -554,7 +554,7 @@ export default function HomePage() {
             Your Action Queue
           </h2>
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-            {actions.length} Tasks Pending
+            {actions.length === 1 ? '1 Task Pending' : `${actions.length} Tasks Pending`}
           </span>
         </div>
 
