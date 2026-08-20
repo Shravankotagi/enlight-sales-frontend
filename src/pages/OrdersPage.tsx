@@ -711,47 +711,17 @@ export default function OrdersPage() {
                         lineItems: selectedDrawerOrder.deal_items || [],
                         total_amount: Number(selectedDrawerOrder.total_amount || 0),
                       });
-                      const baseAmt = pricing.subtotal;
-                      const gstAmt = pricing.gstAmount;
                       const totalVal = pricing.grandTotal;
 
                       return (
-                        <>
-                          {pricing.calculationWarning && (
-                            <tr>
-                              <td colSpan={6} className="px-4 py-2 bg-amber-50 text-amber-800 font-semibold border-b border-amber-200 text-center">
-                                ⚠️ {pricing.calculationWarning}
-                              </td>
-                            </tr>
-                          )}
-                          <tr className="border-b border-slate-200">
-                            <td colSpan={3} className="px-4 py-2 text-slate-600 font-semibold">
-                              Base Material Subtotal (Excl. GST)
-                            </td>
-                            <td className="px-4 py-2 text-right font-bold text-blue-700 font-mono">
-                              {pricing.formattedQuantity || (pricing.totalQuantity > 0 ? `${pricing.totalQuantity} ${pricing.unit || 'MT'}` : '')}
-                            </td>
-                            <td colSpan={2} className="px-4 py-2 text-right font-bold text-slate-800 font-mono">
-                              ₹{baseAmt.toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                          <tr className="border-b border-slate-200 bg-indigo-50/50">
-                            <td colSpan={4} className="px-4 py-2 text-indigo-900 font-semibold">
-                              Applicable GST @ 18% (SGST + CGST / IGST)
-                            </td>
-                            <td colSpan={2} className="px-4 py-2 text-right font-bold text-indigo-800 font-mono">
-                              + ₹{gstAmt.toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                          <tr className="bg-emerald-100/90 text-emerald-950 font-black">
-                            <td colSpan={4} className="px-4 py-3 font-extrabold text-xs uppercase tracking-wide">
-                              Total Order Value (Incl. 18% GST)
-                            </td>
-                            <td colSpan={2} className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
-                              ₹{totalVal.toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                        </>
+                        <tr className="bg-emerald-100/90 text-emerald-950 font-black">
+                          <td colSpan={4} className="px-4 py-3 font-extrabold text-xs uppercase tracking-wide">
+                            Total Order Value (Incl. 18% GST)
+                          </td>
+                          <td colSpan={2} className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
+                            ₹{totalVal.toLocaleString('en-IN')}
+                          </td>
+                        </tr>
                       );
                     })()}
                   </tfoot>
