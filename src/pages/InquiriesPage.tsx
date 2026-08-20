@@ -1350,20 +1350,12 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       </td>
                       <td className="px-4 py-3.5 text-center">
                         <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
-                          (inq.source_channel === 'whatsapp_text' || (!inq.media_urls?.length && inq.source_channel === 'whatsapp'))
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : (inq.source_channel === 'whatsapp_po' || inq.inquiry_type === 'purchase_order')
-                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                            : inq.source_channel === 'web_dashboard'
+                          (inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
                             ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                            : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                         }`}>
-                          {(inq.source_channel === 'whatsapp_text' || (!inq.media_urls?.length && inq.source_channel === 'whatsapp'))
-                            ? 'WhatsApp Text '
-                            : (inq.source_channel === 'whatsapp_po' || inq.inquiry_type === 'purchase_order')
-                            ? 'WhatsApp PO '
-                            : inq.source_channel === 'web_dashboard'
-                            ? 'Dashboard Entry'
+                          {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
+                            ? 'Dashboard'
                             : 'WhatsApp'}
                         </span>
                       </td>
@@ -1444,7 +1436,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 <div className="flex items-center justify-between gap-2">
                   {/* Source badge */}
                   <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] text-slate-300 font-bold uppercase tracking-wider">
-                    Source: {selectedInquiry.source_channel || 'WhatsApp'}
+                    Source: {selectedInquiry.source_channel === 'web_dashboard' || selectedInquiry.source_channel === 'dashboard' ? 'Dashboard' : 'WhatsApp'}
                   </span>
 
                   {/* Document action bar */}
