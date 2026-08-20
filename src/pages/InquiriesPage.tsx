@@ -1388,7 +1388,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                               setShowQuotationView(true);
                             }}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1">
-                            <Eye size={13} /> View Quotation
+                            <Eye size={13} /> Final Quotation
                           </button>
                         </div>
                       </td>
