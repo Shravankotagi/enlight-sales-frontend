@@ -78,6 +78,7 @@ export default function OrdersPage() {
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
+    refetchInterval: 15000,
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -502,9 +503,9 @@ export default function OrdersPage() {
               ) : (
                 filtered.map((ord, idx) => {
                   const itemsStr = (ord?.deal_items || [])
-                    .map(i => `${i?.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''} ${i?.sku_text || 'Material'}`)
+                    .map(i => `${i?.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''} ${i?.sku_text || ''}`.trim())
                     .filter(Boolean)
-                    .join(', ') || 'Metal Products';
+                    .join(', ') || '—';
 
                   return (
                     <tr

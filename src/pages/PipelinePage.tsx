@@ -138,11 +138,13 @@ export default function PipelinePage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['kanban', selectedMonth, selectedYear],
     queryFn: () => dealsApi.getKanban({ from: fromDate, to: toDate }).then(r => r.data?.data ?? r.data),
+    refetchInterval: 15000,
   });
 
   const { data: pipelineData } = useQuery({
     queryKey: ['pipeline', selectedMonth, selectedYear],
     queryFn: () => dealsApi.getPipeline({ from: fromDate, to: toDate }).then(r => r.data?.data ?? r.data),
+    refetchInterval: 15000,
   });
 
   const stageMutation = useMutation({

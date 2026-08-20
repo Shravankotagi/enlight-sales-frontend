@@ -190,7 +190,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                     return (
                       <tr key={i} className="hover:bg-slate-50">
                         <td className="px-4 py-3 text-center text-slate-500 font-medium">{i + 1}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-900">{item.sku_text || 'Metal Products'}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">{item.sku_text || '—'}</td>
                         <td className="px-4 py-3 text-right font-mono font-medium">{qty ? `${qty} ${item.unit || 'MT'}` : '-'}</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-900">₹{amt.toLocaleString('en-IN')}</td>
                       </tr>

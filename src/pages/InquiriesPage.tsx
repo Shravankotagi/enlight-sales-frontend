@@ -356,11 +356,11 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   }
 
   // 5. Quantity (MT / Tons)
-  let quantityTons = 25;
+  let quantityTons = Number(aiJson.quantityTons) || 0;
   const mtMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*(?:mt|ton|tons|tonne)/i);
   if (mtMatch) {
     quantityTons = parseFloat(mtMatch[1]);
-  } else {
+  } else if (!quantityTons) {
     const numMatch = textRaw.match(/\b(\d{1,4})\b/);
     if (numMatch && parseInt(numMatch[1], 10) > 0) {
       quantityTons = parseInt(numMatch[1], 10);
@@ -463,6 +463,18 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     ? calculateSubtotal(rawLineItems)
     : totalAmount;
 
+  const derivedProductForm = (() => {
+    if (aiJson.productForm) return aiJson.productForm;
+    const pt = (productType || '').toLowerCase();
+    if (pt.includes('coil')) return 'Coil';
+    if (pt.includes('sheet')) return 'Sheet';
+    if (pt.includes('plate')) return 'Plate';
+    if (pt.includes('bar') || pt.includes('rebar')) return 'Bar';
+    if (pt.includes('pipe') || pt.includes('tube')) return 'Pipe';
+    if (length && String(length).trim()) return 'Sheet';
+    return null;
+  })();
+
   return {
     companyName,
     customerPhone,
@@ -470,7 +482,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     thickness,
     width,
     length,
-    productForm: 'Coil',
+    productForm: derivedProductForm || null,
     quantityTons,
     quantityUnits,
     unitPrice,
@@ -544,6 +556,7 @@ export default function InquiriesPage() {
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
+    refetchInterval: 15000,
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
