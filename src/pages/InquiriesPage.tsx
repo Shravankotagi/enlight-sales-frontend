@@ -458,6 +458,17 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     amount: item.amount,
   }));
 
+  if (rawLineItems.length === 0 && (productType || quantityTons > 0)) {
+    rawLineItems.push({
+      sku_text: productType || 'Hot Rolled',
+      dimensions: [thickness, width, length].filter(Boolean).join(' x ') || '',
+      quantity: quantityTons || 0,
+      unit: 'MT',
+      rate: unitPrice || 0,
+      amount: totalAmount || Math.round((quantityTons || 0) * (unitPrice || 0)),
+    });
+  }
+
   // Grand total from all line items if multi-item inquiry
   const computedTotal = rawLineItems.length > 0
     ? calculateSubtotal(rawLineItems)
@@ -1345,7 +1356,11 @@ const formatExtractedRequirementText = (extracted: any): string => {
                             )}
                           </div>
                         ) : (
-                          <span className="text-slate-500">{details.productType} · {details.quantityTons} MT</span>
+                          <div className="flex items-center gap-1 text-[11px]">
+                            <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">1</span>
+                            <span className="font-medium text-slate-800 truncate max-w-[160px]">{details.productType || 'Hot Rolled'}</span>
+                            <span className="text-slate-400 font-mono whitespace-nowrap">{details.quantityTons || 0} MT</span>
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-center">
@@ -2206,7 +2221,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 <textarea
                   required
                   rows={3}
-                  placeholder="e.g. 50 MT HR Coil 3.0mm x 1250mm rate 62000 delivery Pune"
+                  placeholder="e.g. 50 MT HR Coil 3.0mm x 1250mm delivery Pune"
                   value={formRequirement}
                   onChange={e => setFormRequirement(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
