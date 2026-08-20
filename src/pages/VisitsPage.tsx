@@ -1,5 +1,23 @@
 import { useState, useEffect } from 'react';
-import { MapPin, Plus, Search, CheckCircle2, Clock, ThumbsUp, RefreshCw, X, User, Phone, Map } from 'lucide-react';
+import {
+  MapPin,
+  Plus,
+  Search,
+  CheckCircle2,
+  Clock,
+  ThumbsUp,
+  RefreshCw,
+  X,
+  User,
+  Phone,
+  Map,
+  Edit2,
+  Trash2,
+  Calendar,
+  Package,
+  Eye,
+  Check,
+} from 'lucide-react';
 import { visitsApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getFirstDayOfMonth, getLastDayOfMonth, formatLocalDate } from '../utils/dateUtils';
@@ -31,13 +49,19 @@ export default function VisitsPage() {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Details & Edit Modal States
+  const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
     from: getFirstDayOfMonth(),
     to: getLastDayOfMonth(),
   });
 
-  // Form state
+  // Create Form state
   const [formCustomerName, setFormCustomerName] = useState('');
   const [formPersonMet, setFormPersonMet] = useState('');
   const [formContactPhone, setFormContactPhone] = useState('');
@@ -46,6 +70,17 @@ export default function VisitsPage() {
   const [formRemarks, setFormRemarks] = useState('');
   const [formFollowup, setFormFollowup] = useState('');
   const [formVisitDate, setFormVisitDate] = useState(formatLocalDate());
+
+  // Edit Form state
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [editPersonMet, setEditPersonMet] = useState('');
+  const [editContactPhone, setEditContactPhone] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editOutcome, setEditOutcome] = useState('positive');
+  const [editRemarks, setEditRemarks] = useState('');
+  const [editFollowup, setEditFollowup] = useState('');
+  const [editRequirement, setEditRequirement] = useState('');
+  const [editVisitDate, setEditVisitDate] = useState(formatLocalDate());
 
   const fetchVisits = async () => {
     try {
@@ -95,6 +130,7 @@ export default function VisitsPage() {
       setFormOutcome('positive');
       setFormRemarks('');
       setFormFollowup('');
+      setFormVisitDate(formatLocalDate());
 
       fetchVisits();
     } catch (err) {
@@ -105,11 +141,89 @@ export default function VisitsPage() {
     }
   };
 
+  const openVisitDetails = (v: CustomerVisit) => {
+    setSelectedVisit(v);
+    setIsEditing(false);
+    setEditCustomerName(v.customer_name || '');
+    setEditPersonMet(v.person_met && v.person_met !== 'null' ? v.person_met : '');
+    setEditContactPhone(v.contact_phone || (v as any).contact_no || '');
+    setEditLocation(v.location || (v as any).customer_address || '');
+    setEditVisitDate(
+      v.visited_at ? new Date(v.visited_at).toISOString().split('T')[0] : formatLocalDate(),
+    );
+    setEditOutcome(getNormalizedOutcome(v));
+    setEditRemarks(
+      (v.raw_remarks || v.remarks || '')
+        .replace(/\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi, '')
+        .trim(),
+    );
+    setEditFollowup(v.follow_up_action || (v as any).followup || (v as any).follow_up || '');
+    setEditRequirement(v.material_requirement || (v as any).requirement || '');
+  };
+
+  const handleUpdateVisit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedVisit || !editCustomerName.trim()) return;
+
+    try {
+      setActionLoading(true);
+      const updatedData = {
+        customer_name: editCustomerName,
+        person_met: editPersonMet,
+        contact_phone: editContactPhone,
+        location: editLocation,
+        outcome: editOutcome,
+        remarks: editRemarks,
+        follow_up_action: editFollowup,
+        material_requirement: editRequirement,
+        visited_at: new Date(editVisitDate).toISOString(),
+      };
+
+      await visitsApi.update(selectedVisit.id, updatedData);
+
+      const updatedObj: CustomerVisit = {
+        ...selectedVisit,
+        ...updatedData,
+      };
+
+      setVisits(prev => prev.map(item => (item.id === selectedVisit.id ? updatedObj : item)));
+      setSelectedVisit(updatedObj);
+      setIsEditing(false);
+      fetchVisits();
+    } catch (err) {
+      console.error('Error updating visit:', err);
+      alert('Failed to update visit details. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    setShowDeleteModal(true);
+  };
+
+  const executeDeleteVisit = async () => {
+    if (!selectedVisit) return;
+
+    try {
+      setActionLoading(true);
+      await visitsApi.delete(selectedVisit.id);
+      setVisits(prev => prev.filter(item => item.id !== selectedVisit.id));
+      setShowDeleteModal(false);
+      setSelectedVisit(null);
+      fetchVisits();
+    } catch (err) {
+      console.error('Error deleting visit:', err);
+      alert('Failed to delete visit. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const safeVisits = Array.isArray(visits) ? visits : [];
 
   // Filter visits by date range, search, & outcome
   const filtered = safeVisits.filter(v => {
-    // Date filter
     if (dateRange.from && dateRange.to) {
       const dateStr = v.visited_at;
       if (dateStr) {
@@ -154,7 +268,7 @@ export default function VisitsPage() {
             Field Customer Visits
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Log and manage customer visits, meeting notes, outcomes, and follow-up actions.
+            Log and track customer field meetings, requirement notes, and follow-up activities.
           </p>
         </div>
 
@@ -162,9 +276,9 @@ export default function VisitsPage() {
           <DateFilterControl onChange={setDateRange} />
           <button
             onClick={fetchVisits}
-            className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
             title="Refresh">
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={18} className={loading ? 'animate-spin text-emerald-600' : ''} />
           </button>
           <button
             onClick={() => setShowModal(true)}
@@ -238,7 +352,7 @@ export default function VisitsPage() {
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
             <option value="all">All Outcomes</option>
             <option value="positive">Positive 🟢</option>
-            <option value="neutral">Neutral / Follow-up 🟡</option>
+            <option value="neutral">Neutral / Discussion 🟡</option>
             <option value="negative">Not Interested 🔴</option>
           </select>
         </div>
@@ -248,26 +362,30 @@ export default function VisitsPage() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <thead className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
                 <th className="px-4 py-3">Customer &amp; Date</th>
                 <th className="px-4 py-3">Contact Person</th>
                 <th className="px-4 py-3">Outcome</th>
                 <th className="px-4 py-3">Discussion &amp; Requirements</th>
                 <th className="px-4 py-3">Next Action</th>
+                <th className="px-3 py-3 text-right"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                    <RefreshCw size={20} className="animate-spin inline mr-2 text-emerald-600" />
                     Loading visit logs...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                    No visit logs found.
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                    <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
+                    <p className="text-slate-600 font-medium">No visit logs found.</p>
+                    <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
                   </td>
                 </tr>
               ) : (
@@ -276,14 +394,6 @@ export default function VisitsPage() {
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const loc = v.location || (v as any).city || (v as any).customer_address || '-';
                   const rawRemarks = v.raw_remarks || v.remarks || '';
-
-                  // Structured Requirement Extraction
-                  const reqMatch =
-                    v.material_requirement ||
-                    (v as any).requirement ||
-                    rawRemarks.match(/\[Requirement:\s*([^\]]+)\]/i)?.[1] ||
-                    rawRemarks.match(/\[Interests:\s*([^\]]+)\]/i)?.[1] ||
-                    null;
 
                   // Follow-up Action Extraction
                   const followUp =
@@ -297,7 +407,7 @@ export default function VisitsPage() {
                       : null) ||
                     '-';
 
-                  // Clean Remarks (strip bracket metadata tags for clear, human-readable display)
+                  // Clean Remarks
                   const cleanRemarks =
                     rawRemarks
                       .replace(
@@ -307,14 +417,22 @@ export default function VisitsPage() {
                       .trim() || rawRemarks || '-';
 
                   return (
-                    <tr key={v.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={v.id || idx}
+                      onClick={() => openVisitDetails(v)}
+                      className="hover:bg-emerald-50/40 cursor-pointer transition-colors group">
                       {/* 1. Customer & Date */}
-                      <td className="px-4 py-3.5 min-w-[180px]">
-                        <div className="font-bold text-slate-900 text-sm">{v.customer_name || 'Customer'}</div>
-                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                          <span>📅 {v.visited_at ? new Date(v.visited_at).toLocaleDateString('en-IN') : '-'}</span>
+                      <td className="px-4 py-3.5 min-w-[190px]">
+                        <div className="font-bold text-slate-900 text-sm group-hover:text-emerald-700 transition-colors">
+                          {v.customer_name || 'Customer'}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 mt-1">
+                          <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap">
+                            <Calendar size={12} className="text-slate-400 shrink-0" />
+                            {v.visited_at ? new Date(v.visited_at).toLocaleDateString('en-IN') : '-'}
+                          </span>
                           {loc && loc !== '-' && (
-                            <span className="flex items-center gap-1">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap">
                               • <Map size={11} className="text-slate-400 shrink-0" /> {loc}
                             </span>
                           )}
@@ -328,7 +446,7 @@ export default function VisitsPage() {
                           {v.person_met && v.person_met !== 'null' ? v.person_met : '-'}
                         </div>
                         {phone && phone !== '-' && (
-                          <div className="text-slate-500 font-mono flex items-center gap-1 mt-0.5">
+                          <div className="text-slate-500 font-mono flex items-center gap-1 mt-0.5 whitespace-nowrap">
                             <Phone size={11} className="text-slate-400 shrink-0" /> {phone}
                           </div>
                         )}
@@ -353,14 +471,7 @@ export default function VisitsPage() {
 
                       {/* 4. Discussion & Requirements */}
                       <td className="px-4 py-3.5 text-xs max-w-md">
-                        {reqMatch && (
-                          <div className="mb-1">
-                            <span className="inline-flex items-center gap-1 font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md text-[11px]">
-                              📦 {reqMatch}
-                            </span>
-                          </div>
-                        )}
-                        <p className="text-slate-700 leading-relaxed break-words whitespace-normal">
+                        <p className="text-slate-700 leading-relaxed break-words whitespace-normal line-clamp-2">
                           {cleanRemarks}
                         </p>
                       </td>
@@ -375,6 +486,13 @@ export default function VisitsPage() {
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
+
+                      {/* 6. Quick Action Icon */}
+                      <td className="px-3 py-3.5 text-right">
+                        <span className="p-1.5 text-slate-400 group-hover:text-emerald-600 group-hover:bg-emerald-50 rounded-lg inline-flex transition-colors">
+                          <Eye size={16} />
+                        </span>
+                      </td>
                     </tr>
                   );
                 })
@@ -386,7 +504,7 @@ export default function VisitsPage() {
 
       {/* Log Visit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -511,6 +629,320 @@ export default function VisitsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Visit Details & Edit Modal */}
+      {selectedVisit && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+            {/* Modal Header */}
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                    <MapPin size={20} />
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">
+                      {isEditing ? 'Edit Visit Details' : selectedVisit.customer_name || 'Customer Visit'}
+                    </h2>
+                    {!isEditing && (
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        <Calendar size={12} />
+                        {selectedVisit.visited_at
+                          ? new Date(selectedVisit.visited_at).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : 'Recent Visit'}
+                        {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons in Header */}
+              <div className="flex items-center gap-1.5">
+                {!isEditing ? (
+                  <>
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1.5 transition-colors"
+                      title="Edit Visit">
+                      <Edit2 size={13} />
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleDeleteClick}
+                      disabled={actionLoading}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="Delete Visit">
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">
+                    Cancel
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedVisit(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg ml-1">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* View Mode */}
+            {!isEditing ? (
+              <div className="space-y-4">
+                {/* Status & Outcome Banner */}
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-xs font-semibold text-slate-600">Visit Outcome Status:</span>
+                  {getNormalizedOutcome(selectedVisit) === 'positive' ? (
+                    <span className="px-3 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                      <ThumbsUp size={12} /> Positive 🟢
+                    </span>
+                  ) : getNormalizedOutcome(selectedVisit) === 'neutral' ? (
+                    <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
+                      <Clock size={12} /> Neutral / Discussion 🟡
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Closed / Red 🔴
+                    </span>
+                  )}
+                </div>
+
+                {/* Contact & Location Grid */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
+                    <p className="text-slate-400 font-medium">Person Met</p>
+                    <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-sm">
+                      <User size={14} className="text-slate-400 shrink-0" />
+                      {selectedVisit.person_met && selectedVisit.person_met !== 'null'
+                        ? selectedVisit.person_met
+                        : '-'}
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
+                    <p className="text-slate-400 font-medium">Contact Phone</p>
+                    <p className="text-slate-800 font-semibold font-mono flex items-center gap-1.5 text-sm">
+                      <Phone size={14} className="text-slate-400 shrink-0" />
+                      {selectedVisit.contact_phone || (selectedVisit as any).contact_no || '-'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Requirements Tag if any */}
+                {(selectedVisit.material_requirement || (selectedVisit as any).requirement) && (
+                  <div className="p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl flex items-center gap-2">
+                    <Package size={16} className="text-indigo-600 shrink-0" />
+                    <div>
+                      <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wide">
+                        Material Requirements Discussed
+                      </p>
+                      <p className="text-xs font-semibold text-indigo-700 mt-0.5">
+                        {selectedVisit.material_requirement || (selectedVisit as any).requirement}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Meeting Remarks */}
+                <div className="p-3.5 bg-slate-50/70 border border-slate-200 rounded-xl space-y-1">
+                  <p className="text-xs font-semibold text-slate-500">Meeting Remarks &amp; Notes</p>
+                  <p className="text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap">
+                    {(selectedVisit.raw_remarks || selectedVisit.remarks || '')
+                      .replace(
+                        /\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi,
+                        '',
+                      )
+                      .trim() || 'No detailed remarks recorded for this visit.'}
+                  </p>
+                </div>
+
+                {/* Next Action Pill */}
+                {selectedVisit.follow_up_action && selectedVisit.follow_up_action !== '-' && (
+                  <div className="p-3 bg-blue-50 border border-blue-200/80 rounded-xl flex items-start gap-2.5">
+                    <Calendar size={16} className="text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">Next Follow-up Action</p>
+                      <p className="text-xs font-semibold text-blue-800 mt-0.5">
+                        {selectedVisit.follow_up_action}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Edit Mode Form */
+              <form onSubmit={handleUpdateVisit} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Customer / Company Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editCustomerName}
+                    onChange={e => setEditCustomerName(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Person Met</label>
+                    <input
+                      type="text"
+                      value={editPersonMet}
+                      onChange={e => setEditPersonMet(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
+                    <input
+                      type="text"
+                      value={editContactPhone}
+                      onChange={e => setEditContactPhone(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">City / Location</label>
+                    <input
+                      type="text"
+                      value={editLocation}
+                      onChange={e => setEditLocation(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Date</label>
+                    <input
+                      type="date"
+                      value={editVisitDate}
+                      onChange={e => setEditVisitDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Outcome</label>
+                    <select
+                      value={editOutcome}
+                      onChange={e => setEditOutcome(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                      <option value="positive">Positive 🟢</option>
+                      <option value="neutral">Neutral 🟡</option>
+                      <option value="negative">Negative 🔴</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Send rate quotation"
+                      value={editFollowup}
+                      onChange={e => setEditFollowup(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Material Requirement</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. HR Coil 2.5mm x 1250mm"
+                    value={editRequirement}
+                    onChange={e => setEditRequirement(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Notes</label>
+                  <textarea
+                    rows={2}
+                    value={editRemarks}
+                    onChange={e => setEditRemarks(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
+                    <Check size={16} />
+                    {actionLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Custom In-App Delete Confirmation Modal */}
+      {showDeleteModal && selectedVisit && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Visit Log</h3>
+                <p className="text-xs text-slate-500 mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to permanently delete the visit record for{' '}
+              <strong className="text-slate-900 font-semibold">{selectedVisit.customer_name}</strong>?
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={actionLoading}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteVisit}
+                disabled={actionLoading}
+                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
+                <Trash2 size={14} />
+                {actionLoading ? 'Deleting...' : 'Delete Visit'}
+              </button>
+            </div>
           </div>
         </div>
       )}
