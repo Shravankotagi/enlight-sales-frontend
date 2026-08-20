@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Calendar, Edit3, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  Calendar, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ZoomIn, ExternalLink, Package, Printer
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
@@ -503,7 +503,6 @@ export default function InquiriesPage() {
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
@@ -659,7 +658,6 @@ export default function InquiriesPage() {
       setEditDetails(parsed);
     }
 
-    setIsEditing(!isConfirmedState);
     setSaveSuccess(isConfirmedState);
     setIsQuotationSent(isQuotedState);
   };
@@ -846,7 +844,6 @@ export default function InquiriesPage() {
       };
 
       setSaveSuccess(true);
-      setIsEditing(false);
       setSelectedInquiry(updatedObj);
       setDrawerFileBase64(null);
 
@@ -1490,18 +1487,12 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 </div>
               </div>
 
-              {/* Edit vs View Toggle Header */}
+              {/* Extracted Customer Inquiry Table Header */}
               <div className="flex items-center justify-between pt-1">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Building2 size={16} className="text-blue-600" />
                   Pre-filled &amp; Extracted Customer Inquiry Table
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(!isEditing)}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition-colors">
-                  <Edit3 size={14} /> {isEditing ? 'Cancel Edit' : 'Edit Pre-filled Fields'}
-                </button>
               </div>
 
               {/* Editable Fields Form — Company Name, Phone always editable */}
@@ -1689,8 +1680,8 @@ const formatExtractedRequirementText = (extracted: any): string => {
                     </tfoot>
                   </table>
 
-                  {/* Commercial Terms Footer (Matching Img1 Layout) */}
-                  <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
+                  {/* Commercial Terms Footer */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                     <div>
                       <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Delivery Address</span>
                       <input
@@ -1725,13 +1716,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         <option value="60 Days Credit">60 Days Credit</option>
                         <option value="100% Advance / Payment">100% Advance / Payment</option>
                       </select>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Inquiry Received Date</span>
-                      <span className="font-mono font-bold text-slate-700 block mt-1">
-                        {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
-                      </span>
                     </div>
                   </div>
 
