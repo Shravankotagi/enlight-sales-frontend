@@ -95,6 +95,7 @@ export const inquiriesApi = {
   updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
   sendQuotation: (id: string, payload: any) => API.post(`/inquiries/send-quotation/${id}`, payload),
   parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
+  parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
 };
 
 export const reportsApi = {

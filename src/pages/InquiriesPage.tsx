@@ -227,6 +227,52 @@ function isProductOrGenericName(name?: string | null): boolean {
   return false;
 }
 
+function extractMultiItemsFromText(raw: string): LineItemDetail[] {
+  if (!raw || !raw.trim()) return [];
+  const steelPattern = /\b(MS\s*Plate|SS\s*\d{3}\s*Pipe|SS\s*Pipe|TMT\s*Rebar|TMT\s*Bar|HR\s*Coil|HR\s*Sheet|CR\s*Coil|CR\s*Sheet|GI\s*Coil|GI\s*Sheet|Chequered\s*Plate|Steel\s*Pipe|Seamless\s*Pipe|MS\s*Flat|MS\s*Beam|ISMB|ISA|MS\s*Angle|MS\s*Channel)\b/gi;
+  const indices: { index: number; product: string }[] = [];
+  let match;
+  while ((match = steelPattern.exec(raw)) !== null) {
+    indices.push({ index: match.index, product: match[1] });
+  }
+  if (indices.length === 0) return [];
+
+  const items: LineItemDetail[] = [];
+  for (let i = 0; i < indices.length; i++) {
+    const start = indices[i].index;
+    const end = (i + 1 < indices.length) ? indices[i + 1].index : raw.length;
+    let chunk = raw.slice(start, end).trim();
+    chunk = chunk.replace(/(?:Please send|Thank you|Please quote|Kindly provide|Please provide)[\s\S]*$/i, '').trim();
+
+    const qtyMatch = chunk.match(/(\d+(?:\.\d+)?)\s*(Metric\s*Tons?|MT|Tons?|Pieces?|Pcs|Nos|KG)/i);
+    const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 0;
+    const unit = qtyMatch ? (qtyMatch[2].toLowerCase().includes('ton') || qtyMatch[2].toLowerCase() === 'mt' ? 'MT' : qtyMatch[2].toLowerCase().includes('pc') || qtyMatch[2].toLowerCase().includes('nos') ? 'Pcs' : qtyMatch[2]) : 'MT';
+
+    const gradeMatch = chunk.match(/([A-Za-z0-9\s]+?(?:\([^)]+\))?)\s*[-:]\s*(\d+.*)/);
+    let sku = indices[i].product.trim();
+    let dims = '';
+    if (gradeMatch) {
+      sku = gradeMatch[1].trim();
+      dims = gradeMatch[2].replace(qtyMatch ? qtyMatch[0] : '', '').replace(/^[-,\s]+|[-,\s]+$/g, '').trim();
+    } else {
+      const parts = chunk.split(/\s*-\s*|\s*:\s*/);
+      sku = parts[0]?.trim() || indices[i].product.trim();
+      dims = chunk.replace(sku, '').replace(qtyMatch ? qtyMatch[0] : '', '').replace(/^[-,\s]+|[-,\s]+$/g, '').trim();
+    }
+    dims = dims.replace(/\s*-\s*\(/g, ' (').replace(/\s*-\s*$/g, '').trim();
+
+    items.push({
+      sku_text: sku,
+      dimensions: dims,
+      quantity: qty,
+      unit: unit,
+      rate: 0,
+      amount: 0,
+    });
+  }
+  return items;
+}
+
 function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const textRaw = text || '';
   const textLower = textRaw.toLowerCase();
@@ -248,7 +294,10 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   }
 
   if (!candidateName) {
-    if (textLower.includes('delta')) {
+    const fromMatch = textRaw.match(/(?:from)\s+([A-Za-z0-9\s&.,'-]+?)(?:\.|\s+we\s+need|\s+we\s+require|,)/i);
+    if (fromMatch && !isProductOrGenericName(fromMatch[1])) {
+      candidateName = fromMatch[1].replace(/^(this\s+is\s+|i\s+am\s+)/i, '').trim();
+    } else if (textLower.includes('delta')) {
       candidateName = 'Delta Structural Steel';
     } else if (textLower.includes('mehta')) {
       candidateName = 'Mehta Engineering';
@@ -426,9 +475,11 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   // 7. Delivery Location (Capture only what is stated, never append "Warehouse")
   let deliveryLocation = aiJson.delivery_location || aiJson.deliveryLocation || '';
   if (!deliveryLocation) {
-    const locMatch = textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z\s]+?)(?:\s+before|\s+by|\s+on|\s+within|\.|$)/i);
+    const locMatch =
+      textRaw.match(/(?:delivered\s+(?:to\s+our\s+site\s+in|to\s+site\s+in|to|at)|delivery\s+(?:to|at)|site\s+in|location:?)\s+([A-Za-z0-9\s,.-]+?)(?:\s*[:\n]|\s*MS\s|\s*SS\s|\s*TMT\s|\s*HR\s|\s*CR\s|\s+for|\s+before|\.|$)/i) ||
+      textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z\s]+?)(?:\s+before|\s+by|\s+on|\s+within|\.|$)/i);
     if (locMatch) {
-      deliveryLocation = locMatch[1].trim();
+      deliveryLocation = locMatch[1].replace(/^[:\s]+|[:\s]+$/g, '').trim();
     } else if (textLower.includes('pune')) {
       deliveryLocation = 'Pune';
     } else if (textLower.includes('nashik')) {
@@ -473,7 +524,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
   const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
-  const rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => ({
+  let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => ({
     sku_text: item.sku_text || item.description || '',
     dimensions: item.dimensions || '',
     quantity: item.quantity,
@@ -481,6 +532,17 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     rate: item.rate,
     amount: item.amount,
   }));
+
+  // Fallback: If line items is empty or contains 1 long unstructured blob, parse multi-items directly from text
+  if (
+    rawLineItems.length === 0 ||
+    (rawLineItems.length === 1 && (rawLineItems[0].sku_text.length > 30 || rawLineItems[0].quantity === 0))
+  ) {
+    const multiItems = extractMultiItemsFromText(textRaw);
+    if (multiItems.length > 0) {
+      rawLineItems = multiItems;
+    }
+  }
 
   if (rawLineItems.length === 0 && (productType || quantityTons > 0)) {
     rawLineItems.push({
@@ -1117,18 +1179,23 @@ const formatExtractedRequirementText = (extracted: any): string => {
           make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
         };
       } else {
-        const lineItems = formProductSKU.trim() ? [{
-          sku_text: formProductSKU.trim(),
-          quantity: qty,
-          unit: 'MT',
-          rate: rate,
-          amount: computedAmt,
-        }] : [];
-
         const parsedReq = parseInquiryText(formRequirement || formProductSKU, {
           customer_name: customerName,
           raw_text: formRequirement || formProductSKU,
         });
+
+        const lineItems = (parsedReq.lineItems && parsedReq.lineItems.length > 0)
+          ? parsedReq.lineItems
+          : (formProductSKU.trim() ? [{
+              sku_text: formProductSKU.trim(),
+              dimensions: '',
+              quantity: qty,
+              unit: 'MT',
+              rate: rate,
+              amount: computedAmt,
+            }] : []);
+
+        const subtotal = lineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0);
 
         aiExtractionJson = {
           customer: {
@@ -1142,16 +1209,16 @@ const formatExtractedRequirementText = (extracted: any): string => {
           productType: formProductSKU.trim() || parsedReq.productType,
           quantityTons: qty > 0 ? qty : parsedReq.quantityTons,
           unitPrice: rate > 0 ? rate : parsedReq.unitPrice,
-          totalAmount: computedAmt > 0 ? computedAmt : parsedReq.totalAmount,
-          total_amount: computedAmt > 0 ? computedAmt : parsedReq.totalAmount,
+          totalAmount: subtotal > 0 ? subtotal : (computedAmt > 0 ? computedAmt : parsedReq.totalAmount),
+          total_amount: subtotal > 0 ? subtotal : (computedAmt > 0 ? computedAmt : parsedReq.totalAmount),
           delivery_location: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
           deliveryLocation: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
           payment_terms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
           paymentTerms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
           preferred_make: formPreferredMake.trim() || (parsedReq as any).preferredMake || '',
           make: formPreferredMake.trim() || (parsedReq as any).preferredMake || '',
-          line_items: lineItems.length > 0 ? lineItems : parsedReq.lineItems,
-          lineItems: lineItems.length > 0 ? lineItems : parsedReq.lineItems,
+          line_items: lineItems,
+          lineItems: lineItems,
         };
       }
 
@@ -1165,9 +1232,11 @@ const formatExtractedRequirementText = (extracted: any): string => {
         formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : '',
       ].filter(Boolean).join(' | ');
 
+      const naturalRawText = (formProductSKU.length > 50 ? formProductSKU.trim() : '') || (formRequirement.length > 50 ? formRequirement.trim() : '');
+
       const rawText = poFileName
-        ? `[Inquiry Attachment: ${poFileName}] ${reqDetails || formRequirement || 'Inquiry'}`
-        : reqDetails || formRequirement || 'Inquiry';
+        ? `[Inquiry Attachment: ${poFileName}] ${naturalRawText || reqDetails || formRequirement || 'Inquiry'}`
+        : naturalRawText || reqDetails || formRequirement || 'Inquiry';
 
       const createRes = await inquiriesApi.create({
         sender_name: customerName,
@@ -1577,51 +1646,47 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 </button>
               </div>
 
-              {/* QA & Audit Section — Source badge + Document action only, no raw description */}
+              {/* QA & Audit Section — Source badge + Document & Raw Inquiry action */}
               <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 shadow-inner">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   {/* Source badge */}
                   <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] text-slate-300 font-bold uppercase tracking-wider">
                     Source: {selectedInquiry.source_channel === 'web_dashboard' || selectedInquiry.source_channel === 'dashboard' ? 'Dashboard' : 'WhatsApp'}
                   </span>
 
-                  {/* Document action bar */}
-                  {(selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) || drawerFileBase64 ? (
-                    <div className="flex items-center gap-2">
-                      {drawerFileBase64 && (
-                        <button
-                          type="button"
-                          onClick={() => setDrawerFileBase64(null)}
-                          className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold transition-colors">
-                          Remove
-                        </button>
-                      )}
+                  {/* Document & Raw Inquiry action bar */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      id="drawer-file-upload"
+                      className="hidden"
+                      accept="image/*,application/pdf"
+                      onChange={handleDrawerFileUpload}
+                    />
+
+                    {drawerFileBase64 && (
                       <button
                         type="button"
-                        onClick={() => handleViewInquiryDocument(selectedInquiry)}
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
-                        <Eye size={14} /> View Inquiry Document 👁️
+                        onClick={() => setDrawerFileBase64(null)}
+                        className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold transition-colors">
+                        Remove File
                       </button>
-                    </div>
-                  ) : (() => {
-                    return (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="file"
-                          id="drawer-file-upload"
-                          className="hidden"
-                          accept="image/*,application/pdf"
-                          onChange={handleDrawerFileUpload}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => document.getElementById('drawer-file-upload')?.click()}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-700">
-                          <UploadCloud size={13} /> Attach Document File
-                        </button>
-                      </div>
-                    );
-                  })()}
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('drawer-file-upload')?.click()}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-700">
+                      <UploadCloud size={13} /> {drawerFileBase64 || (selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) ? 'Replace File' : 'Attach Document File'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleViewInquiryDocument(selectedInquiry)}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
+                      <Eye size={14} /> View Original Inquiry 👁️
+                    </button>
+                  </div>
                 </div>
               </div>
 
