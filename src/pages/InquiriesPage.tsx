@@ -867,22 +867,6 @@ const cleanNumericValue = (raw: any): number => {
   return isNaN(num) ? 0 : num;
 };
 
-const extractJsonFromText = (rawText: string): any => {
-  if (!rawText) return null;
-  try {
-    const stripped = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    return JSON.parse(stripped);
-  } catch {}
-  try {
-    const firstOpen = rawText.indexOf('{');
-    const lastClose = rawText.lastIndexOf('}');
-    if (firstOpen !== -1 && lastClose > firstOpen) {
-      return JSON.parse(rawText.slice(firstOpen, lastClose + 1));
-    }
-  } catch {}
-  return null;
-};
-
 const formatExtractedRequirementText = (extracted: any): string => {
   if (!extracted) return '';
   const items = extracted.line_items || extracted.items || extracted.products || extracted.lineItems || [];
@@ -942,7 +926,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
         let extracted: any = null;
 
-        // 1. Try Backend Gemini Vision API Route
+        // Process Document OCR via Backend Gemini Vision API Route (/inquiries/parse-document)
         try {
           const res = await inquiriesApi.parseDocument({
             file_base64: cleanBase64,
@@ -952,44 +936,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
             extracted = res.data.data;
           }
         } catch (apiErr) {
-          console.warn('Backend parse-document unavailable, trying direct Gemini Vision...', apiErr);
-        }
-
-        // 2. Direct Gemini Vision API call if backend did not return extracted data
-        if (!extracted) {
-          try {
-            const apiKey = ['AQ.Ab8RN6Ibqf', 'NjPprSab_mxBA', 'ZTgLpPuRMFntq', 'kj5YAeK7fhDXPA'].join('');
-            const geminiRes = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents: [
-                    {
-                      parts: [
-                        {
-                          text: `You are an expert OCR parser for steel purchase inquiry documents. Extract ALL data from this document and return ONLY a valid JSON object with NO markdown, NO codeblocks, NO explanation:\n{\n  "customer_name": "company name from document header",\n  "customer_phone": "phone number if present else null",\n  "customer_gst": "GST number if present else null",\n  "customer_address": "company address if present else null",\n  "delivery_location": "delivery location",\n  "payment_terms": "payment terms",\n  "po_number": "PO/Inquiry Ref number if present else null",\n  "line_items": [\n    {\n      "sku_text": "full material description e.g. HR Coil (IS 2062 E250)",\n      "dimensions": "specs e.g. 2.50 mm x 1250 mm",\n      "quantity": numeric_quantity_in_MT,\n      "unit": "MT",\n      "rate": numeric_rate_per_MT_or_0,\n      "amount": numeric_amount_or_0\n    }\n  ],\n  "total_amount": numeric_total_or_0,\n  "overall_confidence": 0.95\n}\nExtract EVERY line item. Do not merge or skip any rows. Return ONLY the JSON.`
-                        },
-                        {
-                          inline_data: {
-                            mime_type: file.type || 'image/jpeg',
-                            data: cleanBase64,
-                          }
-                        }
-                      ]
-                    }
-                  ]
-                })
-              }
-            );
-
-            const geminiData = await geminiRes.json();
-            const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            extracted = extractJsonFromText(rawText);
-          } catch (visionErr) {
-            console.error('Gemini vision extraction error:', visionErr);
-          }
+          console.warn('Backend parse-document failed:', apiErr);
         }
 
         if (extracted) {
