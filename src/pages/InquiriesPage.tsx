@@ -566,6 +566,7 @@ export default function InquiriesPage() {
   const [formCustomerName, setFormCustomerName] = useState('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [formProductSKU, setFormProductSKU] = useState('');
+  const [formPreferredMake, setFormPreferredMake] = useState('');
   const [formQuantity, setFormQuantity] = useState('');
   const [formRate, setFormRate] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
@@ -1027,6 +1028,9 @@ const formatExtractedRequirementText = (extracted: any): string => {
             if (extracted.rate) setFormRate(String(extracted.rate));
           }
 
+          if (extracted.make || extracted.preferred_make || extracted.brand) {
+            setFormPreferredMake(extracted.make || extracted.preferred_make || extracted.brand);
+          }
           if (extracted.delivery_location) {
             setFormDeliveryLocation(extracted.delivery_location);
           }
@@ -1109,6 +1113,8 @@ const formatExtractedRequirementText = (extracted: any): string => {
           deliveryLocation: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
           payment_terms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
           paymentTerms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
+          preferred_make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
+          make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
         };
       } else {
         const lineItems = formProductSKU.trim() ? [{
@@ -1142,6 +1148,8 @@ const formatExtractedRequirementText = (extracted: any): string => {
           deliveryLocation: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
           payment_terms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
           paymentTerms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
+          preferred_make: formPreferredMake.trim() || (parsedReq as any).preferredMake || '',
+          make: formPreferredMake.trim() || (parsedReq as any).preferredMake || '',
           line_items: lineItems.length > 0 ? lineItems : parsedReq.lineItems,
           lineItems: lineItems.length > 0 ? lineItems : parsedReq.lineItems,
         };
@@ -1149,6 +1157,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
       const reqDetails = [
         formProductSKU.trim() ? `Material: ${formProductSKU.trim()}` : '',
+        formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
         qty > 0 ? `Qty: ${qty} MT` : '',
         rate > 0 ? `Rate: ₹${rate.toLocaleString('en-IN')}/MT` : '',
         formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : '',
@@ -1194,6 +1203,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
       setShowCompanyDropdown(false);
       setFormPhone('');
       setFormProductSKU('');
+      setFormPreferredMake('');
       setFormQuantity('');
       setFormRate('');
       setFormDeliveryLocation('');
@@ -2382,40 +2392,25 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Product Description / SKU *</label>
-                <input
-                  type="text"
+                <textarea
+                  rows={3}
                   required
-                  placeholder="e.g. TMT Bar 12mm / HR Coil 3.0mm"
+                  placeholder="e.g. TMT Bar 12mm / HR Coil 3.0mm x 1250mm"
                   value={formProductSKU}
                   onChange={e => setFormProductSKU(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 max-h-36 overflow-y-auto resize-y leading-relaxed"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity (MT)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="e.g. 30"
-                    value={formQuantity}
-                    onChange={e => setFormQuantity(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Rate per MT (₹)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="e.g. 52000"
-                    value={formRate}
-                    onChange={e => setFormRate(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Preferred Make</label>
+                <input
+                  type="text"
+                  placeholder="e.g. JSW, AM/NS, Tata, SAIL, JSPL, or Any"
+                  value={formPreferredMake}
+                  onChange={e => setFormPreferredMake(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>
