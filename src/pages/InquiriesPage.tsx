@@ -1333,19 +1333,20 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 <th className="px-4 py-3 text-center">Customer / Company Name</th>
                 <th className="px-4 py-3 text-center">Items Summary</th>
                 <th className="px-4 py-3 text-center">Source Channel</th>
-                <th className="px-4 py-3 text-center">Status / Actions</th>
+                <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                     Loading monthly inquiries...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                     No product inquiries found for this period.
                   </td>
                 </tr>
@@ -1429,37 +1430,36 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-2">
-                          {(inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                              <CheckCircle size={12} /> PO Confirmed 
-                            </span>
-                          ) : isQuoted ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                              <CheckCircle size={12} /> Quotation Sent 
-                            </span>
-                          ) : isConfirmed ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                              <CheckCircle size={12} /> Confirmed &amp; Saved ✓
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                              <Clock size={12} /> Review &amp; Edit 
-                            </span>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setQuotationViewInquiry(inq);
-                              setQuotationViewDetails(details);  // reuse `details` from the row
-                              setShowQuotationView(true);
-                            }}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1">
-                            <Eye size={13} /> Final Quotation
-                          </button>
-                        </div>
+                        {(inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                            <CheckCircle size={12} /> PO Confirmed 
+                          </span>
+                        ) : isQuoted ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                            <CheckCircle size={12} /> Quotation Sent 
+                          </span>
+                        ) : isConfirmed ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
+                            <CheckCircle size={12} /> Confirmed &amp; Saved ✓
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            <Clock size={12} /> Review &amp; Edit 
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQuotationViewInquiry(inq);
+                            setQuotationViewDetails(details);  // reuse `details` from the row
+                            setShowQuotationView(true);
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 mx-auto">
+                          <Eye size={13} /> Final Quotation
+                        </button>
                       </td>
                     </tr>
                   );
