@@ -74,6 +74,8 @@ export const complaintsApi = {
 export const visitsApi = {
   getAll: (params?: any) => API.get('/kra/visits', { params }),
   create: (data: any) => API.post('/kra/visits', data),
+  update: (id: string, data: any) => API.patch(`/kra/visits/${id}`, data),
+  delete: (id: string) => API.delete(`/kra/visits/${id}`),
 };
 
 export const ordersApi = {
