@@ -1677,33 +1677,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       </select>
                     </div>
                   </div>
-
-                  {/* Requirements & Salesperson Details Section */}
-                  <div className="p-4 bg-slate-100/70 border-t border-slate-200 space-y-3 text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block mb-1">
-                          👤 Salesperson Assigned
-                        </span>
-                        <span className="font-semibold text-slate-800 bg-white px-2.5 py-1 rounded-lg border border-slate-200 inline-block font-mono">
-                          {selectedInquiry.salesperson_phone || selectedInquiry.sender_name || 'Assigned Rep'}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block mb-1">
-                          ⚡ Status / Corrective Action Taken
-                        </span>
-                        <span className="font-semibold text-slate-800 bg-white px-2.5 py-1 rounded-lg border border-slate-200 inline-block">
-                          {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase())
-                            ? 'Quotation Generated & Dispatched ✉️'
-                            : ['confirmed', 'processed'].includes((selectedInquiry.status || '').toLowerCase())
-                            ? 'Confirmed & Order Processed 🎉'
-                            : 'In Review — Pending Confirmation ⏳'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -2226,17 +2199,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
                     ))}
                   </datalist>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Contact Phone Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 9123456789"
-                  value={formPhone}
-                  onChange={e => setFormPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                />
               </div>
 
               <div>
