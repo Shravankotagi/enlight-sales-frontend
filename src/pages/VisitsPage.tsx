@@ -456,6 +456,31 @@ export default function VisitsPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Outcome</label>
+                  <select
+                    value={formOutcome}
+                    onChange={e => setFormOutcome(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                    <option value="positive">Positive 🟢</option>
+                    <option value="neutral">Neutral 🟡</option>
+                    <option value="negative">Negative 🔴</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Send rate quotation"
+                    value={formFollowup}
+                    onChange={e => setFormFollowup(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
                 <textarea
@@ -463,17 +488,6 @@ export default function VisitsPage() {
                   placeholder="Details of discussion, product requirements..."
                   value={formRemarks}
                   onChange={e => setFormRemarks(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Send rate quotation"
-                  value={formFollowup}
-                  onChange={e => setFormFollowup(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
