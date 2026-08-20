@@ -1703,17 +1703,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         </span>
                       </div>
                     </div>
-
-                    {selectedInquiry.raw_text && (
-                      <div>
-                        <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block mb-1">
-                          📝 Customer Inquiry Requirements &amp; Message (Full Text)
-                        </span>
-                        <div className="bg-white p-3 rounded-xl border border-slate-200 text-slate-800 font-sans text-xs leading-relaxed whitespace-pre-wrap select-text">
-                          {selectedInquiry.raw_text}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
