@@ -6,9 +6,9 @@ import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import {
   AlertCircle, Clock, CheckCircle, TrendingUp, Users, Home,
-  ShoppingBag, IndianRupee, RefreshCw, ArrowUpRight,
+  ShoppingBag, RefreshCw, ArrowUpRight,
   Building2, Sparkles, Plus, FileText, Activity, Layers,
-  CheckCircle2, ArrowRight, ChevronRight
+  CheckCircle2, ArrowRight, ChevronRight, Truck
 } from 'lucide-react';
 
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
@@ -318,17 +318,17 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Metric 3: Total Revenue Achieved */}
+        {/* Metric 3: Total Tonnage Delivered */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Tonnage</span>
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-              <IndianRupee size={18} />
+              <Truck size={18} />
             </div>
           </div>
           <div className="mt-4">
             <h3 className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight">
-              ₹{Number(totalRevenue).toLocaleString('en-IN')}
+              {Number(totalTonnageSupplied || 0).toLocaleString('en-IN')} MT
             </h3>
             <div className="flex items-center gap-1.5 mt-2">
               <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${

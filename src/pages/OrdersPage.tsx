@@ -486,7 +486,7 @@ export default function OrdersPage() {
                 <th className="px-4 py-3 text-center">PO Number</th>
                 <th className="px-4 py-3 text-center">Customer Name</th>
                 <th className="px-4 py-3 text-center">Products &amp; Items</th>
-                <th className="px-4 py-3 text-center">Order Value (₹)</th>
+                <th className="px-4 py-3 text-center">Order Tonnage (MT)</th>
                 <th className="px-4 py-3 text-center">Delivery Location</th>
                 <th className="px-4 py-3 text-center">Purchase Order</th>
               </tr>
@@ -506,6 +506,13 @@ export default function OrdersPage() {
                     .map(i => `${i?.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''} ${i?.sku_text || ''}`.trim())
                     .filter(Boolean)
                     .join(', ') || '—';
+
+                  const ordTonnage = (ord?.deal_items || []).reduce((iSum: number, i: any) => {
+                    const q = Number(i?.quantity || 0);
+                    const u = (i?.unit || 'MT').toUpperCase().trim();
+                    const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
+                    return iSum + inMt;
+                  }, 0);
 
                   return (
                     <tr
@@ -538,8 +545,8 @@ export default function OrdersPage() {
                       <td className="px-4 py-3.5 text-xs text-slate-800 font-medium max-w-xs truncate" title={itemsStr}>
                         {itemsStr}
                       </td>
-                      <td className="px-4 py-3.5 text-right font-bold text-slate-900 whitespace-nowrap font-mono">
-                        ₹{Number(ord.total_amount || 0).toLocaleString('en-IN')}
+                      <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap font-mono">
+                        {ordTonnage > 0 ? `${ordTonnage.toLocaleString('en-IN')} MT` : '—'}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-600">
                         {ord.delivery_location || '-'}
