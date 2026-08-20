@@ -250,27 +250,23 @@ export default function VisitsPage() {
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3">Sr.</th>
-                <th className="px-4 py-3">Visit Date</th>
-                <th className="px-4 py-3">Customer Name</th>
-                <th className="px-4 py-3">Person Met</th>
-                <th className="px-4 py-3">Contact Phone</th>
-                <th className="px-4 py-3">Location / City</th>
+                <th className="px-4 py-3">Customer &amp; Date</th>
+                <th className="px-4 py-3">Contact Person</th>
                 <th className="px-4 py-3">Outcome</th>
-                <th className="px-4 py-3">Remarks &amp; Requirements</th>
-                <th className="px-4 py-3">Follow-up Action</th>
+                <th className="px-4 py-3">Discussion &amp; Requirements</th>
+                <th className="px-4 py-3">Next Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
                     Loading visit logs...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
                     No visit logs found.
                   </td>
                 </tr>
@@ -312,45 +308,51 @@ export default function VisitsPage() {
 
                   return (
                     <tr key={v.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-4 py-3.5 font-medium text-slate-500">{idx + 1}</td>
-                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
-                        {v.visited_at ? new Date(v.visited_at).toLocaleDateString('en-IN') : '-'}
+                      {/* 1. Customer & Date */}
+                      <td className="px-4 py-3.5 min-w-[180px]">
+                        <div className="font-bold text-slate-900 text-sm">{v.customer_name || 'Customer'}</div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                          <span>📅 {v.visited_at ? new Date(v.visited_at).toLocaleDateString('en-IN') : '-'}</span>
+                          {loc && loc !== '-' && (
+                            <span className="flex items-center gap-1">
+                              • <Map size={11} className="text-slate-400 shrink-0" /> {loc}
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-slate-900 whitespace-normal break-words min-w-[130px]">
-                        {v.customer_name || 'Customer'}
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 font-medium whitespace-normal break-words min-w-[130px]">
-                        <span className="flex items-center gap-1.5">
+
+                      {/* 2. Contact Details */}
+                      <td className="px-4 py-3.5 text-xs min-w-[150px]">
+                        <div className="font-semibold text-slate-800 flex items-center gap-1.5">
                           <User size={13} className="text-slate-400 shrink-0" />
                           {v.person_met && v.person_met !== 'null' ? v.person_met : '-'}
-                        </span>
+                        </div>
+                        {phone && phone !== '-' && (
+                          <div className="text-slate-500 font-mono flex items-center gap-1 mt-0.5">
+                            <Phone size={11} className="text-slate-400 shrink-0" /> {phone}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-600 font-mono whitespace-nowrap">
-                        <span className="flex items-center gap-1">
-                          <Phone size={12} className="text-slate-400 shrink-0" /> {phone}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 whitespace-normal break-words min-w-[100px]">
-                        <span className="flex items-center gap-1">
-                          <Map size={12} className="text-slate-400 shrink-0" /> {loc}
-                        </span>
-                      </td>
+
+                      {/* 3. Outcome */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         {outcomeLower === 'positive' ? (
-                          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
+                          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
                             Positive 🟢
                           </span>
                         ) : outcomeLower === 'neutral' ? (
-                          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 inline-flex items-center gap-1">
                             Neutral 🟡
                           </span>
                         ) : (
-                          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800">
-                            Closed / Red 🔴
+                          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800 inline-flex items-center gap-1">
+                            Closed 🔴
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-xs whitespace-normal break-words leading-relaxed min-w-[240px]">
+
+                      {/* 4. Discussion & Requirements */}
+                      <td className="px-4 py-3.5 text-xs max-w-md">
                         {reqMatch && (
                           <div className="mb-1">
                             <span className="inline-flex items-center gap-1 font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md text-[11px]">
@@ -358,17 +360,19 @@ export default function VisitsPage() {
                             </span>
                           </div>
                         )}
-                        <p className="text-slate-700 whitespace-normal break-words leading-relaxed">
+                        <p className="text-slate-700 leading-relaxed break-words whitespace-normal">
                           {cleanRemarks}
                         </p>
                       </td>
-                      <td className="px-4 py-3.5 text-xs whitespace-normal break-words leading-relaxed min-w-[180px]">
+
+                      {/* 5. Next Action */}
+                      <td className="px-4 py-3.5 text-xs whitespace-normal min-w-[160px]">
                         {followUp && followUp !== '-' ? (
-                          <span className="font-semibold text-blue-700 bg-blue-50/90 border border-blue-200/90 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 text-xs whitespace-normal break-words">
+                          <span className="font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 text-xs">
                             📅 {followUp}
                           </span>
                         ) : (
-                          <span className="text-slate-400 font-normal">-</span>
+                          <span className="text-slate-400">-</span>
                         )}
                       </td>
                     </tr>
