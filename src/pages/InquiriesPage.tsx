@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ZoomIn, ExternalLink, Package, Printer
+  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -564,6 +564,12 @@ export default function InquiriesPage() {
 
   // Form state for Manual Log & File Upload
   const [formCustomerName, setFormCustomerName] = useState('');
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const [formProductSKU, setFormProductSKU] = useState('');
+  const [formQuantity, setFormQuantity] = useState('');
+  const [formRate, setFormRate] = useState('');
+  const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
+  const [formPaymentTerms, setFormPaymentTerms] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRequirement, setFormRequirement] = useState('');
   const [formInquiryType, setFormInquiryType] = useState('Product Requirement');
@@ -599,7 +605,7 @@ export default function InquiriesPage() {
       const custRes = await customersApi.getAll().catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
-      const fetchedNames = cList.map((c: any) => c.customer_name).filter(Boolean);
+      const fetchedNames = cList.map((c: any) => c.customer_name || c.name || c.company_name).filter(Boolean);
 
       const defaultNames = [
         'Supreme Steel',
@@ -610,10 +616,16 @@ export default function InquiriesPage() {
         'SB Scafform Technovert Pvt. Ltd.',
         'Apex Metals & Engg',
         'Bhushan Steel Works',
-        'Kirloskar Pneumatic'
+        'Kirloskar Pneumatic',
+        'Vardhaman Engineering',
+        'Dynamic Industries',
+        'Mahalaxmi Steel',
+        'Rathi Steel Corp',
       ];
 
-      return Array.from(new Set([...fetchedNames, ...defaultNames]));
+      const inquiryCustomerNames = (rawInquiries || []).map(i => i.customer_name || i.sender_name).filter(Boolean);
+
+      return Array.from(new Set([...fetchedNames, ...inquiryCustomerNames, ...defaultNames]));
     },
   });
 
@@ -994,6 +1006,33 @@ const formatExtractedRequirementText = (extracted: any): string => {
           const reqText = formatExtractedRequirementText(extracted);
           setFormRequirement(reqText);
           setFormInquiryType('Product Requirement (AI Document)');
+
+          // Product SKU, Quantity, Rate, Delivery Location
+          if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
+            const mappedSkus = extracted.line_items
+              .map((li: any) => li.sku_text + (li.dimensions ? ` (${li.dimensions})` : ''))
+              .filter(Boolean)
+              .join(', ');
+            if (mappedSkus) setFormProductSKU(mappedSkus);
+
+            const totalQty = extracted.line_items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0);
+            if (totalQty > 0) setFormQuantity(String(totalQty));
+
+            const totalAmt = extracted.line_items.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0);
+            const avgRate = totalQty > 0 ? Math.round(totalAmt / totalQty) : (extracted.line_items[0]?.rate || 0);
+            if (avgRate > 0) setFormRate(String(avgRate));
+          } else if (extracted.sku_text || extracted.product_type) {
+            setFormProductSKU(extracted.sku_text || extracted.product_type);
+            if (extracted.quantity) setFormQuantity(String(extracted.quantity));
+            if (extracted.rate) setFormRate(String(extracted.rate));
+          }
+
+          if (extracted.delivery_location) {
+            setFormDeliveryLocation(extracted.delivery_location);
+          }
+          if (extracted.payment_terms) {
+            setFormPaymentTerms(extracted.payment_terms);
+          }
         }
 
         setIsExtractingPo(false);
@@ -1033,8 +1072,12 @@ const formatExtractedRequirementText = (extracted: any): string => {
     try {
       setSubmitting(true);
 
-      // Build ai_extraction_json from the structured extraction
+      // Build ai_extraction_json from the structured extraction or manual input
       let aiExtractionJson: any = null;
+      const qty = Number(formQuantity) || 0;
+      const rate = Number(formRate) || 0;
+      const computedAmt = qty > 0 && rate > 0 ? qty * rate : 0;
+
       if (extractedJson) {
         // Normalize line_items to match drawer expectations
         const lineItems = (extractedJson.line_items || []).map((li: any) => ({
@@ -1058,20 +1101,29 @@ const formatExtractedRequirementText = (extracted: any): string => {
           customer_name: extractedJson.customer_name || customerName,
           customerPhone: finalCustomerPhone,
           customer_phone: finalCustomerPhone,
-          line_items: lineItems,
-          lineItems: lineItems,
-          total_amount: totalAmount,
-          totalAmount: totalAmount,
-          delivery_location: extractedJson.delivery_location || '',
-          deliveryLocation: extractedJson.delivery_location || '',
-          payment_terms: extractedJson.payment_terms || '',
-          paymentTerms: extractedJson.payment_terms || '',
+          line_items: lineItems.length > 0 ? lineItems : (formProductSKU.trim() ? [{ sku_text: formProductSKU.trim(), quantity: qty, unit: 'MT', rate, amount: computedAmt }] : []),
+          lineItems: lineItems.length > 0 ? lineItems : (formProductSKU.trim() ? [{ sku_text: formProductSKU.trim(), quantity: qty, unit: 'MT', rate, amount: computedAmt }] : []),
+          total_amount: totalAmount > 0 ? totalAmount : computedAmt,
+          totalAmount: totalAmount > 0 ? totalAmount : computedAmt,
+          delivery_location: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
+          deliveryLocation: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
+          payment_terms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
+          paymentTerms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
         };
-      } else if (formRequirement.trim()) {
-        const parsedReq = parseInquiryText(formRequirement, {
+      } else {
+        const lineItems = formProductSKU.trim() ? [{
+          sku_text: formProductSKU.trim(),
+          quantity: qty,
+          unit: 'MT',
+          rate: rate,
+          amount: computedAmt,
+        }] : [];
+
+        const parsedReq = parseInquiryText(formRequirement || formProductSKU, {
           customer_name: customerName,
-          raw_text: formRequirement,
+          raw_text: formRequirement || formProductSKU,
         });
+
         aiExtractionJson = {
           customer: {
             name: customerName,
@@ -1081,27 +1133,32 @@ const formatExtractedRequirementText = (extracted: any): string => {
           customer_name: customerName,
           customerPhone: finalCustomerPhone,
           customer_phone: finalCustomerPhone,
-          productType: parsedReq.productType,
-          thickness: parsedReq.thickness,
-          width: parsedReq.width,
-          length: parsedReq.length,
-          productForm: parsedReq.productForm,
-          quantityTons: parsedReq.quantityTons,
-          unitPrice: parsedReq.unitPrice,
-          totalAmount: parsedReq.totalAmount,
-          total_amount: parsedReq.totalAmount,
-          delivery_location: parsedReq.deliveryLocation,
-          deliveryLocation: parsedReq.deliveryLocation,
-          payment_terms: parsedReq.paymentTerms,
-          paymentTerms: parsedReq.paymentTerms,
-          line_items: parsedReq.lineItems,
-          lineItems: parsedReq.lineItems,
+          productType: formProductSKU.trim() || parsedReq.productType,
+          quantityTons: qty > 0 ? qty : parsedReq.quantityTons,
+          unitPrice: rate > 0 ? rate : parsedReq.unitPrice,
+          totalAmount: computedAmt > 0 ? computedAmt : parsedReq.totalAmount,
+          total_amount: computedAmt > 0 ? computedAmt : parsedReq.totalAmount,
+          delivery_location: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
+          deliveryLocation: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
+          payment_terms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
+          paymentTerms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
+          line_items: lineItems.length > 0 ? lineItems : parsedReq.lineItems,
+          lineItems: lineItems.length > 0 ? lineItems : parsedReq.lineItems,
         };
       }
 
+      const reqDetails = [
+        formProductSKU.trim() ? `Material: ${formProductSKU.trim()}` : '',
+        qty > 0 ? `Qty: ${qty} MT` : '',
+        rate > 0 ? `Rate: ₹${rate.toLocaleString('en-IN')}/MT` : '',
+        formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : '',
+        formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
+        formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : '',
+      ].filter(Boolean).join(' | ');
+
       const rawText = poFileName
-        ? `[Inquiry Attachment: ${poFileName}] ${formRequirement}`
-        : formRequirement;
+        ? `[Inquiry Attachment: ${poFileName}] ${reqDetails || formRequirement || 'Inquiry'}`
+        : reqDetails || formRequirement || 'Inquiry';
 
       const createRes = await inquiriesApi.create({
         sender_name: customerName,
@@ -1134,7 +1191,13 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
       setShowModal(false);
       setFormCustomerName('');
+      setShowCompanyDropdown(false);
       setFormPhone('');
+      setFormProductSKU('');
+      setFormQuantity('');
+      setFormRate('');
+      setFormDeliveryLocation('');
+      setFormPaymentTerms('');
       setFormRequirement('');
       setFormInquiryType('Product Requirement');
       setPoFileName('');
@@ -2251,34 +2314,125 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
             <form onSubmit={handleCreateInquiry} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Customer / Company Name *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Company Name *</label>
                 <div className="relative">
-                  <input
-                    required
-                    type="text"
-                    list="existing-customers-list"
-                    placeholder="Type or select customer name..."
-                    value={formCustomerName}
-                    onChange={e => setFormCustomerName(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="relative flex items-center">
+                    <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
+                    <input
+                      required
+                      type="text"
+                      list="existing-customers-list"
+                      placeholder="Type or select company name..."
+                      value={formCustomerName}
+                      onChange={e => {
+                        setFormCustomerName(e.target.value);
+                        setShowCompanyDropdown(true);
+                      }}
+                      onFocus={() => setShowCompanyDropdown(true)}
+                      className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowCompanyDropdown(prev => !prev)}
+                      className="absolute right-2 text-slate-400 hover:text-slate-600 p-1">
+                      <ChevronDown size={16} className={`transition-transform ${showCompanyDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
                   <datalist id="existing-customers-list">
                     {existingCustomers.map((cName) => (
                       <option key={cName} value={cName} />
                     ))}
                   </datalist>
+
+                  {showCompanyDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
+                      {existingCustomers
+                        .filter(c => !formCustomerName || c.toLowerCase().includes(formCustomerName.toLowerCase()))
+                        .map(cName => (
+                          <div
+                            key={cName}
+                            onMouseDown={() => {
+                              setFormCustomerName(cName);
+                              setShowCompanyDropdown(false);
+                            }}
+                            className="px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-blue-50 hover:text-blue-700 cursor-pointer flex items-center justify-between transition-colors">
+                            <span className="flex items-center gap-2">
+                              <Building2 size={13} className="text-slate-400" />
+                              {cName}
+                            </span>
+                            {formCustomerName.toLowerCase() === cName.toLowerCase() && (
+                              <CheckCircle size={13} className="text-blue-600" />
+                            )}
+                          </div>
+                        ))}
+                      {existingCustomers.filter(c => !formCustomerName || c.toLowerCase().includes(formCustomerName.toLowerCase())).length === 0 && (
+                        <div className="px-3 py-2 text-xs text-slate-400 italic">
+                          No matching company found. Typing will save as new company.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Requirement &amp; Product Details *</label>
-                <textarea
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Product Description / SKU *</label>
+                <input
+                  type="text"
                   required
-                  rows={3}
-                  placeholder="e.g. 50 MT HR Coil 3.0mm x 1250mm delivery Pune"
+                  placeholder="e.g. TMT Bar 12mm / HR Coil 3.0mm"
+                  value={formProductSKU}
+                  onChange={e => setFormProductSKU(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity (MT)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="e.g. 30"
+                    value={formQuantity}
+                    onChange={e => setFormQuantity(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Rate per MT (₹)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="e.g. 52000"
+                    value={formRate}
+                    onChange={e => setFormRate(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Delivery Location</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Chakan Industrial Area, Pune"
+                  value={formDeliveryLocation}
+                  onChange={e => setFormDeliveryLocation(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Requirement &amp; Additional Notes (Optional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. 3.0mm x 1250mm, delivery within 7 days, 30 days payment terms"
                   value={formRequirement}
                   onChange={e => setFormRequirement(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
                 />
               </div>
 
