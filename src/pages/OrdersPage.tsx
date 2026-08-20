@@ -670,7 +670,7 @@ export default function OrdersPage() {
                     {(() => {
                       const pricing = calculatePricingSummary({
                         lineItems: selectedDrawerOrder.deal_items || [],
-                        basic_amount: Number(selectedDrawerOrder.total_amount || 0),
+                        total_amount: Number(selectedDrawerOrder.total_amount || 0),
                       });
                       const baseAmt = pricing.subtotal;
                       const gstAmt = pricing.gstAmount;
@@ -678,6 +678,13 @@ export default function OrdersPage() {
 
                       return (
                         <>
+                          {pricing.calculationWarning && (
+                            <tr>
+                              <td colSpan={6} className="px-4 py-2 bg-amber-50 text-amber-800 font-semibold border-b border-amber-200 text-center">
+                                ⚠️ {pricing.calculationWarning}
+                              </td>
+                            </tr>
+                          )}
                           <tr className="border-b border-slate-200">
                             <td colSpan={3} className="px-4 py-2 text-slate-600 font-semibold">
                               Base Material Subtotal (Excl. GST)

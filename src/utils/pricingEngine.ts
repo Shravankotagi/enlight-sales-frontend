@@ -38,6 +38,7 @@ export interface PricingSummary {
   gstAmount: number;
   grandTotal: number;
   gstRate: number;
+  calculationWarning?: string | null;
 }
 
 /**
@@ -140,7 +141,24 @@ export function calculateGrandTotal(baseAmount: number, gstRate: number = DEFAUL
  * Computes complete pricing summary breakdown with intelligent unit handling.
  */
 export function calculatePricingSummary(
-  input: LineItemInput[] | { line_items?: LineItemInput[]; lineItems?: LineItemInput[]; basic_amount?: number; subtotal?: number; baseAmount?: number; totalAmount?: number },
+  input:
+    | LineItemInput[]
+    | {
+        line_items?: LineItemInput[];
+        lineItems?: LineItemInput[];
+        basic_amount?: number;
+        subtotal?: number;
+        baseAmount?: number;
+        totalAmount?: number;
+        total_amount?: number;
+        grand_total?: number;
+        grandTotal?: number;
+        gst_amount?: number;
+        gstAmount?: number;
+        sgst_amount?: number;
+        cgst_amount?: number;
+        igst_amount?: number;
+      },
   options: { gstRate?: number } = {}
 ): PricingSummary {
   const gstRate = options.gstRate ?? DEFAULT_GST_RATE;
@@ -152,7 +170,7 @@ export function calculatePricingSummary(
     rawItems = input;
   } else if (input && typeof input === 'object') {
     rawItems = input.line_items || input.lineItems || [];
-    explicitBase = Number(input.basic_amount ?? input.subtotal ?? input.baseAmount ?? input.totalAmount ?? 0);
+    explicitBase = Number(input.basic_amount ?? input.subtotal ?? input.baseAmount ?? 0);
   }
 
   const processedItems = calculateLineItems(rawItems);
@@ -190,9 +208,43 @@ export function calculatePricingSummary(
       : `${totalQuantityMt.toLocaleString('en-IN')} MT`;
   }
 
-  const subtotal = explicitBase > 0 ? explicitBase : itemsSubtotal;
-  const gstAmount = calculateGst(subtotal, gstRate);
+  const inputObj = (!Array.isArray(input) && input && typeof input === 'object') ? input : null;
+
+  // Line-item derived subtotal always takes strict priority when line items exist
+  let subtotal = 0;
+  if (itemsSubtotal > 0) {
+    subtotal = itemsSubtotal;
+  } else if (explicitBase > 0) {
+    subtotal = explicitBase;
+  } else if (inputObj) {
+    const rawTotal = Number(inputObj.total_amount ?? inputObj.totalAmount ?? inputObj.grand_total ?? inputObj.grandTotal ?? 0);
+    if (rawTotal > 0) {
+      subtotal = rawTotal;
+    }
+  }
+
+  // Handle explicit GST components from PO documents (SGST + CGST / IGST)
+  let explicitGst = 0;
+  if (inputObj) {
+    const sgst = Number(inputObj.sgst_amount || 0);
+    const cgst = Number(inputObj.cgst_amount || 0);
+    const igst = Number(inputObj.igst_amount || 0);
+    const statedGst = Number(inputObj.gst_amount ?? inputObj.gstAmount ?? 0);
+    explicitGst = statedGst > 0 ? statedGst : (sgst + cgst + igst);
+  }
+
+  const calculatedGst = calculateGst(subtotal, gstRate);
+  const gstAmount = explicitGst > 0 && Math.abs(explicitGst - calculatedGst) <= 5 ? explicitGst : calculatedGst;
   const grandTotal = subtotal + gstAmount;
+
+  // Cross-verification against stated PO Grand Total
+  let calculationWarning: string | null = null;
+  if (inputObj) {
+    const statedGrand = Number(inputObj.grand_total ?? inputObj.grandTotal ?? 0);
+    if (statedGrand > 0 && Math.abs(statedGrand - grandTotal) > 2) {
+      calculationWarning = `Calculated total (₹${grandTotal.toLocaleString('en-IN')}) does not match PO document total (₹${statedGrand.toLocaleString('en-IN')}) — please review`;
+    }
+  }
 
   return {
     lineItems: processedItems,
@@ -204,5 +256,6 @@ export function calculatePricingSummary(
     gstAmount,
     grandTotal,
     gstRate,
+    calculationWarning,
   };
 }
