@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Phone, Calendar, Edit3, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  Calendar, Edit3, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ZoomIn, ExternalLink, Package, Printer
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
@@ -1269,7 +1269,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 <th className="px-4 py-3 text-center">#</th>
                 <th className="px-4 py-3 text-center">Received Date</th>
                 <th className="px-4 py-3 text-center">Customer / Company Name</th>
-                <th className="px-4 py-3 text-center">Customer Phone</th>
                 <th className="px-4 py-3 text-center">Items Summary</th>
                 <th className="px-4 py-3 text-center">Source Channel</th>
                 <th className="px-4 py-3 text-center">Status / Actions</th>
@@ -1278,13 +1277,13 @@ const formatExtractedRequirementText = (extracted: any): string => {
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                     Loading monthly inquiries...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                     No product inquiries found for this period.
                   </td>
                 </tr>
@@ -1332,12 +1331,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         <span className="flex items-center gap-1.5 text-blue-700 group-hover:underline">
                           <Building2 size={15} className="text-blue-600 flex-shrink-0" />
                           {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 font-mono">
-                        <span className="flex items-center gap-1 font-semibold">
-                          <Phone size={12} className="text-slate-400" />
-                          {details.customerPhone || <span className="text-slate-300 italic">—</span>}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700">
