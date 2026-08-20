@@ -63,14 +63,25 @@ interface ExtractedDetails {
 }
 
 const cleanProductType = (pt: string): string => {
-  if (!pt) return 'Hot Rolled';
+  if (!pt) return 'HR Coil';
   const str = String(pt).trim();
-  if (/\b(hr\s*pickled|pickled)\b/i.test(str)) return 'Hot Rolled Pickled & Oiled';
-  if (/\b(hr|hot\s*rolled)\b/i.test(str)) return 'Hot Rolled';
-  if (/\b(cr|cold\s*rolled|cr\s*sheet|cr\s*coil)\b/i.test(str)) return 'Cold Rolled';
-  if (/gi|spangled/i.test(str)) return 'GI Spangled (IS 277)';
-  if (/tmt|rebar/i.test(str)) return 'TMT Rebar';
-  if (/ms\s*plate|plate/i.test(str)) return 'MS Plate';
+  const strLower = str.toLowerCase();
+
+  if (/\bhr\s*coils?\b/i.test(strLower)) return 'HR Coil';
+  if (/\bcr\s*coils?\b/i.test(strLower)) return 'CR Coil';
+  if (/\bhr\s*sheets?\b/i.test(strLower)) return 'HR Sheet';
+  if (/\bcr\s*sheets?\b/i.test(strLower)) return 'CR Sheet';
+  if (/\b(hr\s*pickled|hrpo|pickled)\b/i.test(strLower)) return 'Hot Rolled Pickled & Oiled';
+  if (/\b(chequered\s*plate|chequered\s*sheets?|chequered)\b/i.test(strLower)) return 'Chequered Steel Plates';
+  if (/\b(ms\s*plate|plates?)\b/i.test(strLower)) return 'MS Plate';
+  if (/\b(gi\s*corrugated|gc\s*sheet)\b/i.test(strLower)) return 'GI Corrugated Sheets (IS 277)';
+  if (/\b(gi\s*coil|galvanized\s*coil)\b/i.test(strLower)) return 'GI Coil';
+  if (/\b(gi\s*sheet|galvanized\s*sheet|gi|spangled|is\s*277)\b/i.test(strLower)) return 'GI Sheet (IS 277)';
+  if (/\b(tmt|rebar|rebars)\b/i.test(strLower)) return 'TMT Rebar';
+  if (/\b(flat\s*bars?|ms\s*flat)\b/i.test(strLower)) return 'MS Flat Bars (IS 2062)';
+  if (/\b(pipe|pipes|tube|tubes)\b/i.test(strLower)) return 'Steel Pipe';
+  if (/\b(hr|hot\s*rolled)\b/i.test(strLower)) return 'HR Coil';
+  if (/\b(cr|cold\s*rolled)\b/i.test(strLower)) return 'CR Coil';
   return str;
 };
 
@@ -306,21 +317,39 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   // 3. Product Type
   let rawPt = aiJson?.productType || aiJson?.sku_text || aiJson?.line_items?.[0]?.sku_text || '';
   if (!rawPt) {
-    if (/\b(hr\s*pickled|pickled)\b/i.test(textLower)) {
+    if (/\b(hr\s*pickled|hrpo|pickled)\b/i.test(textLower)) {
       rawPt = 'Hot Rolled Pickled & Oiled';
-    } else if (/\b(hr|hot\s*rolled)\b/i.test(textLower)) {
-      rawPt = 'Hot Rolled';
-    } else if (/\b(cr|cold\s*rolled|cr\s*sheet|cr\s*coil)\b/i.test(textLower)) {
-      rawPt = 'Cold Rolled';
-    } else if (/\b(is\s*277|spangled|gi)\b/i.test(textLower)) {
-      rawPt = 'GI Spangled (IS 277)';
-    } else if (/\b(tmt|rebar)\b/i.test(textLower)) {
-      rawPt = 'TMT Rebar';
-    } else if (/\b(ms\s*plate|plate)\b/i.test(textLower)) {
+    } else if (/\b(hr\s*coil|hot\s*rolled\s*coil)\b/i.test(textLower)) {
+      rawPt = 'HR Coil';
+    } else if (/\b(hr\s*sheet|hot\s*rolled\s*sheet)\b/i.test(textLower)) {
+      rawPt = 'HR Sheet';
+    } else if (/\b(cr\s*coil|cold\s*rolled\s*coil)\b/i.test(textLower)) {
+      rawPt = 'CR Coil';
+    } else if (/\b(cr\s*sheet|cold\s*rolled\s*sheet)\b/i.test(textLower)) {
+      rawPt = 'CR Sheet';
+    } else if (/\b(chequered\s*plate|chequered\s*sheets?|chequered)\b/i.test(textLower)) {
+      rawPt = 'Chequered Steel Plates';
+    } else if (/\b(ms\s*plate|plates?)\b/i.test(textLower)) {
       rawPt = 'MS Plate';
+    } else if (/\b(gi\s*corrugated|gc\s*sheet)\b/i.test(textLower)) {
+      rawPt = 'GI Corrugated Sheets (IS 277)';
+    } else if (/\b(gi\s*coil|galvanized\s*coil)\b/i.test(textLower)) {
+      rawPt = 'GI Coil';
+    } else if (/\b(gi\s*sheet|galvanized\s*sheet|gi|spangled|is\s*277)\b/i.test(textLower)) {
+      rawPt = 'GI Sheet (IS 277)';
+    } else if (/\b(tmt|rebar|rebars)\b/i.test(textLower)) {
+      rawPt = 'TMT Rebar';
+    } else if (/\b(flat\s*bars?|ms\s*flat)\b/i.test(textLower)) {
+      rawPt = 'MS Flat Bars (IS 2062)';
+    } else if (/\b(pipes?|tubes?)\b/i.test(textLower)) {
+      rawPt = 'Steel Pipe';
+    } else if (/\b(hr|hot\s*rolled)\b/i.test(textLower)) {
+      rawPt = 'HR Coil';
+    } else if (/\b(cr|cold\s*rolled)\b/i.test(textLower)) {
+      rawPt = 'CR Coil';
     }
   }
-  const productType = cleanProductType(rawPt || 'Hot Rolled');
+  const productType = cleanProductType(rawPt || 'HR Coil');
 
   // 4. Dimensions (Thickness x Width x Length) — extract only what is stated
   let thickness = '';
@@ -328,13 +357,22 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   let length = '';
 
   // Pattern A: "8mmx1500x10000" or "8mm x 1500 x 10000" or "1.6mm 1250 * 2500"
-  const tripleMatch = textRaw.match(/(\d+(?:\.\d+)?)\s*mm\s*[*xX\s]\s*(\d{3,4})\s*[*xX\s]\s*(\d{3,5})/i) ||
+  const tripleMatch =
+    textRaw.match(/(\d+(?:\.\d+)?)\s*mm\s*[*xX\s]\s*(\d{3,4})\s*(?:mm)?\s*[*xX\s]\s*(\d{3,5})\s*(?:mm)?/i) ||
     textRaw.match(/(\d+(?:\.\d+)?)\s*[*xX]\s*(\d{3,4})\s*[*xX]\s*(\d{3,5})/i);
+
+  const doubleMatch =
+    textRaw.match(/(\d+(?:\.\d+)?)\s*mm\s*[*xX\s]\s*(\d{2,4})\s*(?:mm)?/i) ||
+    textRaw.match(/(\d+(?:\.\d+)?)\s*[*xX]\s*(\d{3,4})\s*(?:mm)?/i);
 
   if (tripleMatch) {
     thickness = `${tripleMatch[1]} mm`;
     width = `${tripleMatch[2]} mm`;
     length = `${tripleMatch[3]} mm`;
+  } else if (doubleMatch) {
+    thickness = `${doubleMatch[1]} mm`;
+    width = `${doubleMatch[2]} mm`;
+    length = '';
   } else {
     // Pattern B: "240 x 1.60 mm" or "80 x 2.50 mm" (Width x Thickness)
     const wThickMatch = textRaw.match(/(\d{2,4})\s*[*xX]\s*(\d+(?:\.\d+)?)\s*mm/i);
@@ -371,7 +409,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   // 6. Unit Price & Total Amount (Strict active rate sheet lookup)
   const rateMatch =
-    textRaw.match(/(?:rate|price|rs\.?|₹)\s*:?\s*₹?\s*(\d{2,3}(?:,\d{3})*|\d{4,6})/i);
+    textRaw.match(/(?:rate|price|rs\.?|₹)\s*:?\s*₹?\s*(\d{4,6}|\d{2,3}(?:,\d{3})+)/i);
 
   let unitPrice = 0;
   if (aiJson.unitPrice && Number(aiJson.unitPrice) > 0) {
@@ -1042,6 +1080,36 @@ const formatExtractedRequirementText = (extracted: any): string => {
           deliveryLocation: extractedJson.delivery_location || '',
           payment_terms: extractedJson.payment_terms || '',
           paymentTerms: extractedJson.payment_terms || '',
+        };
+      } else if (formRequirement.trim()) {
+        const parsedReq = parseInquiryText(formRequirement, {
+          customer_name: customerName,
+          raw_text: formRequirement,
+        });
+        aiExtractionJson = {
+          customer: {
+            name: customerName,
+            phone: finalCustomerPhone,
+          },
+          companyName: customerName,
+          customer_name: customerName,
+          customerPhone: finalCustomerPhone,
+          customer_phone: finalCustomerPhone,
+          productType: parsedReq.productType,
+          thickness: parsedReq.thickness,
+          width: parsedReq.width,
+          length: parsedReq.length,
+          productForm: parsedReq.productForm,
+          quantityTons: parsedReq.quantityTons,
+          unitPrice: parsedReq.unitPrice,
+          totalAmount: parsedReq.totalAmount,
+          total_amount: parsedReq.totalAmount,
+          delivery_location: parsedReq.deliveryLocation,
+          deliveryLocation: parsedReq.deliveryLocation,
+          payment_terms: parsedReq.paymentTerms,
+          paymentTerms: parsedReq.paymentTerms,
+          line_items: parsedReq.lineItems,
+          lineItems: parsedReq.lineItems,
         };
       }
 
