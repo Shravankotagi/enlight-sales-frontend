@@ -421,21 +421,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     unitPrice = parseFloat(rawVal) || 0;
   }
 
-  if (unitPrice === 0) {
-    // Official Rate Sheet Prices:
-    // HR Coil 8mm = 52,000 | HR Coil 6mm = 51,500 | MS Sheet 2mm = 54,000 | CR Sheets = 55,000 | MS Plates = 53,000
-    if (productType.toLowerCase().includes('cr') || productType.toLowerCase().includes('cold rolled')) {
-      unitPrice = 55000;
-    } else if (productType.toLowerCase().includes('ms plate') || productType.toLowerCase().includes('plate')) {
-      unitPrice = 53000;
-    } else if (productType.toLowerCase().includes('ms sheet')) {
-      unitPrice = 54000;
-    } else {
-      unitPrice = 52000; // HR Coil 8mm rate
-    }
-  }
-
-  const totalAmount = Math.round(quantityTons * unitPrice);
+  const totalAmount = unitPrice > 0 ? Math.round(quantityTons * unitPrice) : 0;
 
   // 7. Delivery Location (Capture only what is stated, never append "Warehouse")
   let deliveryLocation = aiJson.delivery_location || aiJson.deliveryLocation || '';

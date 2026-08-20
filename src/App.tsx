@@ -11,7 +11,6 @@ import InquiriesPage from './pages/InquiriesPage';
 import LogsPage from './pages/LogsPage';
 import ReportsPage from './pages/ReportsPage';
 import IntelligencePage from './pages/IntelligencePage';
-import PricingPage from './pages/PricingPage';
 import ComplaintsPage from './pages/ComplaintsPage';
 import VisitsPage from './pages/VisitsPage';
 import OrdersPage from './pages/OrdersPage';
@@ -39,7 +38,6 @@ function AppRoutes() {
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
-        <Route path="/pricing" element={<PricingPage />} />
         {isAdmin && <Route path="/admin-dashboard" element={<AdminDashboard />} />}
       </Routes>
     </Layout>

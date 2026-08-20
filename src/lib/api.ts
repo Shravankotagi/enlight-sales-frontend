@@ -106,19 +106,6 @@ export const employeesApi = {
   getAll: () => API.get('/employees'),
 };
 
-export const pricingApi = {
-  getToday: () => API.get('/pricing/today'),
-  getHistory: () => API.get('/pricing/history'),
-  getFloorMargins: () => API.get('/pricing/floor-margins'),
-  createRateSheet: (items: any[]) => API.post('/pricing/rate-sheet', { items }),
-  updateRateSheet: (id: string, items: any[]) => API.put(`/pricing/rate-sheet/${id}`, { items }),
-  lockRateSheet: (id: string) => API.post(`/pricing/rate-sheet/${id}/lock`),
-  updateFloorMargin: (id: string, floor_pct: number) =>
-    API.patch(`/pricing/floor-margins/${id}`, { floor_pct }),
-  checkMargin: (sku_text: string, quoted_price: number, rate_sheet_price: number) =>
-    API.post('/pricing/check-margin', { sku_text, quoted_price, rate_sheet_price }),
-};
-
 export const chatbotApi = {
   sendMessage: (data: { message: string; sessionId?: string }) =>
     API.post('/chat/message', data),
