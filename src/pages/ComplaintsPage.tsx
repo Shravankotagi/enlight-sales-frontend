@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, Plus, Search, CheckCircle, Clock, ShieldAlert, RefreshCw, X } from 'lucide-react';
 import { complaintsApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 
 interface Complaint {
   id: string;
@@ -25,11 +26,10 @@ export default function ComplaintsPage() {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const now = new Date();
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-    to: now.toISOString().split('T')[0]
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
   });
 
   // Form state
@@ -43,7 +43,10 @@ export default function ComplaintsPage() {
   const fetchComplaints = async () => {
     try {
       setLoading(true);
-      const res = await complaintsApi.getAll();
+      const params: any = {};
+      if (dateRange.from) params.from = dateRange.from;
+      if (dateRange.to) params.to = dateRange.to;
+      const res = await complaintsApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
       setComplaints(list);
@@ -57,7 +60,7 @@ export default function ComplaintsPage() {
 
   useEffect(() => {
     fetchComplaints();
-  }, []);
+  }, [dateRange]);
 
   const handleCreateComplaint = async (e: React.FormEvent) => {
     e.preventDefault();

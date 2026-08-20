@@ -1,5 +1,11 @@
 import { useState } from 'react';
 import { Calendar, Check, ChevronDown } from 'lucide-react';
+import {
+  formatLocalDate,
+  getFirstDayOfMonth,
+  getLastDayOfMonth,
+  getDaysAgo,
+} from '../utils/dateUtils';
 
 export type FilterPreset = '7_days' | '14_days' | 'this_month' | 'custom' | 'monthly';
 
@@ -17,28 +23,25 @@ interface DateFilterControlProps {
 }
 
 export default function DateFilterControl({ onChange, initialPreset = 'this_month' }: DateFilterControlProps) {
-  const now = new Date();
   const [preset, setPreset] = useState<FilterPreset>(initialPreset);
   const [showCustom, setShowCustom] = useState(initialPreset === 'custom');
 
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-  const todayStr = now.toISOString().split('T')[0];
+  const firstDayOfMonth = getFirstDayOfMonth();
+  const lastDayOfMonth = getLastDayOfMonth();
+  const todayStr = formatLocalDate();
 
-  const [customFrom, setCustomFrom] = useState(
-    new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString().split('T')[0]
-  );
+  const [customFrom, setCustomFrom] = useState(getDaysAgo(7));
   const [customTo, setCustomTo] = useState(todayStr);
 
   const handleSelectPreset = (newPreset: FilterPreset) => {
     setPreset(newPreset);
 
     if (newPreset === '7_days') {
-      const fromStr = new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString().split('T')[0];
+      const fromStr = getDaysAgo(7);
       setShowCustom(false);
       onChange({ preset: '7_days', from: fromStr, to: todayStr });
     } else if (newPreset === '14_days') {
-      const fromStr = new Date(now.getTime() - 14 * 24 * 3600 * 1000).toISOString().split('T')[0];
+      const fromStr = getDaysAgo(14);
       setShowCustom(false);
       onChange({ preset: '14_days', from: fromStr, to: todayStr });
     } else if (newPreset === 'this_month') {

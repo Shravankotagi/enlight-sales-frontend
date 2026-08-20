@@ -26,6 +26,7 @@ import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
+import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 import { calculatePricingSummary } from '../utils/pricingEngine';
 
 interface DealItem {
@@ -59,14 +60,10 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
 
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: firstDayOfMonth,
-    to: lastDayOfMonth,
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
   });
 
   const { data: rawOrders = [], isLoading: loading, refetch: fetchOrders } = useQuery<Order[]>({

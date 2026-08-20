@@ -4,6 +4,7 @@ import { kraApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, CheckCircle, AlertCircle, Clock, ExternalLink, X } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 
 function KRACard({ number, label, data, onClick }: { 
   number: number; label: string; data: any; onClick?: () => void;
@@ -355,11 +356,10 @@ function KRASheetModal({ kraNumber, sheet, isLoading, onClose }: { kraNumber: nu
 
 export default function KRADashboard() {
   const { effectivePhone } = useAuth();
-  const now = new Date();
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-    to: now.toISOString().split('T')[0]
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
   });
   const [activeKraModal, setActiveKraModal] = useState<number | null>(null);
 

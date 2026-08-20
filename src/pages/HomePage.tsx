@@ -11,6 +11,8 @@ import {
   CheckCircle2, ArrowRight, ChevronRight
 } from 'lucide-react';
 
+import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+
 const COLOR_MAP: Record<string, { border: string; bg: string; icon: string }> = {
   red: { border: 'border-red-200', bg: 'bg-red-50', icon: 'text-red-500' },
   orange: { border: 'border-orange-200', bg: 'bg-orange-50', icon: 'text-orange-500' },
@@ -37,12 +39,11 @@ const PRIORITY_BADGE: Record<string, string> = {
 export default function HomePage() {
   const navigate = useNavigate();
   const { employee, effectivePhone, isAdmin, viewingAs } = useAuth();
-  const now = new Date();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-    to: now.toISOString().split('T')[0]
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
   });
 
   const [activeBarHover, setActiveBarHover] = useState<number | null>(6);

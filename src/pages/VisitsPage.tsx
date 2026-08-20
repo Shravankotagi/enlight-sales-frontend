@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapPin, Plus, Search, CheckCircle2, Clock, ThumbsUp, RefreshCw, X, User, Phone, Map } from 'lucide-react';
 import { visitsApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { getFirstDayOfMonth, getLastDayOfMonth, formatLocalDate } from '../utils/dateUtils';
 
 interface CustomerVisit {
   id: string;
@@ -30,11 +31,10 @@ export default function VisitsPage() {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const now = new Date();
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-    to: now.toISOString().split('T')[0]
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
   });
 
   // Form state
@@ -45,12 +45,15 @@ export default function VisitsPage() {
   const [formOutcome, setFormOutcome] = useState('positive');
   const [formRemarks, setFormRemarks] = useState('');
   const [formFollowup, setFormFollowup] = useState('');
-  const [formVisitDate, setFormVisitDate] = useState(new Date().toISOString().split('T')[0]);
+  const [formVisitDate, setFormVisitDate] = useState(formatLocalDate());
 
   const fetchVisits = async () => {
     try {
       setLoading(true);
-      const res = await visitsApi.getAll();
+      const params: any = {};
+      if (dateRange.from) params.from = dateRange.from;
+      if (dateRange.to) params.to = dateRange.to;
+      const res = await visitsApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
       setVisits(list);
@@ -64,7 +67,7 @@ export default function VisitsPage() {
 
   useEffect(() => {
     fetchVisits();
-  }, []);
+  }, [dateRange]);
 
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();

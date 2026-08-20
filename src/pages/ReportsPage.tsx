@@ -4,18 +4,18 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
 import { TrendingUp, ShoppingBag, Package } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 
 type Tab = 'monthly' | 'funnel' | 'sku';
 
 export default function ReportsPage() {
   const { effectivePhone } = useAuth();
-  const now = new Date();
   const [tab, setTab] = useState<Tab>('monthly');
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-    to: now.toISOString().split('T')[0],
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
   });
 
   useEffect(() => {

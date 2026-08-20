@@ -10,6 +10,7 @@ import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
 import { useAuth } from '../context/AuthContext';
+import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 import {
   calculateGst,
   calculateGrandTotal,
@@ -509,14 +510,10 @@ export default function InquiriesPage() {
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
-    from: firstDayOfMonth,
-    to: lastDayOfMonth,
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
   });
 
   // Form state for Manual Log & File Upload
