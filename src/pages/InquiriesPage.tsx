@@ -1533,10 +1533,14 @@ const formatExtractedRequirementText = (extracted: any): string => {
         </div>
       </div>
 
-      {/* AI INTERPRETATION & QA AUDIT DRAWER */}
+      {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
       {selectedInquiry && editDetails && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex justify-end animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-3xl h-full overflow-y-auto shadow-2xl p-6 flex flex-col justify-between space-y-6 border-l border-slate-200">
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150"
+          onClick={() => setSelectedInquiry(null)}>
+          <div
+            className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-6 my-auto"
+            onClick={e => e.stopPropagation()}>
             <div className="space-y-6">
               {/* Drawer Header */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-200">
@@ -1623,7 +1627,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Customer / Company Name *
+                    Company Name *
                   </label>
                   <select
                     value={editDetails.companyName}
@@ -1819,7 +1823,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 type="button"
                 onClick={() => setSelectedInquiry(null)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
-                Close Drawer
+                Close Details
               </button>
 
               <div className="flex flex-wrap items-center gap-2">
