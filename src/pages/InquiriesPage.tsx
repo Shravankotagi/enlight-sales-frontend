@@ -1489,37 +1489,22 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
               {/* Editable Fields Form — Company Name, Phone always editable */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Customer / Company Name *
-                    </label>
-                    <select
-                      value={editDetails.companyName}
-                      onChange={(e) => setEditDetails({ ...editDetails, companyName: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                      {existingCustomers.map((cName) => (
-                        <option key={cName} value={cName}>{cName}</option>
-                      ))}
-                      {/* Allow the current value even if not in list */}
-                      {!existingCustomers.includes(editDetails.companyName) && editDetails.companyName && (
-                        <option value={editDetails.companyName}>{editDetails.companyName}</option>
-                      )}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Customer Phone Number
-                    </label>
-                    <input
-                      type="text"
-                      value={editDetails.customerPhone}
-                      onChange={(e) => setEditDetails({ ...editDetails, customerPhone: e.target.value })}
-                      placeholder="e.g. 9876543210"
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Customer / Company Name *
+                  </label>
+                  <select
+                    value={editDetails.companyName}
+                    onChange={(e) => setEditDetails({ ...editDetails, companyName: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
+                    {existingCustomers.map((cName) => (
+                      <option key={cName} value={cName}>{cName}</option>
+                    ))}
+                    {/* Allow the current value even if not in list */}
+                    {!existingCustomers.includes(editDetails.companyName) && editDetails.companyName && (
+                      <option value={editDetails.companyName}>{editDetails.companyName}</option>
+                    )}
+                  </select>
                 </div>
 
                 {/* Structured Inquiry Table Layout (Matching Img1 Format) */}
@@ -1639,25 +1624,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         </tr>
                       )}
                     </tbody>
-                    <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
-                      <tr className="border-b border-slate-200 text-xs">
-                        <td className="px-4 py-2 font-bold border-r border-slate-200 text-slate-700">Base Subtotal (Excl. GST)</td>
-                        <td colSpan={3} className="px-4 py-2 text-right font-bold uppercase text-slate-500 border-r border-slate-200">
-                          Base Material Amount:
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold text-slate-800 font-mono">
-                          ₹{editDetails.totalAmount.toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                      <tr className="border-b border-slate-200 text-xs bg-indigo-50/50">
-                        <td className="px-4 py-2 font-bold border-r border-slate-200 text-indigo-900">GST @ 18%</td>
-                        <td colSpan={3} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">
-                          Applicable 18% GST:
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold text-indigo-800 font-mono">
-                          + ₹{Math.round(editDetails.totalAmount * 0.18).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
+                    <tfoot className="font-bold text-slate-900 border-t border-slate-300">
                       <tr className="bg-emerald-100/90 text-emerald-950 font-black">
                         <td className="px-4 py-3 font-extrabold border-r border-emerald-300" colSpan={2}>Grand Total (Incl. 18% GST)</td>
                         <td colSpan={2} className="px-4 py-3 text-right font-black uppercase tracking-wide border-r border-emerald-300 text-xs">
