@@ -1390,15 +1390,15 @@ const formatExtractedRequirementText = (extracted: any): string => {
                           {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-bold text-slate-900">
-                        <span className="flex items-center gap-1.5 text-blue-700 group-hover:underline">
+                      <td className="px-4 py-3.5 font-bold text-slate-900 text-center">
+                        <span className="inline-flex items-center justify-center gap-1.5 text-blue-700 group-hover:underline">
                           <Building2 size={15} className="text-blue-600 flex-shrink-0" />
                           {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700">
+                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center">
                         {details.lineItems && details.lineItems.length > 0 ? (
-                          <div className="space-y-0.5">
+                          <div className="space-y-0.5 inline-block text-left">
                             {details.lineItems.slice(0, 3).map((li: LineItemDetail, liIdx: number) => (
                               <div key={liIdx} className="flex items-center gap-1 text-[11px]">
                                 <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">{liIdx + 1}</span>
@@ -1407,11 +1407,11 @@ const formatExtractedRequirementText = (extracted: any): string => {
                               </div>
                             ))}
                             {details.lineItems.length > 3 && (
-                              <span className="text-[10px] text-blue-500 font-semibold">+{details.lineItems.length - 3} more items</span>
+                              <span className="text-[10px] text-blue-500 font-semibold block text-center">+{details.lineItems.length - 3} more items</span>
                             )}
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1 text-[11px]">
+                          <div className="inline-flex items-center justify-center gap-1 text-[11px]">
                             <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">1</span>
                             <span className="font-medium text-slate-800 truncate max-w-[160px]">{details.productType || 'Hot Rolled'}</span>
                             <span className="text-slate-400 font-mono whitespace-nowrap">{details.quantityTons || 0} MT</span>
