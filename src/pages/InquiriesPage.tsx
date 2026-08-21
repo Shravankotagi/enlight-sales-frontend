@@ -3,14 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
-  Calendar, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown, Trash2, Sparkles, User
+  Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown, Trash2, Sparkles, User, Edit3
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
-import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
 import { useAuth } from '../context/AuthContext';
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import {
   calculateLineItems,
   calculateSubtotal,
@@ -662,11 +662,47 @@ export default function InquiriesPage() {
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
+  const [dayPreset, setDayPreset] = useState<string>('30_days');
+  const [customFrom, setCustomFrom] = useState(getDaysAgo(30));
+  const [customTo, setCustomTo] = useState(formatLocalDate());
+  const [showCustomDate, setShowCustomDate] = useState(false);
+
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days' as any,
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
+
+  const handleDayPresetChange = (preset: string) => {
+    setDayPreset(preset);
+    const today = formatLocalDate();
+    if (preset === 'today') {
+      setShowCustomDate(false);
+      setDateRange({ preset: 'today' as any, from: today, to: today });
+    } else if (preset === '7_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '7_days' as any, from: getDaysAgo(7), to: today });
+    } else if (preset === '30_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '30_days' as any, from: getDaysAgo(30), to: today });
+    } else if (preset === '90_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '90_days' as any, from: getDaysAgo(90), to: today });
+    } else if (preset === 'custom') {
+      setShowCustomDate(true);
+      setDateRange({ preset: 'custom', from: customFrom, to: customTo });
+    }
+  };
+
+  const handleCustomFromChange = (val: string) => {
+    setCustomFrom(val);
+    setDateRange({ preset: 'custom', from: val, to: customTo });
+  };
+
+  const handleCustomToChange = (val: string) => {
+    setCustomTo(val);
+    setDateRange({ preset: 'custom', from: customFrom, to: val });
+  };
 
   // Form state for Manual Log & File Upload
   const [formRawInquiryText, setFormRawInquiryText] = useState('');
@@ -1383,9 +1419,14 @@ export default function InquiriesPage() {
     return ['review', 'needs_review', 'pending', 'new', 'draft'].includes(st);
   }).length;
 
-  const processedCount = activeInquiryList.filter(i => {
+  const savedCount = activeInquiryList.filter(i => {
     const st = (i?.status || '').toLowerCase();
-    return ['processed', 'confirmed', 'quoted', 'won', 'auto_created', 'order_created', 'closed'].includes(st);
+    return ['processed', 'confirmed', 'won', 'auto_created', 'order_created', 'quotation_ready'].includes(st);
+  }).length;
+
+  const quotedCount = activeInquiryList.filter(i => {
+    const st = (i?.status || '').toLowerCase();
+    return st === 'quoted' || st === 'quotation_sent';
   }).length;
 
   const filtered = activeInquiryList.filter(i => {
@@ -1437,12 +1478,14 @@ export default function InquiriesPage() {
 
       const statusStr = (i?.status || 'review').toLowerCase();
       const isReview = ['review', 'needs_review', 'pending', 'new', 'draft'].includes(statusStr);
-      const isProcessed = ['processed', 'confirmed', 'quoted', 'won', 'auto_created', 'order_created', 'closed'].includes(statusStr);
+      const isSaved = ['processed', 'confirmed', 'won', 'auto_created', 'order_created', 'quotation_ready'].includes(statusStr);
+      const isQuoted = statusStr === 'quoted' || statusStr === 'quotation_sent';
 
       const matchesStatus =
         filterStatus === 'all' ||
         (filterStatus === 'review' && isReview) ||
-        (filterStatus === 'processed' && isProcessed);
+        (filterStatus === 'saved' && isSaved) ||
+        (filterStatus === 'quoted' && isQuoted);
 
       return matchesSearch && matchesStatus;
     } catch {
@@ -1493,12 +1536,9 @@ export default function InquiriesPage() {
             <FileText className="text-blue-600" size={28} />
             Inquiries &amp; Quotations Management
           </h1>
-          
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <DateFilterControl onChange={setDateRange} initialPreset="this_month" />
-
           <button
             onClick={() => navigate('/orders')}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs">
@@ -1519,31 +1559,73 @@ export default function InquiriesPage() {
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="relative w-full sm:w-96">
-          <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-          <input
-            type="text"
-            placeholder="Search by Received Date, Customer / Company Name, Items Summary..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
-          />
+      {/* Filter & Search Bar - Compact Single Row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* 1. Compact Search Bar */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+            <input
+              type="text"
+              placeholder="Search Customer, Items, Date..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
+            />
+          </div>
+
+          {/* 2. Days Filter Dropdown */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+            <select
+              value={dayPreset}
+              onChange={(e) => handleDayPresetChange(e.target.value)}
+              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
+            >
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 3. Status Dropdown */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
+            >
+              <option value="all">All ({activeInquiryList.length})</option>
+              <option value="review">Review ({reviewCount})</option>
+              <option value="saved">Saved ({savedCount})</option>
+              <option value="quoted">Quotation Sent ({quotedCount})</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
         </div>
 
-        <div className="relative inline-flex items-center w-full sm:w-auto">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-          >
-            <option value="all">All Inquiries ({productInquiries.length})</option>
-            <option value="review">Needs Review ({reviewCount}) ⏳</option>
-            <option value="processed">Quotation Ready ({processedCount}) ✓</option>
-          </select>
-          <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-        </div>
+        {/* Custom Range Picker Inputs */}
+        {showCustomDate && (
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs">
+            <span className="text-slate-500 font-semibold">From:</span>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={e => handleCustomFromChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
+            />
+            <span className="text-slate-500 font-semibold">To:</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={e => handleCustomToChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
+            />
+          </div>
+        )}
       </div>
 
       {/* Main Inquiries Table */}
@@ -1554,7 +1636,7 @@ export default function InquiriesPage() {
               <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 <th className="px-4 py-3 text-center w-12">#</th>
                 <th className="px-4 py-3 text-left">Customer &amp; Date</th>
-                <th className="px-4 py-3 text-left">Items Summary</th>
+                <th className="px-4 py-3 text-center">Items Summary</th>
                 <th className="px-4 py-3 text-center">Source Channel</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Actions</th>
@@ -1600,16 +1682,16 @@ export default function InquiriesPage() {
                   const st = (inq.status || '').toLowerCase();
                   const isQuoted = st === 'quoted';
                   const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won';
+                  const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
 
                   return (
                     <tr
                       key={inq.id || idx}
-                      onClick={() => handleOpenDrawer(inq)}
-                      className="hover:bg-blue-50/50 transition-colors cursor-pointer group">
+                      className="hover:bg-slate-50/75 transition-colors">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
                       <td className="px-4 py-3.5 text-left min-w-[200px]">
                         <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                          <Building2 size={15} className="text-slate-700 flex-shrink-0" />
+                          <Building2 size={15} className="text-slate-700 shrink-0" />
                           <span>{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
                         </div>
                         <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
@@ -1617,38 +1699,13 @@ export default function InquiriesPage() {
                           <span>{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 text-left">
-                        {details.lineItems && details.lineItems.length > 0 ? (
-                          <div className="space-y-0.5 inline-block text-left">
-                            {details.lineItems.slice(0, 3).map((li: LineItemDetail, liIdx: number) => (
-                              <div key={liIdx} className="flex items-center gap-1 text-[11px]">
-                                <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">{liIdx + 1}</span>
-                                <span className="font-medium text-slate-800 truncate max-w-[160px]">{li.sku_text}</span>
-                                <span className="text-slate-400 font-mono whitespace-nowrap">{li.quantity} {li.unit || 'MT'}</span>
-                              </div>
-                            ))}
-                            {details.lineItems.length > 3 && (
-                              <span className="text-[10px] text-blue-500 font-semibold block text-center">+{details.lineItems.length - 3} more items</span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="inline-flex items-center justify-center gap-1 text-[11px]">
-                            <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">1</span>
-                            <span className="font-medium text-slate-800 truncate max-w-[160px]">{details.productType || 'Hot Rolled'}</span>
-                            <span className="text-slate-400 font-mono whitespace-nowrap">{details.quantityTons || 0} {details.lineItems?.[0]?.unit || 'MT'}</span>
-                          </div>
-                        )}
+                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
+                        {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
                       </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
-                          (inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
-                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                        }`}>
-                          {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
-                            ? 'Dashboard'
-                            : 'WhatsApp'}
-                        </span>
+                      <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
+                        {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
+                          ? 'Dashboard'
+                          : 'WhatsApp'}
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         {(inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') ? (
@@ -1670,17 +1727,24 @@ export default function InquiriesPage() {
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setQuotationViewInquiry(inq);
-                            setQuotationViewDetails(details);  // reuse `details` from the row
-                            setShowQuotationView(true);
-                          }}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 mx-auto">
-                          <Eye size={13} /> Final Quotation
-                        </button>
+                        <div className="inline-flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDrawer(inq)}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5">
+                            <Edit3 size={13} className="text-slate-500" /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuotationViewInquiry(inq);
+                              setQuotationViewDetails(details);
+                              setShowQuotationView(true);
+                            }}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5">
+                            <Eye size={13} /> Final Quotation
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1707,10 +1771,7 @@ export default function InquiriesPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    Inquiry AI Interpretation &amp; Audit
-                    <span className="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full flex items-center gap-1">
-                      <ShieldCheck size={12} /> 92% AI Confidence
-                    </span>
+                    Inquiry &amp; Audit
                   </h2>
                   <p className="text-xs text-slate-500 font-mono mt-0.5">
                     ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()}
@@ -1729,10 +1790,7 @@ export default function InquiriesPage() {
 
               {/* Extracted Customer Inquiry Table Header + Action Buttons */}
               <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Building2 size={16} className="text-blue-600" />
-                  Pre-filled &amp; Extracted Customer Inquiry Table
-                </h3>
+                
 
                 <div className="flex items-center gap-2">
                   <input
@@ -1799,9 +1857,7 @@ export default function InquiriesPage() {
                     <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs">
                       <User size={15} className="text-blue-600 shrink-0" />
                       <span className="truncate">{activeSalespersonName}</span>
-                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 ml-auto shrink-0">
-                        Active Session
-                      </span>
+                      
                     </div>
                   </div>
                 </div>
