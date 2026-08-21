@@ -1571,12 +1571,12 @@ export default function InquiriesPage() {
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-3 py-3 text-center w-12">#</th>
-              <th className="px-5 py-3 text-left w-[36%]">Customer &amp; Date</th>
-              <th className="px-4 py-3 text-center w-[16%]">Items Summary</th>
-              <th className="px-4 py-3 text-center w-[16%]">Source Channel</th>
-              <th className="px-4 py-3 text-center w-[18%]">Status</th>
-              <th className="px-3 py-3 text-center w-20">Actions</th>
+              <th className="px-3 py-3.5 text-center w-[5%]">#</th>
+              <th className="px-5 py-3.5 text-left w-[27%]">Customer &amp; Date</th>
+              <th className="px-4 py-3.5 text-center w-[17%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[17%]">Source Channel</th>
+              <th className="px-4 py-3.5 text-center w-[20%]">Status</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -1660,7 +1660,7 @@ export default function InquiriesPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-3.5 text-center whitespace-nowrap">
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
