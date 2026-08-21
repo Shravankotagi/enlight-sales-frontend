@@ -646,8 +646,13 @@ export default function InquiriesPage() {
   const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
+  const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
+  const [pdfModalDetails, setPdfModalDetails] = useState<ExtractedDetails | null>(null);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [shareInquiry, setShareInquiry] = useState<InquiryItem | null>(null);
+  const [shareDetails, setShareDetails] = useState<ExtractedDetails | null>(null);
   const [quotationEmail, setQuotationEmail] = useState('shravankotagi314@gmail.com');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
@@ -795,6 +800,7 @@ export default function InquiriesPage() {
   const handleOpenDrawer = (inq: InquiryItem) => {
     setSelectedInquiry(inq);
     setDrawerFileBase64(null);
+    setShowEditDrawer(true);
 
     const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
     const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
@@ -849,6 +855,13 @@ export default function InquiriesPage() {
 
     setSaveSuccess(isConfirmedState);
     setIsQuotationSent(isQuotedState);
+  };
+
+  const handleCloseDrawer = () => {
+    setShowEditDrawer(false);
+    setSelectedInquiry(null);
+    setEditDetails(null);
+    setDrawerFileBase64(null);
   };
 
   useEffect(() => {
@@ -1442,23 +1455,17 @@ export default function InquiriesPage() {
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => navigate('/orders')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs">
-            <ShoppingBag size={15} className="text-emerald-600" /> View Confirmed Orders / POs 📦
-          </button>
-
-          <button
-            onClick={() => fetchMonthlyInquiries()}
-            className="p-2 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors shadow-2xs">
-            <RefreshCw size={16} className={loading ? 'animate-spin text-blue-600' : ''} />
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
+            <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders / POs 📦
           </button>
 
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
-            <Plus size={16} /> Log New Inquiry / PO
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+            <Plus size={15} /> Log New Inquiry / PO
           </button>
         </div>
       </div>
@@ -1535,15 +1542,15 @@ export default function InquiriesPage() {
       {/* Main Inquiries Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full table-fixed min-w-[900px] text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="px-4 py-3 text-center w-12">#</th>
-                <th className="px-5 py-3 text-left min-w-[220px]">Customer &amp; Date</th>
-                <th className="px-4 py-3 text-center w-32">Items Summary</th>
-                <th className="px-4 py-3 text-center w-32">Source Channel</th>
-                <th className="px-4 py-3 text-center w-36">Status</th>
-                <th className="px-5 py-3 text-center min-w-[370px]">Actions</th>
+                <th className="px-3 py-3 text-center w-12">#</th>
+                <th className="px-5 py-3 text-left w-[28%]">Customer &amp; Date</th>
+                <th className="px-4 py-3 text-center w-[14%]">Items Summary</th>
+                <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
+                <th className="px-4 py-3 text-center w-[16%]">Status</th>
+                <th className="px-5 py-3 text-center w-[28%] min-w-[370px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -1592,15 +1599,15 @@ export default function InquiriesPage() {
                     <tr
                       key={inq.id || idx}
                       className="hover:bg-slate-50/75 transition-colors">
-                      <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
-                      <td className="px-5 py-3.5 text-left min-w-[220px]">
+                      <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
+                      <td className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                           <Building2 size={15} className="text-slate-700 shrink-0" />
-                          <span>{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
+                          <span className="truncate">{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
                         </div>
                         <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
                           <Calendar size={12} className="text-slate-400 shrink-0" />
-                          <span>{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
+                          <span className="font-mono">{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
@@ -1630,16 +1637,20 @@ export default function InquiriesPage() {
                         <div className="inline-flex items-center justify-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleOpenDrawer(inq)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDrawer(inq);
+                            }}
                             className="w-[115px] h-[32px] px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 shrink-0">
                             <Edit3 size={13} className="text-slate-500 shrink-0" /> Edit
                           </button>
 
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedInquiry(inq);
-                              setEditDetails(details);
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPdfModalInquiry(inq);
+                              setPdfModalDetails(details);
                               setShowPdfModal(true);
                             }}
                             className="w-[115px] h-[32px] px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 shrink-0">
@@ -1648,9 +1659,10 @@ export default function InquiriesPage() {
 
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedInquiry(inq);
-                              setEditDetails(details);
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShareInquiry(inq);
+                              setShareDetails(details);
                               setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
                               setShowQuotationModal(true);
                             }}
@@ -1669,10 +1681,10 @@ export default function InquiriesPage() {
       </div>
 
       {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
-      {selectedInquiry && editDetails && (
+      {showEditDrawer && selectedInquiry && editDetails && (
         <div
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-150"
-          onClick={() => setSelectedInquiry(null)}>
+          onClick={handleCloseDrawer}>
           <div
             className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto"
             onClick={e => e.stopPropagation()}>
@@ -1692,7 +1704,7 @@ export default function InquiriesPage() {
                 </div>
               </div>
               <button
-                onClick={() => setSelectedInquiry(null)}
+                onClick={handleCloseDrawer}
                 className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
                 <X size={20} />
               </button>
@@ -2042,7 +2054,11 @@ export default function InquiriesPage() {
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
               <button
                 type="button"
-                onClick={() => setShowPdfModal(true)}
+                onClick={() => {
+                  setPdfModalInquiry(selectedInquiry);
+                  setPdfModalDetails(editDetails);
+                  setShowPdfModal(true);
+                }}
                 className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
                 <Eye size={15} /> View PDF 📄
               </button>
@@ -2071,7 +2087,12 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
-                onClick={() => setShowQuotationModal(true)}
+                onClick={() => {
+                  setShareInquiry(selectedInquiry);
+                  setShareDetails(editDetails);
+                  setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || 'shravankotagi314@gmail.com');
+                  setShowQuotationModal(true);
+                }}
                 className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
                   ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
                     ? 'bg-emerald-600 hover:bg-emerald-700'
@@ -2093,11 +2114,15 @@ export default function InquiriesPage() {
       )}
 
       {/* Inquiry Quotation PDF Preview Modal */}
-      {showPdfModal && editDetails && selectedInquiry && (
+      {showPdfModal && pdfModalDetails && pdfModalInquiry && (
         <InquiryPdfModal
-          inquiry={selectedInquiry}
-          details={editDetails}
-          onClose={() => setShowPdfModal(false)}
+          inquiry={pdfModalInquiry}
+          details={pdfModalDetails}
+          onClose={() => {
+            setShowPdfModal(false);
+            setPdfModalInquiry(null);
+            setPdfModalDetails(null);
+          }}
         />
       )}
 
@@ -2187,7 +2212,7 @@ export default function InquiriesPage() {
       )}
 
       {/* Send Official Quotation Email Modal (Resend API Integration) */}
-      {showQuotationModal && editDetails && selectedInquiry && (
+      {showQuotationModal && shareDetails && shareInquiry && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
@@ -2196,17 +2221,22 @@ export default function InquiriesPage() {
                 Send Price Quotation (Resend API)
               </h2>
               <button
-                onClick={() => setShowQuotationModal(false)}
+                onClick={() => {
+                  setShowQuotationModal(false);
+                  setShareInquiry(null);
+                  setShareDetails(null);
+                  setResendNotice('');
+                }}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
                 <X size={20} />
               </button>
             </div>
 
             {(() => {
-              const activeLineItems = editDetails.lineItems && editDetails.lineItems.length > 0
-                ? editDetails.lineItems
-                : [{ sku_text: editDetails.productType || '', quantity: editDetails.quantityTons, unit: 'MT', rate: editDetails.unitPrice, amount: editDetails.totalAmount }];
-              const subtotal = activeLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
+              const activeLineItems = shareDetails.lineItems && shareDetails.lineItems.length > 0
+                ? shareDetails.lineItems
+                : [{ sku_text: shareDetails.productType || '', quantity: shareDetails.quantityTons, unit: 'MT', rate: shareDetails.unitPrice, amount: shareDetails.totalAmount }];
+              const subtotal = activeLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || shareDetails.totalAmount || 0;
               const qBreakdown = calculateQuotationBreakdown(subtotal);
               const summaryItemsText = activeLineItems.map(i => `${i.sku_text || 'Item'} (${i.quantity} ${i.unit || 'MT'})`).join(' · ');
 
@@ -2221,7 +2251,7 @@ export default function InquiriesPage() {
                     <span>CGST: {qBreakdown.formattedCGST} | SGST: {qBreakdown.formattedSGST}</span>
                   </div>
                   <p className="text-slate-700 font-mono text-[11px]">
-                    {editDetails.companyName} · {summaryItemsText || `${editDetails.productType} (${editDetails.quantityTons} MT)`}
+                    {shareDetails.companyName} · {summaryItemsText || `${shareDetails.productType} (${shareDetails.quantityTons} MT)`}
                   </p>
                   <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
                     📄 <span><strong>Official PDF Quotation:</strong> The formatted PDF document will be generated and attached to this email.</span>
@@ -2265,7 +2295,12 @@ export default function InquiriesPage() {
             <div className="pt-2 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setShowQuotationModal(false)}
+                onClick={() => {
+                  setShowQuotationModal(false);
+                  setShareInquiry(null);
+                  setShareDetails(null);
+                  setResendNotice('');
+                }}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
                 Cancel
               </button>
@@ -2278,18 +2313,19 @@ export default function InquiriesPage() {
                     setSendingQuotation(true);
                     setResendNotice('');
                     const targetEmail = quotationEmail.trim() || 'shravankotagi314@gmail.com';
-                    const res = await inquiriesApi.sendQuotation(selectedInquiry.id, {
+                    const res = await inquiriesApi.sendQuotation(shareInquiry.id, {
                       customer_email: targetEmail,
-                      customer_name: editDetails.companyName,
-                      details: editDetails
+                      customer_name: shareDetails.companyName,
+                      details: shareDetails
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
                     setResendNotice(msg);
                     setIsQuotationSent(true);
-                    setSelectedInquiry(prev => prev ? { ...prev, status: 'quoted' } : null);
                     if (res?.data?.email_sent !== false) {
                       setTimeout(() => {
                         setShowQuotationModal(false);
+                        setShareInquiry(null);
+                        setShareDetails(null);
                         setResendNotice('');
                         fetchMonthlyInquiries();
                       }, 2500);
