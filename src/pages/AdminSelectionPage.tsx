@@ -753,9 +753,9 @@ export default function AdminSelectionPage() {
                     }
                     className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
                   >
-                    <option value="salesperson">💼 Salesperson (Standard Access)</option>
-                    <option value="sales_manager">👔 Sales Manager (Team Scoped Access)</option>
-                    <option value="admin">👑 Admin (Full Company Access & Management)</option>
+                    <option value="salesperson"> Salesperson (Standard Access)</option>
+                    <option value="sales_manager"> Sales Manager (Team Scoped Access)</option>
+                    <option value="admin"> Admin (Full Company Access & Management)</option>
                   </select>
                 </div>
 

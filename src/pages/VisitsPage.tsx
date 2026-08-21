@@ -398,9 +398,9 @@ export default function VisitsPage() {
             onChange={e => setFilterOutcome(e.target.value)}
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
             <option value="all">All Outcomes</option>
-            <option value="positive">Positive 🟢</option>
-            <option value="neutral">Neutral / Discussion 🟡</option>
-            <option value="negative">Not Interested 🔴</option>
+            <option value="positive">Positive </option>
+            <option value="neutral">Neutral / Discussion </option>
+            <option value="negative">Not Interested </option>
           </select>
         </div>
       </div>
@@ -509,15 +509,15 @@ export default function VisitsPage() {
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         {outcomeLower === 'positive' ? (
                           <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
-                            Positive 🟢
+                            Positive 
                           </span>
                         ) : outcomeLower === 'neutral' ? (
                           <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 inline-flex items-center gap-1">
-                            Neutral 🟡
+                            Neutral 
                           </span>
                         ) : (
                           <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800 inline-flex items-center gap-1">
-                            Closed 🔴
+                            Closed 
                           </span>
                         )}
                       </td>
@@ -533,7 +533,7 @@ export default function VisitsPage() {
                       <td className="px-4 py-3.5 text-xs whitespace-normal min-w-[160px]">
                         {followUp && followUp !== '-' ? (
                           <span className="font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 text-xs">
-                            📅 {followUp}
+                             {followUp}
                           </span>
                         ) : (
                           <span className="text-slate-400">-</span>
@@ -631,9 +631,9 @@ export default function VisitsPage() {
                     value={formOutcome}
                     onChange={e => setFormOutcome(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
-                    <option value="positive">Positive 🟢</option>
-                    <option value="neutral">Neutral 🟡</option>
-                    <option value="negative">Negative 🔴</option>
+                    <option value="positive">Positive </option>
+                    <option value="neutral">Neutral </option>
+                    <option value="negative">Negative </option>
                   </select>
                 </div>
 
@@ -704,7 +704,7 @@ export default function VisitsPage() {
                               year: 'numeric',
                             })
                           : 'Recent Visit'}
-                        {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
+                        {selectedVisit.location && <span>• {selectedVisit.location}</span>}
                         {canViewSalesperson && getSalespersonDisplayName(selectedVisit) && (
                           <span>• Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedVisit)}</strong></span>
                         )}
@@ -756,15 +756,15 @@ export default function VisitsPage() {
                   <span className="text-xs font-semibold text-slate-600">Visit Outcome Status:</span>
                   {getNormalizedOutcome(selectedVisit) === 'positive' ? (
                     <span className="px-3 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                      <ThumbsUp size={12} /> Positive 🟢
+                      <ThumbsUp size={12} /> Positive 
                     </span>
                   ) : getNormalizedOutcome(selectedVisit) === 'neutral' ? (
                     <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
-                      <Clock size={12} /> Neutral / Discussion 🟡
+                      <Clock size={12} /> Neutral / Discussion 
                     </span>
                   ) : (
                     <span className="px-3 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Closed / Red 🔴
+                      <CheckCircle2 size={12} /> Closed / Red 
                     </span>
                   )}
                 </div>
@@ -896,9 +896,9 @@ export default function VisitsPage() {
                       value={editOutcome}
                       onChange={e => setEditOutcome(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
-                      <option value="positive">Positive 🟢</option>
-                      <option value="neutral">Neutral 🟡</option>
-                      <option value="negative">Negative 🔴</option>
+                      <option value="positive">Positive </option>
+                      <option value="neutral">Neutral </option>
+                      <option value="negative">Negative </option>
                     </select>
                   </div>
 

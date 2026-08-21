@@ -1486,7 +1486,7 @@ export default function InquiriesPage() {
           <button
             onClick={() => navigate('/orders')}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
-            <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders / POs 📦
+            <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders / POs 
           </button>
 
           <button
@@ -1648,15 +1648,15 @@ export default function InquiriesPage() {
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {isQuoted ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                          <CheckCircle size={12} /> Quotation Sent 📄
+                          <CheckCircle size={12} /> Quotation Sent 
                         </span>
                       ) : isConfirmed ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                          <CheckCircle size={12} /> Saved ✓
+                          <CheckCircle size={12} /> Saved 
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                          <Clock size={12} /> Review ⏳
+                          <Clock size={12} /> Review
                         </span>
                       )}
                     </td>
@@ -1705,7 +1705,7 @@ export default function InquiriesPage() {
                                   }}
                                   className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200/80 text-left">
                                   <Eye size={14} className="text-slate-500 shrink-0" />
-                                  <span>Final Quotation</span>
+                                  <span>View PDF </span>
                                 </button>
 
                                 <button
@@ -1855,7 +1855,7 @@ export default function InquiriesPage() {
                     type="button"
                     onClick={() => handleViewInquiryDocument(selectedInquiry)}
                     className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5">
-                    <Eye size={14} /> View Original Inquiry 👁️
+                    <Eye size={14} /> View Original Inquiry 
                   </button>
                 </div>
               </div>
@@ -2215,7 +2215,7 @@ export default function InquiriesPage() {
                     setShowPdfModal(true);
                   }}
                   className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
-                  <Eye size={15} /> View PDF 📄
+                  <Eye size={15} /> View PDF 
                 </button>
               )}
 
@@ -2257,11 +2257,11 @@ export default function InquiriesPage() {
                   }`}>
                   {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
                     <>
-                      <Check size={15} /> Quotation Sent ✓
+                      <Check size={15} /> Quotation Sent 
                     </>
                   ) : (
                     <>
-                      <Send size={15} /> Send Quotation ✉️
+                      <Send size={15} /> Send Quotation 
                     </>
                   )}
                 </button>
@@ -2412,7 +2412,7 @@ export default function InquiriesPage() {
                     {shareDetails.companyName} · {summaryItemsText || `${shareDetails.productType} (${shareDetails.quantityTons} MT)`}
                   </p>
                   <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
-                    📄 <span><strong>Official PDF Quotation:</strong> The formatted PDF document will be generated and attached to this email.</span>
+                     <span><strong>Official PDF Quotation:</strong> The formatted PDF document will be generated and attached to this email.</span>
                   </div>
                 </div>
               );
@@ -2432,7 +2432,7 @@ export default function InquiriesPage() {
               </div>
 
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed font-medium">
-                ⚡ <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>shravankotagi314@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
+                 <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>shravankotagi314@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
               </div>
 
               {resendNotice && (

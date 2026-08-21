@@ -453,13 +453,13 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 onClick={() => handleStageChange('won')}
                 className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
               >
-                ✓ Won
+                 Won
               </button>
               <button
                 onClick={() => setShowLostModal(true)}
                 className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
-                ✗ Lost
+                 Lost
               </button>
             </div>
           </div>
@@ -538,7 +538,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 </div>
               )}
               <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
-                ⚠️ All items, payments, and metrics for this deal will be deleted from the database and dashboard.
+                 All items, payments, and metrics for this deal will be deleted from the database and dashboard.
               </p>
             </div>
 

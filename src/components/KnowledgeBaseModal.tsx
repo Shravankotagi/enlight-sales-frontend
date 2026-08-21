@@ -494,16 +494,16 @@ export default function KnowledgeBaseModal({
                   className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">
-                    🟢 All Employees (Public SOPs, Product Specifications, FAQs)
+                     All Employees (Public SOPs, Product Specifications, FAQs)
                   </option>
                   <option value="salesperson">
-                    🔵 Sales Reps & Above (Commercial terms, Quote policies)
+                     Sales Reps & Above (Commercial terms, Quote policies)
                   </option>
                   <option value="manager">
-                    🟣 Managers & Admins (Approval thresholds, Sales coaching)
+                     Managers & Admins (Approval thresholds, Sales coaching)
                   </option>
                   <option value="admin_only">
-                    🔒 Admin Only (Executive strategy, Costing formulas)
+                     Admin Only (Executive strategy, Costing formulas)
                   </option>
                 </select>
               </div>

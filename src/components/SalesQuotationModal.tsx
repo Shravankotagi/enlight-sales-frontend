@@ -162,7 +162,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
 
             <div className="text-right">
               <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-full border border-emerald-200 mb-1">
-                ✓ CONFIRMED ORDER &amp; QUOTATION
+                 CONFIRMED ORDER &amp; QUOTATION
               </span>
               <p className="text-xs text-slate-500 font-medium">PO Number: <span className="font-bold text-slate-800">{poNumber}</span></p>
               <p className="text-xs text-slate-500">Order Date: <span className="font-semibold text-slate-700">{orderDate}</span></p>

@@ -354,7 +354,7 @@ export default function PipelinePage() {
                 </div>
               )}
               <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
-                ⚠️ All line items, payment tracking records, and KRA logs tied to this deal will be permanently removed from the database and dashboard.
+                 All line items, payment tracking records, and KRA logs tied to this deal will be permanently removed from the database and dashboard.
               </p>
             </div>
 

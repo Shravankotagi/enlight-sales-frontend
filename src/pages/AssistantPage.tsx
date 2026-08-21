@@ -185,7 +185,7 @@ export default function AssistantPage() {
       const errAsstMsg: ChatMessage = {
         id: 'err-' + Date.now(),
         role: 'assistant',
-        content: `⚠️ ${errReply}`,
+        content: ` ${errReply}`,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errAsstMsg]);

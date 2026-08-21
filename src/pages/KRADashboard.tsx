@@ -134,13 +134,13 @@ function KRACard({ number, label, data, onClick }: {
             <span className="text-gray-500">Logged via Bot</span>
             <span className="font-semibold">{data.logged_via_bot}</span>
           </div>
-          <p className="text-xs text-green-600 mt-1">✅ Auto-tracked via WhatsApp</p>
+          <p className="text-xs text-green-600 mt-1"> Auto-tracked via WhatsApp</p>
         </div>
       );
       case 7: return (
         <div className="text-sm">
           {data.rejections === 0 ? (
-            <p className="text-green-600 font-semibold">✅ Zero rejections!</p>
+            <p className="text-green-600 font-semibold"> Zero rejections!</p>
           ) : (
             <div className="flex justify-between">
               <span className="text-gray-500">Rejections</span>

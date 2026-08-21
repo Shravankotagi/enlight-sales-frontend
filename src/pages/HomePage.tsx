@@ -233,7 +233,7 @@ export default function HomePage() {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
-                {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}! 👋
+                {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}! 
               </h1>
               {isAdmin && !viewingAs ? (
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
@@ -353,7 +353,7 @@ export default function HomePage() {
           </div>
           <div className="mt-4">
             <h3 className={`text-2xl font-black tracking-tight ${overdueVal > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
-              {overdueVal > 0 ? `₹${overdueVal.toLocaleString('en-IN')}` : 'Zero Overdue 🎉'}
+              {overdueVal > 0 ? `₹${overdueVal.toLocaleString('en-IN')}` : 'Zero Overdue '}
             </h3>
             <div className="flex items-center gap-1.5 mt-2">
               {overdueVal > 0 ? (

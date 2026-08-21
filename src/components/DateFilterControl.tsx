@@ -27,7 +27,7 @@ export type FilterPreset =
 export type DateFilterRange = {
   preset: FilterPreset;
   from?: string; // YYYY-MM-DD
-  to?: string;   // YYYY-MM-DD
+  to?: string; // YYYY-MM-DD
   month?: number; // 0-11
   year?: number;
 };

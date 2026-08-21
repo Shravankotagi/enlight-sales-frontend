@@ -107,7 +107,7 @@ export default function IntelligencePage() {
                 <span className="w-2 h-2 rounded-full bg-red-500" /> High Risk - {highRisk.length} customers
               </h3>
               {highRisk.length === 0 ? (
-                <p className="text-gray-400 text-sm">No high risk customers 🎉</p>
+                <p className="text-gray-400 text-sm">No high risk customers </p>
               ) : (
                 <div className="border rounded-xl overflow-hidden">
                   <table className="w-full text-sm">

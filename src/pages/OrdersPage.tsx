@@ -392,7 +392,7 @@ export default function OrdersPage() {
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
 
-      toast.success('🎉 Order Confirmed & Won! Sales Achievement & Payment tracking updated.');
+      toast.success(' Order Confirmed & Won! Sales Achievement & Payment tracking updated.');
       setShowModal(false);
 
       setFormCustomerName('');
@@ -701,7 +701,7 @@ export default function OrdersPage() {
                     {selectedDrawerOrder.customer_name || 'Customer Order'}
                   </h2>
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                    <CheckCircle size={12} /> Won / Confirmed 🎉
+                    <CheckCircle size={12} /> Won / Confirmed 
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
@@ -724,7 +724,7 @@ export default function OrdersPage() {
                   <button
                     onClick={() => handleViewPoDocument(selectedDrawerOrder)}
                     className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs">
-                    <ImageIcon size={14} /> View Original PO Image 📄
+                    <ImageIcon size={14} /> View Original PO Image 
                   </button>
                 )}
                 <button

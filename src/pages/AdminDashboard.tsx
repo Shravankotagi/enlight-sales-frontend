@@ -108,10 +108,10 @@ export default function AdminDashboard() {
     setSyncMsg(null);
     try {
       await axios.get('https://enlight-sales-bot-production.up.railway.app/bigin-sync');
-      setSyncMsg({ text: '✅ Database records & live deals pushed to Zoho Bigin CRM successfully!', type: 'success' });
+      setSyncMsg({ text: ' Database records & live deals pushed to Zoho Bigin CRM successfully!', type: 'success' });
       handleRefreshAll();
     } catch (err: any) {
-      setSyncMsg({ text: `❌ Push failed: ${err.message || 'Error pushing to Bigin'}`, type: 'error' });
+      setSyncMsg({ text: ` Push failed: ${err.message || 'Error pushing to Bigin'}`, type: 'error' });
     } finally {
       setIsPushing(false);
       setTimeout(() => setSyncMsg(null), 6000);
@@ -123,10 +123,10 @@ export default function AdminDashboard() {
     setSyncMsg(null);
     try {
       await axios.get('https://enlight-sales-bot-production.up.railway.app/bigin-import');
-      setSyncMsg({ text: '📥 Contacts & active deals pulled from Zoho Bigin CRM to Database!', type: 'success' });
+      setSyncMsg({ text: ' Contacts & active deals pulled from Zoho Bigin CRM to Database!', type: 'success' });
       handleRefreshAll();
     } catch (err: any) {
-      setSyncMsg({ text: `❌ Pull failed: ${err.message || 'Error pulling from Bigin'}`, type: 'error' });
+      setSyncMsg({ text: ` Pull failed: ${err.message || 'Error pulling from Bigin'}`, type: 'error' });
     } finally {
       setIsPulling(false);
       setTimeout(() => setSyncMsg(null), 6000);
@@ -302,7 +302,7 @@ export default function AdminDashboard() {
             : 'bg-red-50 text-red-800 border-red-200'
         }`}>
           <span className="flex items-center gap-2">{syncMsg.text}</span>
-          <button onClick={() => setSyncMsg(null)} className="font-black opacity-70 hover:opacity-100 ml-3">✕</button>
+          <button onClick={() => setSyncMsg(null)} className="font-black opacity-70 hover:opacity-100 ml-3"></button>
         </div>
       )}
 

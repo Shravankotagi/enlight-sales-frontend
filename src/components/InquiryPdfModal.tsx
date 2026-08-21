@@ -458,7 +458,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 <div className="w-28 h-14 border-2 border-indigo-700/80 rounded-full flex flex-col items-center justify-center p-1 text-center rotate-[-4deg] shadow-2xs">
                   <span className="text-[7px] font-extrabold text-indigo-900 uppercase tracking-tighter">ENLIGHT METALS PVT. LTD.</span>
                   <span className="text-[9px] font-serif italic text-indigo-800 font-bold my-[-2px]">Authorized</span>
-                  <span className="text-[6.5px] font-bold text-indigo-700 uppercase tracking-widest">★ PUNE ★</span>
+                  <span className="text-[6.5px] font-bold text-indigo-700 uppercase tracking-widest"> PUNE </span>
                 </div>
               </div>
               <div className="h-0.5 bg-slate-300 w-36 mb-1"></div>
