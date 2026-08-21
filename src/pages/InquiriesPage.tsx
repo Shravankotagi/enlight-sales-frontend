@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Sparkles, User, Edit3, MoreVertical
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import type { DateFilterRange } from '../components/DateFilterControl';
@@ -562,7 +562,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => ({
     sku_text: item.sku_text || item.description || '',
     dimensions: item.dimensions || '',
-    hsn_code: item.hsn_code || (item as any).hsn || '72083730',
+    hsn_code: item.hsn_code || (item as any).hsn || '',
     quantity: item.quantity,
     unit: item.unit || 'MT',
     rate: item.rate,
@@ -584,6 +584,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     rawLineItems.push({
       sku_text: productType || 'Hot Rolled',
       dimensions: [thickness, width, length].filter(Boolean).join(' x ') || '',
+      hsn_code: '',
       quantity: quantityTons || 0,
       unit: 'MT',
       rate: unitPrice || 0,
@@ -723,8 +724,6 @@ export default function InquiriesPage() {
   };
 
   // Form state for Manual Log & File Upload
-  const [formRawInquiryText, setFormRawInquiryText] = useState('');
-  const [isExtractingText, setIsExtractingText] = useState(false);
   const [formCustomerName, setFormCustomerName] = useState('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [formProductSKU, setFormProductSKU] = useState('');
@@ -1095,85 +1094,11 @@ export default function InquiriesPage() {
     }
   };
 
-  const handleExtractFromText = async () => {
-    const raw = formRawInquiryText.trim();
-    if (!raw) return;
-
-    setIsExtractingText(true);
-    try {
-      // 1. Instant local baseline extraction
-      const localParsed = parseInquiryText(raw, { raw_text: raw });
-      if (localParsed.companyName && !isProductOrGenericName(localParsed.companyName)) {
-        setFormCustomerName(localParsed.companyName);
-      }
-      if (localParsed.customerPhone) {
-        setFormPhone(localParsed.customerPhone);
-      }
-      if (localParsed.productType) {
-        setFormProductSKU(localParsed.productType);
-      }
-      if (localParsed.deliveryLocation) {
-        setFormDeliveryLocation(localParsed.deliveryLocation);
-      }
-      if (localParsed.paymentTerms) {
-        setFormPaymentTerms(localParsed.paymentTerms);
-      }
-
-      // 2. Call Gemini AI via backend for full structured extraction
-      const res = await inquiriesApi.parseText({ text: raw });
-      const extracted = res?.data?.data || res?.data;
-
-      if (extracted && (extracted.customer_name || extracted.line_items || extracted.delivery_location || extracted.payment_terms)) {
-        formExtractedJsonRef.current = extracted;
-
-        if (extracted.customer_name && !isProductOrGenericName(extracted.customer_name)) {
-          const cleanCust = String(extracted.customer_name).trim();
-          setFormCustomerName(cleanCust);
-          setExistingCustomers(prev => Array.from(new Set([cleanCust, ...prev])));
-        }
-
-        if (extracted.customer_phone) {
-          const cleanPhone = String(extracted.customer_phone).replace(/\D/g, '').slice(-10);
-          if (cleanPhone.length >= 10 && !SYSTEM_EMPLOYEE_PHONES.has(cleanPhone)) {
-            setFormPhone(cleanPhone);
-          }
-        }
-
-        if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
-          const mappedSkus = extracted.line_items
-            .map((li: any) => `${li.sku_text || 'Item'}${li.dimensions ? ` (${li.dimensions})` : ''} - ${li.quantity || 0} ${li.unit || 'MT'}${li.rate ? ` @ ₹${li.rate}` : ''}`)
-            .filter(Boolean)
-            .join(', ');
-
-          setFormProductSKU(mappedSkus || extracted.line_items[0].sku_text || '');
-        } else if (extracted.sku_text || extracted.product_type) {
-          setFormProductSKU(extracted.sku_text || extracted.product_type);
-        }
-
-        if (extracted.preferred_make || extracted.make || extracted.brand) {
-          setFormPreferredMake(extracted.preferred_make || extracted.make || extracted.brand);
-        }
-
-        if (extracted.delivery_location) {
-          setFormDeliveryLocation(extracted.delivery_location);
-        }
-
-        if (extracted.payment_terms) {
-          setFormPaymentTerms(extracted.payment_terms);
-        }
-      }
-    } catch (err) {
-      console.warn('AI Text extraction warning:', err);
-    } finally {
-      setIsExtractingText(false);
-    }
-  };
-
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Read directly from ref to avoid React state batching delays
-    const extractedJson = formExtractedJsonRef.current;
+    let extractedJson = formExtractedJsonRef.current;
     const customerName =
       (formCustomerName.trim() && !isProductOrGenericName(formCustomerName))
         ? formCustomerName.trim()
@@ -1196,14 +1121,37 @@ export default function InquiriesPage() {
     try {
       setSubmitting(true);
 
-      // Build ai_extraction_json from the structured extraction or manual input
+      // If no document extraction was pre-loaded, automatically extract line items & terms with Gemini AI
+      if (!extractedJson && formProductSKU.trim()) {
+        try {
+          const fullTextToParse = [
+            `Company: ${customerName}`,
+            `Products & Requirement: ${formProductSKU.trim()}`,
+            formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
+            formDeliveryLocation.trim() ? `Delivery Location: ${formDeliveryLocation.trim()}` : '',
+            formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
+            formRequirement.trim() ? `Additional Notes: ${formRequirement.trim()}` : '',
+          ].filter(Boolean).join('\n');
+
+          const res = await inquiriesApi.parseText({ text: fullTextToParse });
+          const data = res?.data?.data || res?.data;
+          if (data && (Array.isArray(data.line_items) || data.sku_text || data.product_type)) {
+            extractedJson = data;
+          }
+        } catch (geminiErr) {
+          console.warn('Gemini AI parsing fallback:', geminiErr);
+        }
+      }
+
+      // Build ai_extraction_json from the structured extraction or deterministic local parser
       let aiExtractionJson: any = null;
 
-      if (extractedJson) {
-        // Normalize line_items to match drawer expectations
-        const lineItems = (extractedJson.line_items || []).map((li: any) => ({
-          sku_text: li.sku_text || '',
+      if (extractedJson && Array.isArray(extractedJson.line_items) && extractedJson.line_items.length > 0) {
+        // Normalize line_items to match Review & Edit popup expectations
+        const lineItems = extractedJson.line_items.map((li: any) => ({
+          sku_text: li.sku_text || li.description || li.material || li.sku || 'Material',
           dimensions: li.dimensions || '',
+          hsn_code: li.hsn_code || li.hsn || '',
           quantity: Number(li.quantity) || 0,
           unit: li.unit || 'MT',
           rate: Number(li.rate) || 0,
@@ -1213,17 +1161,18 @@ export default function InquiriesPage() {
         aiExtractionJson = {
           ...extractedJson,
           customer: {
-            name: extractedJson.customer_name || customerName,
+            name: customerName,
             phone: finalCustomerPhone,
             gst: extractedJson.customer_gst || null,
-            address: extractedJson.customer_address || null,
+            address: extractedJson.customer_address || formDeliveryLocation.trim() || null,
           },
-          companyName: extractedJson.customer_name || customerName,
-          customer_name: extractedJson.customer_name || customerName,
+          companyName: customerName,
+          customer_name: customerName,
           customerPhone: finalCustomerPhone,
           customer_phone: finalCustomerPhone,
-          line_items: lineItems.length > 0 ? lineItems : (formProductSKU.trim() ? [{ sku_text: formProductSKU.trim(), quantity: 1, unit: 'MT', rate: 0, amount: 0 }] : []),
-          lineItems: lineItems.length > 0 ? lineItems : (formProductSKU.trim() ? [{ sku_text: formProductSKU.trim(), quantity: 1, unit: 'MT', rate: 0, amount: 0 }] : []),
+          salespersonName: activeSalespersonName,
+          line_items: lineItems,
+          lineItems: lineItems,
           total_amount: totalAmount > 0 ? totalAmount : 0,
           totalAmount: totalAmount > 0 ? totalAmount : 0,
           delivery_location: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
@@ -1234,16 +1183,18 @@ export default function InquiriesPage() {
           make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
         };
       } else {
-        const parsedReq = parseInquiryText((formProductSKU || '') + ' ' + (formRequirement || ''), {
+        const fullText = (formProductSKU || '') + ' ' + (formRequirement || '');
+        const parsedReq = parseInquiryText(fullText, {
           customer_name: customerName,
-          raw_text: (formProductSKU || '') + ' ' + (formRequirement || ''),
+          raw_text: fullText,
         });
 
         const lineItems = (parsedReq.lineItems && parsedReq.lineItems.length > 0)
-          ? parsedReq.lineItems
+          ? parsedReq.lineItems.map(i => ({ ...i, hsn_code: '' }))
           : (formProductSKU.trim() ? [{
               sku_text: formProductSKU.trim(),
               dimensions: '',
+              hsn_code: '',
               quantity: parsedReq.quantityTons || 1,
               unit: parsedReq.lineItems?.[0]?.unit || 'MT',
               rate: parsedReq.unitPrice || 0,
@@ -1261,6 +1212,7 @@ export default function InquiriesPage() {
           customer_name: customerName,
           customerPhone: finalCustomerPhone,
           customer_phone: finalCustomerPhone,
+          salespersonName: activeSalespersonName,
           productType: formProductSKU.trim() || parsedReq.productType,
           quantityTons: parsedReq.quantityTons,
           unitPrice: parsedReq.unitPrice,
@@ -1285,11 +1237,9 @@ export default function InquiriesPage() {
         formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : '',
       ].filter(Boolean).join(' | ');
 
-      const naturalRawText = formRawInquiryText.trim() || (formProductSKU.length > 50 ? formProductSKU.trim() : '') || (formRequirement.length > 50 ? formRequirement.trim() : '');
-
       const rawText = poFileName
-        ? `[Inquiry Attachment: ${poFileName}] ${naturalRawText || reqDetails || formRequirement || 'Inquiry'}`
-        : naturalRawText || reqDetails || formRequirement || 'Inquiry';
+        ? `[Inquiry Attachment: ${poFileName}] ${reqDetails || 'Inquiry'}`
+        : reqDetails || formProductSKU.trim() || 'Inquiry';
 
       const createRes = await inquiriesApi.create({
         sender_name: customerName,
@@ -1321,7 +1271,6 @@ export default function InquiriesPage() {
       };
 
       setShowModal(false);
-      setFormRawInquiryText('');
       setFormCustomerName('');
       setShowCompanyDropdown(false);
       setFormPhone('');
@@ -1342,7 +1291,7 @@ export default function InquiriesPage() {
     } catch (err: any) {
       console.error('Error logging inquiry:', err);
       const errMsg = err?.response?.data?.message || err?.message || 'Failed to log inquiry. Please try again.';
-      alert(`Failed to log inquiry: ${errMsg}`);
+      alert(errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -2507,52 +2456,13 @@ export default function InquiriesPage() {
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={22} />
-                Log New Customer Inquiry (Text / File)
+                Log New Customer Inquiry
               </h2>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
                 <X size={20} />
               </button>
-            </div>
-
-            {/* Paste or Type Customer Inquiry Text Section */}
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50/70 rounded-2xl border border-blue-200 space-y-2.5 shadow-2xs">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                  <Sparkles size={15} className="text-blue-600" />
-                  Type or Paste Customer Inquiry Text
-                </label>
-                <span className="text-[11px] text-blue-600 font-medium">WhatsApp message, email, or notes</span>
-              </div>
-
-              <textarea
-                rows={3}
-                value={formRawInquiryText}
-                onChange={e => setFormRawInquiryText(e.target.value)}
-                placeholder="Type or paste inquiry text e.g. Company: Sample Traders Pvt Ltd, CR 1mm (300 nos), CR 1.2mm (200 nos), HR 1.6mm (200 nos), Rate 52000, 30 days payment terms, delivery to Pune..."
-                className="w-full px-3 py-2 bg-white border border-blue-200 rounded-xl text-xs font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400 max-h-36 overflow-y-auto resize-y"
-              />
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  disabled={isExtractingText || !formRawInquiryText.trim()}
-                  onClick={handleExtractFromText}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer">
-                  {isExtractingText ? (
-                    <>
-                      <RefreshCw size={13} className="animate-spin" />
-                      Extracting Details...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={14} className="text-amber-300" />
-                      Extract Details
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
 
             {/* Upload Inquiry Document Section */}
@@ -2723,7 +2633,7 @@ export default function InquiriesPage() {
                   disabled={submitting || isExtractingPo}
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2">
                   {submitting ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-                  {submitting ? 'Saving Inquiry...' : 'Save & Record Inquiry'}
+                  {submitting ? 'Saving Inquiry...' : 'Save Inquiry'}
                 </button>
               </div>
             </form>
