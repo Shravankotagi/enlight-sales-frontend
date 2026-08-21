@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { X, Printer, Copy, Check } from 'lucide-react';
+import { calculateQuotationBreakdown, formatIndianCurrency } from '../utils/pricingEngine';
 
 interface DealItem {
   id?: string;
   sku_text?: string;
+  dimensions?: string;
+  hsn_code?: string;
   quantity?: number;
   unit?: string;
   rate?: number;
@@ -30,20 +33,35 @@ interface SalesQuotationModalProps {
   onClose: () => void;
 }
 
-import { calculatePricingSummary } from '../utils/pricingEngine';
-
 export default function SalesQuotationModal({ deal, onClose }: SalesQuotationModalProps) {
   const [copiedPo, setCopiedPo] = useState(false);
 
   if (!deal) return null;
 
-  const pricing = calculatePricingSummary({
-    lineItems: deal.deal_items || [],
-    basic_amount: deal.total_amount ? Number(deal.total_amount) : 0,
-  });
+  const items = deal.deal_items && deal.deal_items.length > 0
+    ? deal.deal_items
+    : [
+        {
+          sku_text: 'Industrial Metal Supply Order Requirement',
+          dimensions: '',
+          quantity: 1,
+          unit: 'MT',
+          rate: Number(deal.total_amount || 0),
+          amount: Number(deal.total_amount || 0),
+        },
+      ];
 
-  const subtotal = pricing.subtotal;
-  const grandTotal = pricing.grandTotal;
+  const computedSubtotal = items.reduce((s, i) => {
+    const q = Number(i.quantity) || 0;
+    const r = Number(i.rate || i.quoted_price || i.price_per_mt) || 0;
+    const a = Number(i.amount) || (q * r) || 0;
+    return s + a;
+  }, 0) || Number(deal.total_amount || 0);
+
+  const breakdown = calculateQuotationBreakdown(computedSubtotal);
+  const totalQuantity = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+  const firstUnit = items[0]?.unit || 'MT';
+  const isSingleUnit = items.every(i => (i.unit || 'MT').toUpperCase() === firstUnit.toUpperCase());
 
   const dealRefId = deal.id ? `#${deal.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-DEAL';
   const poNumber = deal.po_number || `PO-${new Date().getFullYear()}-AUTO`;
@@ -129,7 +147,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
         </div>
 
         {/* Printable Quotation Sheet Body */}
-        <div id="printable-quotation-modal" className="p-6 sm:p-8 space-y-6 bg-white">
+        <div id="printable-quotation-modal" className="p-6 sm:p-8 space-y-6 bg-white font-sans text-slate-800">
           
           {/* Company Header */}
           <div className="flex justify-between items-start border-b border-slate-200 pb-5">
@@ -168,64 +186,97 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
             </div>
           </div>
 
-          {/* Quotation Line Items Table */}
-          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-900 text-white text-xs font-semibold uppercase">
+          {/* Quotation Line Items Table — Strict Reference Structure */}
+          <div className="border border-slate-300 rounded-lg overflow-hidden">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-700 text-white font-bold text-[11px] tracking-wide">
                 <tr>
-                  <th className="px-4 py-3 text-center w-12">#</th>
-                  <th className="px-4 py-3">Material / Product Description</th>
-                  <th className="px-4 py-3 text-right">Quantity</th>
-                  <th className="px-4 py-3 text-right">Total Amount (₹)</th>
+                  <th className="px-3 py-2.5 text-center w-[5%] border-b border-slate-600">#</th>
+                  <th className="px-4 py-2.5 w-[42%] border-b border-slate-600">Item &amp; Description</th>
+                  <th className="px-3 py-2.5 text-center w-[15%] border-b border-slate-600">HSN/SAC</th>
+                  <th className="px-4 py-2.5 text-right w-[12%] border-b border-slate-600">Qty</th>
+                  <th className="px-4 py-2.5 text-right w-[12%] border-b border-slate-600">Rate</th>
+                  <th className="px-4 py-2.5 text-right w-[14%] border-b border-slate-600">Amount</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
-                {deal.deal_items && deal.deal_items.length > 0 ? (
-                  deal.deal_items.map((item, i) => {
-                    const qty = Number(item.quantity || 0);
-                    const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
-                    const amt = Number(item.amount || (qty * rate) || subtotal || 0);
+              <tbody className="divide-y divide-slate-200 bg-white text-slate-900">
+                {items.map((item, idx) => {
+                  const qty = Number(item.quantity || 0);
+                  const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
+                  const amt = Number(item.amount || (qty * rate) || 0);
+                  const hsn = item.hsn_code || '72083730';
+                  const unit = item.unit || 'MT';
 
-                    return (
-                      <tr key={i} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 text-center text-slate-500 font-medium">{i + 1}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-900">{item.sku_text || '—'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-medium">{qty ? `${qty} ${item.unit || 'MT'}` : '-'}</td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-900">₹{amt.toLocaleString('en-IN')}</td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-center text-slate-500 font-medium">1</td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">Industrial Metal Supply Order Requirement</td>
-                    <td className="px-4 py-3 text-right font-mono font-medium">Bulk Order</td>
-                    <td className="px-4 py-3 text-right font-bold text-slate-900">
-                      ₹{Number(subtotal).toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                )}
+                  return (
+                    <tr key={idx} className="hover:bg-slate-50/70">
+                      <td className="px-3 py-3 text-center text-slate-500 font-medium">{idx + 1}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-900 text-xs tracking-tight">{item.sku_text || 'HR - COIL / SHEET'}</div>
+                        {item.dimensions && (
+                          <div className="text-[11px] text-slate-500 font-mono mt-0.5">{item.dimensions}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-center font-mono text-slate-600 text-xs">{hsn}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="font-bold text-slate-900 font-mono text-xs">{formatIndianCurrency(qty, true)}</div>
+                        <div className="text-[10px] text-slate-500 font-semibold">{unit}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-slate-800 text-xs">
+                        {rate > 0 ? formatIndianCurrency(rate, true) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-slate-900 font-mono text-xs">
+                        {amt > 0 ? formatIndianCurrency(amt, true) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          {/* Financial Calculation Box & Terms */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pt-2">
-            <div className="text-xs text-slate-500 max-w-sm space-y-1">
-              <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>
-              <p>1. Material meets IS 2062 / IS 1786 prime metal standards.</p>
-              <p>2. Payment terms: {deal.payment_terms || '100% as per agreed commercial contract'}.</p>
-              <p>3. Official computer-generated quotation from Enlight Metals OS.</p>
-            </div>
-
-            <div className="w-full sm:w-80 bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-slate-900">Grand Total Amount (Incl. 18% GST):</span>
-                <span className="text-lg font-bold text-emerald-600 font-mono">
-                  ₹{grandTotal.toLocaleString('en-IN')}
-                </span>
+          {/* Table Footer: Left total items & Right financial summary block */}
+          <div className="flex flex-col sm:flex-row justify-between items-start pt-1 gap-6">
+            
+            {/* Bottom Left: Items in Total */}
+            <div className="text-xs font-semibold text-slate-700 pt-1">
+              <span>Items in Total {formatIndianCurrency(totalQuantity, true)} {isSingleUnit ? firstUnit : ''}</span>
+              
+              <div className="text-[11px] text-slate-500 mt-4 space-y-1">
+                <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>
+                <p>1. Material meets IS 2062 / IS 1786 prime metal standards.</p>
+                <p>2. Payment terms: {deal.payment_terms || '100% as per agreed commercial contract'}.</p>
+                <p>3. Official computer-generated quotation from Enlight Metals OS.</p>
               </div>
             </div>
+
+            {/* Bottom Right: Financial Summary Block matching Reference Image */}
+            <div className="w-full sm:w-72 space-y-2 text-xs">
+              <div className="flex justify-between items-center py-1 text-slate-700">
+                <span className="font-medium">Sub Total</span>
+                <span className="font-mono font-medium">{breakdown.formattedSubtotal}</span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 text-slate-700">
+                <span className="font-medium">CGST9 (9%)</span>
+                <span className="font-mono font-medium">{breakdown.formattedCgst9}</span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 text-slate-700">
+                <span className="font-medium">SGST9 (9%)</span>
+                <span className="font-mono font-medium">{breakdown.formattedSgst9}</span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 text-slate-700">
+                <span className="font-medium">Rounding</span>
+                <span className="font-mono font-medium">{breakdown.formattedRounding}</span>
+              </div>
+
+              <div className="flex justify-between items-center py-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                <span>Total</span>
+                <span className="font-mono text-base">{breakdown.formattedGrandTotal}</span>
+              </div>
+            </div>
+
           </div>
 
           {/* Signature Footer */}
