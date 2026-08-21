@@ -8,7 +8,7 @@ import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
   ArrowUpRight, Award, CheckCircle2, AlertCircle, Layers,
-  Sparkles, Plus, Upload, Download
+  Plus, Upload, Download
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -170,6 +170,15 @@ export default function AdminDashboard() {
   const totalValue = dealsTotalPipelineVal > 0 ? dealsTotalPipelineVal : (monthly?.summary?.pipeline_value || monthly?.summary?.total_revenue || monthly?.summary?.total_value || 0);
   const wonValue = dealsWonVal > 0 ? dealsWonVal : (monthly?.summary?.won_revenue || monthly?.summary?.won_value || monthly?.summary?.total_revenue || 0);
   const conversionRate = totalDeals > 0 ? Math.round((wonDealsCount / totalDeals) * 100) : (monthly?.summary?.conversion_rate || 0);
+
+  // Delivered Tonnage (summed live from won deal items in MT)
+  const deliveredTonnage = wonDealsList.reduce((acc: number, d: any) => {
+    const itemsTonnage = (d.deal_items || []).reduce((iSum: number, item: any) => {
+      const q = Number(item.quantity || 0);
+      return iSum + (isNaN(q) ? 0 : q);
+    }, 0);
+    return acc + itemsTonnage;
+  }, 0);
 
   // Find selected salesperson specific KRA metrics from reports response
   const selectedKRA = spList.find((s: any) => s.salesperson_phone === selectedPhone);
@@ -341,12 +350,15 @@ export default function AdminDashboard() {
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-600">
               ₹{Number(wonValue).toLocaleString('en-IN')}
             </h2>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex flex-wrap items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <ArrowUpRight size={12} /> +25%
               </span>
               <span className="text-xs text-slate-500 font-medium">
                 {wonDealsCount} deals closed won
+              </span>
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                📦 {Number(deliveredTonnage.toFixed(2)).toLocaleString('en-IN')} MT
               </span>
             </div>
           </div>
@@ -422,67 +434,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-      </div>
-
-      {/* TOTAL SALES PERFORMANCE Card (Matching Home Dashboard) */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
-              COMPANY SALES PERFORMANCE
-            </span>
-            <div className="flex items-baseline gap-3 mt-1">
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-                ₹{Number(wonValue || totalValue).toLocaleString('en-IN')}
-              </h2>
-              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                <ArrowUpRight size={13} /> +12.5%
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
-              <Sparkles size={14} className="text-amber-500" />
-              Yay! Company sales have surged this month across all metal product categories!
-            </p>
-          </div>
-
-          <button
-            onClick={() => navigate('/pipeline')}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors self-start sm:self-auto"
-          >
-            Detailed Analytics <ChevronRight size={14} />
-          </button>
-        </div>
-
-        {/* Multi-segment Sales Progress Bar */}
-        <div className="w-full h-3 rounded-full overflow-hidden flex bg-slate-100 p-0.5 border border-slate-200">
-          <div className="bg-blue-600 h-full rounded-l-full transition-all" style={{ width: '50%' }} title="Won Orders" />
-          <div className="bg-amber-500 h-full transition-all" style={{ width: '25%' }} title="In Negotiation" />
-          <div className="bg-emerald-500 h-full transition-all" style={{ width: '15%' }} title="Qualified" />
-          <div className="bg-purple-600 h-full rounded-r-full transition-all" style={{ width: '10%' }} title="New Inquiries" />
-        </div>
-
-        {/* 4 Colorful Sub-Metric Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-          <div className="bg-blue-50/50 p-3.5 rounded-xl border border-blue-100">
-            <span className="text-xs font-semibold text-blue-600 block">Won Orders Sales</span>
-            <span className="text-base font-bold text-slate-900 mt-0.5 block">₹{Number(wonValue).toLocaleString('en-IN')}</span>
-          </div>
-
-          <div className="bg-amber-50/50 p-3.5 rounded-xl border border-amber-100">
-            <span className="text-xs font-semibold text-amber-700 block">Active Pipeline Deals</span>
-            <span className="text-base font-bold text-slate-900 mt-0.5 block">{activeDealsCount || totalDeals} Confirmed</span>
-          </div>
-
-          <div className="bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-100">
-            <span className="text-xs font-semibold text-emerald-700 block">Conversion Rate</span>
-            <span className="text-base font-bold text-slate-900 mt-0.5 block">{conversionRate}% Target</span>
-          </div>
-
-          <div className="bg-purple-50/50 p-3.5 rounded-xl border border-purple-100">
-            <span className="text-xs font-semibold text-purple-700 block">Sales Representatives</span>
-            <span className="text-base font-bold text-slate-900 mt-0.5 block">{salespeople.length} Active Accounts</span>
-          </div>
-        </div>
       </div>
 
       {/* Main Breakdown Section (2-Column Grid) */}
@@ -679,7 +630,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <span className="text-xs font-black bg-blue-50 text-blue-700 px-3 py-1 rounded-xl border border-blue-200">
-                      {sp.kra_score}
+                      {Math.round(Number(sp.kra_score) || 0)}
                     </span>
                   </div>
                 ))}

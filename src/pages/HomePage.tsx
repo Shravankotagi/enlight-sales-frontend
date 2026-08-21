@@ -8,7 +8,7 @@ import {
   AlertCircle, Clock, CheckCircle, TrendingUp, Users, Home,
   ShoppingBag, RefreshCw, ArrowUpRight,
   Building2, Sparkles, Plus, FileText, Activity, Layers,
-  CheckCircle2, ArrowRight, ChevronRight, Truck
+  CheckCircle2, ArrowRight, Truck
 } from 'lucide-react';
 
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
@@ -46,7 +46,7 @@ export default function HomePage() {
     to: getLastDayOfMonth(),
   });
 
-  const [activeBarHover, setActiveBarHover] = useState<number | null>(6);
+  const [activeBarHover, setActiveBarHover] = useState<number | null>(new Date().getMonth());
 
   useEffect(() => {
     document.title = 'Home Dashboard - Enlight Sales OS';
@@ -84,7 +84,7 @@ export default function HomePage() {
     refetchInterval: 30000,
   });
 
-  // 3. Orders Query (Fetch all won deals for executive dashboard overview)
+  // 3. Orders Query (Fetch all won deals for executive dashboard overview live)
   const { data: ordersData, refetch: refetchOrders } = useQuery({
     queryKey: ['orders-list', effectivePhone],
     queryFn: () =>
@@ -94,6 +94,8 @@ export default function HomePage() {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
         }),
+    refetchInterval: 30000,
+    staleTime: 0,
   });
 
   const handleRefreshAll = () => {
@@ -138,25 +140,22 @@ export default function HomePage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  // Real Monthly Sales Trend Calculation (Grouping live orders by month)
+  // Real Monthly Sales Trend Calculation (Grouping live confirmed won orders by month for the current year)
+  const currentYear = new Date().getFullYear();
+  const currentMonthIdx = new Date().getMonth();
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const currentMonthIdx = new Date().getMonth(); // 7 for August
   const monthlyStats = monthNames.map((mName, mIdx) => {
     let monthRevenue = 0;
     safeOrders.forEach((o: any) => {
-      const dStr = o.po_date || o.created_at;
+      if (o.stage && o.stage !== 'won') return;
+      const dStr = o.won_at || o.po_date || o.created_at;
       if (dStr) {
         const itemDate = new Date(dStr);
-        if (itemDate.getMonth() === mIdx) {
+        if (itemDate.getFullYear() === currentYear && itemDate.getMonth() === mIdx) {
           monthRevenue += Number(o.total_amount || 0);
         }
       }
     });
-
-    // If current month has no explicit date match yet, attach totalRevenue
-    if (mIdx === currentMonthIdx && monthRevenue === 0) {
-      monthRevenue = totalRevenue;
-    }
 
     return {
       month: mName,
@@ -166,7 +165,10 @@ export default function HomePage() {
   });
 
   const maxValForChart = Math.max(...monthlyStats.map(s => s.value), 100000);
-  const maxMonthObj = monthlyStats.reduce((max, curr) => curr.value > max.value ? curr : max, { month: monthNames[currentMonthIdx], value: totalRevenue });
+  const maxMonthObj = monthlyStats.reduce(
+    (max, curr) => (curr.value > max.value ? curr : max),
+    { month: monthNames[currentMonthIdx], value: monthlyStats[currentMonthIdx]?.value || 0 }
+  );
 
   // Real Top Customer Accounts (from filtered live orders)
   const customerMap: Record<string, number> = {};
@@ -372,69 +374,10 @@ export default function HomePage() {
 
       </div>
 
-      {/* Featured Total Sales Overview Banner (Matching img1 banner card) */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Sales Performance</span>
-            <div className="flex items-center gap-3 mt-1">
-              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                ₹{Number(totalRevenue).toLocaleString('en-IN')}
-              </h2>
-              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                <ArrowUpRight size={13} /> +12.5%
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
-              <Sparkles size={14} className="text-amber-500" />
-              Yay! Your sales have surged this month across all metal product categories!
-            </p>
-          </div>
-
-          <button
-            onClick={() => navigate('/reports')}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200 transition-colors"
-          >
-            Detailed Analytics <ChevronRight size={14} />
-          </button>
-        </div>
-
-        {/* Multi-colored Progress Segment Bar (Matching img1 striped progress bar) */}
-        <div className="w-full h-3 rounded-full bg-slate-100 overflow-hidden flex shadow-inner">
-          <div className="h-full bg-blue-600 w-[55%] transition-all duration-500" title="Won Orders (55%)" />
-          <div className="h-full bg-amber-500 w-[25%] transition-all duration-500" title="Pipeline Inquiries (25%)" />
-          <div className="h-full bg-emerald-500 w-[15%] transition-all duration-500" title="Dispatched Tonnage (15%)" />
-          <div className="h-full bg-purple-500 w-[5%] transition-all duration-500" title="Pending Reviews (5%)" />
-        </div>
-
-        {/* 4 Segment Sub-cards Grid (Matching img1 4 breakdown boxes) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-          <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100">
-            <p className="text-xs text-slate-500 font-medium">Won Orders Sales</p>
-            <p className="text-base font-bold text-blue-900 mt-0.5">₹{Number(totalRevenue).toLocaleString('en-IN')}</p>
-          </div>
-
-          <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100">
-            <p className="text-xs text-slate-500 font-medium">Active Orders Logged</p>
-            <p className="text-base font-bold text-amber-900 mt-0.5">{totalOrdersCount} Confirmed</p>
-          </div>
-
-          <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
-            <p className="text-xs text-slate-500 font-medium">Delivered Tonnage</p>
-            <p className="text-base font-bold text-emerald-900 mt-0.5">{totalTonnageSupplied > 0 ? `${totalTonnageSupplied} MT Supplied` : '75 MT Supplied'}</p>
-          </div>
-
-          <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
-            <p className="text-xs text-slate-500 font-medium">Customer Accounts</p>
-            <p className="text-base font-bold text-purple-900 mt-0.5">{topCustomers.length > 0 ? `${topCustomers.length} Active Accounts` : '3 Active Accounts'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Middle Grid Section: 2 Column Layout (Matching img1 graph & active customer list) */}
+      {/* Middle Grid Section: 2 Column Layout (Matching graph & active customer list) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left 2 Columns: Monthly Sales Trend Chart (Matching img1 bar chart) */}
+        {/* Left 2 Columns: Monthly Sales Trend Chart (Matching bar chart) */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-6">
           <div className="flex items-center justify-between">
             <div>
@@ -442,7 +385,7 @@ export default function HomePage() {
               <p className="text-xs text-slate-400">Monthly revenue trend and checkout performance</p>
             </div>
             <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-              2026 Overview
+              {currentYear} Overview
             </span>
           </div>
 
@@ -485,7 +428,9 @@ export default function HomePage() {
                 <span className="w-3 h-3 rounded bg-blue-600 inline-block" /> Monthly Confirmed Sales
               </span>
             </div>
-            <span className="font-semibold text-slate-700">Peak Month: {maxMonthObj.month} 2026 ({maxMonthObj.value > 0 ? `₹${maxMonthObj.value.toLocaleString('en-IN')}` : 'Active'})</span>
+            <span className="font-semibold text-slate-700">
+              Peak Month: {maxMonthObj.month} {currentYear} ({maxMonthObj.value > 0 ? `₹${maxMonthObj.value.toLocaleString('en-IN')}` : 'Active'})
+            </span>
           </div>
         </div>
 
