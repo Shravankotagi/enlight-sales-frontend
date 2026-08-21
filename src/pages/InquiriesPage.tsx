@@ -692,6 +692,20 @@ export default function InquiriesPage() {
     return () => document.removeEventListener('click', handleOutsideClick);
   }, []);
 
+  // Prevent background scrolling when any modal or drawer is open
+  useEffect(() => {
+    const isAnyModalOpen = showModal || showEditDrawer || showPdfModal || showQuotationModal || !!imageViewerUrl;
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow || 'unset';
+      };
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [showModal, showEditDrawer, showPdfModal, showQuotationModal, imageViewerUrl]);
+
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
     const today = formatLocalDate();
@@ -901,22 +915,6 @@ export default function InquiriesPage() {
       }
     }
   }, [inquiries]);
-
-  const handleDrawerFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const base64String = evt.target?.result as string;
-      if (base64String) {
-        setDrawerFileBase64(base64String);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-
-
 
   const handleSaveDrawerDetails = async () => {
     if (!selectedInquiry || !editDetails) return;
@@ -1441,7 +1439,7 @@ export default function InquiriesPage() {
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
-            <Plus size={15} /> Log New Inquiry / PO
+            <Plus size={15} /> Log New Inquiry
           </button>
         </div>
       </div>
@@ -1769,42 +1767,14 @@ export default function InquiriesPage() {
             {/* Scrollable Content Body */}
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
 
-              {/* Extracted Customer Inquiry Table Header + Action Buttons */}
-              <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
-                
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    id="drawer-file-upload"
-                    className="hidden"
-                    accept="image/*,application/pdf"
-                    onChange={handleDrawerFileUpload}
-                  />
-
-                  {drawerFileBase64 && (
-                    <button
-                      type="button"
-                      onClick={() => setDrawerFileBase64(null)}
-                      className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold transition-colors">
-                      Remove File
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => document.getElementById('drawer-file-upload')?.click()}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300">
-                    <UploadCloud size={14} className="text-slate-600" /> {drawerFileBase64 || (selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) ? 'Replace File' : 'Attach Document File'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleViewInquiryDocument(selectedInquiry)}
-                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5">
-                    <Eye size={14} /> View Original Inquiry 
-                  </button>
-                </div>
+              {/* Extracted Customer Inquiry Table Action Buttons */}
+              <div className="flex items-center justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleViewInquiryDocument(selectedInquiry)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300 shadow-2xs">
+                  <Eye size={14} className="text-slate-600" /> View Original Inquiry
+                </button>
               </div>
 
               {/* Editable Fields Form */}
@@ -2456,7 +2426,7 @@ export default function InquiriesPage() {
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={22} />
-                Log New Customer Inquiry
+                Log New Inquiry
               </h2>
               <button
                 onClick={() => setShowModal(false)}

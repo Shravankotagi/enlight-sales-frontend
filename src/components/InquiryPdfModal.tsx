@@ -54,56 +54,6 @@ interface InquiryPdfModalProps {
   onClose: () => void;
 }
 
-function resolvePlaceOfSupply(address?: string): string {
-  if (!address) return 'Maharashtra (27)';
-  const lower = address.toLowerCase();
-  if (
-    lower.includes('maharashtra') ||
-    lower.includes('mumbai') ||
-    lower.includes('pune') ||
-    lower.includes('khopoli') ||
-    lower.includes('raigad') ||
-    lower.includes('thane') ||
-    lower.includes('nagpur') ||
-    lower.includes('nashik') ||
-    lower.includes('chakan') ||
-    lower.includes('taloja')
-  ) {
-    return 'Maharashtra (27)';
-  }
-  if (lower.includes('gujarat') || lower.includes('ahmedabad') || lower.includes('surat') || lower.includes('vadodara')) {
-    return 'Gujarat (24)';
-  }
-  if (lower.includes('karnataka') || lower.includes('bangalore') || lower.includes('bengaluru')) {
-    return 'Karnataka (29)';
-  }
-  if (lower.includes('tamil nadu') || lower.includes('chennai')) {
-    return 'Tamil Nadu (33)';
-  }
-  if (lower.includes('delhi')) {
-    return 'Delhi (07)';
-  }
-  if (lower.includes('haryana') || lower.includes('gurgaon') || lower.includes('faridabad')) {
-    return 'Haryana (06)';
-  }
-  if (lower.includes('uttar pradesh') || lower.includes('noida') || lower.includes('kanpur')) {
-    return 'Uttar Pradesh (09)';
-  }
-  if (lower.includes('rajasthan') || lower.includes('jaipur')) {
-    return 'Rajasthan (08)';
-  }
-  if (lower.includes('madhya pradesh') || lower.includes('indore')) {
-    return 'Madhya Pradesh (23)';
-  }
-  if (lower.includes('west bengal') || lower.includes('kolkata')) {
-    return 'West Bengal (19)';
-  }
-  if (lower.includes('telangana') || lower.includes('hyderabad')) {
-    return 'Telangana (36)';
-  }
-  return 'Maharashtra (27)';
-}
-
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
   const { employee, viewingAs } = useAuth();
   const [copiedRef, setCopiedRef] = useState(false);
@@ -165,7 +115,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
     : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   const salesperson = details.salespersonName || viewingAs?.name || employee?.name || (inquiry as any)?.salesperson_name || 'Sales Representative';
-  const placeOfSupply = resolvePlaceOfSupply(details.deliveryLocation);
 
   const handleCopyRef = () => {
     navigator.clipboard.writeText(inquiryRefId);
@@ -325,12 +274,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 )}
               </div>
             </div>
-
-            {/* Place Of Supply Indicator */}
-            <div className="px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[11px] font-semibold text-slate-700 flex items-center justify-between">
-              <span>Place Of Supply: <strong className="text-slate-900 font-bold">{placeOfSupply}</strong></span>
-              
-            </div>
           </div>
 
           {/* Quotation Line Items Table — Strict Reference Structure */}
@@ -364,9 +307,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                         )}
                       </td>
                       <td className="px-3 py-3 text-center font-mono text-slate-600 text-xs">{hsn}</td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="font-bold text-slate-900 font-mono text-xs">{formatIndianCurrency(qty, true)}</div>
-                        <div className="text-[10px] text-slate-500 font-semibold">{unit}</div>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <span className="font-bold text-slate-900 font-mono text-xs">{formatIndianCurrency(qty, true)}</span>{' '}
+                        <span className="text-[11px] text-slate-600 font-semibold">{unit}</span>
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-slate-800 text-xs">
                         {rate > 0 ? formatIndianCurrency(rate, true) : '—'}
