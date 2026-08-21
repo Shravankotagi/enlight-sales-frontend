@@ -329,13 +329,19 @@ export default function OrdersPage() {
             const avgRate = totalQty > 0 ? Math.round(totalAmt / totalQty) : (mappedItems[0]?.rate || 0);
 
             if (mappedItems.length === 1) {
-              setFormProductSKU(
-                mappedItems[0].sku_text +
-                  (mappedItems[0].dimensions ? ` (${mappedItems[0].dimensions})` : '')
-              );
+              const item = mappedItems[0];
+              const skuText = item.sku_text || 'Material';
+              const dimStr = item.dimensions && !skuText.includes(item.dimensions) ? ` (${item.dimensions})` : '';
+              setFormProductSKU(`1. ${skuText}${dimStr} - ${item.quantity} ${item.unit || 'MT'}`);
             } else {
               setFormProductSKU(
-                mappedItems.map((i, idx) => `${idx + 1}. ${i.sku_text}${i.dimensions ? ` (${i.dimensions})` : ''} - ${i.quantity} MT`).join(', ')
+                mappedItems
+                  .map((i, idx) => {
+                    const skuText = i.sku_text || 'Material';
+                    const dimStr = i.dimensions && !skuText.includes(i.dimensions) ? ` (${i.dimensions})` : '';
+                    return `${idx + 1}. ${skuText}${dimStr} - ${i.quantity} ${i.unit || 'MT'}`;
+                  })
+                  .join('\n')
               );
             }
 
@@ -1073,7 +1079,7 @@ export default function OrdersPage() {
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingBag className="text-blue-600" size={20} />
-                Create New Order (Mark Won)
+                Record New Order
               </h2>
               <button
                 onClick={() => setShowModal(false)}
@@ -1274,13 +1280,13 @@ export default function OrdersPage() {
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Delivery Location <span className="text-red-500 font-bold">*</span>
                 </label>
-                <input
-                  type="text"
+                <textarea
                   required
-                  placeholder="e.g. Chakan Industrial Area, Pune"
+                  rows={2}
+                  placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
                   value={formDeliveryLocation}
                   onChange={e => setFormDeliveryLocation(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y max-h-32 overflow-y-auto leading-relaxed placeholder:text-slate-400 font-medium"
                 />
               </div>
 
