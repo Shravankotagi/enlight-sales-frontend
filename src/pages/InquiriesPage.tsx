@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown
+  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown, Trash2
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -29,6 +29,7 @@ interface InquiryItem {
   status?: string;
   source_channel?: string;
   media_urls?: string[];
+  has_media?: boolean;
   overall_confidence?: number;
   ai_extraction_json?: any;
   created_at: string;
@@ -228,7 +229,7 @@ function isProductOrGenericName(name?: string | null): boolean {
 
 function extractMultiItemsFromText(raw: string): LineItemDetail[] {
   if (!raw || !raw.trim()) return [];
-  const steelPattern = /\b(MS\s*Plate|SS\s*\d{3}\s*Pipe|SS\s*Pipe|TMT\s*Rebar|TMT\s*Bar|HR\s*Coil|HR\s*Sheet|CR\s*Coil|CR\s*Sheet|GI\s*Coil|GI\s*Sheet|Chequered\s*Plate|Steel\s*Pipe|Seamless\s*Pipe|MS\s*Flat|MS\s*Beam|ISMB|ISA|MS\s*Angle|MS\s*Channel)\b/gi;
+  const steelPattern = /\b(CR\s*\d+(?:\.\d+)?\s*mm|HR\s*\d+(?:\.\d+)?\s*mm|MS\s*Plate|SS\s*\d{3}\s*Pipe|SS\s*Pipe|TMT\s*Rebar|TMT\s*Bar|HR\s*Coil|HR\s*Sheet|CR\s*Coil|CR\s*Sheet|GI\s*Coil|GI\s*Sheet|CR|HR|GI|Chequered\s*Plate|Steel\s*Pipe|Seamless\s*Pipe|MS\s*Flat|MS\s*Beam|ISMB|ISA|MS\s*Angle|MS\s*Channel)\b/gi;
   const indices: { index: number; product: string }[] = [];
   let match;
   while ((match = steelPattern.exec(raw)) !== null) {
@@ -241,9 +242,9 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
     const start = indices[i].index;
     const end = (i + 1 < indices.length) ? indices[i + 1].index : raw.length;
     let chunk = raw.slice(start, end).trim();
-    chunk = chunk.replace(/(?:Please send|Thank you|Please quote|Kindly provide|Please provide)[\s\S]*$/i, '').trim();
+    chunk = chunk.replace(/(?:Please send|Thank you|Please quote|Kindly provide|Please provide|Payment terms|Payment:)[\s\S]*$/i, '').trim();
 
-    const qtyMatch = chunk.match(/(\d+(?:\.\d+)?)\s*(Metric\s*Tons?|MT|Tons?|Pieces?|Pcs|Nos|KG)/i);
+    const qtyMatch = chunk.match(/(\d+(?:\.\d+)?)\s*(Metric\s*Tons?|MT|Tons?|Pieces?|Pcs|Nos|Sheets?|Coils?|KG)/i);
     const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 0;
 
     let unit = 'MT';
@@ -251,22 +252,34 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
       const uRaw = qtyMatch[2].toLowerCase();
       if (uRaw.includes('ton') || uRaw === 'mt') {
         unit = 'MT';
-      } else if (uRaw.includes('pc') || uRaw.includes('nos')) {
+      } else if (uRaw.includes('pc')) {
         unit = 'Pieces';
+      } else if (uRaw.includes('nos')) {
+        unit = 'Nos';
+      } else if (uRaw.includes('sheet')) {
+        unit = 'Sheets';
       } else if (uRaw.includes('kg')) {
         unit = 'KG';
       } else {
         unit = qtyMatch[2];
       }
     }
-    if (/\b(?:MT|Metric\s*Tons?|Tons?|\/MT)\b/i.test(chunk)) {
+    if (/\b(?:MT|Metric\s*Tons?|Tons?|\/MT)\b/i.test(chunk) && !/\b(?:nos|pcs|pieces|sheets?|kg)\b/i.test(chunk)) {
       unit = 'MT';
     }
 
     const gradeMatch = chunk.match(/([A-Za-z0-9\s]+?(?:\([^)]+\))?)\s*[-:]\s*(\d+.*)/);
     let sku = indices[i].product.trim();
     let dims = '';
-    if (gradeMatch) {
+
+    const thkMatch = sku.match(/(\d+(?:\.\d+)?\s*mm)/i);
+    if (thkMatch) {
+      dims = thkMatch[1];
+      sku = sku.replace(thkMatch[0], '').trim();
+      if (/^CR$/i.test(sku)) sku = 'CR Sheet';
+      if (/^HR$/i.test(sku)) sku = 'HR Sheet';
+      if (/^GI$/i.test(sku)) sku = 'GI Sheet';
+    } else if (gradeMatch) {
       sku = gradeMatch[1].trim();
       dims = gradeMatch[2].replace(qtyMatch ? qtyMatch[0] : '', '').replace(/^[-,\s]+|[-,\s]+$/g, '').trim();
     } else {
@@ -277,7 +290,7 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
     dims = dims.replace(/\s*-\s*\(/g, ' (').replace(/\s*-\s*$/g, '').trim();
 
     items.push({
-      sku_text: sku,
+      sku_text: sku || 'Material',
       dimensions: dims,
       quantity: qty,
       unit: unit,
@@ -528,13 +541,23 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     }
   }
 
-  // 9. Payment Terms (Keep blank if not explicitly in prompt)
+  // 9. Payment Terms (Extract directly from aiJson or text)
   let paymentTerms = aiJson.payment_terms || aiJson.paymentTerms || '';
   if (!paymentTerms) {
-    if (textLower.includes('100% advance') || textLower.includes('advance')) paymentTerms = '100% Advance / Payment';
-    else if (textLower.includes('30 days') || textLower.includes('30-day')) paymentTerms = '30 Days Credit';
-    else if (textLower.includes('45 days') || textLower.includes('45-day')) paymentTerms = '45 Days Credit';
-    else paymentTerms = '';
+    const payMatch = textRaw.match(/(?:payment\s*terms?|payment|terms?)\s*[:=-]?\s*([A-Za-z0-9\s%/-]+?)(?:[.,\n]|$)/i);
+    if (payMatch && payMatch[1].trim().length > 2 && !/^(is|are|of|the|we)$/i.test(payMatch[1].trim())) {
+      paymentTerms = payMatch[1].trim();
+    } else if (textLower.includes('100% advance') || textLower.includes('advance')) {
+      paymentTerms = '100% Advance';
+    } else if (textLower.includes('30 days') || textLower.includes('30-day')) {
+      paymentTerms = '30 Days Credit';
+    } else if (textLower.includes('45 days') || textLower.includes('45-day')) {
+      paymentTerms = '45 Days Credit';
+    } else if (textLower.includes('60 days') || textLower.includes('60-day')) {
+      paymentTerms = '60 Days Credit';
+    } else {
+      paymentTerms = '';
+    }
   }
 
   // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
@@ -643,9 +666,11 @@ export default function InquiriesPage() {
   const [formCustomerName, setFormCustomerName] = useState('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [formProductSKU, setFormProductSKU] = useState('');
-  const [formPreferredMake, setFormPreferredMake] = useState('');
+  const [formDimensions, setFormDimensions] = useState('');
   const [formQuantity, setFormQuantity] = useState('');
+  const [formUnit, setFormUnit] = useState('MT');
   const [formRate, setFormRate] = useState('');
+  const [formPreferredMake, setFormPreferredMake] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
   const [formPhone, setFormPhone] = useState('');
@@ -1373,25 +1398,28 @@ const formatExtractedRequirementText = (extracted: any): string => {
       return;
     }
 
-    let mediaUrl = inq.media_urls?.[0];
+    const mediaUrl = inq.media_urls?.[0];
     if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
       setImageViewerUrl(mediaUrl);
       return;
     }
 
-    try {
-      const res = await inquiriesApi.getOne(inq.id);
-      const fullInq = res?.data?.data || res?.data;
-      const dbMedia = fullInq?.media_urls?.[0];
-      if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
-        setImageViewerUrl(dbMedia);
-        return;
-      }
-    } catch (e) {
-      console.warn('Error fetching full inquiry doc:', e);
-    }
-
+    // Immediately open text view for zero latency
     setImageViewerUrl(`extracted_preview://${inq.id}`);
+
+    // If media is attached in DB, asynchronously fetch and upgrade viewer
+    if (inq.has_media || inq.media_urls?.includes('attached_document')) {
+      try {
+        const res = await inquiriesApi.getOne(inq.id);
+        const fullInq = res?.data?.data || res?.data;
+        const dbMedia = fullInq?.media_urls?.[0];
+        if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
+          setImageViewerUrl(dbMedia);
+        }
+      } catch (e) {
+        console.warn('Error fetching full inquiry doc:', e);
+      }
+    }
   };
 
   return (
@@ -1450,8 +1478,8 @@ const formatExtractedRequirementText = (extracted: any): string => {
               st === 'all'
                 ? `All Inquiries (${productInquiries.length})`
                 : st === 'review'
-                ? `In Review (${reviewCount}) ⏳`
-                : `Processed (${processedCount}) 🎉`;
+                ? `Needs Review (${reviewCount}) ⏳`
+                : `Quotation Ready (${processedCount}) ✓`;
             return (
               <button
                 key={st}
@@ -1549,7 +1577,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                               <div key={liIdx} className="flex items-center gap-1 text-[11px]">
                                 <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">{liIdx + 1}</span>
                                 <span className="font-medium text-slate-800 truncate max-w-[160px]">{li.sku_text}</span>
-                                <span className="text-slate-400 font-mono whitespace-nowrap">{li.quantity} MT</span>
+                                <span className="text-slate-400 font-mono whitespace-nowrap">{li.quantity} {li.unit || 'MT'}</span>
                               </div>
                             ))}
                             {details.lineItems.length > 3 && (
@@ -1560,7 +1588,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                           <div className="inline-flex items-center justify-center gap-1 text-[11px]">
                             <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-[10px]">1</span>
                             <span className="font-medium text-slate-800 truncate max-w-[160px]">{details.productType || 'Hot Rolled'}</span>
-                            <span className="text-slate-400 font-mono whitespace-nowrap">{details.quantityTons || 0} MT</span>
+                            <span className="text-slate-400 font-mono whitespace-nowrap">{details.quantityTons || 0} {details.lineItems?.[0]?.unit || 'MT'}</span>
                           </div>
                         )}
                       </td>
@@ -1582,15 +1610,15 @@ const formatExtractedRequirementText = (extracted: any): string => {
                           </span>
                         ) : isQuoted ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                            <CheckCircle size={12} /> Quotation Sent 
+                            <CheckCircle size={12} /> Quotation Sent 📄
                           </span>
                         ) : isConfirmed ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                            <CheckCircle size={12} /> Confirmed &amp; Saved ✓
+                            <CheckCircle size={12} /> Quotation Ready ✓
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                            <Clock size={12} /> Review &amp; Edit 
+                            <Clock size={12} /> Needs Review ⏳
                           </span>
                         )}
                       </td>
@@ -1639,7 +1667,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       </span>
                     </h2>
                     <p className="text-xs text-slate-500 font-mono mt-0.5">
-                      ID: {selectedInquiry.id} · Received {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
+                      ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()} · Received {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
                     </p>
                   </div>
                 </div>
@@ -1702,7 +1730,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 </h3>
               </div>
 
-              {/* Editable Fields Form — Company Name, Phone always editable */}
+              {/* Editable Fields Form */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -1715,60 +1743,64 @@ const formatExtractedRequirementText = (extracted: any): string => {
                     {existingCustomers.map((cName) => (
                       <option key={cName} value={cName}>{cName}</option>
                     ))}
-                    {/* Allow the current value even if not in list */}
+                    {/* Allow current value even if not in list */}
                     {!existingCustomers.includes(editDetails.companyName) && editDetails.companyName && (
                       <option value={editDetails.companyName}>{editDetails.companyName}</option>
                     )}
                   </select>
                 </div>
 
-                {/* Structured Inquiry Table Layout (Matching Img1 Format) */}
+                {/* Structured Inquiry Table Layout */}
                 <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
                   <table className="w-full text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[10%]">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[40%]">Description &amp; Specifications</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[15%]">Qty (MT)</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[15%]">Rate (₹/MT)</th>
-                        <th className="px-4 py-3 text-right w-[20%]">Amount (₹)</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[5%] text-center">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[38%]">Description &amp; Specifications</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[18%] text-center">Quantity &amp; Unit</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[16%] text-center">Rate (₹)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[18%] text-right">Amount (₹)</th>
+                        <th className="px-2 py-3 text-center w-[5%]"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
-                      {editDetails.lineItems && editDetails.lineItems.length > 0 ? (
-                        editDetails.lineItems.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-blue-50/30">
-                            <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center">{idx + 1}</td>
-                            <td className="px-4 py-3.5 border-r border-slate-200">
-                              <div className="space-y-1">
+                      {(editDetails.lineItems && editDetails.lineItems.length > 0
+                        ? editDetails.lineItems
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                      ).map((item, idx) => (
+                        <tr key={idx} className="hover:bg-blue-50/30">
+                          <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                          <td className="px-4 py-3.5 border-r border-slate-200">
+                            <div className="space-y-1">
+                              <input
+                                type="text"
+                                value={item.sku_text || ''}
+                                onChange={(e) => {
+                                  const updated = [...(editDetails.lineItems || [])];
+                                  updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                  setEditDetails({ ...editDetails, lineItems: updated });
+                                }}
+                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                                placeholder="Product Name / Description"
+                              />
+                              <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                                <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
                                 <input
                                   type="text"
-                                  value={item.sku_text || ''}
+                                  value={item.dimensions || ''}
                                   onChange={(e) => {
-                                    const updated = [...editDetails.lineItems];
-                                    updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                    const updated = [...(editDetails.lineItems || [])];
+                                    updated[idx] = { ...updated[idx], dimensions: e.target.value };
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                   }}
-                                  className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
-                                  placeholder="Product Name / Description"
+                                  className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                                  placeholder="e.g. 1mm or 2.50mm x 1250mm"
                                 />
-                                <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
-                                  <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
-                                  <input
-                                    type="text"
-                                    value={item.dimensions || ''}
-                                    onChange={(e) => {
-                                      const updated = [...editDetails.lineItems];
-                                      updated[idx] = { ...updated[idx], dimensions: e.target.value };
-                                      setEditDetails({ ...editDetails, lineItems: updated });
-                                    }}
-                                    className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700"
-                                    placeholder="e.g. 2.50 mm x 1250 mm"
-                                  />
-                                </div>
                               </div>
-                            </td>
-                            <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
+                            </div>
+                          </td>
+                          <td className="px-3 py-3.5 border-r border-slate-200">
+                            <div className="flex items-center gap-1">
                               <input
                                 type="number"
                                 value={item.quantity === 0 ? '' : item.quantity}
@@ -1776,215 +1808,193 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                   const val = e.target.value;
                                   const q = val === '' ? 0 : parseFloat(val);
                                   const safeQ = isNaN(q) ? 0 : q;
-                                  const updated = [...editDetails.lineItems];
-                                  updated[idx] = { ...updated[idx], quantity: safeQ, amount: Math.round(safeQ * (updated[idx].rate || 0)) };
-                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
+                                  const updated = [...(editDetails.lineItems || [])];
+                                  const amt = Math.round(safeQ * (updated[idx]?.rate || 0));
+                                  updated[idx] = { ...updated[idx], quantity: safeQ, amount: amt };
+                                  const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                  const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
+                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                 }}
                                 placeholder="0"
-                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-blue-700 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                               />
-                            </td>
-                            <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
-                              <input
-                                type="number"
-                                value={item.rate === 0 ? '' : item.rate}
+                              <select
+                                value={item.unit || 'MT'}
                                 onChange={(e) => {
-                                  const val = e.target.value;
-                                  const r = val === '' ? 0 : parseFloat(val);
-                                  const safeR = isNaN(r) ? 0 : r;
-                                  const updated = [...editDetails.lineItems];
-                                  updated[idx] = { ...updated[idx], rate: safeR, amount: Math.round((updated[idx].quantity || 0) * safeR) };
-                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
+                                  const updated = [...(editDetails.lineItems || [])];
+                                  updated[idx] = { ...updated[idx], unit: e.target.value };
+                                  setEditDetails({ ...editDetails, lineItems: updated });
                                 }}
-                                placeholder="0"
-                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                              />
-                            </td>
-                            <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
-                              <input
-                                type="number"
-                                value={item.amount === 0 ? '' : item.amount}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const a = val === '' ? 0 : parseFloat(val);
-                                  const safeA = isNaN(a) ? 0 : a;
-                                  const updated = [...editDetails.lineItems];
-                                  updated[idx] = { ...updated[idx], amount: safeA };
-                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
-                                }}
-                                placeholder="0"
-                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
-                              />
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr className="hover:bg-blue-50/30">
-                          <td className="px-4 py-3.5 border-r border-slate-200 text-slate-400 text-center">1</td>
-                          <td className="px-4 py-3.5 border-r border-slate-200">
-                            <div className="space-y-2">
-                              <input
-                                type="text"
-                                value={editDetails.productType}
-                                onChange={(e) => setEditDetails({ ...editDetails, productType: e.target.value })}
-                                placeholder="Product Type (CR / HR / HR Pickled)"
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
-                              />
-                              <div className="grid grid-cols-3 gap-1">
-                                <input type="text" placeholder="Thk" value={editDetails.thickness} onChange={(e) => setEditDetails({ ...editDetails, thickness: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
-                                <input type="text" placeholder="Width" value={editDetails.width} onChange={(e) => setEditDetails({ ...editDetails, width: e.target.value })} className="px-2 py-1 border rounded text-[11px] font-mono" />
-                                <input type="text" placeholder="Length" value={editDetails.length} onChange={(e) => { const l = e.target.value; setEditDetails({ ...editDetails, length: l, productForm: l.trim() ? 'Sheet' : 'Coil' }); }} className="px-2 py-1 border rounded text-[11px] font-mono" />
-                              </div>
+                                className="px-1.5 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="MT">MT</option>
+                                <option value="Nos">Nos</option>
+                                <option value="Pieces">Pcs</option>
+                                <option value="KG">KG</option>
+                                <option value="Sheets">Sheets</option>
+                              </select>
                             </div>
                           </td>
-                          <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
+                          <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
                             <input
                               type="number"
-                              value={editDetails.quantityTons === 0 ? '' : editDetails.quantityTons}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const q = val === '' ? 0 : parseFloat(val);
-                                const safeQ = isNaN(q) ? 0 : q;
-                                setEditDetails({ ...editDetails, quantityTons: safeQ, totalAmount: Math.round(safeQ * editDetails.unitPrice) });
-                              }}
-                              placeholder="0"
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </td>
-                          <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
-                            <input
-                              type="number"
-                              value={editDetails.unitPrice === 0 ? '' : editDetails.unitPrice}
+                              value={item.rate === 0 ? '' : item.rate}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 const r = val === '' ? 0 : parseFloat(val);
                                 const safeR = isNaN(r) ? 0 : r;
-                                setEditDetails({ ...editDetails, unitPrice: safeR, totalAmount: Math.round(editDetails.quantityTons * safeR) });
+                                const updated = [...(editDetails.lineItems || [])];
+                                const amt = Math.round((updated[idx]?.quantity || 0) * safeR);
+                                updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
+                                const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
                               }}
                               placeholder="0"
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                             />
                           </td>
-                          <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
+                          <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono border-r border-slate-200">
                             <input
                               type="number"
-                              value={editDetails.totalAmount === 0 ? '' : editDetails.totalAmount}
+                              value={item.amount === 0 ? '' : item.amount}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 const a = val === '' ? 0 : parseFloat(val);
-                                setEditDetails({ ...editDetails, totalAmount: isNaN(a) ? 0 : a });
+                                const safeA = isNaN(a) ? 0 : a;
+                                const updated = [...(editDetails.lineItems || [])];
+                                updated[idx] = { ...updated[idx], amount: safeA };
+                                const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
                               }}
                               placeholder="0"
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                             />
                           </td>
+                          <td className="px-2 py-3.5 text-center">
+                            {(editDetails.lineItems || []).length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = (editDetails.lineItems || []).filter((_, i) => i !== idx);
+                                  const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                  const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
+                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Remove line item">
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </td>
                         </tr>
-                      )}
+                      ))}
                     </tbody>
                     <tfoot className="font-bold text-slate-900 border-t border-slate-300">
                       <tr className="bg-emerald-100/90 text-emerald-950 font-black">
-                        <td className="px-4 py-3 font-extrabold border-r border-emerald-300" colSpan={2}>Grand Total (Incl. 18% GST)</td>
-                        <td colSpan={2} className="px-4 py-3 text-right font-black uppercase tracking-wide border-r border-emerald-300 text-xs">
-                          {editDetails.lineItems && editDetails.lineItems.length > 0
-                            ? `${editDetails.lineItems.reduce((s,i)=>s+i.quantity,0)} MT total`
-                            : `${editDetails.quantityTons} MT`}
+                        <td className="px-4 py-3 font-extrabold border-r border-emerald-300" colSpan={2}>
+                          Grand Total Amount (Incl. 18% GST):
                         </td>
-                        <td className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
-                          ₹{Math.round(editDetails.totalAmount * 1.18).toLocaleString('en-IN')}
+                        <td className="px-3 py-3 text-center font-bold text-xs border-r border-emerald-300 font-mono text-emerald-900">
+                          {(editDetails.lineItems || []).length > 0
+                            ? `${(editDetails.lineItems || []).reduce((s, i) => s + (i.quantity || 0), 0)} Total Units`
+                            : `${editDetails.quantityTons || 0} MT`}
                         </td>
+                        <td className="px-3 py-3 text-center text-slate-500 font-mono text-xs border-r border-emerald-300">
+                          —
+                        </td>
+                        <td className="px-4 py-3 text-right font-black text-emerald-950 text-base font-mono border-r border-emerald-300">
+                          ₹{Math.round((editDetails.totalAmount || 0) * 1.18).toLocaleString('en-IN')}
+                        </td>
+                        <td></td>
                       </tr>
                     </tfoot>
                   </table>
 
+                  {/* Add Line Item Button */}
+                  <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = editDetails.lineItems && editDetails.lineItems.length > 0
+                          ? editDetails.lineItems
+                          : [{ sku_text: editDetails.productType || '', dimensions: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                        const updated = [
+                          ...current,
+                          { sku_text: '', dimensions: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                        ];
+                        setEditDetails({ ...editDetails, lineItems: updated });
+                      }}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs">
+                      <Plus size={14} /> + Add Line Item
+                    </button>
+                    <span className="text-[11px] text-slate-400 italic">Add multiple product lines for complex inquiries</span>
+                  </div>
+
                   {/* Commercial Terms Footer */}
-                  <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
-                      <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Delivery Address</span>
+                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">Delivery Address / Location</span>
                       <input
                         type="text"
                         value={editDetails.deliveryLocation}
                         onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
-                        placeholder="e.g. Mumbai"
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold"
+                        placeholder="e.g. Chakan Industrial Area, Pune"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                       />
                     </div>
 
                     <div>
-                      <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Target Delivery Date</span>
+                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">Payment Terms</span>
                       <input
                         type="text"
-                        value={editDetails.deliveryDate}
-                        onChange={(e) => setEditDetails({ ...editDetails, deliveryDate: e.target.value })}
-                        placeholder="e.g. 2026-08-25"
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold font-mono text-blue-700"
-                      />
-                    </div>
-
-                    <div>
-                      <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Payment Terms</span>
-                      <select
                         value={editDetails.paymentTerms}
                         onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold">
-                        <option value="">— Not Specified —</option>
-                        <option value="30 Days Credit">30 Days Credit</option>
-                        <option value="STRICTLY 45 Days Credit">STRICTLY 45 Days Credit</option>
-                        <option value="60 Days Credit">60 Days Credit</option>
-                        <option value="100% Advance / Payment">100% Advance / Payment</option>
-                      </select>
+                        placeholder="e.g. 30 Days Credit, 100% Advance, 50% Advance 50% on Delivery"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                      />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Bottom Actions Bar (Clean Uncluttered Single-Row Layout) */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3 bg-white sticky bottom-0 z-10 py-2">
+            {/* Bottom Actions Bar */}
+            <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3 bg-white sticky bottom-0 z-10 py-2">
               <button
                 type="button"
-                onClick={() => setSelectedInquiry(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
-                Close Details
+                onClick={() => setShowPdfModal(true)}
+                className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
+                <Eye size={15} /> View PDF 📄
               </button>
 
-              <div className="flex flex-wrap items-center gap-2">
+              {!['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) && !saveSuccess && (
                 <button
                   type="button"
-                  onClick={() => setShowPdfModal(true)}
-                  className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
-                  <Eye size={15} /> View PDF 📄
+                  disabled={submitting}
+                  onClick={handleSaveDrawerDetails}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
+                  {submitting ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+                  Save &amp; Confirm Quotation ✓
                 </button>
+              )}
 
-                {!['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) && !saveSuccess && (
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={handleSaveDrawerDetails}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
-                    {submitting ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
-                    Save &amp; Confirm
-                  </button>
+              <button
+                type="button"
+                onClick={() => setShowQuotationModal(true)}
+                className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                  ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-purple-600 hover:bg-purple-700'
+                }`}>
+                {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
+                  <>
+                    <Check size={15} /> Quotation Sent ✓
+                  </>
+                ) : (
+                  <>
+                    <Send size={15} /> Send Quotation ✉️
+                  </>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => setShowQuotationModal(true)}
-                  className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                    ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
-                      ? 'bg-emerald-600 hover:bg-emerald-700'
-                      : 'bg-purple-600 hover:bg-purple-700'
-                  }`}>
-                  {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
-                    <>
-                      <Check size={15} /> Quotation Sent ✓
-                    </>
-                  ) : (
-                    <>
-                      <Send size={15} /> Send Quotation ✉️
-                    </>
-                  )}
-                </button>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -1999,55 +2009,53 @@ const formatExtractedRequirementText = (extracted: any): string => {
         />
       )}
 
-      {/* FULL-SCREEN IMAGE / DOCUMENT VIEWER */}
+      {/* FULL-SCREEN LIGHT MODE IMAGE / DOCUMENT / TEXT VIEWER */}
       {imageViewerUrl && (
         <div
-          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[60] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4"
           onClick={() => setImageViewerUrl(null)}>
-          <div className="relative max-w-4xl w-full max-h-[90vh] bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-2xl overflow-hidden flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
-            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-800 mb-4 px-1">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                <FileText size={16} className="text-blue-400" />
+          <div className="relative max-w-3xl w-full max-h-[90vh] bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+              <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <FileText size={18} className="text-blue-600" />
                 {imageViewerUrl.startsWith('extracted_preview://')
-                  ? 'Customer Inquiry Text'
-                  : 'Attached Customer Document / Inquiry Image'}
+                  ? 'Original Customer Inquiry Message'
+                  : 'Attached Customer Document / Inquiry File'}
               </span>
               <button
                 onClick={() => setImageViewerUrl(null)}
-                className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 flex items-center gap-1 text-xs font-bold transition-colors">
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 flex items-center gap-1 text-xs font-bold transition-colors">
                 <X size={18} /> Close
               </button>
             </div>
 
             {imageViewerUrl.startsWith('extracted_preview://') ? (
-              <div className="w-full bg-slate-900 rounded-2xl p-6 border border-slate-800 text-white space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Customer Inquiry Message
-                  </span>
+              <div className="w-full space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                  <span>Source Inquiry Text</span>
                   {selectedInquiry?.created_at && (
-                    <span className="text-xs text-slate-400 font-mono">
+                    <span className="font-mono">
                       Received: {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
                     </span>
                   )}
                 </div>
 
-                <div className="p-5 bg-slate-950 rounded-xl border border-slate-800 text-slate-100 text-sm font-sans whitespace-pre-wrap leading-relaxed select-text min-h-[160px] max-h-[60vh] overflow-y-auto">
-                  {selectedInquiry?.raw_text || 'No inquiry text available.'}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-sm font-sans whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
+                  {selectedInquiry?.raw_text || 'No inquiry text recorded.'}
                 </div>
               </div>
             ) : isPdf(imageViewerUrl) ? (
               <iframe
                 src={imageViewerUrl}
                 title="Inquiry PDF Document"
-                className="w-full h-[72vh] rounded-2xl bg-white shadow-2xl border border-slate-800"
+                className="w-full h-[70vh] rounded-xl bg-white shadow-inner border border-slate-200"
               />
             ) : (
-              <div className="w-full h-[76vh] flex items-center justify-center bg-slate-950/80 rounded-2xl p-2 overflow-auto">
+              <div className="w-full h-[70vh] flex items-center justify-center bg-slate-50 rounded-xl p-2 overflow-auto border border-slate-200">
                 <img
                   src={imageViewerUrl}
                   alt="Inquiry document full view"
-                  className="max-w-full max-h-[74vh] object-contain rounded-xl shadow-2xl bg-white border border-slate-700"
+                  className="max-w-full max-h-[68vh] object-contain rounded-lg shadow-md bg-white border border-slate-200"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
@@ -2059,29 +2067,26 @@ const formatExtractedRequirementText = (extracted: any): string => {
             )}
 
             {/* Fallback UI if media URL is raw WhatsApp ID or broken base64 */}
-            <div id="image-fallback-card" style={{ display: 'none' }} className="flex-col items-center justify-center p-8 text-center bg-slate-900/90 rounded-2xl border border-slate-800 space-y-4 max-w-md my-8">
-              <div className="p-4 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
-                <ImageIcon size={40} />
+            <div id="image-fallback-card" style={{ display: 'none' }} className="flex-col items-center justify-center p-6 text-center bg-slate-50 rounded-xl border border-slate-200 space-y-3 max-w-md mx-auto my-4">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-200">
+                <ImageIcon size={32} />
               </div>
               <div>
-                <h3 className="text-white font-bold text-sm">WhatsApp Shared Document Attachment</h3>
-                <p className="text-slate-400 text-xs mt-1">
-                  Media Attachment Received &amp; Processed Live
-                </p>
-                <p className="text-slate-500 text-[11px] mt-2 leading-relaxed">
-                  The document details, quantity in MT, and material specifications were extracted with Gemini Vision and saved live to the Inquiries Table.
+                <h3 className="text-slate-900 font-bold text-sm">Customer Attached Document</h3>
+                <p className="text-slate-600 text-xs mt-1">
+                  Document content was parsed and extracted with Gemini AI into the structured inquiry table.
                 </p>
               </div>
             </div>
 
             {imageViewerUrl.startsWith('http') && (
-              <div className="flex items-center justify-center mt-3 gap-3">
+              <div className="flex items-center justify-end mt-4 gap-2">
                 <a
                   href={imageViewerUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md">
-                  <ExternalLink size={14} /> Open Original Document
+                  <ExternalLink size={14} /> Open Original Attachment
                 </a>
               </div>
             )}
@@ -2427,7 +2432,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
               </div>
             </div>
 
-            <form onSubmit={handleCreateInquiry} className="space-y-4">
+            <form onSubmit={handleCreateInquiry} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Company Name *</label>
                 <div className="relative">
@@ -2444,7 +2449,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         setShowCompanyDropdown(true);
                       }}
                       onFocus={() => setShowCompanyDropdown(true)}
-                      className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                     />
                     <button
                       type="button"
@@ -2493,25 +2498,85 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Product Description / SKU *</label>
-                <textarea
-                  rows={3}
+                <input
+                  type="text"
                   required
-                  placeholder="e.g. TMT Bar 12mm / HR Coil 3.0mm x 1250mm"
+                  placeholder="e.g. HR Coil, MS Plate, SS 304 Pipe, TMT Rebar"
                   value={formProductSKU}
                   onChange={e => setFormProductSKU(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 max-h-36 overflow-y-auto resize-y leading-relaxed"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Preferred Make</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Dimensions / Specifications (Optional)</label>
                 <input
                   type="text"
-                  placeholder="e.g. JSW, AM/NS, Tata, SAIL, JSPL, or Any"
-                  value={formPreferredMake}
-                  onChange={e => setFormPreferredMake(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. 12mm thickness (1500mm x 6000mm) or 2.50mm x 1250mm"
+                  value={formDimensions}
+                  onChange={e => setFormDimensions(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity &amp; Unit</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={formQuantity}
+                      onChange={e => setFormQuantity(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                    />
+                    <select
+                      value={formUnit}
+                      onChange={e => setFormUnit(e.target.value)}
+                      className="px-2 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="MT">MT</option>
+                      <option value="Nos">Nos</option>
+                      <option value="Pieces">Pcs</option>
+                      <option value="KG">KG</option>
+                      <option value="Sheets">Sheets</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Estimated Rate (₹)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 52000"
+                    value={formRate}
+                    onChange={e => setFormRate(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Preferred Make</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. JSW, AM/NS, Tata, SAIL, or Any"
+                    value={formPreferredMake}
+                    onChange={e => setFormPreferredMake(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Terms</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 30 Days Credit, 100% Advance"
+                    value={formPaymentTerms}
+                    onChange={e => setFormPaymentTerms(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                  />
+                </div>
               </div>
 
               <div>
@@ -2521,7 +2586,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                   placeholder="e.g. Chakan Industrial Area, Pune"
                   value={formDeliveryLocation}
                   onChange={e => setFormDeliveryLocation(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
 
@@ -2529,10 +2594,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Requirement &amp; Additional Notes (Optional)</label>
                 <textarea
                   rows={2}
-                  placeholder="e.g. 3.0mm x 1250mm, delivery within 7 days, 30 days payment terms"
+                  placeholder="Special instructions, test certificates (MTC), or logistical notes only — not dimensions or quantity"
                   value={formRequirement}
                   onChange={e => setFormRequirement(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
 
