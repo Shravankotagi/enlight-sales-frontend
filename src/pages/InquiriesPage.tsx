@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Trash2, Sparkles, User, Edit3
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Trash2, Sparkles, User, Edit3, MoreVertical
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import type { DateFilterRange } from '../components/DateFilterControl';
@@ -676,9 +676,20 @@ export default function InquiriesPage() {
     to: formatLocalDate(),
   });
 
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+
   useEffect(() => {
     setCurrentPage(1);
+    setOpenActionMenuId(null);
   }, [searchTerm, filterStatus, dateRange]);
+
+  useEffect(() => {
+    const handleOutsideClick = () => {
+      setOpenActionMenuId(null);
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -1560,12 +1571,12 @@ export default function InquiriesPage() {
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-2.5 py-3 text-center w-12">#</th>
-              <th className="px-4 py-3 text-left w-[29%]">Customer &amp; Date</th>
-              <th className="px-3 py-3 text-center w-[13%]">Items Summary</th>
-              <th className="px-3 py-3 text-center w-[13%]">Source Channel</th>
-              <th className="px-3 py-3 text-center w-[15%]">Status</th>
-              <th className="px-3 py-3 text-center w-[30%]">Actions</th>
+              <th className="px-3 py-3 text-center w-12">#</th>
+              <th className="px-5 py-3 text-left w-[36%]">Customer &amp; Date</th>
+              <th className="px-4 py-3 text-center w-[16%]">Items Summary</th>
+              <th className="px-4 py-3 text-center w-[16%]">Source Channel</th>
+              <th className="px-4 py-3 text-center w-[18%]">Status</th>
+              <th className="px-3 py-3 text-center w-20">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -1615,8 +1626,8 @@ export default function InquiriesPage() {
                   <tr
                     key={inq.id || idx}
                     className="hover:bg-slate-50/75 transition-colors">
-                    <td className="px-2.5 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                    <td className="px-4 py-3.5 text-left">
+                    <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                    <td className="px-5 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                         <Building2 size={15} className="text-slate-700 shrink-0" />
                         <span className="truncate">{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
@@ -1626,15 +1637,15 @@ export default function InquiriesPage() {
                         <span className="font-mono">{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-3.5 text-xs text-slate-700 text-center font-medium">
+                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
                       {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
                     </td>
-                    <td className="px-3 py-3.5 text-center text-xs font-medium text-slate-700">
+                    <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
                       {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
                         ? 'Dashboard'
                         : 'WhatsApp'}
                     </td>
-                    <td className="px-3 py-3.5 text-center whitespace-nowrap">
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {isQuoted ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
                           <CheckCircle size={12} /> Quotation Sent 📄
@@ -1650,41 +1661,67 @@ export default function InquiriesPage() {
                       )}
                     </td>
                     <td className="px-3 py-3.5 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1.5 flex-nowrap">
+                      <div className="relative inline-block text-left">
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleOpenDrawer(inq);
+                            setOpenActionMenuId(openActionMenuId === inq.id ? null : inq.id);
                           }}
-                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1 shrink-0">
-                          <Edit3 size={12} className="text-slate-500 shrink-0" /> Edit
+                          className={`p-1.5 rounded-lg border transition-all ${
+                            openActionMenuId === inq.id
+                              ? 'bg-slate-200 text-slate-900 border-slate-300'
+                              : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300'
+                          } shadow-2xs`}>
+                          <MoreVertical size={16} />
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPdfModalInquiry(inq);
-                            setPdfModalDetails(details);
-                            setShowPdfModal(true);
-                          }}
-                          className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1 shrink-0">
-                          <Eye size={12} className="shrink-0" /> Final Quotation
-                        </button>
+                        {openActionMenuId === inq.id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 px-1 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionMenuId(null);
+                                handleOpenDrawer(inq);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200/80 text-left">
+                              <Edit3 size={14} className="text-slate-500 shrink-0" />
+                              <span>Edit</span>
+                            </button>
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShareInquiry(inq);
-                            setShareDetails(details);
-                            setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
-                            setShowQuotationModal(true);
-                          }}
-                          className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1 shrink-0">
-                          <Send size={12} className="shrink-0" /> Share Quotation
-                        </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionMenuId(null);
+                                setPdfModalInquiry(inq);
+                                setPdfModalDetails(details);
+                                setShowPdfModal(true);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200/80 text-left">
+                              <Eye size={14} className="text-blue-600 shrink-0" />
+                              <span>Final Quotation</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionMenuId(null);
+                                setShareInquiry(inq);
+                                setShareDetails(details);
+                                setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
+                                setShowQuotationModal(true);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors border border-purple-200/80 text-left">
+                              <Send size={14} className="text-purple-600 shrink-0" />
+                              <span>Share Quotation</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -2183,11 +2220,11 @@ export default function InquiriesPage() {
                   </>
                 ) : saveSuccess ? (
                   <>
-                    <Check size={15} /> Saved &amp; Confirmed ✓
+                    <Check size={15} /> Saved
                   </>
                 ) : (
                   <>
-                    <Save size={15} /> Save &amp; Confirm Quotation ✓
+                    <Save size={15} /> Save 
                   </>
                 )}
               </button>
