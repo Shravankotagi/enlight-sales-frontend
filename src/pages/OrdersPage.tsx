@@ -382,22 +382,66 @@ export default function OrdersPage() {
       toast.error('Please enter Company Name');
       return;
     }
-
+    if (!formPoNumber.trim()) {
+      toast.error('Please enter PO Number');
+      return;
+    }
+    if (!formPoDate) {
+      toast.error('Please select PO Date');
+      return;
+    }
+    if (!formProductSKU.trim()) {
+      toast.error('Please enter Product Description / SKU');
+      return;
+    }
     const qty = Number(formQuantity) || 0;
+    if (qty <= 0) {
+      toast.error('Please enter valid Quantity');
+      return;
+    }
     const rate = Number(formRate) || 0;
+    if (rate <= 0) {
+      toast.error('Please enter valid Rate per MT');
+      return;
+    }
+    if (!formDeliveryLocation.trim()) {
+      toast.error('Please enter Delivery Location');
+      return;
+    }
+
     const computedAmt = qty > 0 && rate > 0 ? qty * rate : 0;
 
-    const lineItemsToSend = formExtractedItems.length > 0
-      ? formExtractedItems
-      : formProductSKU
-      ? [{
-          sku_text: formProductSKU,
-          quantity: qty,
-          unit: 'MT',
-          rate: rate,
-          amount: computedAmt,
-        }]
-      : [];
+    let lineItemsToSend = formExtractedItems;
+    if (lineItemsToSend.length === 0 && formProductSKU.trim()) {
+      try {
+        const textExtractRes = await inquiriesApi.parseText({
+          text: `${formProductSKU} Quantity: ${formQuantity} MT Rate: ${formRate} Delivery: ${formDeliveryLocation} Payment: ${formPaymentTerms || '30 days'}`,
+        });
+        const extractedData = textExtractRes?.data?.data || textExtractRes?.data;
+        if (Array.isArray(extractedData?.line_items) && extractedData.line_items.length > 0) {
+          lineItemsToSend = extractedData.line_items.map((i: any) => ({
+            sku_text: i.sku_text || i.sku || i.product_name || i.description || formProductSKU,
+            dimensions: i.dimensions || '',
+            quantity: Number(i.quantity) || qty || 0,
+            unit: i.unit || 'MT',
+            rate: Number(i.rate) || rate || 0,
+            amount: Number(i.amount) || Math.round((Number(i.quantity) || qty || 0) * (Number(i.rate) || rate || 0)),
+          }));
+        }
+      } catch (e) {
+        console.warn('Fallback manual single line item for order creation');
+      }
+    }
+
+    if (lineItemsToSend.length === 0 && formProductSKU.trim()) {
+      lineItemsToSend = [{
+        sku_text: formProductSKU.trim(),
+        quantity: qty,
+        unit: 'MT',
+        rate: rate,
+        amount: computedAmt,
+      }];
+    }
 
     const finalOrderValue = totalDealValue > 0 ? totalDealValue : (basicValue > 0 ? basicValue : computedAmt);
 
@@ -406,16 +450,16 @@ export default function OrdersPage() {
       await ordersApi.processPo({
         customer_name: formCustomerName.trim(),
         customer_phone: formCustomerPhone.trim() || undefined,
-        po_number: formPoNumber.trim() || undefined,
-        po_date: formPoDate || undefined,
+        po_number: formPoNumber.trim(),
+        po_date: formPoDate,
         total_amount: finalOrderValue,
-        delivery_location: formDeliveryLocation.trim() || undefined,
+        delivery_location: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim() || undefined,
         line_items: lineItemsToSend,
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
 
-      toast.success(' Order Confirmed & Won! Sales Achievement & Payment tracking updated.');
+      toast.success('Order Confirmed & Won! Sales Achievement & Payment tracking updated.');
       setShowModal(false);
 
       setFormCustomerName('');
@@ -1038,41 +1082,56 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-blue-900 flex items-center gap-1.5 cursor-pointer">
-                  <UploadCloud size={16} className="text-blue-600" />
+            {/* Upload PO Document Section matching Img 4 */}
+            <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between text-xs text-blue-900 font-bold">
+                <span className="flex items-center gap-1.5">
+                  <UploadCloud size={15} className="text-blue-600" />
                   Upload PO Document (Auto-Fill via Gemini)
-                </label>
-                {isParsingDoc && (
-                  <span className="text-xs text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
-                    <Loader2 size={12} className="animate-spin" /> Extracting...
-                  </span>
-                )}
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
               </div>
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={handleFileUpload}
-                className="w-full text-xs text-slate-600 file:mr-2.5 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
-              />
-              {poFileName && (
-                <p className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
-                  <CheckCircle size={12} /> {poFileName} (Details auto-filled below)
-                </p>
-              )}
+
+              <label
+                htmlFor="order-po-file-upload"
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
+                <input
+                  id="order-po-file-upload"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                {isParsingDoc ? (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 animate-pulse py-1">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>AI Extracting PO details from document...</span>
+                  </div>
+                ) : formUploadedBase64 ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
+                    <CheckCircle size={15} className="text-emerald-600 shrink-0" />
+                    <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
+                    <span className="text-[10px] text-blue-600 underline ml-1">Change</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-600 font-medium py-1">
+                    Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
+                  </p>
+                )}
+              </label>
             </div>
 
             <form onSubmit={handleCreateOrder} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Company Name *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Company Name <span className="text-red-500 font-bold">*</span>
+                </label>
                 <div className="relative">
                   <div className="relative flex items-center">
                     <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
                     <input
                       type="text"
                       required
-                      list="order-companies-list"
                       placeholder="Type or select company name..."
                       value={formCustomerName}
                       onChange={e => {
@@ -1080,7 +1139,7 @@ export default function OrdersPage() {
                         setShowCompanyDropdown(true);
                       }}
                       onFocus={() => setShowCompanyDropdown(true)}
-                      className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                     />
                     <button
                       type="button"
@@ -1090,11 +1149,6 @@ export default function OrdersPage() {
                       <ChevronDown size={16} className={`transition-transform ${showCompanyDropdown ? 'rotate-180' : ''}`} />
                     </button>
                   </div>
-                  <datalist id="order-companies-list">
-                    {rawCustomers.map((cName) => (
-                      <option key={cName} value={cName} />
-                    ))}
-                  </datalist>
 
                   {showCompanyDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
@@ -1127,83 +1181,106 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">PO Number (Optional)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    PO Number <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <input
                     type="text"
-                    placeholder="Auto-generated if empty"
+                    required
+                    placeholder="e.g. PO-2026-0042"
                     value={formPoNumber}
                     onChange={e => setFormPoNumber(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">PO Date</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    PO Date <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <input
                     type="date"
+                    required
                     value={formPoDate}
                     onChange={e => setFormPoDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Product Description / SKU</label>
-                <input
-                  type="text"
-                  placeholder="e.g. TMT Bar 12mm"
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Product Description / SKU <span className="text-red-500 font-bold">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="e.g. TMT Bar 12mm - 30 MT @ ₹58,000/MT&#10;HR Coil 2.5mm - 10 MT @ ₹62,000/MT"
                   value={formProductSKU}
                   onChange={e => setFormProductSKU(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y max-h-40 overflow-y-auto leading-relaxed placeholder:text-slate-400"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity (MT)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Quantity (MT) <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <input
                     type="number"
-                    step="0.0001"
+                    required
+                    min="0"
+                    step="any"
                     placeholder="e.g. 30"
                     value={formQuantity}
                     onChange={e => {
-                      setFormQuantity(e.target.value);
+                      const val = Number(e.target.value);
+                      setFormQuantity(val < 0 ? '0' : e.target.value);
                       setFormBasicAmount(0);
                       setFormGstAmount(0);
                       setFormGrandTotal(0);
                     }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Rate per MT (₹)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Rate per MT (₹) <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <input
                     type="number"
+                    required
+                    min="0"
+                    step="any"
                     placeholder="e.g. 58000"
                     value={formRate}
                     onChange={e => {
-                      setFormRate(e.target.value);
+                      const val = Number(e.target.value);
+                      setFormRate(val < 0 ? '0' : e.target.value);
                       setFormBasicAmount(0);
                       setFormGstAmount(0);
                       setFormGrandTotal(0);
                     }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Delivery Location</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Delivery Location <span className="text-red-500 font-bold">*</span>
+                </label>
                 <input
                   type="text"
+                  required
                   placeholder="e.g. Chakan Industrial Area, Pune"
                   value={formDeliveryLocation}
                   onChange={e => setFormDeliveryLocation(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
 
