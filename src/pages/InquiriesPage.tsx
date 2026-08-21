@@ -647,6 +647,7 @@ export default function InquiriesPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
   const [showEditDrawer, setShowEditDrawer] = useState(false);
+  const [showEditCompanyDropdown, setShowEditCompanyDropdown] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
   const [pdfModalDetails, setPdfModalDetails] = useState<ExtractedDetails | null>(null);
@@ -808,6 +809,7 @@ export default function InquiriesPage() {
     setSelectedInquiry(inq);
     setDrawerFileBase64(null);
     setShowEditDrawer(true);
+    setShowEditCompanyDropdown(false);
 
     const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
     const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
@@ -866,6 +868,7 @@ export default function InquiriesPage() {
 
   const handleCloseDrawer = () => {
     setShowEditDrawer(false);
+    setShowEditCompanyDropdown(false);
     setSelectedInquiry(null);
     setEditDetails(null);
     setDrawerFileBase64(null);
@@ -1823,21 +1826,60 @@ export default function InquiriesPage() {
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Company Name *
                     </label>
-                    <select
-                      value={editDetails.companyName}
-                      onChange={(e) => {
-                        setEditDetails({ ...editDetails, companyName: e.target.value });
-                        setSaveSuccess(false);
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                      {existingCustomers.map((cName) => (
-                        <option key={cName} value={cName}>{cName}</option>
-                      ))}
-                      {/* Allow current value even if not in list */}
-                      {!existingCustomers.includes(editDetails.companyName) && editDetails.companyName && (
-                        <option value={editDetails.companyName}>{editDetails.companyName}</option>
+                    <div className="relative">
+                      <div className="relative flex items-center">
+                        <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
+                        <input
+                          type="text"
+                          placeholder="Type or select company name..."
+                          value={editDetails.companyName}
+                          onChange={(e) => {
+                            setEditDetails({ ...editDetails, companyName: e.target.value });
+                            setShowEditCompanyDropdown(true);
+                            setSaveSuccess(false);
+                          }}
+                          onFocus={() => setShowEditCompanyDropdown(true)}
+                          className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => setShowEditCompanyDropdown(prev => !prev)}
+                          className="absolute right-2 text-slate-400 hover:text-slate-600 p-1">
+                          <ChevronDown size={16} className={`transition-transform ${showEditCompanyDropdown ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+
+                      {showEditCompanyDropdown && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
+                          {existingCustomers
+                            .filter(c => !editDetails.companyName || c.toLowerCase().includes(editDetails.companyName.toLowerCase()))
+                            .map(cName => (
+                              <div
+                                key={cName}
+                                onMouseDown={() => {
+                                  setEditDetails({ ...editDetails, companyName: cName });
+                                  setShowEditCompanyDropdown(false);
+                                  setSaveSuccess(false);
+                                }}
+                                className="px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-blue-50 hover:text-blue-700 cursor-pointer flex items-center justify-between transition-colors">
+                                <span className="flex items-center gap-2">
+                                  <Building2 size={13} className="text-slate-400" />
+                                  {cName}
+                                </span>
+                                {editDetails.companyName.toLowerCase() === cName.toLowerCase() && (
+                                  <CheckCircle size={13} className="text-blue-600" />
+                                )}
+                              </div>
+                            ))}
+                          {existingCustomers.filter(c => !editDetails.companyName || c.toLowerCase().includes(editDetails.companyName.toLowerCase())).length === 0 && (
+                            <div className="px-3 py-2 text-xs text-slate-400 italic">
+                              No matching company found. Typing will update company name.
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </select>
+                    </div>
                   </div>
 
                   <div>
