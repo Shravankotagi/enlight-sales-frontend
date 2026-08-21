@@ -1519,7 +1519,7 @@ export default function InquiriesPage() {
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <th className="px-3 py-3.5 text-center w-[5%]">#</th>
-              <th className="px-5 py-3.5 text-left w-[27%]">Customer &amp; Date</th>
+              <th className="px-5 py-3.5 text-left w-[27%]">Customer</th>
               <th className="px-4 py-3.5 text-center w-[17%]">Items Summary</th>
               <th className="px-4 py-3.5 text-center w-[17%]">Source Channel</th>
               <th className="px-4 py-3.5 text-center w-[20%]">Status</th>
@@ -1757,25 +1757,25 @@ export default function InquiriesPage() {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleCloseDrawer}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
-                <X size={20} />
-              </button>
-            </div>
 
-            {/* Scrollable Content Body */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-
-              {/* Extracted Customer Inquiry Table Action Buttons */}
-              <div className="flex items-center justify-end pt-1">
+              <div className="flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => handleViewInquiryDocument(selectedInquiry)}
                   className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300 shadow-2xs">
                   <Eye size={14} className="text-slate-600" /> View Original Inquiry
                 </button>
+
+                <button
+                  onClick={handleCloseDrawer}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
+                  <X size={20} />
+                </button>
               </div>
+            </div>
+
+            {/* Scrollable Content Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
 
               {/* Editable Fields Form */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
