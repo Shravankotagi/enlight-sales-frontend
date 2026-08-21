@@ -48,7 +48,7 @@ interface InquiryPdfModalProps {
   onClose: () => void;
 }
 
-import { calculateGst, calculateGrandTotal } from '../utils/pricingEngine';
+import { calculateGrandTotal } from '../utils/pricingEngine';
 
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
   const [copiedRef, setCopiedRef] = useState(false);
@@ -58,7 +58,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   // totalAmount = base pre-GST value; GST is 18% on top
   const baseAmount = details.totalAmount;
-  const gstAmount = calculateGst(baseAmount);
   const grandTotal = calculateGrandTotal(baseAmount);
 
   // Build line items list — prefer dynamic lineItems, fall back to single item
@@ -262,19 +261,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               <p>3. System generated official PDF quotation from Enlight Metals OS.</p>
             </div>
 
-            <div className="w-full sm:w-80 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-              <div className="flex justify-between text-xs text-slate-600">
-                <span>Subtotal (Excl. GST):</span>
-                <span className="font-mono font-semibold">₹{baseAmount.toLocaleString('en-IN')}</span>
-              </div>
-
-              <div className="flex justify-between text-xs text-slate-600">
-                <span>GST @ 18%:</span>
-                <span className="font-mono font-semibold text-indigo-700">+ ₹{gstAmount.toLocaleString('en-IN')}</span>
-              </div>
-
-              <div className="pt-2 border-t border-slate-300 flex justify-between items-center">
-                <span className="text-sm font-bold text-slate-900">Grand Total (Incl. GST):</span>
+            <div className="w-full sm:w-80 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-slate-900">Grand Total Amount (Incl. 18% GST):</span>
                 <span className="text-lg font-bold text-emerald-700 font-mono">₹{grandTotal.toLocaleString('en-IN')}</span>
               </div>
             </div>

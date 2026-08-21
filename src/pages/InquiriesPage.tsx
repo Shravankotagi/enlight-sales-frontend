@@ -12,7 +12,6 @@ import InquiryPdfModal from '../components/InquiryPdfModal';
 import { useAuth } from '../context/AuthContext';
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 import {
-  calculateGst,
   calculateGrandTotal,
   calculateLineItems,
   calculateSubtotal,
@@ -246,7 +245,23 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
 
     const qtyMatch = chunk.match(/(\d+(?:\.\d+)?)\s*(Metric\s*Tons?|MT|Tons?|Pieces?|Pcs|Nos|KG)/i);
     const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 0;
-    const unit = qtyMatch ? (qtyMatch[2].toLowerCase().includes('ton') || qtyMatch[2].toLowerCase() === 'mt' ? 'MT' : qtyMatch[2].toLowerCase().includes('pc') || qtyMatch[2].toLowerCase().includes('nos') ? 'Pcs' : qtyMatch[2]) : 'MT';
+
+    let unit = 'MT';
+    if (qtyMatch) {
+      const uRaw = qtyMatch[2].toLowerCase();
+      if (uRaw.includes('ton') || uRaw === 'mt') {
+        unit = 'MT';
+      } else if (uRaw.includes('pc') || uRaw.includes('nos')) {
+        unit = 'Pieces';
+      } else if (uRaw.includes('kg')) {
+        unit = 'KG';
+      } else {
+        unit = qtyMatch[2];
+      }
+    }
+    if (/\b(?:MT|Metric\s*Tons?|Tons?|\/MT)\b/i.test(chunk)) {
+      unit = 'MT';
+    }
 
     const gradeMatch = chunk.match(/([A-Za-z0-9\s]+?(?:\([^)]+\))?)\s*[-:]\s*(\d+.*)/);
     let sku = indices[i].product.trim();
@@ -805,7 +820,6 @@ export default function InquiriesPage() {
 
 
   const handlePrintQuotation = (inq: InquiryItem, details: ExtractedDetails) => {
-    const gst = Math.round(details.totalAmount * 0.18);
     const grand = Math.round(details.totalAmount * 1.18);
     const refId = inq.id.slice(0, 12).toUpperCase();
     const dateStr = new Date(inq.created_at).toLocaleDateString('en-IN');
@@ -877,16 +891,6 @@ export default function InquiriesPage() {
       </tr>
     </tbody>
     <tfoot>
-      <tr class="subtotal-row">
-        <td>Subtotal (Excl. GST)</td>
-        <td colspan="2" style="text-align:right">Base Material Amount:</td>
-        <td>&#8377;${details.totalAmount.toLocaleString('en-IN')}</td>
-      </tr>
-      <tr class="gst-row">
-        <td>GST @ 18%</td>
-        <td colspan="2" style="text-align:right">Applicable 18% GST:</td>
-        <td>+ &#8377;${gst.toLocaleString('en-IN')}</td>
-      </tr>
       <tr class="total-row">
         <td>Total: ${details.quantityTons} MT</td>
         <td colspan="2" style="text-align:right;font-size:11px">GRAND TOTAL AMOUNT (INCL. 18% GST):</td>
@@ -2188,22 +2192,12 @@ const formatExtractedRequirementText = (extracted: any): string => {
                     )}
                   </tbody>
                   <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t border-slate-300">
-                    <tr className="border-b border-slate-200 text-xs">
-                      <td className="px-4 py-2 font-bold border-r border-slate-200 text-slate-700">Subtotal (Excl. GST)</td>
-                      <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-slate-500 border-r border-slate-200">Base Material Amount:</td>
-                      <td className="px-4 py-2 text-right font-bold text-slate-800 font-mono">
-                        ₹{quotationViewDetails.totalAmount.toLocaleString('en-IN')}
-                      </td>
-                    </tr>
-                    <tr className="border-b border-slate-200 text-xs bg-indigo-50/50">
-                      <td className="px-4 py-2 font-bold border-r border-slate-200 text-indigo-900">GST @ 18%</td>
-                      <td colSpan={2} className="px-4 py-2 text-right font-bold uppercase text-indigo-700 border-r border-slate-200">Applicable 18% GST:</td>
-                      <td className="px-4 py-2 text-right font-bold text-indigo-800 font-mono">
-                        + ₹{calculateGst(quotationViewDetails.totalAmount).toLocaleString('en-IN')}
-                      </td>
-                    </tr>
                     <tr className="bg-emerald-100/90 text-emerald-950 font-black">
-                      <td className="px-4 py-3 font-extrabold border-r border-emerald-300">Total: {quotationViewDetails.quantityTons} MT</td>
+                      <td className="px-4 py-3 font-extrabold border-r border-emerald-300">
+                        Total: {quotationViewDetails.lineItems && quotationViewDetails.lineItems.length > 0
+                          ? `${quotationViewDetails.lineItems.reduce((s, i) => s + i.quantity, 0)} MT`
+                          : `${quotationViewDetails.quantityTons} MT`}
+                      </td>
                       <td colSpan={2} className="px-4 py-3 text-right font-black uppercase tracking-wide border-r border-emerald-300 text-xs">Grand Total Amount (Incl. 18% GST):</td>
                       <td className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
                         ₹{calculateGrandTotal(quotationViewDetails.totalAmount).toLocaleString('en-IN')}

@@ -43,7 +43,6 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
   });
 
   const subtotal = pricing.subtotal;
-  const gstAmount = pricing.gstAmount;
   const grandTotal = pricing.grandTotal;
 
   const dealRefId = deal.id ? `#${deal.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-DEAL';
@@ -219,23 +218,9 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
               <p>3. Official computer-generated quotation from Enlight Metals OS.</p>
             </div>
 
-            <div className="w-full sm:w-80 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-              <div className="flex justify-between text-xs text-slate-600">
-                <span>Subtotal (Base Value):</span>
-                <span className="font-mono font-medium">
-                  ₹{subtotal.toLocaleString('en-IN')}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-xs text-slate-600">
-                <span>GST (18% Forward):</span>
-                <span className="font-mono font-medium">
-                  + ₹{gstAmount.toLocaleString('en-IN')}
-                </span>
-              </div>
-
-              <div className="pt-2 border-t border-slate-300 flex justify-between items-center">
-                <span className="text-sm font-bold text-slate-900">Total Order Value:</span>
+            <div className="w-full sm:w-80 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-slate-900">Grand Total Amount (Incl. 18% GST):</span>
                 <span className="text-lg font-bold text-emerald-600 font-mono">
                   ₹{grandTotal.toLocaleString('en-IN')}
                 </span>
