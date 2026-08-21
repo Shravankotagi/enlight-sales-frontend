@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, Trash2, Sparkles, User, Edit3
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Trash2, Sparkles, User, Edit3
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import type { DateFilterRange } from '../components/DateFilterControl';
@@ -661,6 +661,9 @@ export default function InquiriesPage() {
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 25;
+
   const [dayPreset, setDayPreset] = useState<string>('30_days');
   const [customFrom, setCustomFrom] = useState(getDaysAgo(30));
   const [customTo, setCustomTo] = useState(formatLocalDate());
@@ -671,6 +674,10 @@ export default function InquiriesPage() {
     from: getDaysAgo(30),
     to: formatLocalDate(),
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus, dateRange]);
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -1414,6 +1421,12 @@ export default function InquiriesPage() {
     return timeB - timeA;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (validCurrentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filtered.length);
+  const paginatedInquiries = filtered.slice(startIndex, endIndex);
+
   const handleViewInquiryDocument = async (inq: InquiryItem) => {
     if (drawerFileBase64) {
       setImageViewerUrl(drawerFileBase64);
@@ -1541,143 +1554,195 @@ export default function InquiriesPage() {
 
       {/* Main Inquiries Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed min-w-[900px] text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="px-3 py-3 text-center w-12">#</th>
-                <th className="px-5 py-3 text-left w-[28%]">Customer &amp; Date</th>
-                <th className="px-4 py-3 text-center w-[14%]">Items Summary</th>
-                <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
-                <th className="px-4 py-3 text-center w-[16%]">Status</th>
-                <th className="px-5 py-3 text-center w-[28%] min-w-[370px]">Actions</th>
+        <table className="w-full table-fixed text-left border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <th className="px-2.5 py-3 text-center w-12">#</th>
+              <th className="px-4 py-3 text-left w-[29%]">Customer &amp; Date</th>
+              <th className="px-3 py-3 text-center w-[13%]">Items Summary</th>
+              <th className="px-3 py-3 text-center w-[13%]">Source Channel</th>
+              <th className="px-3 py-3 text-center w-[15%]">Status</th>
+              <th className="px-3 py-3 text-center w-[30%]">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                  Loading monthly inquiries...
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                    Loading monthly inquiries...
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                    No product inquiries found for this period.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((inq, idx) => {
-                  const details = (() => {
-                    const parsed = parseInquiryText(inq.raw_text || '', inq);
-                    const ai = inq?.ai_extraction_json || {};
-                    const lineItemsSrc = ai.line_items || ai.lineItems || [];
-                    if (lineItemsSrc.length > 0) {
-                      return {
-                        ...parsed,
-                        companyName: parsed.companyName,
-                        customerPhone: parsed.customerPhone,
-                        lineItems: lineItemsSrc.map((item: any) => ({
-                          sku_text: item.sku_text || item.description || '',
-                          dimensions: item.dimensions || '',
-                          quantity: Number(item.quantity) || 0,
-                          unit: item.unit || 'MT',
-                          rate: Number(item.rate) || 0,
-                          amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
-                        })),
-                        totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
-                      };
-                    }
-                    return parsed;
-                  })();
-                  const st = (inq.status || '').toLowerCase();
-                  const isQuoted = st === 'quoted' || st === 'quotation_sent';
-                  const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po';
-                  const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                  No product inquiries found for this period.
+                </td>
+              </tr>
+            ) : (
+              paginatedInquiries.map((inq, idx) => {
+                const globalIdx = startIndex + idx + 1;
+                const details = (() => {
+                  const parsed = parseInquiryText(inq.raw_text || '', inq);
+                  const ai = inq?.ai_extraction_json || {};
+                  const lineItemsSrc = ai.line_items || ai.lineItems || [];
+                  if (lineItemsSrc.length > 0) {
+                    return {
+                      ...parsed,
+                      companyName: parsed.companyName,
+                      customerPhone: parsed.customerPhone,
+                      lineItems: lineItemsSrc.map((item: any) => ({
+                        sku_text: item.sku_text || item.description || '',
+                        dimensions: item.dimensions || '',
+                        quantity: Number(item.quantity) || 0,
+                        unit: item.unit || 'MT',
+                        rate: Number(item.rate) || 0,
+                        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+                      })),
+                      totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
+                    };
+                  }
+                  return parsed;
+                })();
+                const st = (inq.status || '').toLowerCase();
+                const isQuoted = st === 'quoted' || st === 'quotation_sent';
+                const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po';
+                const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
 
-                  return (
-                    <tr
-                      key={inq.id || idx}
-                      className="hover:bg-slate-50/75 transition-colors">
-                      <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
-                      <td className="px-5 py-3.5 text-left">
-                        <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                          <Building2 size={15} className="text-slate-700 shrink-0" />
-                          <span className="truncate">{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
-                          <Calendar size={12} className="text-slate-400 shrink-0" />
-                          <span className="font-mono">{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
-                        {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
-                      </td>
-                      <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
-                        {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
-                          ? 'Dashboard'
-                          : 'WhatsApp'}
-                      </td>
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        {isQuoted ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                            <CheckCircle size={12} /> Quotation Sent 📄
-                          </span>
-                        ) : isConfirmed ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                            <CheckCircle size={12} /> Saved ✓
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                            <Clock size={12} /> Review ⏳
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                        <div className="inline-flex items-center justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDrawer(inq);
-                            }}
-                            className="w-[115px] h-[32px] px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 shrink-0">
-                            <Edit3 size={13} className="text-slate-500 shrink-0" /> Edit
-                          </button>
+                return (
+                  <tr
+                    key={inq.id || idx}
+                    className="hover:bg-slate-50/75 transition-colors">
+                    <td className="px-2.5 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                    <td className="px-4 py-3.5 text-left">
+                      <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                        <Building2 size={15} className="text-slate-700 shrink-0" />
+                        <span className="truncate">{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                        <Calendar size={12} className="text-slate-400 shrink-0" />
+                        <span className="font-mono">{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3.5 text-xs text-slate-700 text-center font-medium">
+                      {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+                    </td>
+                    <td className="px-3 py-3.5 text-center text-xs font-medium text-slate-700">
+                      {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
+                        ? 'Dashboard'
+                        : 'WhatsApp'}
+                    </td>
+                    <td className="px-3 py-3.5 text-center whitespace-nowrap">
+                      {isQuoted ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                          <CheckCircle size={12} /> Quotation Sent 📄
+                        </span>
+                      ) : isConfirmed ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
+                          <CheckCircle size={12} /> Saved ✓
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                          <Clock size={12} /> Review ⏳
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3.5 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5 flex-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDrawer(inq);
+                          }}
+                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1 shrink-0">
+                          <Edit3 size={12} className="text-slate-500 shrink-0" /> Edit
+                        </button>
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPdfModalInquiry(inq);
-                              setPdfModalDetails(details);
-                              setShowPdfModal(true);
-                            }}
-                            className="w-[115px] h-[32px] px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 shrink-0">
-                            <Eye size={13} className="shrink-0" /> Final Quotation
-                          </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPdfModalInquiry(inq);
+                            setPdfModalDetails(details);
+                            setShowPdfModal(true);
+                          }}
+                          className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1 shrink-0">
+                          <Eye size={12} className="shrink-0" /> Final Quotation
+                        </button>
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShareInquiry(inq);
-                              setShareDetails(details);
-                              setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
-                              setShowQuotationModal(true);
-                            }}
-                            className="w-[115px] h-[32px] px-2 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 shrink-0">
-                            <Send size={13} className="shrink-0" /> Share Quotation
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShareInquiry(inq);
+                            setShareDetails(details);
+                            setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
+                            setShowQuotationModal(true);
+                          }}
+                          className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1 shrink-0">
+                          <Send size={12} className="shrink-0" /> Share Quotation
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+
+        {/* Pagination Bar */}
+        {filtered.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
+            <div className="font-medium">
+              Showing <span className="font-bold text-slate-900">{startIndex + 1}</span> to{' '}
+              <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
+              <span className="font-bold text-slate-900">{filtered.length}</span> inquiries
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={validCurrentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1 transition-colors shadow-2xs text-xs">
+                <ChevronLeft size={14} /> Prev
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || (p >= validCurrentPage - 2 && p <= validCurrentPage + 2))
+                  .map((pageNum, i, arr) => {
+                    const prevPageNum = arr[i - 1];
+                    const showEllipsis = prevPageNum && pageNum - prevPageNum > 1;
+                    return (
+                      <span key={pageNum} className="flex items-center">
+                        {showEllipsis && <span className="px-1 text-slate-400 font-mono text-xs">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-7 h-7 rounded-lg text-xs font-bold transition-all flex items-center justify-center ${
+                            validCurrentPage === pageNum
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                          }`}>
+                          {pageNum}
+                        </button>
+                      </span>
+                    );
+                  })}
+              </div>
+
+              <button
+                type="button"
+                disabled={validCurrentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1 transition-colors shadow-2xs text-xs">
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
