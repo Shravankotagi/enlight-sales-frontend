@@ -2,12 +2,27 @@ import { useState } from 'react';
 import { Calendar, Check, ChevronDown } from 'lucide-react';
 import {
   formatLocalDate,
+  getFirstDayOfWeek,
+  getLastDayOfWeek,
   getFirstDayOfMonth,
   getLastDayOfMonth,
+  getFirstDayOfQuarter,
+  getLastDayOfQuarter,
+  getFirstDayOfYear,
+  getLastDayOfYear,
   getDaysAgo,
 } from '../utils/dateUtils';
 
-export type FilterPreset = '7_days' | '14_days' | 'this_month' | 'custom' | 'monthly';
+export type FilterPreset =
+  | 'today'
+  | 'this_week'
+  | 'this_month'
+  | 'this_quarter'
+  | 'this_year'
+  | 'custom'
+  | '7_days'
+  | '14_days'
+  | 'monthly';
 
 export type DateFilterRange = {
   preset: FilterPreset;
@@ -26,17 +41,40 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
   const [preset, setPreset] = useState<FilterPreset>(initialPreset);
   const [showCustom, setShowCustom] = useState(initialPreset === 'custom');
 
-  const firstDayOfMonth = getFirstDayOfMonth();
-  const lastDayOfMonth = getLastDayOfMonth();
   const todayStr = formatLocalDate();
-
   const [customFrom, setCustomFrom] = useState(getDaysAgo(7));
   const [customTo, setCustomTo] = useState(todayStr);
 
   const handleSelectPreset = (newPreset: FilterPreset) => {
     setPreset(newPreset);
 
-    if (newPreset === '7_days') {
+    if (newPreset === 'today') {
+      setShowCustom(false);
+      onChange({ preset: 'today', from: todayStr, to: todayStr });
+    } else if (newPreset === 'this_week') {
+      const fromStr = getFirstDayOfWeek();
+      const toStr = getLastDayOfWeek();
+      setShowCustom(false);
+      onChange({ preset: 'this_week', from: fromStr, to: toStr });
+    } else if (newPreset === 'this_month') {
+      const fromStr = getFirstDayOfMonth();
+      const toStr = getLastDayOfMonth();
+      setShowCustom(false);
+      onChange({ preset: 'this_month', from: fromStr, to: toStr });
+    } else if (newPreset === 'this_quarter') {
+      const fromStr = getFirstDayOfQuarter();
+      const toStr = getLastDayOfQuarter();
+      setShowCustom(false);
+      onChange({ preset: 'this_quarter', from: fromStr, to: toStr });
+    } else if (newPreset === 'this_year') {
+      const fromStr = getFirstDayOfYear();
+      const toStr = getLastDayOfYear();
+      setShowCustom(false);
+      onChange({ preset: 'this_year', from: fromStr, to: toStr });
+    } else if (newPreset === 'custom') {
+      setShowCustom(true);
+      onChange({ preset: 'custom', from: customFrom, to: customTo });
+    } else if (newPreset === '7_days') {
       const fromStr = getDaysAgo(7);
       setShowCustom(false);
       onChange({ preset: '7_days', from: fromStr, to: todayStr });
@@ -44,12 +82,6 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
       const fromStr = getDaysAgo(14);
       setShowCustom(false);
       onChange({ preset: '14_days', from: fromStr, to: todayStr });
-    } else if (newPreset === 'this_month') {
-      setShowCustom(false);
-      onChange({ preset: 'this_month', from: firstDayOfMonth, to: lastDayOfMonth });
-    } else if (newPreset === 'custom') {
-      setShowCustom(true);
-      onChange({ preset: 'custom', from: customFrom, to: customTo });
     }
   };
 
@@ -81,10 +113,12 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
           onChange={(e) => handleSelectPreset(e.target.value as FilterPreset)}
           className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs appearance-none cursor-pointer transition-all"
         >
+          <option value="today">Today</option>
+          <option value="this_week">This Week</option>
           <option value="this_month">This Month</option>
-          <option value="7_days">Last 7 Days</option>
-          <option value="14_days">Last 15 Days</option>
-          <option value="custom">Custom Date Range</option>
+          <option value="this_quarter">This Quarter</option>
+          <option value="this_year">This Year</option>
+          <option value="custom">Custom Range</option>
         </select>
         <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
       </div>

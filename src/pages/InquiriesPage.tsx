@@ -1601,9 +1601,9 @@ export default function InquiriesPage() {
                           {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-bold text-slate-900 text-center">
-                        <span className="inline-flex items-center justify-center gap-1.5 text-blue-700 group-hover:underline">
-                          <Building2 size={15} className="text-blue-600 flex-shrink-0" />
+                      <td className="px-4 py-3.5 font-bold text-slate-950 text-center">
+                        <span className="inline-flex items-center justify-center gap-1.5 text-slate-950 font-black group-hover:text-blue-600 group-hover:underline">
+                          <Building2 size={15} className="text-slate-800 flex-shrink-0" />
                           {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
                         </span>
                       </td>
@@ -1684,36 +1684,38 @@ export default function InquiriesPage() {
       {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
       {selectedInquiry && editDetails && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-150"
           onClick={() => setSelectedInquiry(null)}>
           <div
-            className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-6 my-auto"
+            className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto"
             onClick={e => e.stopPropagation()}>
-            <div className="space-y-6">
-              {/* Drawer Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-200">
-                    <FileText size={22} />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                      Inquiry AI Interpretation &amp; Audit
-                      <span className="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full flex items-center gap-1">
-                        <ShieldCheck size={12} /> 92% AI Confidence
-                      </span>
-                    </h2>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">
-                      ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()} · Received {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
-                    </p>
-                  </div>
+            {/* Drawer Header (Fixed Top) */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-200">
+                  <FileText size={22} />
                 </div>
-                <button
-                  onClick={() => setSelectedInquiry(null)}
-                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
-                  <X size={20} />
-                </button>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    Inquiry AI Interpretation &amp; Audit
+                    <span className="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full flex items-center gap-1">
+                      <ShieldCheck size={12} /> 92% AI Confidence
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                    ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()} · Received {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={() => setSelectedInquiry(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Scrollable Content Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
 
               {/* QA & Audit Section — Source badge + Document & Raw Inquiry action */}
               <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 shadow-inner">
@@ -2053,8 +2055,8 @@ export default function InquiriesPage() {
               </div>
             </div>
 
-            {/* Bottom Actions Bar */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3 bg-white sticky bottom-0 z-10 py-2">
+            {/* Bottom Actions Bar (Solid White Pinned Footer) */}
+            <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
               <button
                 type="button"
                 onClick={() => setShowPdfModal(true)}
@@ -2638,7 +2640,6 @@ export default function InquiriesPage() {
                     <input
                       required
                       type="text"
-                      list="existing-customers-list"
                       placeholder="Type or select company name..."
                       value={formCustomerName}
                       onChange={e => {
@@ -2656,11 +2657,6 @@ export default function InquiriesPage() {
                       <ChevronDown size={16} className={`transition-transform ${showCompanyDropdown ? 'rotate-180' : ''}`} />
                     </button>
                   </div>
-                  <datalist id="existing-customers-list">
-                    {existingCustomers.map((cName) => (
-                      <option key={cName} value={cName} />
-                    ))}
-                  </datalist>
 
                   {showCompanyDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
