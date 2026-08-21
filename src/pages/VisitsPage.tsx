@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   MapPin,
   Plus,
@@ -10,15 +10,15 @@ import {
   X,
   User,
   Phone,
-  Map,
+  Map as MapIcon,
   Edit2,
   Trash2,
   Calendar,
   Package,
-  Eye,
   Check,
 } from 'lucide-react';
-import { visitsApi } from '../lib/api';
+import { visitsApi, employeesApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getFirstDayOfMonth, getLastDayOfMonth, formatLocalDate } from '../utils/dateUtils';
 
@@ -39,15 +39,60 @@ interface CustomerVisit {
   follow_up?: string;
   followup?: string;
   visited_at: string;
+  salesperson_phone?: string;
+  salesperson_name?: string;
 }
 
 export default function VisitsPage() {
+  const { isSalesManager, isAdmin } = useAuth();
+  const canViewSalesperson = isSalesManager || isAdmin;
+
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Fetch employees list for salesperson name mapping
+  useEffect(() => {
+    if (canViewSalesperson) {
+      employeesApi
+        .getAll()
+        .then(res => {
+          const raw = res?.data;
+          const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+          setEmployees(list);
+        })
+        .catch(() => setEmployees([]));
+    }
+  }, [canViewSalesperson]);
+
+  const employeeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    employees.forEach(emp => {
+      if (emp.phone) {
+        const clean = emp.phone.replace(/\D/g, '').slice(-10);
+        if (clean) map.set(clean, emp.name);
+      }
+    });
+    return map;
+  }, [employees]);
+
+  const getSalespersonDisplayName = (v: CustomerVisit) => {
+    if (v.salesperson_name && v.salesperson_name !== v.salesperson_phone) {
+      return v.salesperson_name;
+    }
+    if (v.salesperson_phone) {
+      const cleanPhone = v.salesperson_phone.replace(/\D/g, '').slice(-10);
+      if (cleanPhone && employeeMap.has(cleanPhone)) {
+        return employeeMap.get(cleanPhone);
+      }
+      return v.salesperson_phone;
+    }
+    return null;
+  };
 
   // Details & Edit Modal States
   const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
@@ -232,6 +277,7 @@ export default function VisitsPage() {
       }
     }
 
+    const repName = getSalespersonDisplayName(v) || '';
     const matchesSearch =
       (v?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.person_met || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -239,7 +285,8 @@ export default function VisitsPage() {
       (v?.customer_address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.remarks || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.follow_up_action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      repName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesOutcome = filterOutcome === 'all' || (v?.outcome || '').toLowerCase() === filterOutcome.toLowerCase();
     return matchesSearch && matchesOutcome;
   });
@@ -264,11 +311,11 @@ export default function VisitsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <MapPin className="text-emerald-600" size={28} />
-            Field Customer Visits
+            <MapPin className="text-blue-600" size={28} />
+            Customer Visits Log
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Log and track customer field meetings, requirement notes, and follow-up activities.
+            Track customer field visits, meetings, feedback, and sales follow-up commitments.
           </p>
         </div>
 
@@ -282,7 +329,7 @@ export default function VisitsPage() {
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
             <Plus size={18} />
             Log Customer Visit
           </button>
@@ -293,7 +340,7 @@ export default function VisitsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Visits Logged</p>
+            <p className="text-xs text-slate-500 font-medium">Total Visits</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{totalVisits}</p>
           </div>
           <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
@@ -303,7 +350,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Positive Outcomes 🟢</p>
+            <p className="text-xs text-slate-500 font-medium">Positive Outcome</p>
             <p className="text-2xl font-bold text-emerald-600 mt-1">{positiveVisits}</p>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
@@ -313,7 +360,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Neutral / Discussion 🟡</p>
+            <p className="text-xs text-slate-500 font-medium">Neutral / Discussion</p>
             <p className="text-2xl font-bold text-amber-600 mt-1">{neutralVisits}</p>
           </div>
           <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
@@ -323,7 +370,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Not Interested / Closed 🔴</p>
+            <p className="text-xs text-slate-500 font-medium">Not Interested</p>
             <p className="text-2xl font-bold text-rose-600 mt-1">{negativeVisits}</p>
           </div>
           <div className="p-3 bg-rose-50 text-rose-600 rounded-lg">
@@ -332,13 +379,13 @@ export default function VisitsPage() {
         </div>
       </div>
 
-      {/* Filter & Search */}
+      {/* Filters & Search */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
         <div className="relative w-full sm:w-80">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search customer, person met, city, remarks..."
+            placeholder={canViewSalesperson ? 'Search customer, contact, location, salesperson...' : 'Search customer, contact, location, remarks...'}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -369,20 +416,19 @@ export default function VisitsPage() {
                 <th className="px-4 py-3">Outcome</th>
                 <th className="px-4 py-3">Discussion &amp; Requirements</th>
                 <th className="px-4 py-3">Next Action</th>
-                <th className="px-3 py-3 text-right"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline mr-2 text-emerald-600" />
                     Loading visit logs...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
                     <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-slate-600 font-medium">No visit logs found.</p>
                     <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
@@ -394,6 +440,7 @@ export default function VisitsPage() {
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const loc = v.location || (v as any).city || (v as any).customer_address || '-';
                   const rawRemarks = v.raw_remarks || v.remarks || '';
+                  const salespersonName = getSalespersonDisplayName(v);
 
                   // Follow-up Action Extraction
                   const followUp =
@@ -433,7 +480,13 @@ export default function VisitsPage() {
                           </span>
                           {loc && loc !== '-' && (
                             <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                              • <Map size={11} className="text-slate-400 shrink-0" /> {loc}
+                              • <MapIcon size={11} className="text-slate-400 shrink-0" /> {loc}
+                            </span>
+                          )}
+                          {/* Salesperson tag visible ONLY to Sales Managers & Admin */}
+                          {canViewSalesperson && salespersonName && (
+                            <span className="text-slate-500 font-medium inline-flex items-center gap-1 whitespace-nowrap">
+                              • <User size={11} className="text-slate-400 shrink-0" /> {salespersonName}
                             </span>
                           )}
                         </div>
@@ -485,13 +538,6 @@ export default function VisitsPage() {
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
-                      </td>
-
-                      {/* 6. Quick Action Icon */}
-                      <td className="px-3 py-3.5 text-right">
-                        <span className="p-1.5 text-slate-400 group-hover:text-emerald-600 group-hover:bg-emerald-50 rounded-lg inline-flex transition-colors">
-                          <Eye size={16} />
-                        </span>
                       </td>
                     </tr>
                   );
@@ -649,7 +695,7 @@ export default function VisitsPage() {
                       {isEditing ? 'Edit Visit Details' : selectedVisit.customer_name || 'Customer Visit'}
                     </h2>
                     {!isEditing && (
-                      <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
                         <Calendar size={12} />
                         {selectedVisit.visited_at
                           ? new Date(selectedVisit.visited_at).toLocaleDateString('en-IN', {
@@ -659,6 +705,9 @@ export default function VisitsPage() {
                             })
                           : 'Recent Visit'}
                         {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
+                        {canViewSalesperson && getSalespersonDisplayName(selectedVisit) && (
+                          <span>• Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedVisit)}</strong></span>
+                        )}
                       </p>
                     )}
                   </div>
@@ -671,10 +720,10 @@ export default function VisitsPage() {
                   <>
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1.5 transition-colors"
+                      className="px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
                       title="Edit Visit">
                       <Edit2 size={13} />
-                      Edit
+                      Edit Visit
                     </button>
                     <button
                       onClick={handleDeleteClick}
