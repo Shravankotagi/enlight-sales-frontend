@@ -282,7 +282,7 @@ export default function VisitsPage() {
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
             <Plus size={18} />
             Log Customer Visit
           </button>
