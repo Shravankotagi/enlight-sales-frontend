@@ -500,20 +500,15 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   const totalAmount = unitPrice > 0 ? Math.round(quantityTons * unitPrice) : 0;
 
-  // 7. Delivery Location (Capture only what is stated, never append "Warehouse")
+  // 7. Delivery Location (Capture full delivery address as stated in text or aiJson)
   let deliveryLocation = aiJson.delivery_location || aiJson.deliveryLocation || '';
   if (!deliveryLocation) {
     const locMatch =
-      textRaw.match(/(?:delivered\s+(?:to\s+our\s+site\s+in|to\s+site\s+in|to|at)|delivery\s+(?:to|at)|site\s+in|location:?)\s+([A-Za-z0-9\s,.-]+?)(?:\s*[:\n]|\s*MS\s|\s*SS\s|\s*TMT\s|\s*HR\s|\s*CR\s|\s+for|\s+before|\.|$)/i) ||
-      textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z\s]+?)(?:\s+before|\s+by|\s+on|\s+within|\.|$)/i);
-    if (locMatch) {
+      textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to|location)\s*[:=-]?\s*([A-Za-z0-9\s,./#&-]+?)(?:\s*(?:payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|before|by|on\s+\d|gst\b)|\n{2,}|$)/i) ||
+      textRaw.match(/(?:delivered\s+(?:to\s+our\s+site\s+in|to\s+site\s+in|to|at)|delivery\s+(?:to|at)|site\s+in|location:?)\s+([A-Za-z0-9\s,./#&-]+?)(?:\s*[:\n]|\s*MS\s|\s*SS\s|\s*TMT\s|\s*HR\s|\s*CR\s|\s+for|\s+before|$)/i) ||
+      textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&-]+?)(?:\s+before|\s+by|\s+on|\s+within|$)/i);
+    if (locMatch && locMatch[1].trim().length > 2) {
       deliveryLocation = locMatch[1].replace(/^[:\s]+|[:\s]+$/g, '').trim();
-    } else if (textLower.includes('pune')) {
-      deliveryLocation = 'Pune';
-    } else if (textLower.includes('nashik')) {
-      deliveryLocation = 'Nashik';
-    } else if (textLower.includes('mumbai')) {
-      deliveryLocation = 'Mumbai';
     }
   }
 
@@ -791,12 +786,12 @@ export default function InquiriesPage() {
         width: ai.width || '',
         length: ai.length || '',
         productForm: ai.productForm || 'Coil',
-        quantityTons: frozenLineItems.reduce((s: number, i: any) => s + i.quantity, 0) || ai.quantityTons || 0,
+        quantityTons: frozenLineItems.reduce((s: number, i: any) => s + (i.unit === 'MT' ? i.quantity : 0), 0) || ai.quantityTons || 0,
         quantityUnits: ai.quantityUnits || 0,
         unitPrice: frozenLineItems[0]?.rate || ai.unitPrice || 0,
         totalAmount: frozenTotal,
-        paymentTerms: ai.payment_terms || ai.paymentTerms || '',
-        deliveryLocation: ai.delivery_location || ai.deliveryLocation || '',
+        paymentTerms: ai.payment_terms || ai.paymentTerms || parsed.paymentTerms || '',
+        deliveryLocation: ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || '',
         deliveryDate: ai.delivery_date || ai.deliveryDate || '',
         lineItems: frozenLineItems,
       });
@@ -1707,7 +1702,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150"
           onClick={() => setSelectedInquiry(null)}>
           <div
-            className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-6 my-auto"
+            className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-6 my-auto"
             onClick={e => e.stopPropagation()}>
             <div className="space-y-6">
               {/* Drawer Header */}
@@ -1812,12 +1807,12 @@ const formatExtractedRequirementText = (extracted: any): string => {
                   <table className="w-full text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[5%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[38%]">Description &amp; Specifications</th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[18%] text-center">Quantity &amp; Unit</th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[16%] text-center">Rate (₹)</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[18%] text-right">Amount (₹)</th>
-                        <th className="px-2 py-3 text-center w-[5%]"></th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[35%]">Description &amp; Specifications</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[24%] text-center">Quantity &amp; Unit</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[17%] text-center">Rate (₹)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[16%] text-right">Amount (₹)</th>
+                        <th className="px-2 py-3 text-center w-[4%]"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
@@ -1857,7 +1852,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                             </div>
                           </td>
                           <td className="px-3 py-3.5 border-r border-slate-200">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5 w-full min-w-[135px]">
                               <input
                                 type="number"
                                 value={item.quantity === 0 ? '' : item.quantity}
@@ -1873,7 +1868,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                 }}
                                 placeholder="0"
-                                className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-blue-700 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                                className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-blue-700 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                               />
                               <select
                                 value={item.unit || 'MT'}
@@ -1882,7 +1877,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                   updated[idx] = { ...updated[idx], unit: e.target.value };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                 }}
-                                className="px-1.5 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
                                 <option value="Pieces">Pcs</option>
