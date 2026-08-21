@@ -1413,14 +1413,27 @@ export default function InquiriesPage() {
 
       const text = i?.raw_text || '';
       const parsed = parseInquiryText(text, i);
-      const name = parsed.companyName || '';
-      const phone = parsed.customerPhone || '';
+      const name = (parsed.companyName || i?.customer_name || i?.sender_name || '').toLowerCase();
+      const phone = (parsed.customerPhone || i?.sender_phone || i?.customer_phone || '').toLowerCase();
+      const itemsSummary = (
+        (parsed.lineItems || []).map((li: LineItemDetail) => `${li.sku_text} ${li.dimensions || ''} ${li.quantity} ${li.unit || ''}`).join(' ') +
+        ' ' + (parsed.productType || '')
+      ).toLowerCase();
 
+      const formattedDate = i?.created_at ? new Date(i.created_at).toLocaleString('en-IN').toLowerCase() : '';
+      const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
+      const isoDate = (i?.created_at || '').toLowerCase();
+
+      const s = searchTerm.toLowerCase().trim();
       const matchesSearch =
-        !searchTerm.trim() ||
-        name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        phone.toLowerCase().includes(searchTerm.toLowerCase());
+        !s ||
+        name.includes(s) ||
+        itemsSummary.includes(s) ||
+        formattedDate.includes(s) ||
+        dateOnly.includes(s) ||
+        isoDate.includes(s) ||
+        phone.includes(s) ||
+        text.toLowerCase().includes(s);
 
       const statusStr = (i?.status || 'review').toLowerCase();
       const isReview = ['review', 'needs_review', 'pending', 'new', 'draft'].includes(statusStr);
@@ -1510,38 +1523,28 @@ export default function InquiriesPage() {
 
       {/* Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="relative w-full sm:w-80">
+        <div className="relative w-full sm:w-96">
           <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
           <input
             type="text"
-            placeholder="Search by Customer, Material, or Phone..."
+            placeholder="Search by Received Date, Customer / Company Name, Items Summary..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-          {['all', 'review', 'processed'].map(st => {
-            const label =
-              st === 'all'
-                ? `All Inquiries (${productInquiries.length})`
-                : st === 'review'
-                ? `Needs Review (${reviewCount}) ⏳`
-                : `Quotation Ready (${processedCount}) ✓`;
-            return (
-              <button
-                key={st}
-                onClick={() => setFilterStatus(st)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${
-                  filterStatus === st
-                    ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}>
-                {label}
-              </button>
-            );
-          })}
+        <div className="relative inline-flex items-center w-full sm:w-auto">
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
+          >
+            <option value="all">All Inquiries ({productInquiries.length})</option>
+            <option value="review">Needs Review ({reviewCount}) ⏳</option>
+            <option value="processed">Quotation Ready ({processedCount}) ✓</option>
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
         </div>
       </div>
 
@@ -1551,10 +1554,9 @@ export default function InquiriesPage() {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="px-4 py-3 text-center">#</th>
-                <th className="px-4 py-3 text-center">Received Date</th>
-                <th className="px-4 py-3 text-center">Customer / Company Name</th>
-                <th className="px-4 py-3 text-center">Items Summary</th>
+                <th className="px-4 py-3 text-center w-12">#</th>
+                <th className="px-4 py-3 text-left">Customer &amp; Date</th>
+                <th className="px-4 py-3 text-left">Items Summary</th>
                 <th className="px-4 py-3 text-center">Source Channel</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Actions</th>
@@ -1563,13 +1565,13 @@ export default function InquiriesPage() {
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                     Loading monthly inquiries...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                     No product inquiries found for this period.
                   </td>
                 </tr>
@@ -1607,19 +1609,17 @@ export default function InquiriesPage() {
                       onClick={() => handleOpenDrawer(inq)}
                       className="hover:bg-blue-50/50 transition-colors cursor-pointer group">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
-                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center gap-1">
-                          <Calendar size={12} className="text-slate-400" />
-                          {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="inline-flex items-center justify-center gap-1.5 font-bold text-slate-900 text-sm">
+                      <td className="px-4 py-3.5 text-left min-w-[200px]">
+                        <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                           <Building2 size={15} className="text-slate-700 flex-shrink-0" />
-                          {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
-                        </span>
+                          <span>{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                          <Calendar size={12} className="text-slate-400 shrink-0" />
+                          <span>{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
+                        </div>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center">
+                      <td className="px-4 py-3.5 text-xs text-slate-700 text-left">
                         {details.lineItems && details.lineItems.length > 0 ? (
                           <div className="space-y-0.5 inline-block text-left">
                             {details.lineItems.slice(0, 3).map((li: LineItemDetail, liIdx: number) => (
