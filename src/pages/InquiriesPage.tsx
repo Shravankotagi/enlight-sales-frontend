@@ -1518,12 +1518,12 @@ export default function InquiriesPage() {
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-3 py-3.5 text-center w-[5%]">#</th>
-              <th className="px-5 py-3.5 text-left w-[27%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[17%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[17%]">Source Channel</th>
-              <th className="px-4 py-3.5 text-center w-[20%]">Status</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Actions</th>
+              <th className="px-3 py-3.5 text-center w-[4%]">#</th>
+              <th className="px-5 py-3.5 text-left w-[24%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
+              <th className="px-4 py-3.5 text-center w-[18%]">Status</th>
+              <th className="px-4 py-3.5 text-center w-[26%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -1552,8 +1552,9 @@ export default function InquiriesPage() {
                       companyName: parsed.companyName,
                       customerPhone: parsed.customerPhone,
                       lineItems: lineItemsSrc.map((item: any) => ({
-                        sku_text: item.sku_text || item.description || '',
+                        sku_text: item.sku_text || item.sku || item.product_name || '',
                         dimensions: item.dimensions || '',
+                        hsn_code: item.hsn_code || '',
                         quantity: Number(item.quantity) || 0,
                         unit: item.unit || 'MT',
                         rate: Number(item.rate) || 0,
@@ -1608,70 +1609,64 @@ export default function InquiriesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      <div className="relative inline-block text-left">
+                      {openActionMenuId === inq.id ? (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center justify-center gap-1.5 animate-in fade-in zoom-in-95 duration-100">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionMenuId(null);
+                              handleOpenDrawer(inq);
+                            }}
+                            className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 flex items-center gap-1 shadow-2xs">
+                            <Edit3 size={13} className="text-slate-600" />
+                            <span>Edit</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionMenuId(null);
+                              setPdfModalInquiry(inq);
+                              setPdfModalDetails(details);
+                              setShowPdfModal(true);
+                            }}
+                            className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 flex items-center gap-1 shadow-2xs">
+                            <Eye size={13} className="text-slate-600" />
+                            <span>View PDF</span>
+                          </button>
+
+                          {isConfirmed && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionMenuId(null);
+                                setShareInquiry(inq);
+                                setShareDetails(details);
+                                setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
+                                setShowQuotationModal(true);
+                              }}
+                              className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 flex items-center gap-1 shadow-2xs">
+                              <Send size={13} className="text-slate-600" />
+                              <span>Share</span>
+                            </button>
+                          )}
+                        </div>
+                      ) : (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setOpenActionMenuId(openActionMenuId === inq.id ? null : inq.id);
+                            setOpenActionMenuId(inq.id);
                           }}
-                          className={`p-1.5 rounded-lg border transition-all ${
-                            openActionMenuId === inq.id
-                              ? 'bg-slate-200 text-slate-900 border-slate-300'
-                              : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300'
-                          } shadow-2xs`}>
+                          className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all">
                           <MoreVertical size={16} />
                         </button>
-
-                        {openActionMenuId === inq.id && (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 px-1 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActionMenuId(null);
-                                handleOpenDrawer(inq);
-                              }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200/80 text-left">
-                              <Edit3 size={14} className="text-slate-500 shrink-0" />
-                              <span>Edit</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActionMenuId(null);
-                                setPdfModalInquiry(inq);
-                                setPdfModalDetails(details);
-                                setShowPdfModal(true);
-                              }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200/80 text-left">
-                              <Eye size={14} className="text-slate-500 shrink-0" />
-                              <span>View PDF</span>
-                            </button>
-
-                            {isConfirmed && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenActionMenuId(null);
-                                  setShareInquiry(inq);
-                                  setShareDetails(details);
-                                  setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
-                                  setShowQuotationModal(true);
-                                }}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200/80 text-left">
-                                <Send size={14} className="text-slate-500 shrink-0" />
-                                <span>Share Quotation</span>
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </td>
                   </tr>
                 );
