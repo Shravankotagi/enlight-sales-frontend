@@ -2282,13 +2282,13 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       </div>
 
                       <div className="flex justify-between items-center py-0.5 text-slate-700">
-                        <span className="font-medium">CGST9 (9%)</span>
-                        <span className="font-mono font-medium">{qBreakdown.formattedCgst9}</span>
+                        <span className="font-medium">CGST (9%)</span>
+                        <span className="font-mono font-medium">{qBreakdown.formattedCGST}</span>
                       </div>
 
                       <div className="flex justify-between items-center py-0.5 text-slate-700">
-                        <span className="font-medium">SGST9 (9%)</span>
-                        <span className="font-mono font-medium">{qBreakdown.formattedSgst9}</span>
+                        <span className="font-medium">SGST (9%)</span>
+                        <span className="font-mono font-medium">{qBreakdown.formattedSGST}</span>
                       </div>
 
                       <div className="flex justify-between items-center py-0.5 text-slate-700">
@@ -2392,7 +2392,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                   </div>
                   <div className="text-[11px] text-slate-600 flex justify-between font-mono">
                     <span>Sub Total: ₹{qBreakdown.formattedSubtotal}</span>
-                    <span>CGST: ₹{qBreakdown.formattedCgst9} | SGST: ₹{qBreakdown.formattedSgst9}</span>
+                    <span>CGST: ₹{qBreakdown.formattedCGST} | SGST: ₹{qBreakdown.formattedSGST}</span>
                   </div>
                   <p className="text-slate-700 font-mono text-[11px]">
                     {editDetails.companyName} · {editDetails.productType} ({editDetails.productForm || 'Material'}) {editDetails.quantityTons} MT @ ₹{editDetails.unitPrice}/MT

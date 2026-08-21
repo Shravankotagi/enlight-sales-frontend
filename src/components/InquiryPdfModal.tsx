@@ -290,13 +290,13 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               </div>
 
               <div className="flex justify-between items-center py-1 text-slate-700">
-                <span className="font-medium">CGST9 (9%)</span>
-                <span className="font-mono font-medium">{breakdown.formattedCgst9}</span>
+                <span className="font-medium">CGST (9%)</span>
+                <span className="font-mono font-medium">{breakdown.formattedCGST}</span>
               </div>
 
               <div className="flex justify-between items-center py-1 text-slate-700">
-                <span className="font-medium">SGST9 (9%)</span>
-                <span className="font-mono font-medium">{breakdown.formattedSgst9}</span>
+                <span className="font-medium">SGST (9%)</span>
+                <span className="font-mono font-medium">{breakdown.formattedSGST}</span>
               </div>
 
               <div className="flex justify-between items-center py-1 text-slate-700">
