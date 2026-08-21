@@ -42,12 +42,63 @@ interface ExtractedDetails {
   paymentTerms: string;
   deliveryLocation: string;
   lineItems: LineItemDetail[];
+  salespersonName?: string;
 }
 
 interface InquiryPdfModalProps {
   inquiry: InquiryItem | null;
   details: ExtractedDetails | null;
   onClose: () => void;
+}
+
+function resolvePlaceOfSupply(address?: string): string {
+  if (!address) return 'Maharashtra (27)';
+  const lower = address.toLowerCase();
+  if (
+    lower.includes('maharashtra') ||
+    lower.includes('mumbai') ||
+    lower.includes('pune') ||
+    lower.includes('khopoli') ||
+    lower.includes('raigad') ||
+    lower.includes('thane') ||
+    lower.includes('nagpur') ||
+    lower.includes('nashik') ||
+    lower.includes('chakan') ||
+    lower.includes('taloja')
+  ) {
+    return 'Maharashtra (27)';
+  }
+  if (lower.includes('gujarat') || lower.includes('ahmedabad') || lower.includes('surat') || lower.includes('vadodara')) {
+    return 'Gujarat (24)';
+  }
+  if (lower.includes('karnataka') || lower.includes('bangalore') || lower.includes('bengaluru')) {
+    return 'Karnataka (29)';
+  }
+  if (lower.includes('tamil nadu') || lower.includes('chennai')) {
+    return 'Tamil Nadu (33)';
+  }
+  if (lower.includes('delhi')) {
+    return 'Delhi (07)';
+  }
+  if (lower.includes('haryana') || lower.includes('gurgaon') || lower.includes('faridabad')) {
+    return 'Haryana (06)';
+  }
+  if (lower.includes('uttar pradesh') || lower.includes('noida') || lower.includes('kanpur')) {
+    return 'Uttar Pradesh (09)';
+  }
+  if (lower.includes('rajasthan') || lower.includes('jaipur')) {
+    return 'Rajasthan (08)';
+  }
+  if (lower.includes('madhya pradesh') || lower.includes('indore')) {
+    return 'Madhya Pradesh (23)';
+  }
+  if (lower.includes('west bengal') || lower.includes('kolkata')) {
+    return 'West Bengal (19)';
+  }
+  if (lower.includes('telangana') || lower.includes('hyderabad')) {
+    return 'Telangana (36)';
+  }
+  return 'Maharashtra (27)';
 }
 
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
@@ -62,11 +113,12 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
       ? details.lineItems
       : [
           {
-            sku_text: details.productType || 'Material',
+            sku_text: details.productType || 'HR - COIL / SHEET',
             dimensions: [details.thickness, details.width ? `x ${details.width}` : '', details.length ? `x ${details.length}` : '']
               .filter(Boolean)
               .join(' ')
               .trim() || undefined,
+            hsn_code: '72083730',
             quantity: details.quantityTons,
             unit: 'MT',
             rate: details.unitPrice,
@@ -83,9 +135,14 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const isSingleUnit = lineItems.every(i => (i.unit || 'MT').toUpperCase() === firstUnit.toUpperCase());
 
   const inquiryRefId = inquiry.id ? `#INQ-${inquiry.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-INQ';
+  const piNumber = `PI-${inquiry.id ? inquiry.id.substring(0, 5).toUpperCase() : '00051'}`;
+  
   const createdDate = inquiry.created_at
-    ? new Date(inquiry.created_at).toLocaleDateString('en-IN')
-    : new Date().toLocaleDateString('en-IN');
+    ? new Date(inquiry.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  const salesperson = details.salespersonName || 'Vedant Goel';
+  const placeOfSupply = resolvePlaceOfSupply(details.deliveryLocation);
 
   const handleCopyRef = () => {
     navigator.clipboard.writeText(inquiryRefId);
@@ -99,10 +156,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   return (
     <div
-      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 z-[9999] animate-in fade-in duration-200"
+      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-[9999] animate-in fade-in duration-200"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      
       {/* Print CSS to ensure only the document sheet prints */}
       <style>{`
         @media print {
@@ -119,7 +175,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
-            padding: 20px !important;
+            padding: 24px !important;
             box-shadow: none !important;
             border: none !important;
             background: white !important;
@@ -130,17 +186,17 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         }
       `}</style>
 
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
         
         {/* Top Actions Header */}
         <div className="bg-slate-900 px-6 py-3.5 flex items-center justify-between no-print shrink-0 border-b border-slate-800 z-10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-              PDF
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-inner">
+              PI
             </div>
             <div>
-              <h3 className="font-bold text-white text-base">Inquiry Sales Quotation Document</h3>
-              <p className="text-xs text-slate-400">Ref: {inquiryRefId} • {details.companyName}</p>
+              <h3 className="font-bold text-white text-base leading-tight">Proforma Invoice / Sales Quotation</h3>
+              <p className="text-xs text-slate-400">PI Number: {piNumber} • Ref: {inquiryRefId} • {details.companyName}</p>
             </div>
           </div>
 
@@ -170,65 +226,96 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         </div>
 
         {/* Printable PDF Document Body */}
-        <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-6 sm:p-8 space-y-6 bg-white font-sans text-slate-800">
+        <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-6 sm:p-8 space-y-6 bg-white font-sans text-slate-800 text-xs">
           
-          {/* Company Header */}
+          {/* Header Section: Company Profile (Left) & Document Title/Meta (Right) */}
           <div className="flex justify-between items-start border-b border-slate-200 pb-5">
-            <div>
+            <div className="space-y-1">
               {!logoError ? (
                 <img
                   src="/logo.png"
                   alt="Enlight Metals"
                   onError={() => setLogoError(true)}
-                  className="h-10 w-auto object-contain max-w-[220px]"
+                  className="h-10 w-auto object-contain max-w-[220px] mb-2"
                 />
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mb-2">
                   <span className="bg-slate-900 text-white font-black text-xl px-3 py-1 rounded-lg">ENLIGHT</span>
                   <span className="text-xl font-bold tracking-wider text-slate-800">METALS</span>
                 </div>
               )}
-              <p className="text-xs font-bold text-indigo-700 mt-1">ENLIGHT METALS PRIVATE LIMITED • INDUSTRIAL METAL SOLUTIONS</p>
-              <p className="text-xs text-slate-500">MIDC Industrial Zone, Mumbai - 400001 • GSTIN: 27AAACE1234F1Z9</p>
+              <h2 className="font-extrabold text-slate-900 text-sm">Enlight Metals Private Limited</h2>
+              <p className="text-slate-600 leading-tight">606 Clover Hills Plaza, NIBM Road</p>
+              <p className="text-slate-600 leading-tight">Pune Maharashtra 411048, India</p>
+              <p className="text-slate-700 font-semibold font-mono text-[11px] pt-0.5">GSTIN 27AAICE5263E1ZN</p>
+              <p className="text-slate-500 font-mono text-[11px]">accounts@enlightmetals.com • https://enlightmetals.com/</p>
             </div>
 
-            <div className="text-right">
-              <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-full border border-indigo-200 mb-1">
-                📄 OFFICIAL SALES QUOTATION
-              </span>
-              <p className="text-xs text-slate-500 font-medium">Inquiry Ref: <span className="font-bold text-slate-800">{inquiryRefId}</span></p>
-              <p className="text-xs text-slate-500">Date: <span className="font-semibold text-slate-700">{createdDate}</span></p>
+            <div className="text-right space-y-1.5">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Proforma Invoice</h1>
+              <p className="font-mono text-slate-700 text-xs font-semibold">PI Number# <span className="font-bold text-slate-900">{piNumber}</span></p>
+              <p className="text-slate-500 text-[11px]">Quotation Ref: <span className="font-mono font-bold text-slate-800">{inquiryRefId}</span></p>
+              
+              <div className="pt-2 space-y-1 text-[11px]">
+                <div className="flex justify-end gap-2 text-slate-600">
+                  <span className="font-medium">Order Date :</span>
+                  <span className="font-bold text-slate-900 font-mono">{createdDate}</span>
+                </div>
+                <div className="flex justify-end gap-2 text-slate-600">
+                  <span className="font-medium">Sales person :</span>
+                  <span className="font-bold text-slate-900">{salesperson}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Customer & Delivery Information */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-            <div>
-              <p className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Customer / Company Details</p>
-              <h4 className="font-bold text-slate-900 text-base mt-0.5">{details.companyName}</h4>
-              {details.customerPhone && (
-                <p className="text-slate-600 font-mono mt-0.5">Phone: {details.customerPhone}</p>
-              )}
-              <p className="text-slate-400 mt-1">Channel Source: <span className="font-semibold text-slate-700 capitalize">{inquiry.source_channel || 'WhatsApp Bot'}</span></p>
+          {/* Address & Supply Section: Bill To, Ship To & Place of Supply */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              {/* Bill To */}
+              <div className="space-y-1">
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Bill To</p>
+                <h4 className="font-extrabold text-slate-900 text-sm uppercase">{details.companyName}</h4>
+                <p className="text-slate-600 leading-snug">
+                  {details.deliveryLocation || 'MIDC Industrial Area, Maharashtra, India'}
+                </p>
+                {details.customerPhone && (
+                  <p className="text-slate-600 font-mono text-[11px]">Phone: {details.customerPhone}</p>
+                )}
+                <p className="text-slate-700 font-mono text-[11px]">GSTIN: 27AAOCS2064H1Z4</p>
+              </div>
+
+              {/* Ship To */}
+              <div className="space-y-1">
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ship To</p>
+                <h4 className="font-extrabold text-slate-900 text-sm uppercase">{details.companyName}</h4>
+                <p className="text-slate-600 font-medium">C/O Site Incharge / Delivery Warehouse</p>
+                <p className="text-slate-700 font-semibold text-xs leading-snug">
+                  {details.deliveryLocation || 'Customer Delivery Site, Maharashtra, India'}
+                </p>
+                <p className="text-purple-800 font-bold text-[11px] pt-1">
+                  Payment Terms: <span className="font-semibold">{details.paymentTerms || 'As per agreed terms'}</span>
+                </p>
+              </div>
             </div>
 
-            <div className="text-left sm:text-right">
-              <p className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Delivery &amp; Commercial Terms</p>
-              <h4 className="font-bold text-slate-900 text-sm mt-0.5">{details.deliveryLocation}</h4>
-              <p className="text-purple-800 font-bold mt-1">Payment Terms: {details.paymentTerms || 'As agreed'}</p>
+            {/* Place Of Supply Indicator */}
+            <div className="px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[11px] font-semibold text-slate-700 flex items-center justify-between">
+              <span>Place Of Supply: <strong className="text-slate-900 font-bold">{placeOfSupply}</strong></span>
+              <span className="text-slate-500 font-mono text-[10px]">Currency: INR (₹)</span>
             </div>
           </div>
 
           {/* Quotation Line Items Table — Strict Reference Structure */}
-          <div className="border border-slate-300 rounded-lg overflow-hidden">
+          <div className="border border-slate-300 rounded-lg overflow-hidden shadow-2xs">
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-700 text-white font-bold text-[11px] tracking-wide">
                 <tr>
                   <th className="px-3 py-2.5 text-center w-[5%] border-b border-slate-600">#</th>
-                  <th className="px-4 py-2.5 w-[42%] border-b border-slate-600">Item &amp; Description</th>
+                  <th className="px-4 py-2.5 w-[40%] border-b border-slate-600">Item &amp; Description</th>
                   <th className="px-3 py-2.5 text-center w-[15%] border-b border-slate-600">HSN/SAC</th>
-                  <th className="px-4 py-2.5 text-right w-[12%] border-b border-slate-600">Qty</th>
-                  <th className="px-4 py-2.5 text-right w-[12%] border-b border-slate-600">Rate</th>
+                  <th className="px-4 py-2.5 text-right w-[13%] border-b border-slate-600">Qty</th>
+                  <th className="px-4 py-2.5 text-right w-[13%] border-b border-slate-600">Rate</th>
                   <th className="px-4 py-2.5 text-right w-[14%] border-b border-slate-600">Amount</th>
                 </tr>
               </thead>
@@ -267,61 +354,88 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </table>
           </div>
 
-          {/* Table Footer: Left total items & Right financial summary block */}
+          {/* Table Footer: Left Total Items & Right Financial Summary Block */}
           <div className="flex flex-col sm:flex-row justify-between items-start pt-1 gap-6">
-            
-            {/* Bottom Left: Items in Total */}
+            {/* Bottom Left: Total Items */}
             <div className="text-xs font-semibold text-slate-700 pt-1">
-              <span>Items in Total {formatIndianCurrency(totalQuantity, true)} {isSingleUnit ? firstUnit : ''}</span>
-              
-              <div className="text-[11px] text-slate-500 mt-4 space-y-1">
-                <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>
-                <p>1. Material meets IS 2062 / IS 1786 prime metal standards.</p>
-                <p>2. Prices valid for 7 days from issue date.</p>
-                <p>3. System generated official PDF quotation from Enlight Metals OS.</p>
-              </div>
+              <span>Items in Total <strong className="font-mono text-slate-900 font-bold">{formatIndianCurrency(totalQuantity, true)} {isSingleUnit ? firstUnit : ''}</strong></span>
             </div>
 
-            {/* Bottom Right: Financial Summary Block matching Reference Image */}
-            <div className="w-full sm:w-72 space-y-2 text-xs">
-              <div className="flex justify-between items-center py-1 text-slate-700">
-                <span className="font-medium">Sub Total</span>
-                <span className="font-mono font-medium">{breakdown.formattedSubtotal}</span>
+            {/* Bottom Right: Financial Summary Block */}
+            <div className="w-full sm:w-72 space-y-1.5 text-xs text-slate-700">
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-medium text-slate-600">Sub Total</span>
+                <span className="font-mono font-medium text-slate-900">{breakdown.formattedSubtotal}</span>
               </div>
 
-              <div className="flex justify-between items-center py-1 text-slate-700">
-                <span className="font-medium">CGST (9%)</span>
-                <span className="font-mono font-medium">{breakdown.formattedCGST}</span>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-medium text-slate-600">CGST9 (9%)</span>
+                <span className="font-mono font-medium text-slate-900">{breakdown.formattedCGST}</span>
               </div>
 
-              <div className="flex justify-between items-center py-1 text-slate-700">
-                <span className="font-medium">SGST (9%)</span>
-                <span className="font-mono font-medium">{breakdown.formattedSGST}</span>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-medium text-slate-600">SGST9 (9%)</span>
+                <span className="font-mono font-medium text-slate-900">{breakdown.formattedSGST}</span>
               </div>
 
-              <div className="flex justify-between items-center py-1 text-slate-700">
-                <span className="font-medium">Rounding</span>
-                <span className="font-mono font-medium">{breakdown.formattedRounding}</span>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-medium text-slate-600">Rounding</span>
+                <span className="font-mono font-medium text-slate-900">{breakdown.formattedRounding}</span>
               </div>
 
-              <div className="flex justify-between items-center py-2 border-t border-slate-300 font-black text-slate-950 text-sm">
-                <span>Total</span>
-                <span className="font-mono text-base">{breakdown.formattedGrandTotal}</span>
+              <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                <span className="font-bold">Total</span>
+                <span className="font-mono text-base font-black text-slate-950">{breakdown.formattedGrandTotal}</span>
               </div>
             </div>
-
           </div>
 
-          {/* Signature Footer */}
-          <div className="pt-6 border-t border-slate-200 flex justify-between items-end text-xs text-slate-500">
-            <div>
-              <p className="font-semibold text-slate-800">Enlight Metals Sales Ops Team</p>
-              <p>System Generated Inquiry Quotation PDF Document</p>
+          {/* Bank Details & Terms Section (Direct Match with PDF 2 Page 2) */}
+          <div className="pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-6 text-[11px] text-slate-700">
+            {/* Notes & Bank Details */}
+            <div className="space-y-1.5">
+              <p className="font-bold text-slate-900 text-xs">Notes</p>
+              <p className="font-bold text-slate-800">Bank Details:-</p>
+              <div className="font-mono text-slate-700 space-y-0.5 pl-1">
+                <p>Bank Name: <span className="font-semibold text-slate-900">HDFC Bank</span></p>
+                <p>IFSC Code: <span className="font-semibold text-slate-900">HDFC0002454</span></p>
+                <p>Account Number: <span className="font-semibold text-slate-900">50200107323747</span></p>
+                <p>Account Name: <span className="font-semibold text-slate-900">Enlight Metals Private Limited</span></p>
+              </div>
             </div>
 
-            <div className="text-right">
-              <div className="h-10 border-b border-dashed border-slate-300 w-36 mb-1"></div>
-              <p className="font-bold text-slate-800">Authorized Signatory</p>
+            {/* Terms & Conditions / Declaration */}
+            <div className="space-y-1.5">
+              <p className="font-bold text-slate-900 text-xs">Terms &amp; Conditions</p>
+              <p className="text-slate-600 leading-tight">
+                <strong className="text-slate-800 font-semibold">Declaration:</strong> Certified that the particulars given above are true and correct and the amount indicated represents the price actually charged and there is no flow of additional consideration directly or indirectly from the buyer.
+              </p>
+              <div className="pt-1 text-[10px] text-slate-500 leading-tight space-y-0.5">
+                <p className="font-semibold text-slate-700">Note:</p>
+                <p>1) Interest @24% p.a. will be charged if the payment is not made with stipulated date.</p>
+                <p>2) All disputes are Subject to Pune Jurisdiction only.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Authorized Signature Section with Official Stamp */}
+          <div className="pt-6 border-t border-slate-200 flex justify-between items-end">
+            <div>
+              <p className="font-extrabold text-slate-900 text-xs">Enlight Metals Private Limited</p>
+              <p className="text-[10px] text-slate-400">MIDC Zone, Pune / Mumbai Operations</p>
+            </div>
+
+            <div className="text-right flex flex-col items-center sm:items-end">
+              {/* Stamp Graphic & Signature Line */}
+              <div className="relative flex items-center justify-center mb-1">
+                <div className="w-28 h-14 border-2 border-indigo-700/80 rounded-full flex flex-col items-center justify-center p-1 text-center rotate-[-4deg] shadow-2xs">
+                  <span className="text-[7px] font-extrabold text-indigo-900 uppercase tracking-tighter">ENLIGHT METALS PVT. LTD.</span>
+                  <span className="text-[9px] font-serif italic text-indigo-800 font-bold my-[-2px]">Authorized</span>
+                  <span className="text-[6.5px] font-bold text-indigo-700 uppercase tracking-widest">★ PUNE ★</span>
+                </div>
+              </div>
+              <div className="h-0.5 bg-slate-300 w-36 mb-1"></div>
+              <p className="font-bold text-slate-800 text-xs">Authorized Signature</p>
             </div>
           </div>
 
