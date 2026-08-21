@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
+  FileText, Plus, Minus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Trash2, Sparkles, User, Edit3, MoreVertical
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Sparkles, User, Edit3, MoreVertical
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import type { DateFilterRange } from '../components/DateFilterControl';
@@ -833,7 +833,7 @@ export default function InquiriesPage() {
       const frozenLineItems = lineItemsSrc.map((item: any) => ({
         sku_text: item.sku_text || item.description || '',
         dimensions: item.dimensions || '',
-        hsn_code: item.hsn_code || item.hsn || '72083730',
+        hsn_code: item.hsn_code || item.hsn || '',
         quantity: Number(item.quantity) || 0,
         unit: item.unit || 'MT',
         rate: Number(item.rate) || 0,
@@ -1692,34 +1692,38 @@ export default function InquiriesPage() {
                               <span>Edit</span>
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActionMenuId(null);
-                                setPdfModalInquiry(inq);
-                                setPdfModalDetails(details);
-                                setShowPdfModal(true);
-                              }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200/80 text-left">
-                              <Eye size={14} className="text-blue-600 shrink-0" />
-                              <span>Final Quotation</span>
-                            </button>
+                            {isConfirmed && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenActionMenuId(null);
+                                    setPdfModalInquiry(inq);
+                                    setPdfModalDetails(details);
+                                    setShowPdfModal(true);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200/80 text-left">
+                                  <Eye size={14} className="text-slate-500 shrink-0" />
+                                  <span>Final Quotation</span>
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActionMenuId(null);
-                                setShareInquiry(inq);
-                                setShareDetails(details);
-                                setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
-                                setShowQuotationModal(true);
-                              }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors border border-purple-200/80 text-left">
-                              <Send size={14} className="text-purple-600 shrink-0" />
-                              <span>Share Quotation</span>
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenActionMenuId(null);
+                                    setShareInquiry(inq);
+                                    setShareDetails(details);
+                                    setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
+                                    setShowQuotationModal(true);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200/80 text-left">
+                                  <Send size={14} className="text-slate-500 shrink-0" />
+                                  <span>Share Quotation</span>
+                                </button>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1861,7 +1865,7 @@ export default function InquiriesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Company Name *
+                      Company Name <span className="text-red-500 font-bold">*</span>
                     </label>
                     <div className="relative">
                       <div className="relative flex items-center">
@@ -1926,7 +1930,6 @@ export default function InquiriesPage() {
                     <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs">
                       <User size={15} className="text-blue-600 shrink-0" />
                       <span className="truncate">{activeSalespersonName}</span>
-                      
                     </div>
                   </div>
                 </div>
@@ -1937,18 +1940,22 @@ export default function InquiriesPage() {
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
                         <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[30%]">Description &amp; Specifications</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[30%]">
+                          Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
+                        </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">HSN/SAC</th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[22%] text-center">Quantity &amp; Unit</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[22%] text-center">
+                          Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                        </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">Rate (₹)</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-right">Amount (₹)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
                         <th className="px-2 py-3 text-center w-[3%]"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: '72083730', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -1986,28 +1993,29 @@ export default function InquiriesPage() {
                           <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                             <input
                               type="text"
-                              value={item.hsn_code !== undefined ? item.hsn_code : '72083730'}
+                              value={item.hsn_code || ''}
                               onChange={(e) => {
                                 const updated = [...(editDetails.lineItems || [])];
                                 updated[idx] = { ...updated[idx], hsn_code: e.target.value };
                                 setEditDetails({ ...editDetails, lineItems: updated });
                                 setSaveSuccess(false);
                               }}
-                              placeholder="72083730"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
+                              placeholder="e.g. 72083730"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                             />
                           </td>
                           <td className="px-3 py-3.5 border-r border-slate-200">
                             <div className="flex items-center gap-1.5 w-full min-w-[135px]">
                               <input
                                 type="number"
+                                min="0"
                                 value={item.quantity === 0 ? '' : item.quantity}
                                 onChange={(e) => {
                                   const val = e.target.value;
-                                  const q = val === '' ? 0 : parseFloat(val);
-                                  const safeQ = isNaN(q) ? 0 : q;
+                                  const rawQ = val === '' ? 0 : parseFloat(val);
+                                  const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  const amt = Math.round(safeQ * (updated[idx]?.rate || 0));
+                                  const amt = Math.max(0, Math.round(safeQ * (updated[idx]?.rate || 0)));
                                   updated[idx] = { ...updated[idx], quantity: safeQ, amount: amt };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
@@ -2015,7 +2023,7 @@ export default function InquiriesPage() {
                                   setSaveSuccess(false);
                                 }}
                                 placeholder="0"
-                                className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-blue-700 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                                className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                               />
                               <select
                                 value={item.unit || 'MT'}
@@ -2037,30 +2045,32 @@ export default function InquiriesPage() {
                           <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
                             <input
                               type="number"
+                              min="0"
                               value={item.rate === 0 ? '' : item.rate}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                const r = val === '' ? 0 : parseFloat(val);
-                                const safeR = isNaN(r) ? 0 : r;
+                                const rawR = val === '' ? 0 : parseFloat(val);
+                                const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
                                 const updated = [...(editDetails.lineItems || [])];
-                                const amt = Math.round((updated[idx]?.quantity || 0) * safeR);
+                                const amt = Math.max(0, Math.round((updated[idx]?.quantity || 0) * safeR));
                                 updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
                                 setSaveSuccess(false);
                               }}
                               placeholder="0"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                             />
                           </td>
-                          <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono border-r border-slate-200">
+                          <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200">
                             <input
                               type="number"
+                              min="0"
                               value={item.amount === 0 ? '' : item.amount}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                const a = val === '' ? 0 : parseFloat(val);
-                                const safeA = isNaN(a) ? 0 : a;
+                                const rawA = val === '' ? 0 : parseFloat(val);
+                                const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                                 const updated = [...(editDetails.lineItems || [])];
                                 updated[idx] = { ...updated[idx], amount: safeA };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
@@ -2068,7 +2078,7 @@ export default function InquiriesPage() {
                                 setSaveSuccess(false);
                               }}
                               placeholder="0"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                             />
                           </td>
                           <td className="px-2 py-3.5 text-center">
@@ -2083,9 +2093,9 @@ export default function InquiriesPage() {
                                     setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                     setSaveSuccess(false);
                                   }}
-                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
                                   title="Remove line item">
-                                  <Trash2 size={15} />
+                                  <Minus size={15} />
                                 </button>
                               )}
                               {idx === (editDetails.lineItems && editDetails.lineItems.length > 0 ? editDetails.lineItems.length - 1 : 0) && (
@@ -2094,15 +2104,15 @@ export default function InquiriesPage() {
                                   onClick={() => {
                                     const current = editDetails.lineItems && editDetails.lineItems.length > 0
                                       ? editDetails.lineItems
-                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083730', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                                     const updated = [
                                       ...current,
-                                      { sku_text: '', dimensions: '', hsn_code: '72083730', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
                                     ];
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
                                   }}
-                                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
                                   title="Add line item">
                                   <Plus size={16} />
                                 </button>
@@ -2160,8 +2170,8 @@ export default function InquiriesPage() {
                     );
                   })()}
 
-                  {/* Commercial Terms Footer */}
-                  <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  {/* Commercial Terms Footer (Background Removed to match popup) */}
+                  <div className="p-4 bg-transparent border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
                       <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">Delivery Address / Location</span>
                       <input
@@ -2185,7 +2195,7 @@ export default function InquiriesPage() {
                           setEditDetails({ ...editDetails, paymentTerms: e.target.value });
                           setSaveSuccess(false);
                         }}
-                        placeholder="e.g. 30 Days Credit, 100% Advance, 50% Advance 50% on Delivery"
+                        placeholder="e.g. 30 Days Credit, 100% Advance"
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                       />
                     </div>
@@ -2194,18 +2204,20 @@ export default function InquiriesPage() {
               </div>
             </div>
 
-            {/* Bottom Actions Bar (Solid White Pinned Footer) */}
+            {/* Bottom Actions Bar (Solid White Pinned Footer - View PDF & Share Quotation gated on Saved status) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-              <button
-                type="button"
-                onClick={() => {
-                  setPdfModalInquiry(selectedInquiry);
-                  setPdfModalDetails(editDetails);
-                  setShowPdfModal(true);
-                }}
-                className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
-                <Eye size={15} /> View PDF 📄
-              </button>
+              {(saveSuccess || ['confirmed', 'processed', 'saved', 'won', 'quotation_ready', 'quoted'].includes((selectedInquiry.status || '').toLowerCase())) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPdfModalInquiry(selectedInquiry);
+                    setPdfModalDetails(editDetails);
+                    setShowPdfModal(true);
+                  }}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
+                  <Eye size={15} /> View PDF 📄
+                </button>
+              )}
 
               <button
                 type="button"
@@ -2224,34 +2236,36 @@ export default function InquiriesPage() {
                   </>
                 ) : (
                   <>
-                    <Save size={15} /> Save 
+                    <Save size={15} /> Save
                   </>
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShareInquiry(selectedInquiry);
-                  setShareDetails(editDetails);
-                  setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || 'shravankotagi314@gmail.com');
-                  setShowQuotationModal(true);
-                }}
-                className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                  ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : 'bg-purple-600 hover:bg-purple-700'
-                }`}>
-                {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
-                  <>
-                    <Check size={15} /> Quotation Sent ✓
-                  </>
-                ) : (
-                  <>
-                    <Send size={15} /> Send Quotation ✉️
-                  </>
-                )}
-              </button>
+              {(saveSuccess || ['confirmed', 'processed', 'saved', 'won', 'quotation_ready', 'quoted'].includes((selectedInquiry.status || '').toLowerCase())) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareInquiry(selectedInquiry);
+                    setShareDetails(editDetails);
+                    setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || 'shravankotagi314@gmail.com');
+                    setShowQuotationModal(true);
+                  }}
+                  className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                    ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-purple-600 hover:bg-purple-700'
+                  }`}>
+                  {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
+                    <>
+                      <Check size={15} /> Quotation Sent ✓
+                    </>
+                  ) : (
+                    <>
+                      <Send size={15} /> Send Quotation ✉️
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2583,7 +2597,9 @@ export default function InquiriesPage() {
 
             <form onSubmit={handleCreateInquiry} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Company Name *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Company Name <span className="text-red-500 font-bold">*</span>
+                </label>
                 <div className="relative">
                   <div className="relative flex items-center">
                     <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
@@ -2640,7 +2656,9 @@ export default function InquiriesPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Product Description / SKU *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Product Description / SKU <span className="text-red-500 font-bold">*</span>
+                </label>
                 <textarea
                   rows={3}
                   required

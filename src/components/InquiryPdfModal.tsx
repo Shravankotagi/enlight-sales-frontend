@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { X, Download, Check, Copy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { customersApi } from '../lib/api';
 import { calculateQuotationBreakdown, formatIndianCurrency } from '../utils/pricingEngine';
 
 interface InquiryItem {
@@ -107,7 +109,26 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const [copiedRef, setCopiedRef] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
+  const { data: customerList = [] } = useQuery({
+    queryKey: ['customers-list'],
+    queryFn: async () => {
+      const res = await customersApi.getAll();
+      return Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   if (!inquiry || !details) return null;
+
+  const matchedCustomer = (customerList as any[]).find((c: any) => {
+    const cName = (c.company_name || c.name || '').toLowerCase().trim();
+    const targetName = (details.companyName || '').toLowerCase().trim();
+    return cName && targetName && (cName === targetName || cName.includes(targetName) || targetName.includes(cName));
+  });
+
+  const customerAddress = details.deliveryLocation || matchedCustomer?.address || matchedCustomer?.billing_address || (inquiry as any)?.customer_address || '';
+  const customerGstin = matchedCustomer?.gstin || matchedCustomer?.gst_number || (inquiry as any)?.customer_gstin || '';
+  const customerPhone = details.customerPhone || matchedCustomer?.phone || (inquiry as any)?.customer_phone || (inquiry as any)?.sender_phone || '';
 
   // Build line items list — prefer dynamic lineItems, fall back to single item
   const lineItems: LineItemDetail[] =
@@ -120,7 +141,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               .filter(Boolean)
               .join(' ')
               .trim() || undefined,
-            hsn_code: '72083730',
+            hsn_code: '',
             quantity: details.quantityTons,
             unit: 'MT',
             rate: details.unitPrice,
@@ -277,34 +298,38 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               {/* Bill To */}
               <div className="space-y-1">
                 <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Bill To</p>
-                <h4 className="font-extrabold text-slate-900 text-sm uppercase">{details.companyName}</h4>
-                <p className="text-slate-600 leading-snug">
-                  {details.deliveryLocation || 'MIDC Industrial Area, Maharashtra, India'}
-                </p>
-                {details.customerPhone && (
-                  <p className="text-slate-600 font-mono text-[11px]">Phone: {details.customerPhone}</p>
+                <h4 className="font-extrabold text-slate-900 text-sm uppercase">{details.companyName || '—'}</h4>
+                {customerAddress && (
+                  <p className="text-slate-600 leading-snug">{customerAddress}</p>
                 )}
-                <p className="text-slate-700 font-mono text-[11px]">GSTIN: 27AAOCS2064H1Z4</p>
+                {customerPhone && (
+                  <p className="text-slate-600 font-mono text-[11px]">Phone: {customerPhone}</p>
+                )}
+                {customerGstin && (
+                  <p className="text-slate-700 font-mono text-[11px]">GSTIN: {customerGstin}</p>
+                )}
               </div>
 
               {/* Ship To */}
               <div className="space-y-1">
                 <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ship To</p>
-                <h4 className="font-extrabold text-slate-900 text-sm uppercase">{details.companyName}</h4>
+                <h4 className="font-extrabold text-slate-900 text-sm uppercase">{details.companyName || '—'}</h4>
                 <p className="text-slate-600 font-medium">C/O Site Incharge / Delivery Warehouse</p>
-                <p className="text-slate-700 font-semibold text-xs leading-snug">
-                  {details.deliveryLocation || 'Customer Delivery Site, Maharashtra, India'}
-                </p>
-                <p className="text-purple-800 font-bold text-[11px] pt-1">
-                  Payment Terms: <span className="font-semibold">{details.paymentTerms || 'As per agreed terms'}</span>
-                </p>
+                {customerAddress && (
+                  <p className="text-slate-700 font-semibold text-xs leading-snug">{customerAddress}</p>
+                )}
+                {details.paymentTerms && (
+                  <p className="text-purple-800 font-bold text-[11px] pt-1">
+                    Payment Terms: <span className="font-semibold">{details.paymentTerms}</span>
+                  </p>
+                )}
               </div>
             </div>
 
             {/* Place Of Supply Indicator */}
             <div className="px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[11px] font-semibold text-slate-700 flex items-center justify-between">
               <span>Place Of Supply: <strong className="text-slate-900 font-bold">{placeOfSupply}</strong></span>
-              <span className="text-slate-500 font-mono text-[10px]">Currency: INR (₹)</span>
+              
             </div>
           </div>
 
@@ -326,7 +351,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   const qty = Number(item.quantity) || 0;
                   const rate = Number(item.rate) || 0;
                   const amt = Number(item.amount) || (qty * rate) || 0;
-                  const hsn = item.hsn_code || '72083730';
+                  const hsn = item.hsn_code || '—';
                   const unit = item.unit || 'MT';
 
                   return (
