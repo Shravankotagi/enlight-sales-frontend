@@ -39,6 +39,7 @@ interface InquiryItem {
 interface LineItemDetail {
   sku_text: string;
   dimensions?: string;
+  hsn_code?: string;
   quantity: number;
   unit?: string;
   rate: number;
@@ -561,6 +562,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => ({
     sku_text: item.sku_text || item.description || '',
     dimensions: item.dimensions || '',
+    hsn_code: item.hsn_code || (item as any).hsn || '72083730',
     quantity: item.quantity,
     unit: item.unit || 'MT',
     rate: item.rate,
@@ -767,6 +769,7 @@ export default function InquiriesPage() {
       const frozenLineItems = lineItemsSrc.map((item: any) => ({
         sku_text: item.sku_text || item.description || '',
         dimensions: item.dimensions || '',
+        hsn_code: item.hsn_code || item.hsn || '72083730',
         quantity: Number(item.quantity) || 0,
         unit: item.unit || 'MT',
         rate: Number(item.rate) || 0,
@@ -1824,17 +1827,18 @@ const formatExtractedRequirementText = (extracted: any): string => {
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
                         <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[35%]">Description &amp; Specifications</th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[24%] text-center">Quantity &amp; Unit</th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[17%] text-center">Rate (₹)</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[16%] text-right">Amount (₹)</th>
-                        <th className="px-2 py-3 text-center w-[4%]"></th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[30%]">Description &amp; Specifications</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">HSN/SAC</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[22%] text-center">Quantity &amp; Unit</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">Rate (₹)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-right">Amount (₹)</th>
+                        <th className="px-2 py-3 text-center w-[3%]"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: '72083730', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -1868,6 +1872,20 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                 />
                               </div>
                             </div>
+                          </td>
+                          <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                            <input
+                              type="text"
+                              value={item.hsn_code !== undefined ? item.hsn_code : '72083730'}
+                              onChange={(e) => {
+                                const updated = [...(editDetails.lineItems || [])];
+                                updated[idx] = { ...updated[idx], hsn_code: e.target.value };
+                                setEditDetails({ ...editDetails, lineItems: updated });
+                                setSaveSuccess(false);
+                              }}
+                              placeholder="72083730"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
+                            />
                           </td>
                           <td className="px-3 py-3.5 border-r border-slate-200">
                             <div className="flex items-center gap-1.5 w-full min-w-[135px]">
@@ -1972,10 +1990,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       onClick={() => {
                         const current = editDetails.lineItems && editDetails.lineItems.length > 0
                           ? editDetails.lineItems
-                          : [{ sku_text: editDetails.productType || '', dimensions: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                          : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083730', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                         const updated = [
                           ...current,
-                          { sku_text: '', dimensions: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                          { sku_text: '', dimensions: '', hsn_code: '72083730', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
                         ];
                         setEditDetails({ ...editDetails, lineItems: updated });
                         setSaveSuccess(false);
@@ -2012,11 +2030,11 @@ const formatExtractedRequirementText = (extracted: any): string => {
                             <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
                           </div>
                           <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">CGST9 (9%)</span>
+                            <span className="font-medium text-slate-600">CGST (9%)</span>
                             <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
                           </div>
                           <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">SGST9 (9%)</span>
+                            <span className="font-medium text-slate-600">SGST (9%)</span>
                             <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
                           </div>
                           <div className="flex justify-between items-center py-0.5">

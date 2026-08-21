@@ -99,7 +99,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   return (
     <div
-      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 z-[9999] animate-in fade-in duration-200"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       
@@ -130,10 +130,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         }
       `}</style>
 
-      <div className="bg-white rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl border border-slate-200 my-8">
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
         
         {/* Top Actions Header */}
-        <div className="bg-slate-900 px-6 py-4 flex items-center justify-between no-print">
+        <div className="bg-slate-900 px-6 py-3.5 flex items-center justify-between no-print shrink-0 border-b border-slate-800 z-10">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
               PDF
@@ -170,7 +170,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         </div>
 
         {/* Printable PDF Document Body */}
-        <div id="printable-inquiry-pdf" className="p-6 sm:p-8 space-y-6 bg-white font-sans text-slate-800">
+        <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-6 sm:p-8 space-y-6 bg-white font-sans text-slate-800">
           
           {/* Company Header */}
           <div className="flex justify-between items-start border-b border-slate-200 pb-5">
