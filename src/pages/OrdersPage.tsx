@@ -57,6 +57,87 @@ interface Order {
   deal_items?: DealItem[];
 }
 
+export function formatDeliveryLocation(raw?: string): string {
+  if (!raw || !raw.trim() || raw === '-') return '—';
+  const text = raw.trim();
+
+  // If already clean and short (e.g. "Chakan, Maharashtra" or "Talegaon, Maharashtra")
+  if (
+    text.length < 35 &&
+    !text.toLowerCase().includes('gat no') &&
+    !text.toLowerCase().includes('plot no') &&
+    !text.toLowerCase().includes('shed no') &&
+    !text.toLowerCase().includes('unit -') &&
+    !text.toLowerCase().includes('pin:')
+  ) {
+    return text;
+  }
+
+  const indianStates = [
+    'Maharashtra', 'Gujarat', 'Karnataka', 'Tamil Nadu', 'Telangana', 'Andhra Pradesh',
+    'Rajasthan', 'Madhya Pradesh', 'Uttar Pradesh', 'Haryana', 'Punjab', 'West Bengal',
+    'Odisha', 'Chhattisgarh', 'Jharkhand', 'Bihar', 'Kerala', 'Goa', 'Delhi', 'Uttarakhand'
+  ];
+
+  const indianCities = [
+    'Chakan', 'Pune', 'Talegaon', 'Bhosari', 'Vasuli', 'Kharabwadi', 'Sanaswadi', 'Ranjangaon',
+    'Pimpri', 'Chinchwad', 'Kurkumbh', 'Baramati', 'Waluj', 'Aurangabad', 'Nashik', 'Nagpur',
+    'Kolhapur', 'Solapur', 'Mumbai', 'Thane', 'Navi Mumbai', 'Tarapur', 'Taloja', 'Panvel',
+    'Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Gandhinagar', 'Vapi', 'Ankleshwar',
+    'Bengaluru', 'Bangalore', 'Chennai', 'Hyderabad', 'Kolkata', 'Jamshedpur', 'Raipur',
+    'Bhilai', 'Rourkela', 'Jaipur', 'Indore', 'Bhopal', 'Ghaziabad', 'Faridabad', 'Gurugram',
+    'Gurgaon', 'Noida', 'Uchgaon', 'Chiplun', 'Sangli', 'Satara'
+  ];
+
+  let detectedState = '';
+  for (const st of indianStates) {
+    if (new RegExp('\\b' + st + '\\b', 'i').test(text)) {
+      detectedState = st;
+      break;
+    }
+  }
+
+  let detectedCity = '';
+  for (const ct of indianCities) {
+    if (new RegExp('\\b' + ct + '\\b', 'i').test(text)) {
+      detectedCity = ct;
+      break;
+    }
+  }
+
+  if (detectedCity && detectedState) {
+    if (detectedCity.toLowerCase() === detectedState.toLowerCase()) return detectedState;
+    return `${detectedCity}, ${detectedState}`;
+  }
+
+  if (detectedCity) {
+    return `${detectedCity}, Maharashtra`;
+  }
+
+  if (detectedState) {
+    return detectedState;
+  }
+
+  const parts = text
+    .split(/[,;\n]+/)
+    .map((p) => p.trim())
+    .filter(
+      (p) =>
+        p.length > 0 &&
+        !p.toLowerCase().includes('pin') &&
+        !p.toLowerCase().includes('state code') &&
+        !p.toLowerCase().includes('india') &&
+        !/^\d{6}$/.test(p),
+    );
+
+  if (parts.length > 0) {
+    const cleanLast = parts.slice(-2).join(', ');
+    return cleanLast.length > 40 ? parts[parts.length - 1] : cleanLast;
+  }
+
+  return text;
+}
+
 export default function OrdersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
@@ -554,7 +635,7 @@ export default function OrdersPage() {
                       title="Click anywhere on row to view full Order Details in table format">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
                       <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center gap-1">
+                        <span className="inline-flex items-center justify-center gap-1">
                           <Calendar size={12} className="text-slate-400" />
                           {ord.created_at
                             ? new Date(ord.created_at).toLocaleString('en-IN')
@@ -564,24 +645,27 @@ export default function OrdersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 font-mono text-xs text-blue-700 font-semibold text-center">
-                        <span className="inline-flex items-center gap-1.5 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-md border border-blue-200 group-hover:border-blue-600 transition-all font-bold shadow-2xs">
+                        <span className="inline-flex items-center justify-center gap-1.5 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-md border border-blue-200 group-hover:border-blue-600 transition-all font-bold shadow-2xs">
                           <FileText size={13} /> {ord.po_number || 'PO-2026-AUTO'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-slate-900">
-                        <span className="flex items-center gap-1.5 group-hover:text-blue-700 transition-colors">
+                      <td className="px-4 py-3.5 font-semibold text-slate-900 text-center">
+                        <span className="inline-flex items-center justify-center gap-1.5 group-hover:text-blue-700 transition-colors">
                           <Building2 size={14} className="text-slate-400 group-hover:text-blue-500" />
                           {ord.customer_name || 'Customer'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-800 font-medium max-w-xs truncate" title={itemsStr}>
-                        {itemsStr}
+                      <td className="px-4 py-3.5 text-xs text-slate-800 font-medium max-w-xs text-center" title={itemsStr}>
+                        <div className="truncate max-w-xs mx-auto text-center">{itemsStr}</div>
                       </td>
                       <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap font-mono">
                         {ordTonnage > 0 ? `${ordTonnage.toLocaleString('en-IN')} MT` : '—'}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-600">
-                        {ord.delivery_location || '-'}
+                      <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
+                        <span className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200 text-slate-800 font-semibold text-xs">
+                          <MapPin size={12} className="text-rose-500 shrink-0" />
+                          {formatDeliveryLocation(ord.delivery_location)}
+                        </span>
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         <button
@@ -589,7 +673,7 @@ export default function OrdersPage() {
                             e.stopPropagation();
                             handleViewPoDocument(ord);
                           }}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all group-hover:shadow-md hover:scale-105"
+                          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all group-hover:shadow-md hover:scale-105"
                           title="View Original Purchase Order Image / Document">
                           <Eye size={14} /> View PO
                         </button>
