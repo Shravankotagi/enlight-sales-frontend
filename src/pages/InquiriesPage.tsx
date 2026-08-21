@@ -934,29 +934,47 @@ export default function InquiriesPage() {
     if (!selectedInquiry || !editDetails) return;
     try {
       setSubmitting(true);
-      const baseAmt = editDetails.totalAmount;
-      const gstAmt = Math.round(baseAmt * 0.18);
-      const grandAmt = Math.round(baseAmt * 1.18);
+      const currentItems = editDetails.lineItems && editDetails.lineItems.length > 0
+        ? editDetails.lineItems
+        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+
+      const baseAmt = currentItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
+      const qBreakdown = calculateQuotationBreakdown(baseAmt);
 
       let summaryRequirement = '';
-      if (editDetails.lineItems && editDetails.lineItems.length > 0) {
-        const itemStrs = editDetails.lineItems.map(item => `${item.sku_text || 'Item'}: ${item.quantity} MT @ ₹${item.rate}/MT`);
-        summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+      if (currentItems.length > 0) {
+        const itemStrs = currentItems.map(item => `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}: ${item.quantity} ${item.unit || 'MT'} @ ₹${item.rate}/${item.unit || 'MT'}`);
+        summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       } else {
-        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Subtotal: ₹${baseAmt.toLocaleString('en-IN')}, Grand Total: ₹${grandAmt.toLocaleString('en-IN')}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       }
 
       const mediaUrlsPayload = drawerFileBase64 ? [drawerFileBase64] : (selectedInquiry.media_urls || []);
 
-      await inquiriesApi.updateStatus(selectedInquiry.id, 'confirmed', {
+      const payload = {
         ...editDetails,
-        line_items: editDetails.lineItems,
+        companyName: editDetails.companyName,
+        customer_name: editDetails.companyName,
+        customerPhone: editDetails.customerPhone,
+        customer_phone: editDetails.customerPhone,
+        deliveryLocation: editDetails.deliveryLocation,
+        delivery_location: editDetails.deliveryLocation,
+        paymentTerms: editDetails.paymentTerms,
+        payment_terms: editDetails.paymentTerms,
+        lineItems: currentItems,
+        line_items: currentItems,
         requirement: summaryRequirement,
         totalAmount: baseAmt,
-        gstAmount: gstAmt,
-        grandTotal: grandAmt,
+        total_amount: baseAmt,
+        subtotal: qBreakdown.subtotal,
+        gstAmount: qBreakdown.CGST + qBreakdown.SGST,
+        gst_amount: qBreakdown.CGST + qBreakdown.SGST,
+        grandTotal: qBreakdown.grandTotal,
+        grand_total: qBreakdown.grandTotal,
         media_urls: mediaUrlsPayload,
-      });
+      };
+
+      await inquiriesApi.updateStatus(selectedInquiry.id, 'confirmed', payload);
 
       const updatedObj: InquiryItem = {
         ...selectedInquiry,
@@ -967,13 +985,7 @@ export default function InquiriesPage() {
         customer_phone: editDetails.customerPhone,
         raw_text: selectedInquiry.raw_text,
         media_urls: mediaUrlsPayload,
-        ai_extraction_json: {
-          ...editDetails,
-          line_items: editDetails.lineItems,
-          totalAmount: baseAmt,
-          gstAmount: gstAmt,
-          grandTotal: grandAmt,
-        },
+        ai_extraction_json: payload,
       };
 
       setSaveSuccess(true);
@@ -1791,7 +1803,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
                   </label>
                   <select
                     value={editDetails.companyName}
-                    onChange={(e) => setEditDetails({ ...editDetails, companyName: e.target.value })}
+                    onChange={(e) => {
+                      setEditDetails({ ...editDetails, companyName: e.target.value });
+                      setSaveSuccess(false);
+                    }}
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
                     {existingCustomers.map((cName) => (
                       <option key={cName} value={cName}>{cName}</option>
@@ -1832,6 +1847,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                   const updated = [...(editDetails.lineItems || [])];
                                   updated[idx] = { ...updated[idx], sku_text: e.target.value };
                                   setEditDetails({ ...editDetails, lineItems: updated });
+                                  setSaveSuccess(false);
                                 }}
                                 className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
                                 placeholder="Product Name / Description"
@@ -1845,6 +1861,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                     const updated = [...(editDetails.lineItems || [])];
                                     updated[idx] = { ...updated[idx], dimensions: e.target.value };
                                     setEditDetails({ ...editDetails, lineItems: updated });
+                                    setSaveSuccess(false);
                                   }}
                                   className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
                                   placeholder="e.g. 1mm or 2.50mm x 1250mm"
@@ -1867,6 +1884,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
+                                  setSaveSuccess(false);
                                 }}
                                 placeholder="0"
                                 className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-blue-700 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
@@ -1877,6 +1895,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                   const updated = [...(editDetails.lineItems || [])];
                                   updated[idx] = { ...updated[idx], unit: e.target.value };
                                   setEditDetails({ ...editDetails, lineItems: updated });
+                                  setSaveSuccess(false);
                                 }}
                                 className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
@@ -1900,6 +1919,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                 updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
+                                setSaveSuccess(false);
                               }}
                               placeholder="0"
                               className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
@@ -1917,6 +1937,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                 updated[idx] = { ...updated[idx], amount: safeA };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
+                                setSaveSuccess(false);
                               }}
                               placeholder="0"
                               className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
@@ -1931,6 +1952,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
+                                  setSaveSuccess(false);
                                 }}
                                 className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Remove line item">
@@ -1941,25 +1963,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="font-bold text-slate-900 border-t border-slate-300">
-                      <tr className="bg-emerald-100/90 text-emerald-950 font-black">
-                        <td className="px-4 py-3 font-extrabold border-r border-emerald-300" colSpan={2}>
-                          Grand Total Amount (Incl. 18% GST):
-                        </td>
-                        <td className="px-3 py-3 text-center font-bold text-xs border-r border-emerald-300 font-mono text-emerald-900">
-                          {(editDetails.lineItems || []).length > 0
-                            ? `${(editDetails.lineItems || []).reduce((s, i) => s + (i.quantity || 0), 0)} Total Units`
-                            : `${editDetails.quantityTons || 0} MT`}
-                        </td>
-                        <td className="px-3 py-3 text-center text-slate-500 font-mono text-xs border-r border-emerald-300">
-                          —
-                        </td>
-                        <td className="px-4 py-3 text-right font-black text-emerald-950 text-base font-mono border-r border-emerald-300">
-                          ₹{Math.round((editDetails.totalAmount || 0) * 1.18).toLocaleString('en-IN')}
-                        </td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
                   </table>
 
                   {/* Add Line Item Button */}
@@ -1975,12 +1978,59 @@ const formatExtractedRequirementText = (extracted: any): string => {
                           { sku_text: '', dimensions: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
                         ];
                         setEditDetails({ ...editDetails, lineItems: updated });
+                        setSaveSuccess(false);
                       }}
                       className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs">
                       <Plus size={14} /> + Add Line Item
                     </button>
                     <span className="text-[11px] text-slate-400 italic">Add multiple product lines for complex inquiries</span>
                   </div>
+
+                  {/* Standard Quotation Pricing Breakdown Layout (Matching Reference) */}
+                  {(() => {
+                    const activeLineItems = editDetails.lineItems && editDetails.lineItems.length > 0
+                      ? editDetails.lineItems
+                      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+
+                    const subtotal = activeLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                    const qBreakdown = calculateQuotationBreakdown(subtotal);
+
+                    const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => i.unit || 'MT')));
+                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
+                    const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
+
+                    return (
+                      <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
+                        <div className="text-xs font-semibold text-slate-700 pt-1">
+                          Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        </div>
+
+                        <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">Sub Total</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">CGST9 (9%)</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">SGST9 (9%)</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">Rounding</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                            <span className="font-bold">Total</span>
+                            <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Commercial Terms Footer */}
                   <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -1989,7 +2039,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       <input
                         type="text"
                         value={editDetails.deliveryLocation}
-                        onChange={(e) => setEditDetails({ ...editDetails, deliveryLocation: e.target.value })}
+                        onChange={(e) => {
+                          setEditDetails({ ...editDetails, deliveryLocation: e.target.value });
+                          setSaveSuccess(false);
+                        }}
                         placeholder="e.g. Chakan Industrial Area, Pune"
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                       />
@@ -2000,7 +2053,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
                       <input
                         type="text"
                         value={editDetails.paymentTerms}
-                        onChange={(e) => setEditDetails({ ...editDetails, paymentTerms: e.target.value })}
+                        onChange={(e) => {
+                          setEditDetails({ ...editDetails, paymentTerms: e.target.value });
+                          setSaveSuccess(false);
+                        }}
                         placeholder="e.g. 30 Days Credit, 100% Advance, 50% Advance 50% on Delivery"
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                       />
@@ -2019,16 +2075,27 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 <Eye size={15} /> View PDF 📄
               </button>
 
-              {!['confirmed', 'processed', 'quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) && !saveSuccess && (
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={handleSaveDrawerDetails}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
-                  {submitting ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
-                  Save &amp; Confirm Quotation ✓
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={handleSaveDrawerDetails}
+                className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                  saveSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+                }`}>
+                {submitting ? (
+                  <>
+                    <RefreshCw size={15} className="animate-spin" /> Saving...
+                  </>
+                ) : saveSuccess ? (
+                  <>
+                    <Check size={15} /> Saved &amp; Confirmed ✓
+                  </>
+                ) : (
+                  <>
+                    <Save size={15} /> Save &amp; Confirm Quotation ✓
+                  </>
+                )}
+              </button>
 
               <button
                 type="button"
