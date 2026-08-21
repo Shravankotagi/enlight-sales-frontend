@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown, Trash2
+  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown, Trash2, Sparkles
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -663,6 +663,8 @@ export default function InquiriesPage() {
   });
 
   // Form state for Manual Log & File Upload
+  const [formRawInquiryText, setFormRawInquiryText] = useState('');
+  const [isExtractingText, setIsExtractingText] = useState(false);
   const [formCustomerName, setFormCustomerName] = useState('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [formProductSKU, setFormProductSKU] = useState('');
@@ -1140,6 +1142,110 @@ const formatExtractedRequirementText = (extracted: any): string => {
     }
   };
 
+  const handleExtractFromText = async () => {
+    const raw = formRawInquiryText.trim();
+    if (!raw) return;
+
+    setIsExtractingText(true);
+    try {
+      // 1. Instant local baseline extraction
+      const localParsed = parseInquiryText(raw, { raw_text: raw });
+      if (localParsed.companyName && !isProductOrGenericName(localParsed.companyName)) {
+        setFormCustomerName(localParsed.companyName);
+      }
+      if (localParsed.customerPhone) {
+        setFormPhone(localParsed.customerPhone);
+      }
+      if (localParsed.productType) {
+        setFormProductSKU(localParsed.productType);
+      }
+      if (localParsed.thickness || localParsed.width || localParsed.length) {
+        setFormDimensions([localParsed.thickness, localParsed.width, localParsed.length].filter(Boolean).join(' x '));
+      }
+      if (localParsed.quantityTons > 0) {
+        setFormQuantity(String(localParsed.quantityTons));
+      }
+      if (localParsed.lineItems?.[0]?.unit) {
+        setFormUnit(localParsed.lineItems[0].unit);
+      }
+      if (localParsed.unitPrice > 0) {
+        setFormRate(String(localParsed.unitPrice));
+      }
+      if (localParsed.deliveryLocation) {
+        setFormDeliveryLocation(localParsed.deliveryLocation);
+      }
+      if (localParsed.paymentTerms) {
+        setFormPaymentTerms(localParsed.paymentTerms);
+      }
+
+      // 2. Call Gemini AI via backend for full structured extraction
+      const res = await inquiriesApi.parseText({ text: raw });
+      const extracted = res?.data?.data || res?.data;
+
+      if (extracted && (extracted.customer_name || extracted.line_items || extracted.delivery_location || extracted.payment_terms)) {
+        formExtractedJsonRef.current = extracted;
+
+        if (extracted.customer_name && !isProductOrGenericName(extracted.customer_name)) {
+          const cleanCust = String(extracted.customer_name).trim();
+          setFormCustomerName(cleanCust);
+          setExistingCustomers(prev => Array.from(new Set([cleanCust, ...prev])));
+        }
+
+        if (extracted.customer_phone) {
+          const cleanPhone = String(extracted.customer_phone).replace(/\D/g, '').slice(-10);
+          if (cleanPhone.length >= 10 && !SYSTEM_EMPLOYEE_PHONES.has(cleanPhone)) {
+            setFormPhone(cleanPhone);
+          }
+        }
+
+        if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
+          const mappedSkus = extracted.line_items
+            .map((li: any) => li.sku_text + (li.dimensions ? ` (${li.dimensions})` : ''))
+            .filter(Boolean)
+            .join(', ');
+
+          if (extracted.line_items.length === 1) {
+            setFormProductSKU(extracted.line_items[0].sku_text || '');
+            if (extracted.line_items[0].dimensions) setFormDimensions(extracted.line_items[0].dimensions);
+            if (extracted.line_items[0].quantity) setFormQuantity(String(extracted.line_items[0].quantity));
+            if (extracted.line_items[0].unit) setFormUnit(extracted.line_items[0].unit);
+            if (extracted.line_items[0].rate) setFormRate(String(extracted.line_items[0].rate));
+          } else {
+            setFormProductSKU(mappedSkus || extracted.line_items[0].sku_text || '');
+            const totalQty = extracted.line_items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0);
+            if (totalQty > 0) setFormQuantity(String(totalQty));
+            if (extracted.line_items[0].unit) setFormUnit(extracted.line_items[0].unit);
+            const totalAmt = extracted.line_items.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0);
+            const avgRate = totalQty > 0 ? Math.round(totalAmt / totalQty) : (extracted.line_items[0]?.rate || 0);
+            if (avgRate > 0) setFormRate(String(avgRate));
+          }
+        } else if (extracted.sku_text || extracted.product_type) {
+          setFormProductSKU(extracted.sku_text || extracted.product_type);
+          if (extracted.dimensions) setFormDimensions(extracted.dimensions);
+          if (extracted.quantity) setFormQuantity(String(extracted.quantity));
+          if (extracted.unit) setFormUnit(extracted.unit);
+          if (extracted.rate) setFormRate(String(extracted.rate));
+        }
+
+        if (extracted.preferred_make || extracted.make || extracted.brand) {
+          setFormPreferredMake(extracted.preferred_make || extracted.make || extracted.brand);
+        }
+
+        if (extracted.delivery_location) {
+          setFormDeliveryLocation(extracted.delivery_location);
+        }
+
+        if (extracted.payment_terms) {
+          setFormPaymentTerms(extracted.payment_terms);
+        }
+      }
+    } catch (err) {
+      console.warn('AI Text extraction warning:', err);
+    } finally {
+      setIsExtractingText(false);
+    }
+  };
+
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1261,7 +1367,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
         formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : '',
       ].filter(Boolean).join(' | ');
 
-      const naturalRawText = (formProductSKU.length > 50 ? formProductSKU.trim() : '') || (formRequirement.length > 50 ? formRequirement.trim() : '');
+      const naturalRawText = formRawInquiryText.trim() || (formProductSKU.length > 50 ? formProductSKU.trim() : '') || (formRequirement.length > 50 ? formRequirement.trim() : '');
 
       const rawText = poFileName
         ? `[Inquiry Attachment: ${poFileName}] ${naturalRawText || reqDetails || formRequirement || 'Inquiry'}`
@@ -1297,13 +1403,16 @@ const formatExtractedRequirementText = (extracted: any): string => {
       };
 
       setShowModal(false);
+      setFormRawInquiryText('');
       setFormCustomerName('');
       setShowCompanyDropdown(false);
       setFormPhone('');
       setFormProductSKU('');
-      setFormPreferredMake('');
+      setFormDimensions('');
       setFormQuantity('');
+      setFormUnit('MT');
       setFormRate('');
+      setFormPreferredMake('');
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
       setFormRequirement('');
@@ -2398,36 +2507,77 @@ const formatExtractedRequirementText = (extracted: any): string => {
               </button>
             </div>
 
+            {/* Paste or Type Customer Inquiry Text Section */}
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50/70 rounded-2xl border border-blue-200 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                  <Sparkles size={15} className="text-blue-600" />
+                  Type or Paste Customer Inquiry Text
+                </label>
+                <span className="text-[11px] text-blue-600 font-medium">WhatsApp message, email, or notes</span>
+              </div>
+
+              <textarea
+                rows={3}
+                value={formRawInquiryText}
+                onChange={e => setFormRawInquiryText(e.target.value)}
+                placeholder="Type or paste inquiry text e.g. Company: Sample Traders Pvt Ltd, CR 1mm (300 nos), CR 1.2mm (200 nos), HR 1.6mm (200 nos), Rate 52000, 30 days payment terms, delivery to Pune..."
+                className="w-full px-3 py-2 bg-white border border-blue-200 rounded-xl text-xs font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400"
+              />
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  disabled={isExtractingText || !formRawInquiryText.trim()}
+                  onClick={handleExtractFromText}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer">
+                  {isExtractingText ? (
+                    <>
+                      <RefreshCw size={13} className="animate-spin" />
+                      Extracting Details...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} className="text-amber-300" />
+                      Extract Details
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
             {/* Upload Inquiry Document Section */}
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50/60 rounded-2xl border border-blue-200 space-y-2">
-              <label className="block text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                <UploadCloud size={16} className="text-blue-600" />
-                Upload Inquiry Document (PDF, JPEG, PNG) for Auto AI Extraction
-              </label>
-              <div className="relative flex items-center justify-center border-2 border-dashed border-blue-300 rounded-xl p-4 bg-white/80 hover:bg-white transition-all cursor-pointer">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                <span className="flex items-center gap-1.5 text-slate-800">
+                  <UploadCloud size={14} className="text-blue-600" />
+                  Or Upload Inquiry Document (PDF, JPEG, PNG)
+                </span>
+                <span className="text-slate-400 font-normal">PDF, JPEG, PNG</span>
+              </div>
+              <div className="relative flex items-center justify-center border border-dashed border-slate-300 rounded-lg p-2.5 bg-white hover:bg-slate-50 transition-all cursor-pointer">
                 <input
                   type="file"
                   accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
                   onChange={handleFileUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
-                <div className="text-center space-y-1">
+                <div className="text-center">
                   {isExtractingPo ? (
                     <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
-                      <RefreshCw size={16} className="animate-spin text-blue-600" />
-                      Gemini AI Analyzing &amp; Extracting Inquiry Document...
+                      <RefreshCw size={14} className="animate-spin text-blue-600" />
+                      Gemini AI Analyzing &amp; Extracting Document...
                     </div>
                   ) : poFileName ? (
                     <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
-                      <FileCheck size={18} />
-                      {poFileName} (Inquiry Details Extracted &amp; Pre-filled!)
+                      <FileCheck size={16} />
+                      {poFileName} (Details Extracted &amp; Pre-filled!)
                     </div>
                   ) : (
-                    <p className="text-xs font-bold text-slate-600">
-                      Drop Inquiry File (PDF, JPEG, PNG) here, or <span className="text-blue-600 underline">Browse File</span>
+                    <p className="text-xs text-slate-600 font-medium">
+                      Drop document here, or <span className="text-blue-600 underline font-bold">Browse File</span>
                     </p>
                   )}
-                  <p className="text-[11px] text-slate-400">PDF, JPEG, PNG supported · Gemini AI pre-fills fields below</p>
                 </div>
               </div>
             </div>
