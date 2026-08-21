@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, ShieldCheck, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown, Trash2, Sparkles
+  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown, Trash2, Sparkles, User
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -49,6 +49,7 @@ interface LineItemDetail {
 interface ExtractedDetails {
   companyName: string;
   customerPhone: string;
+  salespersonName?: string;
   productType: string;
   thickness: string;
   width: string;
@@ -629,11 +630,18 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
-  const { effectivePhone } = useAuth();
+  const { effectivePhone, employee, viewingAs } = useAuth();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
+
+  const activeSalespersonName =
+    viewingAs?.name ||
+    employee?.name ||
+    (selectedInquiry as any)?.salesperson_name ||
+    (selectedInquiry as any)?.assigned_salesperson_name ||
+    'Sales Representative';
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
@@ -785,6 +793,7 @@ export default function InquiriesPage() {
       setEditDetails({
         companyName: parsed.companyName || '',
         customerPhone: parsed.customerPhone || '',
+        salespersonName: activeSalespersonName,
         productType: frozenLineItems[0]?.sku_text || ai.productType || 'Hot Rolled',
         thickness: ai.thickness || '',
         width: ai.width || '',
@@ -802,7 +811,10 @@ export default function InquiriesPage() {
     } else {
       // True fallback: no structured line items in ai_extraction_json, parse raw text
       const parsed = parseInquiryText(inq.raw_text || '', inq);
-      setEditDetails(parsed);
+      setEditDetails({
+        ...parsed,
+        salespersonName: activeSalespersonName,
+      });
     }
 
     setSaveSuccess(isConfirmedState);
@@ -1601,9 +1613,9 @@ export default function InquiriesPage() {
                           {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-bold text-slate-950 text-center">
-                        <span className="inline-flex items-center justify-center gap-1.5 text-slate-950 font-black group-hover:text-blue-600 group-hover:underline">
-                          <Building2 size={15} className="text-slate-800 flex-shrink-0" />
+                      <td className="px-4 py-3.5 text-center">
+                        <span className="inline-flex items-center justify-center gap-1.5 font-bold text-slate-900 text-sm">
+                          <Building2 size={15} className="text-slate-700 flex-shrink-0" />
                           {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
                         </span>
                       </td>
@@ -1703,7 +1715,7 @@ export default function InquiriesPage() {
                     </span>
                   </h2>
                   <p className="text-xs text-slate-500 font-mono mt-0.5">
-                    ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()} · Received {new Date(selectedInquiry.created_at).toLocaleString('en-IN')}
+                    ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()} · Received {new Date(selectedInquiry.created_at).toLocaleString('en-IN')} · Salesperson: <span className="font-sans font-bold text-slate-800">{activeSalespersonName}</span>
                   </p>
                 </div>
               </div>
@@ -1771,25 +1783,40 @@ export default function InquiriesPage() {
 
               {/* Editable Fields Form */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Company Name *
-                  </label>
-                  <select
-                    value={editDetails.companyName}
-                    onChange={(e) => {
-                      setEditDetails({ ...editDetails, companyName: e.target.value });
-                      setSaveSuccess(false);
-                    }}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
-                    {existingCustomers.map((cName) => (
-                      <option key={cName} value={cName}>{cName}</option>
-                    ))}
-                    {/* Allow current value even if not in list */}
-                    {!existingCustomers.includes(editDetails.companyName) && editDetails.companyName && (
-                      <option value={editDetails.companyName}>{editDetails.companyName}</option>
-                    )}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Company Name *
+                    </label>
+                    <select
+                      value={editDetails.companyName}
+                      onChange={(e) => {
+                        setEditDetails({ ...editDetails, companyName: e.target.value });
+                        setSaveSuccess(false);
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
+                      {existingCustomers.map((cName) => (
+                        <option key={cName} value={cName}>{cName}</option>
+                      ))}
+                      {/* Allow current value even if not in list */}
+                      {!existingCustomers.includes(editDetails.companyName) && editDetails.companyName && (
+                        <option value={editDetails.companyName}>{editDetails.companyName}</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Salesperson
+                    </label>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs">
+                      <User size={15} className="text-blue-600 shrink-0" />
+                      <span className="truncate">{activeSalespersonName}</span>
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 ml-auto shrink-0">
+                        Active Session
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Structured Inquiry Table Layout */}

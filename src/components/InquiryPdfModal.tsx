@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Download, Check, Copy } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { calculateQuotationBreakdown, formatIndianCurrency } from '../utils/pricingEngine';
 
 interface InquiryItem {
@@ -102,6 +103,7 @@ function resolvePlaceOfSupply(address?: string): string {
 }
 
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
+  const { employee, viewingAs } = useAuth();
   const [copiedRef, setCopiedRef] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
@@ -141,7 +143,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
     ? new Date(inquiry.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  const salesperson = details.salespersonName || 'Vedant Goel';
+  const salesperson = details.salespersonName || viewingAs?.name || employee?.name || (inquiry as any)?.salesperson_name || 'Sales Representative';
   const placeOfSupply = resolvePlaceOfSupply(details.deliveryLocation);
 
   const handleCopyRef = () => {
