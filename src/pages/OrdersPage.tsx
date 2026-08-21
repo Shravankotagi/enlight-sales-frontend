@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag,
@@ -7,7 +7,6 @@ import {
   CheckCircle,
   PackageCheck,
   Truck,
-  RefreshCw,
   X,
   Building2,
   Eye,
@@ -22,6 +21,9 @@ import {
   ImageIcon,
   User,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
@@ -194,13 +196,34 @@ export default function OrdersPage() {
   });
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
   const [showModal, setShowModal] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Reset page when search or date range changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, dateRange]);
+
   // Selected Order for Details Drawer & PO Image Viewer
   const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<Order | null>(null);
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
+
+  // Prevent background scrolling when any modal or drawer is open
+  useEffect(() => {
+    const isAnyModalOpen = showModal || !!selectedDrawerOrder || !!poImageViewerUrl;
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow || 'unset';
+      };
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [showModal, selectedDrawerOrder, poImageViewerUrl]);
 
   // AI OCR Scanning state
   const [isParsingDoc, setIsParsingDoc] = useState(false);
@@ -514,6 +537,12 @@ export default function OrdersPage() {
     }
   };
 
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filtered.length);
+  const paginatedOrders = filtered.slice(startIndex, endIndex);
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -527,17 +556,10 @@ export default function OrdersPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <DateFilterControl onChange={setDateRange} />
-          <button
-            onClick={() => fetchOrders()}
-            className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
-            title="Refresh">
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-sm transition-colors">
             <Plus size={18} />
             Create New Order
           </button>
@@ -577,15 +599,18 @@ export default function OrdersPage() {
       </div>
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
-        <div className="relative w-full sm:w-80">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search customer, PO number, location, product..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-          />
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-72">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search customer, PO number, location, product..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <DateFilterControl onChange={setDateRange} />
         </div>
       </div>
 
@@ -594,31 +619,28 @@ export default function OrdersPage() {
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3 text-center">Sr.</th>
-                <th className="px-4 py-3 text-center">Order Date</th>
-                <th className="px-4 py-3 text-center">PO Number</th>
-                <th className="px-4 py-3 text-center">Customer Name</th>
-                <th className="px-4 py-3 text-center">Products &amp; Items</th>
-                <th className="px-4 py-3 text-center">Order Tonnage (MT)</th>
-                <th className="px-4 py-3 text-center">Delivery Location</th>
-                <th className="px-4 py-3 text-center">Purchase Order</th>
+                <th className="px-4 py-3 text-center w-[4%]">#</th>
+                <th className="px-5 py-3 text-left w-[26%]">Customer</th>
+                <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
+                <th className="px-4 py-3 text-center w-[12%]">Products &amp; Items</th>
+                <th className="px-4 py-3 text-center w-[14%]">Order Tonnage (MT)</th>
+                <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
+                <th className="px-4 py-3 text-center w-[12%]">Purchase Order</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No orders found.</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">No orders found.</td>
                 </tr>
               ) : (
-                filtered.map((ord, idx) => {
-                  const itemsStr = (ord?.deal_items || [])
-                    .map(i => `${i?.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''} ${i?.sku_text || ''}`.trim())
-                    .filter(Boolean)
-                    .join(', ') || '—';
+                paginatedOrders.map((ord, idx) => {
+                  const globalIdx = startIndex + idx + 1;
+                  const itemCount = (ord?.deal_items && ord.deal_items.length > 0) ? ord.deal_items.length : 1;
 
                   const ordTonnage = (ord?.deal_items || []).reduce((iSum: number, i: any) => {
                     const q = Number(i?.quantity || 0);
@@ -633,32 +655,32 @@ export default function OrdersPage() {
                       onClick={() => setSelectedDrawerOrder(ord)}
                       className="hover:bg-blue-50/80 transition-colors cursor-pointer group select-none"
                       title="Click anywhere on row to view full Order Details in table format">
-                      <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
-                      <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center justify-center gap-1">
-                          <Calendar size={12} className="text-slate-400" />
-                          {ord.created_at
-                            ? new Date(ord.created_at).toLocaleString('en-IN')
-                            : (ord.won_at
-                                ? new Date(ord.won_at).toLocaleString('en-IN')
-                                : (ord.po_date || '-'))}
-                        </span>
+                      <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                      <td className="px-5 py-3.5 text-left">
+                        <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                          <Building2 size={15} className="text-slate-700 shrink-0" />
+                          <span className="truncate">{ord.customer_name || 'Customer'}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                          <Calendar size={12} className="text-slate-400 shrink-0" />
+                          <span className="font-mono">
+                            {ord.created_at
+                              ? new Date(ord.created_at).toLocaleString('en-IN')
+                              : (ord.won_at
+                                  ? new Date(ord.won_at).toLocaleString('en-IN')
+                                  : (ord.po_date || '-'))}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-3.5 font-mono text-xs text-blue-700 font-semibold text-center">
                         <span className="inline-flex items-center justify-center gap-1.5 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-md border border-blue-200 group-hover:border-blue-600 transition-all font-bold shadow-2xs">
                           <FileText size={13} /> {ord.po_number || 'PO-2026-AUTO'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-slate-900 text-center">
-                        <span className="inline-flex items-center justify-center gap-1.5 group-hover:text-blue-700 transition-colors">
-                          <Building2 size={14} className="text-slate-400 group-hover:text-blue-500" />
-                          {ord.customer_name || 'Customer'}
-                        </span>
+                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
+                        {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-800 font-medium max-w-xs text-center" title={itemsStr}>
-                        <div className="truncate max-w-xs mx-auto text-center">{itemsStr}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap font-mono">
+                      <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap font-mono text-xs">
                         {ordTonnage > 0 ? `${ordTonnage.toLocaleString('en-IN')} MT` : '—'}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
@@ -669,13 +691,15 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         <button
+                          type="button"
                           onClick={e => {
                             e.stopPropagation();
                             handleViewPoDocument(ord);
                           }}
-                          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all group-hover:shadow-md hover:scale-105"
+                          className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 inline-flex items-center gap-1 shadow-2xs"
                           title="View Original Purchase Order Image / Document">
-                          <Eye size={14} /> View PO
+                          <Eye size={13} className="text-slate-600" />
+                          <span>View PO</span>
                         </button>
                       </td>
                     </tr>
@@ -685,6 +709,59 @@ export default function OrdersPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Bar */}
+        {filtered.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
+            <div className="font-medium">
+              Showing <span className="font-bold text-slate-900">{startIndex + 1}</span> to{' '}
+              <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
+              <span className="font-bold text-slate-900">{filtered.length}</span> orders
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={validCurrentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1 transition-colors shadow-2xs text-xs">
+                <ChevronLeft size={14} /> Prev
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || (p >= validCurrentPage - 2 && p <= validCurrentPage + 2))
+                  .map((pageNum, i, arr) => {
+                    const prevPageNum = arr[i - 1];
+                    const showEllipsis = prevPageNum && pageNum - prevPageNum > 1;
+                    return (
+                      <span key={pageNum} className="flex items-center">
+                        {showEllipsis && <span className="px-1 text-slate-400 font-mono text-xs">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-7 h-7 rounded-lg text-xs font-bold transition-all flex items-center justify-center ${
+                            validCurrentPage === pageNum
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                          }`}>
+                          {pageNum}
+                        </button>
+                      </span>
+                    );
+                  })}
+              </div>
+
+              <button
+                type="button"
+                disabled={validCurrentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1 transition-colors shadow-2xs text-xs">
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {selectedDrawerOrder && (
@@ -969,7 +1046,7 @@ export default function OrdersPage() {
                 </label>
                 {isParsingDoc && (
                   <span className="text-xs text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
-                    <RefreshCw size={12} className="animate-spin" /> Extracting...
+                    <Loader2 size={12} className="animate-spin" /> Extracting...
                   </span>
                 )}
               </div>
