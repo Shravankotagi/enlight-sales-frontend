@@ -668,10 +668,6 @@ export default function InquiriesPage() {
   const [formCustomerName, setFormCustomerName] = useState('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [formProductSKU, setFormProductSKU] = useState('');
-  const [formDimensions, setFormDimensions] = useState('');
-  const [formQuantity, setFormQuantity] = useState('');
-  const [formUnit, setFormUnit] = useState('MT');
-  const [formRate, setFormRate] = useState('');
   const [formPreferredMake, setFormPreferredMake] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
@@ -1101,24 +1097,15 @@ const formatExtractedRequirementText = (extracted: any): string => {
           setFormRequirement(reqText);
           setFormInquiryType('Product Requirement (AI Document)');
 
-          // Product SKU, Quantity, Rate, Delivery Location
+          // Product SKU / Description
           if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
             const mappedSkus = extracted.line_items
-              .map((li: any) => li.sku_text + (li.dimensions ? ` (${li.dimensions})` : ''))
+              .map((li: any) => `${li.sku_text || 'Item'}${li.dimensions ? ` (${li.dimensions})` : ''} - ${li.quantity || 0} ${li.unit || 'MT'}${li.rate ? ` @ ₹${li.rate}` : ''}`)
               .filter(Boolean)
               .join(', ');
             if (mappedSkus) setFormProductSKU(mappedSkus);
-
-            const totalQty = extracted.line_items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0);
-            if (totalQty > 0) setFormQuantity(String(totalQty));
-
-            const totalAmt = extracted.line_items.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0);
-            const avgRate = totalQty > 0 ? Math.round(totalAmt / totalQty) : (extracted.line_items[0]?.rate || 0);
-            if (avgRate > 0) setFormRate(String(avgRate));
           } else if (extracted.sku_text || extracted.product_type) {
             setFormProductSKU(extracted.sku_text || extracted.product_type);
-            if (extracted.quantity) setFormQuantity(String(extracted.quantity));
-            if (extracted.rate) setFormRate(String(extracted.rate));
           }
 
           if (extracted.make || extracted.preferred_make || extracted.brand) {
@@ -1159,18 +1146,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
       if (localParsed.productType) {
         setFormProductSKU(localParsed.productType);
       }
-      if (localParsed.thickness || localParsed.width || localParsed.length) {
-        setFormDimensions([localParsed.thickness, localParsed.width, localParsed.length].filter(Boolean).join(' x '));
-      }
-      if (localParsed.quantityTons > 0) {
-        setFormQuantity(String(localParsed.quantityTons));
-      }
-      if (localParsed.lineItems?.[0]?.unit) {
-        setFormUnit(localParsed.lineItems[0].unit);
-      }
-      if (localParsed.unitPrice > 0) {
-        setFormRate(String(localParsed.unitPrice));
-      }
       if (localParsed.deliveryLocation) {
         setFormDeliveryLocation(localParsed.deliveryLocation);
       }
@@ -1200,31 +1175,13 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
         if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
           const mappedSkus = extracted.line_items
-            .map((li: any) => li.sku_text + (li.dimensions ? ` (${li.dimensions})` : ''))
+            .map((li: any) => `${li.sku_text || 'Item'}${li.dimensions ? ` (${li.dimensions})` : ''} - ${li.quantity || 0} ${li.unit || 'MT'}${li.rate ? ` @ ₹${li.rate}` : ''}`)
             .filter(Boolean)
             .join(', ');
 
-          if (extracted.line_items.length === 1) {
-            setFormProductSKU(extracted.line_items[0].sku_text || '');
-            if (extracted.line_items[0].dimensions) setFormDimensions(extracted.line_items[0].dimensions);
-            if (extracted.line_items[0].quantity) setFormQuantity(String(extracted.line_items[0].quantity));
-            if (extracted.line_items[0].unit) setFormUnit(extracted.line_items[0].unit);
-            if (extracted.line_items[0].rate) setFormRate(String(extracted.line_items[0].rate));
-          } else {
-            setFormProductSKU(mappedSkus || extracted.line_items[0].sku_text || '');
-            const totalQty = extracted.line_items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0);
-            if (totalQty > 0) setFormQuantity(String(totalQty));
-            if (extracted.line_items[0].unit) setFormUnit(extracted.line_items[0].unit);
-            const totalAmt = extracted.line_items.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0);
-            const avgRate = totalQty > 0 ? Math.round(totalAmt / totalQty) : (extracted.line_items[0]?.rate || 0);
-            if (avgRate > 0) setFormRate(String(avgRate));
-          }
+          setFormProductSKU(mappedSkus || extracted.line_items[0].sku_text || '');
         } else if (extracted.sku_text || extracted.product_type) {
           setFormProductSKU(extracted.sku_text || extracted.product_type);
-          if (extracted.dimensions) setFormDimensions(extracted.dimensions);
-          if (extracted.quantity) setFormQuantity(String(extracted.quantity));
-          if (extracted.unit) setFormUnit(extracted.unit);
-          if (extracted.rate) setFormRate(String(extracted.rate));
         }
 
         if (extracted.preferred_make || extracted.make || extracted.brand) {
@@ -1275,9 +1232,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
       // Build ai_extraction_json from the structured extraction or manual input
       let aiExtractionJson: any = null;
-      const qty = Number(formQuantity) || 0;
-      const rate = Number(formRate) || 0;
-      const computedAmt = qty > 0 && rate > 0 ? qty * rate : 0;
 
       if (extractedJson) {
         // Normalize line_items to match drawer expectations
@@ -1302,10 +1256,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
           customer_name: extractedJson.customer_name || customerName,
           customerPhone: finalCustomerPhone,
           customer_phone: finalCustomerPhone,
-          line_items: lineItems.length > 0 ? lineItems : (formProductSKU.trim() ? [{ sku_text: formProductSKU.trim(), quantity: qty, unit: 'MT', rate, amount: computedAmt }] : []),
-          lineItems: lineItems.length > 0 ? lineItems : (formProductSKU.trim() ? [{ sku_text: formProductSKU.trim(), quantity: qty, unit: 'MT', rate, amount: computedAmt }] : []),
-          total_amount: totalAmount > 0 ? totalAmount : computedAmt,
-          totalAmount: totalAmount > 0 ? totalAmount : computedAmt,
+          line_items: lineItems.length > 0 ? lineItems : (formProductSKU.trim() ? [{ sku_text: formProductSKU.trim(), quantity: 1, unit: 'MT', rate: 0, amount: 0 }] : []),
+          lineItems: lineItems.length > 0 ? lineItems : (formProductSKU.trim() ? [{ sku_text: formProductSKU.trim(), quantity: 1, unit: 'MT', rate: 0, amount: 0 }] : []),
+          total_amount: totalAmount > 0 ? totalAmount : 0,
+          totalAmount: totalAmount > 0 ? totalAmount : 0,
           delivery_location: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
           deliveryLocation: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
           payment_terms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
@@ -1314,9 +1268,9 @@ const formatExtractedRequirementText = (extracted: any): string => {
           make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
         };
       } else {
-        const parsedReq = parseInquiryText(formRequirement || formProductSKU, {
+        const parsedReq = parseInquiryText((formProductSKU || '') + ' ' + (formRequirement || ''), {
           customer_name: customerName,
-          raw_text: formRequirement || formProductSKU,
+          raw_text: (formProductSKU || '') + ' ' + (formRequirement || ''),
         });
 
         const lineItems = (parsedReq.lineItems && parsedReq.lineItems.length > 0)
@@ -1324,10 +1278,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
           : (formProductSKU.trim() ? [{
               sku_text: formProductSKU.trim(),
               dimensions: '',
-              quantity: qty,
-              unit: 'MT',
-              rate: rate,
-              amount: computedAmt,
+              quantity: parsedReq.quantityTons || 1,
+              unit: parsedReq.lineItems?.[0]?.unit || 'MT',
+              rate: parsedReq.unitPrice || 0,
+              amount: parsedReq.totalAmount || 0,
             }] : []);
 
         const subtotal = lineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0);
@@ -1342,10 +1296,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
           customerPhone: finalCustomerPhone,
           customer_phone: finalCustomerPhone,
           productType: formProductSKU.trim() || parsedReq.productType,
-          quantityTons: qty > 0 ? qty : parsedReq.quantityTons,
-          unitPrice: rate > 0 ? rate : parsedReq.unitPrice,
-          totalAmount: subtotal > 0 ? subtotal : (computedAmt > 0 ? computedAmt : parsedReq.totalAmount),
-          total_amount: subtotal > 0 ? subtotal : (computedAmt > 0 ? computedAmt : parsedReq.totalAmount),
+          quantityTons: parsedReq.quantityTons,
+          unitPrice: parsedReq.unitPrice,
+          totalAmount: subtotal > 0 ? subtotal : parsedReq.totalAmount,
+          total_amount: subtotal > 0 ? subtotal : parsedReq.totalAmount,
           delivery_location: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
           deliveryLocation: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
           payment_terms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
@@ -1360,8 +1314,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
       const reqDetails = [
         formProductSKU.trim() ? `Material: ${formProductSKU.trim()}` : '',
         formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
-        qty > 0 ? `Qty: ${qty} MT` : '',
-        rate > 0 ? `Rate: ₹${rate.toLocaleString('en-IN')}/MT` : '',
         formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : '',
         formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
         formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : '',
@@ -1408,10 +1360,6 @@ const formatExtractedRequirementText = (extracted: any): string => {
       setShowCompanyDropdown(false);
       setFormPhone('');
       setFormProductSKU('');
-      setFormDimensions('');
-      setFormQuantity('');
-      setFormUnit('MT');
-      setFormRate('');
       setFormPreferredMake('');
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
@@ -2494,7 +2442,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={22} />
@@ -2522,7 +2470,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 value={formRawInquiryText}
                 onChange={e => setFormRawInquiryText(e.target.value)}
                 placeholder="Type or paste inquiry text e.g. Company: Sample Traders Pvt Ltd, CR 1mm (300 nos), CR 1.2mm (200 nos), HR 1.6mm (200 nos), Rate 52000, 30 days payment terms, delivery to Pune..."
-                className="w-full px-3 py-2 bg-white border border-blue-200 rounded-xl text-xs font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400"
+                className="w-full px-3 py-2 bg-white border border-blue-200 rounded-xl text-xs font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400 max-h-36 overflow-y-auto resize-y"
               />
 
               <div className="flex justify-end">
@@ -2648,61 +2596,14 @@ const formatExtractedRequirementText = (extracted: any): string => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Product Description / SKU *</label>
-                <input
-                  type="text"
+                <textarea
+                  rows={3}
                   required
-                  placeholder="e.g. HR Coil, MS Plate, SS 304 Pipe, TMT Rebar"
+                  placeholder="e.g. HR Coil, MS Plate, SS 304 Pipe, TMT Rebar..."
                   value={formProductSKU}
                   onChange={e => setFormProductSKU(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal max-h-36 overflow-y-auto resize-y leading-relaxed"
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Dimensions / Specifications (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 12mm thickness (1500mm x 6000mm) or 2.50mm x 1250mm"
-                  value={formDimensions}
-                  onChange={e => setFormDimensions(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity &amp; Unit</label>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      placeholder="0"
-                      value={formQuantity}
-                      onChange={e => setFormQuantity(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                    />
-                    <select
-                      value={formUnit}
-                      onChange={e => setFormUnit(e.target.value)}
-                      className="px-2 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="MT">MT</option>
-                      <option value="Nos">Nos</option>
-                      <option value="Pieces">Pcs</option>
-                      <option value="KG">KG</option>
-                      <option value="Sheets">Sheets</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Estimated Rate (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 52000"
-                    value={formRate}
-                    onChange={e => setFormRate(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2744,7 +2645,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Requirement &amp; Additional Notes (Optional)</label>
                 <textarea
                   rows={2}
-                  placeholder="Special instructions, test certificates (MTC), or logistical notes only — not dimensions or quantity"
+                  placeholder="Special instructions, test certificates (MTC), or logistical notes only"
                   value={formRequirement}
                   onChange={e => setFormRequirement(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
