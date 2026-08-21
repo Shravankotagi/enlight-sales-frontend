@@ -1493,9 +1493,7 @@ export default function InquiriesPage() {
             <FileText className="text-blue-600" size={28} />
             Inquiries &amp; Quotations Management
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Automated RFQ extraction, pricing computation, PDF quotation generation, and dispatch tracking.
-          </p>
+          
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -1715,7 +1713,7 @@ export default function InquiriesPage() {
                     </span>
                   </h2>
                   <p className="text-xs text-slate-500 font-mono mt-0.5">
-                    ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()} · Received {new Date(selectedInquiry.created_at).toLocaleString('en-IN')} · Salesperson: <span className="font-sans font-bold text-slate-800">{activeSalespersonName}</span>
+                    ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()}
                   </p>
                 </div>
               </div>
@@ -1729,56 +1727,45 @@ export default function InquiriesPage() {
             {/* Scrollable Content Body */}
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
 
-              {/* QA & Audit Section — Source badge + Document & Raw Inquiry action */}
-              <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 shadow-inner">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  {/* Source badge */}
-                  <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] text-slate-300 font-bold uppercase tracking-wider">
-                    Source: {selectedInquiry.source_channel === 'web_dashboard' || selectedInquiry.source_channel === 'dashboard' ? 'Dashboard' : 'WhatsApp'}
-                  </span>
-
-                  {/* Document & Raw Inquiry action bar */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="file"
-                      id="drawer-file-upload"
-                      className="hidden"
-                      accept="image/*,application/pdf"
-                      onChange={handleDrawerFileUpload}
-                    />
-
-                    {drawerFileBase64 && (
-                      <button
-                        type="button"
-                        onClick={() => setDrawerFileBase64(null)}
-                        className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg text-[11px] font-bold transition-colors">
-                        Remove File
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => document.getElementById('drawer-file-upload')?.click()}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-700">
-                      <UploadCloud size={13} /> {drawerFileBase64 || (selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) ? 'Replace File' : 'Attach Document File'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleViewInquiryDocument(selectedInquiry)}
-                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
-                      <Eye size={14} /> View Original Inquiry 👁️
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Extracted Customer Inquiry Table Header */}
-              <div className="flex items-center justify-between pt-1">
+              {/* Extracted Customer Inquiry Table Header + Action Buttons */}
+              <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Building2 size={16} className="text-blue-600" />
                   Pre-filled &amp; Extracted Customer Inquiry Table
                 </h3>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    id="drawer-file-upload"
+                    className="hidden"
+                    accept="image/*,application/pdf"
+                    onChange={handleDrawerFileUpload}
+                  />
+
+                  {drawerFileBase64 && (
+                    <button
+                      type="button"
+                      onClick={() => setDrawerFileBase64(null)}
+                      className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold transition-colors">
+                      Remove File
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('drawer-file-upload')?.click()}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300">
+                    <UploadCloud size={14} className="text-slate-600" /> {drawerFileBase64 || (selectedInquiry.media_urls && selectedInquiry.media_urls.length > 0) ? 'Replace File' : 'Attach Document File'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleViewInquiryDocument(selectedInquiry)}
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5">
+                    <Eye size={14} /> View Original Inquiry 👁️
+                  </button>
+                </div>
               </div>
 
               {/* Editable Fields Form */}
@@ -1960,47 +1947,47 @@ export default function InquiriesPage() {
                             />
                           </td>
                           <td className="px-2 py-3.5 text-center">
-                            {(editDetails.lineItems || []).length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = (editDetails.lineItems || []).filter((_, i) => i !== idx);
-                                  const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                  const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
-                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
-                                  setSaveSuccess(false);
-                                }}
-                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Remove line item">
-                                <Trash2 size={15} />
-                              </button>
-                            )}
+                            <div className="flex items-center justify-center gap-1">
+                              {(editDetails.lineItems || []).length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = (editDetails.lineItems || []).filter((_, i) => i !== idx);
+                                    const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                    const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
+                                    setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
+                                    setSaveSuccess(false);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Remove line item">
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                              {idx === (editDetails.lineItems && editDetails.lineItems.length > 0 ? editDetails.lineItems.length - 1 : 0) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const current = editDetails.lineItems && editDetails.lineItems.length > 0
+                                      ? editDetails.lineItems
+                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083730', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                                    const updated = [
+                                      ...current,
+                                      { sku_text: '', dimensions: '', hsn_code: '72083730', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                    ];
+                                    setEditDetails({ ...editDetails, lineItems: updated });
+                                    setSaveSuccess(false);
+                                  }}
+                                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Add line item">
+                                  <Plus size={16} />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-
-                  {/* Add Line Item Button */}
-                  <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const current = editDetails.lineItems && editDetails.lineItems.length > 0
-                          ? editDetails.lineItems
-                          : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083730', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
-                        const updated = [
-                          ...current,
-                          { sku_text: '', dimensions: '', hsn_code: '72083730', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
-                        ];
-                        setEditDetails({ ...editDetails, lineItems: updated });
-                        setSaveSuccess(false);
-                      }}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs">
-                      <Plus size={14} /> + Add Line Item
-                    </button>
-                    <span className="text-[11px] text-slate-400 italic">Add multiple product lines for complex inquiries</span>
-                  </div>
 
                   {/* Standard Quotation Pricing Breakdown Layout (Matching Reference) */}
                   {(() => {
