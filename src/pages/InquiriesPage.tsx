@@ -1005,50 +1005,6 @@ export default function InquiriesPage() {
     }
   };
 
-const cleanNumericValue = (raw: any): number => {
-  if (typeof raw === 'number') return isNaN(raw) ? 0 : raw;
-  if (!raw) return 0;
-  const num = parseFloat(String(raw).replace(/,/g, '').replace(/[^0-9.]/g, ''));
-  return isNaN(num) ? 0 : num;
-};
-
-const formatExtractedRequirementText = (extracted: any): string => {
-  if (!extracted) return '';
-  const items = extracted.line_items || extracted.items || extracted.products || extracted.lineItems || [];
-  if (Array.isArray(items) && items.length > 0) {
-    const lines = items.map((li: any, idx: number) => {
-      const sku = li.sku_text || li.sku || li.material || li.description || li.product_name || li.product || 'Material';
-      const dims = li.dimensions || li.specs || li.size || '';
-      const dimsStr = dims ? ` (${dims})` : '';
-
-      const qtyNum = cleanNumericValue(li.quantity ?? li.qty ?? li.quantity_mt ?? li.quantityTons);
-      const unit = (li.unit && String(li.unit).trim()) || 'MT';
-      const qtyStr = qtyNum > 0 ? `${qtyNum} ${unit}` : (li.quantity ? String(li.quantity) : '');
-
-      const rateNum = cleanNumericValue(li.rate ?? li.target_rate ?? li.price ?? li.unitPrice);
-      const rateStr = rateNum > 0 ? ` @ ₹${rateNum.toLocaleString('en-IN')}/MT` : (li.rate ? ` @ ₹${li.rate}` : '');
-
-      return `${idx + 1}. ${sku}${dimsStr}${qtyStr ? ': ' + qtyStr : ''}${rateStr}`.trim();
-    }).filter(Boolean);
-
-    if (lines.length > 0) {
-      return lines.join('\n');
-    }
-  }
-
-  if (typeof extracted.requirement === 'string' && extracted.requirement.trim()) {
-    return extracted.requirement.trim();
-  }
-  if (typeof extracted.raw_text === 'string' && extracted.raw_text.trim()) {
-    return extracted.raw_text.trim();
-  }
-  if (typeof extracted.description === 'string' && extracted.description.trim()) {
-    return extracted.description.trim();
-  }
-
-  return '';
-};
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1087,8 +1043,8 @@ const formatExtractedRequirementText = (extracted: any): string => {
         if (extracted) {
           formExtractedJsonRef.current = extracted;
 
-          // Customer name: fill if detected, keep blank if not
-          const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || extracted.customer?.name || '';
+          // Customer name: fill ONLY if explicitly present, keep blank if not
+          const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || '';
           const cleanCustomer = (rawName && !isProductOrGenericName(String(rawName)))
             ? String(rawName).trim()
             : '';
@@ -1103,30 +1059,43 @@ const formatExtractedRequirementText = (extracted: any): string => {
           const validPhone = (cleanPhone.length >= 10 && !SYSTEM_EMPLOYEE_PHONES.has(cleanPhone)) ? cleanPhone : '';
           setFormPhone(validPhone);
 
-          // Requirement & Product Details: formatted multi-line items
-          const reqText = formatExtractedRequirementText(extracted);
-          setFormRequirement(reqText);
-          setFormInquiryType('Product Requirement (AI Document)');
-
-          // Product SKU / Description
+          // Product Description / SKU: Formatted numbered serial list matching document
           if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
             const mappedSkus = extracted.line_items
-              .map((li: any) => `${li.sku_text || 'Item'}${li.dimensions ? ` (${li.dimensions})` : ''} - ${li.quantity || 0} ${li.unit || 'MT'}${li.rate ? ` @ ₹${li.rate}` : ''}`)
+              .map((li: any, idx: number) => {
+                const sku = li.sku_text || li.sku || li.material || li.description || 'Material';
+                const dims = li.dimensions ? ` (${li.dimensions})` : '';
+                const qty = (li.quantity !== undefined && li.quantity !== null && li.quantity !== '')
+                  ? ` - ${li.quantity} ${li.unit || 'Nos'}`
+                  : '';
+                const rate = li.rate ? ` @ ₹${li.rate}` : '';
+                return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
+              })
               .filter(Boolean)
-              .join(', ');
+              .join('\n');
             if (mappedSkus) setFormProductSKU(mappedSkus);
           } else if (extracted.sku_text || extracted.product_type) {
             setFormProductSKU(extracted.sku_text || extracted.product_type);
           }
 
-          if (extracted.make || extracted.preferred_make || extracted.brand) {
-            setFormPreferredMake(extracted.make || extracted.preferred_make || extracted.brand);
-          }
-          if (extracted.delivery_location) {
-            setFormDeliveryLocation(extracted.delivery_location);
+          // Additional Notes: Only non-product notes, remarks, delivery timeline, contact details (never line items)
+          const notesText = (
+            extracted.additional_notes ||
+            extracted.notes ||
+            extracted.remarks ||
+            ''
+          ).trim();
+          setFormRequirement(notesText);
+          setFormInquiryType('Product Requirement (AI Document)');
+
+          if (extracted.preferred_make || extracted.make || extracted.brand) {
+            setFormPreferredMake(extracted.preferred_make || extracted.make || extracted.brand);
           }
           if (extracted.payment_terms) {
             setFormPaymentTerms(extracted.payment_terms);
+          }
+          if (extracted.delivery_location) {
+            setFormDeliveryLocation(extracted.delivery_location);
           }
         }
 
@@ -2772,10 +2741,10 @@ const formatExtractedRequirementText = (extracted: any): string => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Requirement &amp; Additional Notes (Optional)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes</label>
                 <textarea
                   rows={2}
-                  placeholder="Special instructions, test certificates (MTC), or logistical notes only"
+                  placeholder="Special instructions, delivery timeline, or logistics notes"
                   value={formRequirement}
                   onChange={e => setFormRequirement(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
