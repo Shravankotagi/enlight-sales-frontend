@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ZoomIn, ExternalLink, Package, Printer, ChevronDown, Trash2, Sparkles, User, Edit3
+  ImageIcon, ExternalLink, ChevronDown, Trash2, Sparkles, User, Edit3
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import type { DateFilterRange } from '../components/DateFilterControl';
@@ -15,7 +15,6 @@ import {
   calculateLineItems,
   calculateSubtotal,
   calculateQuotationBreakdown,
-  formatIndianCurrency,
 } from '../utils/pricingEngine';
 
 interface InquiryItem {
@@ -654,11 +653,6 @@ export default function InquiriesPage() {
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
 
-  // Quotation View Modal (clean standalone view)
-  const [showQuotationView, setShowQuotationView] = useState(false);
-  const [quotationViewInquiry, setQuotationViewInquiry] = useState<InquiryItem | null>(null);
-  const [quotationViewDetails, setQuotationViewDetails] = useState<ExtractedDetails | null>(null);
-
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
@@ -889,97 +883,7 @@ export default function InquiriesPage() {
   };
 
 
-  const handlePrintQuotation = (inq: InquiryItem, details: ExtractedDetails) => {
-    const grand = Math.round(details.totalAmount * 1.18);
-    const refId = inq.id.slice(0, 12).toUpperCase();
-    const dateStr = new Date(inq.created_at).toLocaleDateString('en-IN');
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <title>Quotation - ${details.companyName}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
-    h1 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
-    .subtitle { font-size: 12px; color: #64748b; margin-bottom: 24px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-    .card { padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px; }
-    .label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; }
-    .name { font-size: 15px; font-weight: 800; margin-bottom: 3px; }
-    .meta { font-size: 12px; color: #64748b; margin-top: 2px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
-    th { background: #1e293b; color: white; padding: 10px 14px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    th:last-child { text-align: right; }
-    td { padding: 12px 14px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
-    td:last-child { text-align: right; }
-    .qty { font-size: 14px; font-weight: 800; color: #2563eb; }
-    .product { font-weight: 700; }
-    .spec { font-size: 11px; color: #64748b; margin-top: 3px; font-family: monospace; }
-    .form-badge { display: inline-block; background: #dcfce7; color: #15803d; border: 1px solid #86efac; padding: 1px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-left: 8px; text-transform: uppercase; }
-    .amount { font-size: 14px; font-weight: 800; color: #059669; }
-    .subtotal-row td { background: #f8fafc; font-weight: 600; font-size: 12px; }
-    .gst-row td { background: #eef2ff; font-weight: 600; font-size: 12px; color: #4338ca; }
-    .total-row td { background: #d1fae5; font-weight: 900; font-size: 14px; color: #065f46; }
-    .terms { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 14px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-    .term-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
-    .term-val { font-size: 12px; font-weight: 700; }
-    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
-  </style>
-</head>
-<body>
-  <h1>Price Quotation</h1>
-  <p class="subtitle">Enlight Metals Pvt. Ltd. &bull; Ref: ${refId} &bull; Date: ${dateStr}</p>
-  <div class="grid">
-    <div class="card">
-      <div class="label">Bill To</div>
-      <div class="name">${details.companyName}</div>
-      <div class="meta">Phone: ${details.customerPhone}</div>
-      <div class="meta">Delivery: ${details.deliveryLocation}</div>
-    </div>
-    <div class="card">
-      <div class="label">From</div>
-      <div class="name">Enlight Metals Pvt. Ltd.</div>
-      <div class="meta">Mumbai, Maharashtra</div>
-      <div class="meta">GST Registered Supplier</div>
-    </div>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:18%">Quantity</th>
-        <th style="width:40%">Description &amp; Specifications</th>
-        <th style="width:20%">Unit Price (&#8377;)</th>
-        <th style="width:22%">Amount (&#8377;)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><div class="qty">${details.quantityTons} MT</div><div style="font-size:11px;color:#94a3b8">(${details.quantityUnits} nos)</div></td>
-        <td><div class="product">${details.productType} <span class="form-badge">Form: ${details.productForm}</span></div><div class="spec">Spec: ${details.thickness} ${details.width ? 'x ' + details.width : ''}</div></td>
-        <td>&#8377;${details.unitPrice.toLocaleString('en-IN')}/MT</td>
-        <td class="amount">&#8377;${details.totalAmount.toLocaleString('en-IN')}</td>
-      </tr>
-    </tbody>
-    <tfoot>
-      <tr class="total-row">
-        <td>Total: ${details.quantityTons} MT</td>
-        <td colspan="2" style="text-align:right;font-size:11px">GRAND TOTAL AMOUNT (INCL. 18% GST):</td>
-        <td>&#8377;${grand.toLocaleString('en-IN')}</td>
-      </tr>
-    </tfoot>
-  </table>
-  <div class="terms">
-    <div><div class="term-label">Delivery Address</div><div class="term-val">${details.deliveryLocation}</div></div>
-    <div><div class="term-label">Payment Terms</div><div class="term-val" style="color:#7c3aed">${details.paymentTerms}</div></div>
-    <div><div class="term-label">Inquiry Date</div><div class="term-val">${dateStr}</div></div>
-  </div>
-  <div class="footer">This is a system-generated quotation from Enlight Sales OS. Prices are subject to change.</div>
-  <script>window.onload = function() { window.print(); window.onafterprint = function() { window.close(); }; };</script>
-</body>
-</html>`;
-    const w = window.open('', '_blank', 'width=900,height=700');
-    if (w) { w.document.write(html); w.document.close(); }
-  };
+
 
   const handleSaveDrawerDetails = async () => {
     if (!selectedInquiry || !editDetails) return;
@@ -1635,11 +1539,11 @@ export default function InquiriesPage() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 <th className="px-4 py-3 text-center w-12">#</th>
-                <th className="px-4 py-3 text-left">Customer &amp; Date</th>
-                <th className="px-4 py-3 text-center">Items Summary</th>
-                <th className="px-4 py-3 text-center">Source Channel</th>
-                <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th className="px-5 py-3 text-left min-w-[220px]">Customer &amp; Date</th>
+                <th className="px-4 py-3 text-center w-32">Items Summary</th>
+                <th className="px-4 py-3 text-center w-32">Source Channel</th>
+                <th className="px-4 py-3 text-center w-36">Status</th>
+                <th className="px-5 py-3 text-center min-w-[370px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -1680,8 +1584,8 @@ export default function InquiriesPage() {
                     return parsed;
                   })();
                   const st = (inq.status || '').toLowerCase();
-                  const isQuoted = st === 'quoted';
-                  const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won';
+                  const isQuoted = st === 'quoted' || st === 'quotation_sent';
+                  const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po';
                   const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
 
                   return (
@@ -1689,7 +1593,7 @@ export default function InquiriesPage() {
                       key={inq.id || idx}
                       className="hover:bg-slate-50/75 transition-colors">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{idx + 1}</td>
-                      <td className="px-4 py-3.5 text-left min-w-[200px]">
+                      <td className="px-5 py-3.5 text-left min-w-[220px]">
                         <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                           <Building2 size={15} className="text-slate-700 shrink-0" />
                           <span>{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
@@ -1708,41 +1612,50 @@ export default function InquiriesPage() {
                           : 'WhatsApp'}
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        {(inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                            <CheckCircle size={12} /> PO Confirmed 
-                          </span>
-                        ) : isQuoted ? (
+                        {isQuoted ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
                             <CheckCircle size={12} /> Quotation Sent 📄
                           </span>
                         ) : isConfirmed ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                            <CheckCircle size={12} /> Quotation Ready ✓
+                            <CheckCircle size={12} /> Saved ✓
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                            <Clock size={12} /> Needs Review ⏳
+                            <Clock size={12} /> Review ⏳
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <td className="px-5 py-3.5 text-center whitespace-nowrap">
                         <div className="inline-flex items-center justify-center gap-2">
                           <button
                             type="button"
                             onClick={() => handleOpenDrawer(inq)}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5">
-                            <Edit3 size={13} className="text-slate-500" /> Edit
+                            className="w-[115px] h-[32px] px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 shrink-0">
+                            <Edit3 size={13} className="text-slate-500 shrink-0" /> Edit
                           </button>
+
                           <button
                             type="button"
                             onClick={() => {
-                              setQuotationViewInquiry(inq);
-                              setQuotationViewDetails(details);
-                              setShowQuotationView(true);
+                              setSelectedInquiry(inq);
+                              setEditDetails(details);
+                              setShowPdfModal(true);
                             }}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5">
-                            <Eye size={13} /> Final Quotation
+                            className="w-[115px] h-[32px] px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 shrink-0">
+                            <Eye size={13} className="shrink-0" /> Final Quotation
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedInquiry(inq);
+                              setEditDetails(details);
+                              setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
+                              setShowQuotationModal(true);
+                            }}
+                            className="w-[115px] h-[32px] px-2 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 shrink-0">
+                            <Send size={13} className="shrink-0" /> Share Quotation
                           </button>
                         </div>
                       </td>
@@ -2273,225 +2186,6 @@ export default function InquiriesPage() {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* CLEAN QUOTATION VIEW MODAL */}
-      {/* ============================================================ */}
-      {showQuotationView && quotationViewInquiry && quotationViewDetails && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto shadow-2xl border border-slate-200">
-            {/* Quotation Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-slate-800 rounded-t-2xl">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-blue-600 rounded-xl">
-                  <Package size={20} className="text-white" />
-                </div>
-                <div>
-                  <h2 className="text-white font-bold text-base">Price Quotation</h2>
-                  <p className="text-slate-400 text-[11px] font-mono mt-0.5">
-                    Enlight Metals Pvt. Ltd. · {new Date(quotationViewInquiry.created_at).toLocaleDateString('en-IN')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handlePrintQuotation(quotationViewInquiry, quotationViewDetails)}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5">
-                  <Printer size={13} /> Print / Save PDF
-                </button>
-                <button
-                  onClick={() => setShowQuotationView(false)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-700">
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-5">
-              {/* Buyer & Seller Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                  <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Bill To</p>
-                  <p className="font-bold text-slate-900 text-sm">{quotationViewDetails.companyName}</p>
-                  <p className="text-xs text-slate-600 font-mono mt-0.5">📞 {quotationViewDetails.customerPhone}</p>
-                  <p className="text-xs text-slate-600 mt-0.5">📍 {quotationViewDetails.deliveryLocation}</p>
-                </div>
-<div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</p>
-                  <p className="font-bold text-slate-900 text-sm">Enlight Metals Pvt. Ltd.</p>
-                  <p className="text-xs text-slate-600 mt-0.5">Mumbai, Maharashtra</p>
-                  <p className="text-[11px] text-slate-500 font-mono mt-1">
-                    Ref: {quotationViewInquiry.id.slice(0, 12).toUpperCase()}
-                  </p>
-                </div>
-              </div>
-
-              {/* Quotation Table matching reference image */}
-              <div className="rounded-xl border border-slate-300 overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-700 text-white font-bold text-[11px] tracking-wide">
-                    <tr>
-                      <th className="px-3 py-2.5 text-center w-[5%] border-b border-slate-600">#</th>
-                      <th className="px-4 py-2.5 w-[42%] border-b border-slate-600">Item &amp; Description</th>
-                      <th className="px-3 py-2.5 text-center w-[15%] border-b border-slate-600">HSN/SAC</th>
-                      <th className="px-4 py-2.5 text-right w-[12%] border-b border-slate-600">Qty</th>
-                      <th className="px-4 py-2.5 text-right w-[12%] border-b border-slate-600">Rate</th>
-                      <th className="px-4 py-2.5 text-right w-[14%] border-b border-slate-600">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white text-slate-900">
-                    {(quotationViewDetails.lineItems && quotationViewDetails.lineItems.length > 0 ? (
-                      quotationViewDetails.lineItems
-                    ) : (
-                      [{
-                        sku_text: cleanProductType(quotationViewDetails.productType) || 'HR - COIL / SHEET',
-                        dimensions: [quotationViewDetails.thickness, quotationViewDetails.width ? `x ${quotationViewDetails.width}` : ''].filter(Boolean).join(' '),
-                        quantity: quotationViewDetails.quantityTons,
-                        unit: 'MT',
-                        rate: quotationViewDetails.unitPrice,
-                        amount: quotationViewDetails.totalAmount,
-                      }]
-                    )).map((item, idx) => {
-                      const qty = Number(item.quantity || 0);
-                      const rate = Number(item.rate || 0);
-                      const amt = Number(item.amount || (qty * rate) || 0);
-                      const hsn = (item as any).hsn_code || '72083730';
-                      const unit = item.unit || 'MT';
-
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50/70">
-                          <td className="px-3 py-3 text-center text-slate-500 font-medium">{idx + 1}</td>
-                          <td className="px-4 py-3">
-                            <div className="font-bold text-slate-900 text-xs tracking-tight">{item.sku_text || 'HR - COIL / SHEET'}</div>
-                            {item.dimensions && (
-                              <div className="text-[11px] text-slate-500 font-mono mt-0.5">{item.dimensions}</div>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-center font-mono text-slate-600 text-xs">{hsn}</td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="font-bold text-slate-900 font-mono text-xs">{formatIndianCurrency(qty, true)}</div>
-                            <div className="text-[10px] text-slate-500 font-semibold">{unit}</div>
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-slate-800 text-xs">
-                            {rate > 0 ? formatIndianCurrency(rate, true) : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-right font-bold text-slate-900 font-mono text-xs">
-                            {amt > 0 ? formatIndianCurrency(amt, true) : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Table Footer: Left items total & Right financial summary block */}
-              {(() => {
-                const qItems = quotationViewDetails.lineItems && quotationViewDetails.lineItems.length > 0
-                  ? quotationViewDetails.lineItems
-                  : [{ quantity: quotationViewDetails.quantityTons, unit: 'MT', amount: quotationViewDetails.totalAmount }];
-                const qSubtotal = qItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || quotationViewDetails.totalAmount || 0;
-                const qBreakdown = calculateQuotationBreakdown(qSubtotal);
-                const qTotalQty = qItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-                const qUnit = qItems[0]?.unit || 'MT';
-                const qIsSingleUnit = qItems.every(i => (i.unit || 'MT').toUpperCase() === qUnit.toUpperCase());
-
-                return (
-                  <div className="flex flex-col sm:flex-row justify-between items-start pt-1 gap-6">
-                    <div className="text-xs font-semibold text-slate-700 pt-1">
-                      <span>Items in Total {formatIndianCurrency(qTotalQty, true)} {qIsSingleUnit ? qUnit : ''}</span>
-                    </div>
-
-                    <div className="w-full sm:w-72 space-y-1.5 text-xs">
-                      <div className="flex justify-between items-center py-0.5 text-slate-700">
-                        <span className="font-medium">Sub Total</span>
-                        <span className="font-mono font-medium">{qBreakdown.formattedSubtotal}</span>
-                      </div>
-
-                      <div className="flex justify-between items-center py-0.5 text-slate-700">
-                        <span className="font-medium">CGST (9%)</span>
-                        <span className="font-mono font-medium">{qBreakdown.formattedCGST}</span>
-                      </div>
-
-                      <div className="flex justify-between items-center py-0.5 text-slate-700">
-                        <span className="font-medium">SGST (9%)</span>
-                        <span className="font-mono font-medium">{qBreakdown.formattedSGST}</span>
-                      </div>
-
-                      <div className="flex justify-between items-center py-0.5 text-slate-700">
-                        <span className="font-medium">Rounding</span>
-                        <span className="font-mono font-medium">{qBreakdown.formattedRounding}</span>
-                      </div>
-
-                      <div className="flex justify-between items-center py-1.5 border-t border-slate-300 font-black text-slate-950 text-sm">
-                        <span>Total</span>
-                        <span className="font-mono text-base">{qBreakdown.formattedGrandTotal}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-                {/* Commercial Terms */}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-3 gap-4 text-xs">
-                  <div>
-                    <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Delivery Address</span>
-                    <span className="font-bold text-slate-900">{quotationViewDetails.deliveryLocation}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Payment Terms</span>
-                    <span className="font-bold text-purple-900">{quotationViewDetails.paymentTerms}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-semibold block mb-0.5 uppercase tracking-wider text-[10px]">Inquiry Date</span>
-                    <span className="font-mono font-bold text-slate-700">{new Date(quotationViewInquiry.created_at).toLocaleDateString('en-IN')}</span>
-                  </div>
-                </div>
-
-              {/* Attached Image Preview in Quotation */}
-              {quotationViewInquiry.media_urls && quotationViewInquiry.media_urls.length > 0 && (
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                      <ImageIcon size={13} className="text-blue-500" /> Customer's Shared Document / Image
-                    </span>
-                    <button
-                      onClick={() => setImageViewerUrl(quotationViewInquiry.media_urls![0])}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1">
-                      <ZoomIn size={12} /> View Full Size
-                    </button>
-                  </div>
-                  <img
-                    src={quotationViewInquiry.media_urls[0]}
-                    alt="Customer shared document"
-                    className="w-full max-h-48 object-contain bg-slate-100 cursor-zoom-in"
-                    onClick={() => setImageViewerUrl(quotationViewInquiry.media_urls![0])}
-                    onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
-                  />
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <button
-                  onClick={() => setShowQuotationView(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    setShowQuotationView(false);
-                    handleOpenDrawer(quotationViewInquiry);
-                    setShowQuotationModal(true);
-                  }}
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md">
-                  <Send size={14} /> Send Quotation to Customer ✉️
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Send Official Quotation Email Modal (Resend API Integration) */}
       {showQuotationModal && editDetails && selectedInquiry && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
@@ -2509,7 +2203,13 @@ export default function InquiriesPage() {
             </div>
 
             {(() => {
-              const qBreakdown = calculateQuotationBreakdown(editDetails.totalAmount);
+              const activeLineItems = editDetails.lineItems && editDetails.lineItems.length > 0
+                ? editDetails.lineItems
+                : [{ sku_text: editDetails.productType || '', quantity: editDetails.quantityTons, unit: 'MT', rate: editDetails.unitPrice, amount: editDetails.totalAmount }];
+              const subtotal = activeLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
+              const qBreakdown = calculateQuotationBreakdown(subtotal);
+              const summaryItemsText = activeLineItems.map(i => `${i.sku_text || 'Item'} (${i.quantity} ${i.unit || 'MT'})`).join(' · ');
+
               return (
                 <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-2">
                   <div className="font-bold text-purple-900 flex items-center justify-between">
@@ -2517,11 +2217,11 @@ export default function InquiriesPage() {
                     <span className="font-extrabold text-emerald-800">Total: {qBreakdown.formattedGrandTotal}</span>
                   </div>
                   <div className="text-[11px] text-slate-600 flex justify-between font-mono">
-                    <span>Sub Total: ₹{qBreakdown.formattedSubtotal}</span>
-                    <span>CGST: ₹{qBreakdown.formattedCGST} | SGST: ₹{qBreakdown.formattedSGST}</span>
+                    <span>Sub Total: {qBreakdown.formattedSubtotal}</span>
+                    <span>CGST: {qBreakdown.formattedCGST} | SGST: {qBreakdown.formattedSGST}</span>
                   </div>
                   <p className="text-slate-700 font-mono text-[11px]">
-                    {editDetails.companyName} · {editDetails.productType} ({editDetails.productForm || 'Material'}) {editDetails.quantityTons} MT @ ₹{editDetails.unitPrice}/MT
+                    {editDetails.companyName} · {summaryItemsText || `${editDetails.productType} (${editDetails.quantityTons} MT)`}
                   </p>
                   <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
                     📄 <span><strong>Official PDF Quotation:</strong> The formatted PDF document will be generated and attached to this email.</span>
