@@ -1297,7 +1297,7 @@ const formatExtractedRequirementText = (extracted: any): string => {
   };
 
   // Keep ONLY actual Product Inquiries (filters out generic chat greetings, deal logs, and status questions!)
-  const rawList = Array.isArray(inquiries) ? inquiries : [];
+  const rawList = Array.isArray(inquiries) && inquiries.length > 0 ? inquiries : (Array.isArray(rawInquiries) ? rawInquiries : []);
   const productInquiries = rawList.filter(isProductInquiry);
   const activeInquiryList = productInquiries;
   const reviewCount = activeInquiryList.filter(i => {
@@ -1767,38 +1767,48 @@ const formatExtractedRequirementText = (extracted: any): string => {
                             <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
                               <input
                                 type="number"
-                                value={item.quantity}
+                                value={item.quantity === 0 ? '' : item.quantity}
                                 onChange={(e) => {
+                                  const val = e.target.value;
+                                  const q = val === '' ? 0 : parseFloat(val);
+                                  const safeQ = isNaN(q) ? 0 : q;
                                   const updated = [...editDetails.lineItems];
-                                  const q = parseFloat(e.target.value) || 0;
-                                  updated[idx] = { ...updated[idx], quantity: q, amount: Math.round(q * (updated[idx].rate || 0)) };
+                                  updated[idx] = { ...updated[idx], quantity: safeQ, amount: Math.round(safeQ * (updated[idx].rate || 0)) };
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
                                 }}
+                                placeholder="0"
                                 className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </td>
                             <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
                               <input
                                 type="number"
-                                value={item.rate}
+                                value={item.rate === 0 ? '' : item.rate}
                                 onChange={(e) => {
+                                  const val = e.target.value;
+                                  const r = val === '' ? 0 : parseFloat(val);
+                                  const safeR = isNaN(r) ? 0 : r;
                                   const updated = [...editDetails.lineItems];
-                                  const r = parseFloat(e.target.value) || 0;
-                                  updated[idx] = { ...updated[idx], rate: r, amount: Math.round((updated[idx].quantity || 0) * r) };
+                                  updated[idx] = { ...updated[idx], rate: safeR, amount: Math.round((updated[idx].quantity || 0) * safeR) };
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
                                 }}
+                                placeholder="0"
                                 className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </td>
                             <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
                               <input
                                 type="number"
-                                value={item.amount}
+                                value={item.amount === 0 ? '' : item.amount}
                                 onChange={(e) => {
+                                  const val = e.target.value;
+                                  const a = val === '' ? 0 : parseFloat(val);
+                                  const safeA = isNaN(a) ? 0 : a;
                                   const updated = [...editDetails.lineItems];
-                                  updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 };
+                                  updated[idx] = { ...updated[idx], amount: safeA };
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: updated.reduce((s, i) => s + i.amount, 0) });
                                 }}
+                                placeholder="0"
                                 className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </td>
@@ -1824,13 +1834,45 @@ const formatExtractedRequirementText = (extracted: any): string => {
                             </div>
                           </td>
                           <td className="px-4 py-3.5 border-r border-slate-200 font-bold text-blue-700 font-mono">
-                            <input type="number" value={editDetails.quantityTons} onChange={(e) => { const q = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, quantityTons: q, totalAmount: Math.round(q * editDetails.unitPrice) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input
+                              type="number"
+                              value={editDetails.quantityTons === 0 ? '' : editDetails.quantityTons}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const q = val === '' ? 0 : parseFloat(val);
+                                const safeQ = isNaN(q) ? 0 : q;
+                                setEditDetails({ ...editDetails, quantityTons: safeQ, totalAmount: Math.round(safeQ * editDetails.unitPrice) });
+                              }}
+                              placeholder="0"
+                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                            />
                           </td>
                           <td className="px-4 py-3.5 border-r border-slate-200 font-bold font-mono">
-                            <input type="number" value={editDetails.unitPrice} onChange={(e) => { const r = parseFloat(e.target.value) || 0; setEditDetails({ ...editDetails, unitPrice: r, totalAmount: Math.round(editDetails.quantityTons * r) }); }} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input
+                              type="number"
+                              value={editDetails.unitPrice === 0 ? '' : editDetails.unitPrice}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const r = val === '' ? 0 : parseFloat(val);
+                                const safeR = isNaN(r) ? 0 : r;
+                                setEditDetails({ ...editDetails, unitPrice: safeR, totalAmount: Math.round(editDetails.quantityTons * safeR) });
+                              }}
+                              placeholder="0"
+                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                            />
                           </td>
                           <td className="px-4 py-3.5 text-right font-black text-emerald-700 font-mono">
-                            <input type="number" value={editDetails.totalAmount} onChange={(e) => setEditDetails({ ...editDetails, totalAmount: parseFloat(e.target.value) || 0 })} className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input
+                              type="number"
+                              value={editDetails.totalAmount === 0 ? '' : editDetails.totalAmount}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const a = val === '' ? 0 : parseFloat(val);
+                                setEditDetails({ ...editDetails, totalAmount: isNaN(a) ? 0 : a });
+                              }}
+                              placeholder="0"
+                              className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-xs text-right font-mono text-emerald-700 outline-none focus:ring-2 focus:ring-blue-500"
+                            />
                           </td>
                         </tr>
                       )}
