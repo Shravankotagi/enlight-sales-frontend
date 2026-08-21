@@ -8,7 +8,7 @@ import {
   AlertCircle, Clock, CheckCircle, TrendingUp, Users, Home,
   ShoppingBag, RefreshCw, ArrowUpRight,
   Building2, Sparkles, Plus, FileText, Activity, Layers,
-  CheckCircle2, ArrowRight, Truck
+  CheckCircle2, ArrowRight, ChevronRight, Truck
 } from 'lucide-react';
 
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
@@ -372,6 +372,34 @@ export default function HomePage() {
           </div>
         </div>
 
+      </div>
+
+      {/* Featured Total Sales Overview Value Banner (Matching img1) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Sales Performance</span>
+            <div className="flex items-center gap-3 mt-1">
+              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                ₹{Number(totalRevenue).toLocaleString('en-IN')}
+              </h2>
+              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <ArrowUpRight size={13} /> +12.5%
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
+              <Sparkles size={14} className="text-amber-500" />
+              Yay! Your sales have surged this month across all metal product categories!
+            </p>
+          </div>
+
+          <button
+            onClick={() => navigate('/reports')}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors shadow-2xs hover:bg-blue-100"
+          >
+            Detailed Analytics <ChevronRight size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Middle Grid Section: 2 Column Layout (Matching graph & active customer list) */}

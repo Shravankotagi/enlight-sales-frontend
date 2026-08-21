@@ -7,8 +7,8 @@ import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
-  ArrowUpRight, Award, CheckCircle2, AlertCircle, Layers,
-  Plus, Upload, Download
+  ArrowUpRight, Award, AlertCircle, Layers,
+  Plus, Upload, Download, Truck, Sparkles
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -335,30 +335,27 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Card 2: WON ORDERS VALUE */}
+        {/* Card 2: TOTAL TONNAGE */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
-              WON ORDERS VALUE
+              TOTAL TONNAGE
             </span>
             <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 size={18} />
+              <Truck size={18} />
             </div>
           </div>
 
           <div className="mt-4">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-600">
-              ₹{Number(wonValue).toLocaleString('en-IN')}
+              {Number(deliveredTonnage.toFixed(2)).toLocaleString('en-IN')} MT
             </h2>
-            <div className="flex flex-wrap items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <ArrowUpRight size={12} /> +25%
               </span>
               <span className="text-xs text-slate-500 font-medium">
-                {wonDealsCount} deals closed won
-              </span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                📦 {Number(deliveredTonnage.toFixed(2)).toLocaleString('en-IN')} MT
+                From last month
               </span>
             </div>
           </div>
@@ -434,6 +431,36 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+      </div>
+
+      {/* Featured Total Sales Overview Value Banner (Matching img1) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
+              TOTAL SALES PERFORMANCE
+            </span>
+            <div className="flex items-baseline gap-3 mt-1">
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+                ₹{Number(wonValue || totalValue).toLocaleString('en-IN')}
+              </h2>
+              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <ArrowUpRight size={13} /> +12.5%
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
+              <Sparkles size={14} className="text-amber-500" />
+              Yay! Company sales have surged this month across all metal product categories!
+            </p>
+          </div>
+
+          <button
+            onClick={() => navigate('/pipeline')}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors shadow-2xs hover:bg-blue-100 self-start sm:self-auto"
+          >
+            Detailed Analytics <ChevronRight size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Main Breakdown Section (2-Column Grid) */}
