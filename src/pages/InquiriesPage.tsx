@@ -815,7 +815,7 @@ export default function InquiriesPage() {
     return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
   };
 
-  const { data: rawInquiries = [], isLoading: loading, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
+  const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
     queryKey: ['inquiries-list', effectivePhone, dateRange],
     queryFn: async () => {
       const params: any = {};
@@ -1638,13 +1638,14 @@ export default function InquiriesPage() {
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => {
-              fetchMonthlyInquiries();
+            disabled={isFetching}
+            onClick={async () => {
+              await fetchMonthlyInquiries();
               toast.success('Inquiries list refreshed');
             }}
             title="Refresh Inquiries"
-            className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer">
-            <RefreshCw size={15} className={loading ? 'animate-spin text-blue-600' : ''} />
+            className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+            <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
           </button>
 
           <button
@@ -2574,7 +2575,7 @@ export default function InquiriesPage() {
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Send className="text-blue-600" size={22} />
-                Send Quotation
+                Share Quotation
               </h2>
               <button
                 type="button"
