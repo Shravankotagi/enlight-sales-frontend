@@ -25,7 +25,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
+import { ordersApi, inquiriesApi, dealsApi, customersApi, employeesApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
@@ -186,7 +186,38 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
-  const { effectivePhone } = useAuth();
+  const { effectivePhone, employee, viewingAs } = useAuth();
+
+  const { data: rawEmployees = [] } = useQuery<{ id: string; name: string; phone: string }[]>({
+    queryKey: ['employees-list-all'],
+    queryFn: async () => {
+      const res = await employeesApi.getAll().catch(() => null);
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    },
+    staleTime: 60000,
+  });
+
+  const getSalespersonName = (order?: Order | null) => {
+    if (!order) return viewingAs?.name || employee?.name || 'Vedant Goel';
+    if ((order as any).salesperson_name) return (order as any).salesperson_name;
+    if ((order as any).assigned_salesperson_name) return (order as any).assigned_salesperson_name;
+    if ((order as any).salesperson) return (order as any).salesperson;
+
+    const phone = (order.salesperson_phone || '').replace(/\D/g, '');
+    if (phone) {
+      const p10 = phone.slice(-10);
+      const found = rawEmployees.find(e => {
+        const ePhone = (e.phone || '').replace(/\D/g, '');
+        return ePhone.endsWith(p10) || p10.endsWith(ePhone.slice(-10));
+      });
+      if (found?.name) return found.name;
+    }
+
+    if (viewingAs?.name) return viewingAs.name;
+    if (employee?.name) return employee.name;
+    return 'Vedant Goel';
+  };
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
@@ -940,16 +971,16 @@ export default function OrdersPage() {
 
                         return (
                           <tr key={iIdx} className="hover:bg-slate-50">
-                            <td className="px-4 py-3.5 font-medium text-slate-400 text-left font-mono">{iIdx + 1}</td>
+                            <td className="px-4 py-3.5 font-medium text-slate-900 text-left font-mono">{iIdx + 1}</td>
                             <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
-                            <td className="px-4 py-3.5 text-slate-600 font-mono text-left">{dimensions}</td>
+                            <td className="px-4 py-3.5 text-slate-900 font-mono text-left">{dimensions}</td>
                             <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
                               {qtyNum > 0 ? `${qtyNum.toLocaleString('en-IN')} ${item.unit || 'MT'}` : '—'}
                             </td>
-                            <td className="px-4 py-3.5 text-left font-semibold text-slate-700 font-mono">
+                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
                               {rateNum > 0 ? `₹${rateNum.toLocaleString('en-IN')}` : '—'}
                             </td>
-                            <td className="px-4 py-3.5 text-left font-bold text-emerald-700 font-mono">
+                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
                               ₹{amtNum.toLocaleString('en-IN')}
                             </td>
                           </tr>
@@ -960,12 +991,12 @@ export default function OrdersPage() {
                         const { materialDescription, dimensions } = extractCleanProductAndSpecs('Steel Material Requirements', '');
                         return (
                           <tr>
-                            <td className="px-4 py-3.5 font-medium text-slate-400 text-left font-mono">1</td>
+                            <td className="px-4 py-3.5 font-medium text-slate-900 text-left font-mono">1</td>
                             <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
-                            <td className="px-4 py-3.5 text-slate-600 font-mono text-left">{dimensions}</td>
+                            <td className="px-4 py-3.5 text-slate-900 font-mono text-left">{dimensions}</td>
                             <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">—</td>
-                            <td className="px-4 py-3.5 text-left font-semibold text-slate-700 font-mono">—</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-emerald-700 font-mono">
+                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">—</td>
+                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
                               ₹{Number(selectedDrawerOrder.total_amount || 0).toLocaleString('en-IN')}
                             </td>
                           </tr>
@@ -1044,7 +1075,7 @@ export default function OrdersPage() {
                 <CreditCard size={16} className="text-slate-400 mt-0.5 shrink-0" />
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Payment Terms</span>
-                  <span className="font-semibold text-purple-700">{selectedDrawerOrder.payment_terms || '-'}</span>
+                  <span className="font-semibold text-slate-800">{selectedDrawerOrder.payment_terms || '-'}</span>
                 </div>
               </div>
 
@@ -1062,8 +1093,8 @@ export default function OrdersPage() {
                 <User size={16} className="text-slate-400 mt-0.5 shrink-0" />
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Salesperson</span>
-                  <span className="font-mono font-bold text-slate-800">
-                    {selectedDrawerOrder.salesperson_phone || '-'}
+                  <span className="font-bold text-slate-800 capitalize">
+                    {getSalespersonName(selectedDrawerOrder)}
                   </span>
                 </div>
               </div>

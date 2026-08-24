@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FileText, Plus, Minus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
+  FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical, AlertCircle, Loader2
 } from 'lucide-react';
@@ -1778,15 +1778,15 @@ export default function InquiriesPage() {
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {isQuoted ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                          <CheckCircle size={12} /> Quotation Sent 
+                          Quotation Sent 
                         </span>
                       ) : isConfirmed ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                          <CheckCircle size={12} /> Saved 
+                          Saved 
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                          <Clock size={12} /> Review
+                          Review
                         </span>
                       )}
                     </td>
