@@ -240,12 +240,12 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         </div>
 
         {/* Printable PDF Document Body - Exact Reference Match */}
-        <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-8 sm:p-12 space-y-8 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
+        <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-8 sm:p-12 space-y-4 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
           
           {/* ================= PAGE 1 ================= */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Header Section: Company Monogram/Details (Left) & Proforma Invoice (Right) */}
-            <div className="flex justify-between items-start pb-4">
+            <div className="flex justify-between items-start pb-3">
               {/* Left: Enlight Metals Monogram + Address */}
               <div className="space-y-0.5 text-slate-700 text-[12px]">
                 {!logoError ? (
@@ -287,10 +287,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               </div>
             </div>
 
-            {/* Addresses & Supply Section: Bill To, Ship To, Sales Person (Left) & Order Date (Right) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-2 pb-2">
-              {/* Left Column: Bill To, Ship To, Sales Person */}
-              <div className="space-y-4 text-slate-700 text-[12px]">
+            {/* Addresses & Supply Section: Bill To, Ship To, Place of Supply (Left) & Order Date, Salesperson (Right) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-1 pb-1">
+              {/* Left Column: Bill To, Ship To, Place of Supply */}
+              <div className="space-y-3 text-slate-700 text-[12px]">
                 {/* Bill To */}
                 <div className="space-y-0.5">
                   <p className="font-bold text-slate-800 mb-0.5">Bill To</p>
@@ -316,7 +316,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 </div>
 
                 {/* Ship To */}
-                <div className="space-y-0.5 pt-1">
+                <div className="space-y-0.5 pt-0.5">
                   <p className="font-bold text-slate-800 mb-0.5">Ship To</p>
                   <p className="font-bold text-slate-900 uppercase text-[12px]">{details.companyName || 'STANDARD RETAIL PRIVATE LIMITED'}</p>
                   {details.deliveryLocation ? (
@@ -336,26 +336,29 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   )}
                 </div>
 
-                {/* Sales person (Replaces Place of Supply) */}
-                <div className="pt-2">
-                  <p className="text-slate-800 text-[12px]">
-                    <span className="font-bold text-slate-800">Sales person : </span>
-                    <span className="font-normal text-slate-900">{salesperson}</span>
+                {/* Place Of Supply */}
+                <div className="pt-1">
+                  <p className="font-medium text-slate-800 text-[12px]">
+                    Place Of Supply: <span className="font-normal text-slate-700">Maharashtra (27)</span>
                   </p>
                 </div>
               </div>
 
-              {/* Right Column: Order Date */}
-              <div className="flex flex-col items-start sm:items-end justify-end space-y-2 text-[12px] pb-2">
+              {/* Right Column: Order Date & Salesperson (Both together on the right, aligned with bottom) */}
+              <div className="flex flex-col items-start sm:items-end justify-end space-y-1.5 text-[12px] pb-1">
                 <div className="flex items-center gap-6 text-slate-700">
                   <span className="font-medium text-slate-700 w-28 sm:text-right">Order Date :</span>
                   <span className="font-medium text-slate-900 w-32 text-left">{createdDate}</span>
+                </div>
+                <div className="flex items-center gap-6 text-slate-700">
+                  <span className="font-medium text-slate-700 w-28 sm:text-right">Sales person :</span>
+                  <span className="font-medium text-slate-900 w-32 text-left capitalize">{salesperson}</span>
                 </div>
               </div>
             </div>
 
             {/* Quotation Line Items Table — Exact Dark Header Reference Style */}
-            <div className="pt-2 overflow-x-auto">
+            <div className="pt-1 overflow-x-auto">
               <table className="w-full text-left text-[12px] border-collapse">
                 <thead>
                   <tr className="bg-[#525E6F] text-white font-bold text-[12px]">
