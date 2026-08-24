@@ -691,9 +691,7 @@ export default function OrdersPage() {
             <ShoppingBag className="text-blue-600" size={28} />
             Completed &amp; Delivered Orders
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Track confirmed sales orders, PO numbers, tonnage, and delivery dispatches.
-          </p>
+          
         </div>
 
         <div className="flex items-center gap-2">
