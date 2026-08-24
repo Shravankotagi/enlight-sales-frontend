@@ -973,6 +973,7 @@ export default function InquiriesPage() {
 
   const handleSaveDrawerDetails = async () => {
     if (!selectedInquiry || !editDetails) return;
+    if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
 
     // Strict validation for all compulsory fields (marked with red asterisks)
     if (!editDetails.companyName || !editDetails.companyName.trim()) {
@@ -2300,10 +2301,14 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
-                disabled={submitting}
+                disabled={submitting || saveSuccess}
                 onClick={handleSaveDrawerDetails}
                 className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                  saveSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+                  submitting
+                    ? 'bg-blue-600 opacity-80 cursor-wait'
+                    : saveSuccess
+                    ? 'bg-emerald-600 hover:bg-emerald-600 cursor-default shadow-xs'
+                    : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
                 }`}>
                 {submitting ? (
                   <>
