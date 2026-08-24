@@ -1750,15 +1750,15 @@ export default function InquiriesPage() {
 
       {/* Main Inquiries Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
-        <table className="w-full table-fixed text-left border-collapse text-xs">
+        <table className="w-full table-fixed text-center border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-3 py-3.5 text-center w-[4%]">#</th>
-              <th className="px-5 py-3.5 text-left w-[28%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[24%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
+              <th className="px-3 py-3.5 text-center w-[6%]">#</th>
+              <th className="px-4 py-3.5 text-center w-[24%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[18%]">Source Channel</th>
               <th className="px-4 py-3.5 text-center w-[18%]">Status</th>
-              <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -1826,12 +1826,12 @@ export default function InquiriesPage() {
                     key={inq.id || idx}
                     className="hover:bg-slate-50/75 transition-colors">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                    <td className="px-5 py-3.5 text-left">
-                      <div className="font-bold text-slate-900 text-sm">
-                        <span className="truncate">{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
+                    <td className="px-4 py-3.5 text-center">
+                      <div className="font-bold text-slate-900 text-sm truncate">
+                        {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
                       </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        <span className="font-mono">{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
+                      <div className="text-xs text-slate-500 mt-0.5 font-mono">
+                        {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
