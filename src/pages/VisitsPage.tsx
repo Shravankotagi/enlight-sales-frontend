@@ -551,25 +551,24 @@ export default function VisitsPage() {
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3">Customer &amp; Date</th>
-                <th className="px-4 py-3">Contact Person</th>
-                <th className="px-4 py-3">Outcome</th>
-                <th className="px-4 py-3">Discussion &amp; Requirements</th>
-                <th className="px-4 py-3">Next Action</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3 min-w-[180px]">Customer</th>
+                <th className="px-4 py-3 min-w-[150px]">Contact Person</th>
+                <th className="px-4 py-3 min-w-[170px]">Date &amp; Location</th>
+                <th className="px-4 py-3 min-w-[130px]">Outcome</th>
+                <th className="px-4 py-3 text-right w-16">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline mr-2 text-blue-600" />
                     Loading visit logs...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
                     <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-slate-600 font-medium">No visit logs found.</p>
                     <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
@@ -580,60 +579,26 @@ export default function VisitsPage() {
                   const outcomeLower = getNormalizedOutcome(v);
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const loc = v.location || (v as any).city || (v as any).customer_address || '-';
-                  const rawRemarks = v.remarks || v.raw_remarks || '';
                   const salespersonName = getSalespersonDisplayName(v);
-
-                  // Follow-up Action Extraction
-                  const followUp =
-                    v.follow_up_action ||
-                    (v as any).follow_up ||
-                    (v as any).followup ||
-                    rawRemarks.match(/\[FollowUp:\s*([^\]]+)\]/i)?.[1] ||
-                    rawRemarks.match(/\[Follow-up:\s*([^\]]+)\]/i)?.[1] ||
-                    (rawRemarks.match(/\[Interests:\s*([^\]]+)\]/i)?.[1]
-                      ? `Follow-up on ${rawRemarks.match(/\[Interests:\s*([^\]]+)\]/i)?.[1]} requirement`
-                      : null) ||
-                    '-';
-
-                  // Clean Remarks
-                  const cleanRemarks =
-                    rawRemarks
-                      .replace(
-                        /\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi,
-                        '',
-                      )
-                      .trim() || rawRemarks || '-';
 
                   return (
                     <tr
                       key={v.id || idx}
                       className="hover:bg-slate-50/70 transition-colors group">
-                      {/* 1. Customer & Date */}
-                      <td className="px-4 py-3.5 min-w-[190px]">
+                      {/* 1. Customer */}
+                      <td className="px-4 py-3.5">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {v.customer_name || 'Customer'}
                         </div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 mt-1">
-                          <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap">
-                            <Calendar size={12} className="text-slate-400 shrink-0" />
-                            {v.visited_at ? new Date(v.visited_at).toLocaleDateString('en-IN') : '-'}
-                          </span>
-                          {loc && loc !== '-' && (
-                            <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                              • <MapIcon size={11} className="text-slate-400 shrink-0" /> {loc}
-                            </span>
-                          )}
-                          {/* Salesperson tag visible ONLY to Sales Managers & Admin */}
-                          {canViewSalesperson && salespersonName && (
-                            <span className="text-slate-500 font-medium inline-flex items-center gap-1 whitespace-nowrap">
-                              • <User size={11} className="text-slate-400 shrink-0" /> {salespersonName}
-                            </span>
-                          )}
-                        </div>
+                        {canViewSalesperson && salespersonName && (
+                          <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                            <User size={11} className="text-slate-400 shrink-0" /> Rep: {salespersonName}
+                          </div>
+                        )}
                       </td>
 
-                      {/* 2. Contact Details */}
-                      <td className="px-4 py-3.5 text-xs min-w-[150px]">
+                      {/* 2. Contact Person */}
+                      <td className="px-4 py-3.5 text-xs">
                         <div className="font-semibold text-slate-800 flex items-center gap-1.5">
                           <User size={13} className="text-slate-400 shrink-0" />
                           {v.person_met && v.person_met !== 'null' ? v.person_met : '-'}
@@ -645,7 +610,26 @@ export default function VisitsPage() {
                         )}
                       </td>
 
-                      {/* 3. Outcome */}
+                      {/* 3. Date & Location */}
+                      <td className="px-4 py-3.5 text-xs">
+                        <div className="font-semibold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
+                          <Calendar size={12} className="text-slate-400 shrink-0" />
+                          {v.visited_at
+                            ? new Date(v.visited_at).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : '-'}
+                        </div>
+                        {loc && loc !== '-' && (
+                          <div className="text-slate-500 flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                            <MapIcon size={11} className="text-slate-400 shrink-0" /> {loc}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* 4. Outcome */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         {outcomeLower === 'positive' ? (
                           <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
@@ -662,25 +646,7 @@ export default function VisitsPage() {
                         )}
                       </td>
 
-                      {/* 4. Discussion & Requirements */}
-                      <td className="px-4 py-3.5 text-xs max-w-md">
-                        <p className="text-slate-700 leading-relaxed break-words whitespace-normal line-clamp-2">
-                          {cleanRemarks}
-                        </p>
-                      </td>
-
-                      {/* 5. Next Action */}
-                      <td className="px-4 py-3.5 text-xs whitespace-normal min-w-[160px]">
-                        {followUp && followUp !== '-' ? (
-                          <span className="font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 text-xs">
-                            📅 {followUp}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
-
-                      {/* 6. Actions (3-dots dropdown) */}
+                      {/* 5. Actions (3-dots dropdown) */}
                       <td className="px-4 py-3.5 text-right relative whitespace-nowrap">
                         <div className="inline-block text-left">
                           <button
