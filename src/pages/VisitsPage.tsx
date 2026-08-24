@@ -565,24 +565,25 @@ export default function VisitsPage() {
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3 min-w-[180px]">Customer</th>
-                <th className="px-4 py-3 min-w-[150px]">Contact Person</th>
-                <th className="px-4 py-3 min-w-[170px]">Date &amp; Location</th>
-                <th className="px-4 py-3 min-w-[130px]">Outcome</th>
-                <th className="px-4 py-3 text-right w-16">Actions</th>
+                <th className="px-3 py-3.5 text-center w-12">#</th>
+                <th className="px-5 py-3.5 text-left min-w-[200px]">Customer</th>
+                <th className="px-4 py-3.5 text-left min-w-[150px]">Contact Person</th>
+                <th className="px-4 py-3.5 text-left min-w-[170px]">Date &amp; Location</th>
+                <th className="px-4 py-3.5 text-center min-w-[130px]">Outcome</th>
+                <th className="px-4 py-3.5 text-center w-20">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline mr-2 text-blue-600" />
                     Loading visit logs...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
                     <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-slate-600 font-medium">No visit logs found.</p>
                     <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
@@ -590,6 +591,7 @@ export default function VisitsPage() {
                 </tr>
               ) : (
                 paginatedVisits.map((v, idx) => {
+                  const globalIdx = startIndex + idx + 1;
                   const outcomeLower = getNormalizedOutcome(v);
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const loc = v.location || (v as any).city || (v as any).customer_address || '-';
@@ -599,8 +601,13 @@ export default function VisitsPage() {
                     <tr
                       key={v.id || idx}
                       className="hover:bg-slate-50/70 transition-colors group">
+                      {/* 0. Serial Number */}
+                      <td className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                        {globalIdx}
+                      </td>
+
                       {/* 1. Customer */}
-                      <td className="px-4 py-3.5">
+                      <td className="px-5 py-3.5">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {v.customer_name || 'Customer'}
                         </div>
@@ -644,7 +651,7 @@ export default function VisitsPage() {
                       </td>
 
                       {/* 4. Outcome */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         {outcomeLower === 'positive' ? (
                           <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
                             Positive
@@ -660,16 +667,16 @@ export default function VisitsPage() {
                         )}
                       </td>
 
-                      {/* 5. Actions (Bordered 3-dots dropdown) */}
-                      <td className="px-4 py-3.5 text-right relative whitespace-nowrap">
-                        <div className="inline-block text-left">
+                      {/* 5. Actions (Bordered 3-dots dropdown matching Inquiries tab) */}
+                      <td className="px-4 py-3.5 text-center relative whitespace-nowrap">
+                        <div className="relative inline-block text-left">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveActionMenuId(prev => prev === v.id ? null : v.id);
                             }}
-                            className="p-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-800 rounded-xl transition-all shadow-2xs cursor-pointer inline-flex items-center justify-center"
+                            className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all inline-flex items-center justify-center cursor-pointer"
                             title="Actions">
                             <MoreVertical size={16} />
                           </button>
@@ -677,7 +684,11 @@ export default function VisitsPage() {
                           {activeActionMenuId === v.id && (
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              className="absolute right-4 top-11 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1.5 min-w-[130px] text-left animate-in fade-in-50 duration-100">
+                              className={`absolute right-0 ${
+                                idx >= paginatedVisits.length - 2 && paginatedVisits.length >= 3
+                                  ? 'bottom-full mb-1'
+                                  : 'top-full mt-1'
+                              } w-36 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 text-left animate-in fade-in-50 duration-100`}>
                               <button
                                 type="button"
                                 onClick={() => {
