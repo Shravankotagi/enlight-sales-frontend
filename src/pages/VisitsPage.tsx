@@ -17,6 +17,8 @@ import {
   Check,
   MoreVertical,
   Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -58,6 +60,8 @@ export default function VisitsPage() {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
 
   // Close active action dropdown when clicking outside
   useEffect(() => {
@@ -424,6 +428,16 @@ export default function VisitsPage() {
 
   const [dateFilterResetKey, setDateFilterResetKey] = useState(0);
 
+  // Reset pagination to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterOutcome, dateRange]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filtered.length);
+  const paginatedVisits = filtered.slice(startIndex, startIndex + pageSize);
+
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterOutcome('all');
@@ -575,7 +589,7 @@ export default function VisitsPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((v, idx) => {
+                paginatedVisits.map((v, idx) => {
                   const outcomeLower = getNormalizedOutcome(v);
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const loc = v.location || (v as any).city || (v as any).customer_address || '-';
@@ -616,10 +630,10 @@ export default function VisitsPage() {
                           <Calendar size={12} className="text-slate-400 shrink-0" />
                           {v.visited_at
                             ? new Date(v.visited_at).toLocaleDateString('en-IN', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                              })
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
                             : '-'}
                         </div>
                         {loc && loc !== '-' && (
@@ -646,7 +660,7 @@ export default function VisitsPage() {
                         )}
                       </td>
 
-                      {/* 5. Actions (3-dots dropdown) */}
+                      {/* 5. Actions (Bordered 3-dots dropdown) */}
                       <td className="px-4 py-3.5 text-right relative whitespace-nowrap">
                         <div className="inline-block text-left">
                           <button
@@ -655,7 +669,7 @@ export default function VisitsPage() {
                               e.stopPropagation();
                               setActiveActionMenuId(prev => prev === v.id ? null : v.id);
                             }}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="p-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-800 rounded-xl transition-all shadow-2xs cursor-pointer inline-flex items-center justify-center"
                             title="Actions">
                             <MoreVertical size={16} />
                           </button>
@@ -663,7 +677,7 @@ export default function VisitsPage() {
                           {activeActionMenuId === v.id && (
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              className="absolute right-4 top-10 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1.5 min-w-[130px] text-left animate-in fade-in-50 duration-100">
+                              className="absolute right-4 top-11 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1.5 min-w-[130px] text-left animate-in fade-in-50 duration-100">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -705,6 +719,48 @@ export default function VisitsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Controls matching reference image */}
+        <div className="px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div>
+            Showing <span className="font-bold text-slate-900">{filtered.length === 0 ? 0 : startIndex + 1}</span> to{' '}
+            <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
+            <span className="font-bold text-slate-900">{filtered.length}</span> visits
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+              className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer flex items-center gap-1">
+              <ChevronLeft size={14} className="text-slate-400" />
+              Prev
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setCurrentPage(pageNum)}
+                className={`w-7 h-7 rounded-xl text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${
+                  currentPage === pageNum
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-transparent hover:border-slate-200'
+                }`}>
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              disabled={currentPage === totalPages || totalPages === 0}
+              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+              className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer flex items-center gap-1">
+              Next
+              <ChevronRight size={14} className="text-slate-400" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -852,64 +908,65 @@ export default function VisitsPage() {
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                    <MapPin size={20} />
-                  </span>
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">
-                      {isEditing ? 'Edit Visit Details' : selectedVisit.customer_name || 'Customer Visit'}
-                    </h2>
-                    {!isEditing && (
-                      <p className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
-                        <Calendar size={12} />
-                        {selectedVisit.visited_at
-                          ? new Date(selectedVisit.visited_at).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })
-                          : 'Recent Visit'}
-                        {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
-                        {canViewSalesperson && getSalespersonDisplayName(selectedVisit) && (
-                          <span>• Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedVisit)}</strong></span>
-                        )}
-                      </p>
-                    )}
-                  </div>
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+                  <MapPin size={20} />
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {isEditing ? 'Edit Visit Details' : selectedVisit.customer_name || 'Customer Visit'}
+                  </h2>
+                  {!isEditing && (
+                    <p className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
+                      <Calendar size={12} />
+                      {selectedVisit.visited_at
+                        ? new Date(selectedVisit.visited_at).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                        : 'Recent Visit'}
+                      {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
+                      {canViewSalesperson && getSalespersonDisplayName(selectedVisit) && (
+                        <span>• Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedVisit)}</strong></span>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Action Buttons in Header */}
-              <div className="flex items-center gap-1.5">
-                {!isEditing ? (
-                  <>
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-3.5 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
-                      title="Edit Visit">
-                      <Edit2 size={13} />
-                      Edit Visit
-                    </button>
-                    <button
-                      onClick={handleDeleteClick}
-                      disabled={actionLoading}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      title="Delete Visit">
-                      <Trash2 size={16} />
-                    </button>
-                  </>
-                ) : (
+              {/* Header Right: Outcome Badge (View Mode) & Close Button */}
+              <div className="flex items-center gap-2">
+                {!isEditing && (
+                  <div>
+                    {getNormalizedOutcome(selectedVisit) === 'positive' ? (
+                      <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1 shadow-2xs">
+                        <ThumbsUp size={12} /> Positive 🟢
+                      </span>
+                    ) : getNormalizedOutcome(selectedVisit) === 'neutral' ? (
+                      <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 inline-flex items-center gap-1 shadow-2xs">
+                        <Clock size={12} /> Neutral 🟡
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-800 inline-flex items-center gap-1 shadow-2xs">
+                        <CheckCircle2 size={12} /> Negative 🔴
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {isEditing && (
                   <button
                     onClick={() => setIsEditing(false)}
                     className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">
                     Cancel
                   </button>
                 )}
+
                 <button
                   onClick={() => setSelectedVisit(null)}
-                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg ml-1">
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors ml-1"
+                  title="Close">
                   <X size={20} />
                 </button>
               </div>
@@ -917,71 +974,71 @@ export default function VisitsPage() {
 
             {/* View Mode */}
             {!isEditing ? (
-              <div className="overflow-y-auto flex-1 space-y-4 pr-1.5 py-3">
-                {/* Status & Outcome Banner */}
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-xs font-semibold text-slate-600">Visit Outcome Status:</span>
-                  {getNormalizedOutcome(selectedVisit) === 'positive' ? (
-                    <span className="px-3 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                      <ThumbsUp size={12} /> Positive 🟢
-                    </span>
-                  ) : getNormalizedOutcome(selectedVisit) === 'neutral' ? (
-                    <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
-                      <Clock size={12} /> Neutral 🟡
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Negative 🔴
-                    </span>
-                  )}
-                </div>
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <div className="overflow-y-auto flex-1 space-y-3.5 pr-1.5 py-3">
+                  {/* Contact Details Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1 shadow-2xs">
+                      <p className="text-slate-400 font-medium">Person Met</p>
+                      <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-sm">
+                        <User size={14} className="text-slate-400 shrink-0" />
+                        {selectedVisit.person_met && selectedVisit.person_met !== 'null'
+                          ? selectedVisit.person_met
+                          : '-'}
+                      </p>
+                    </div>
 
-                {/* Contact & Location Grid */}
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
-                    <p className="text-slate-400 font-medium">Person Met</p>
-                    <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-sm">
-                      <User size={14} className="text-slate-400 shrink-0" />
-                      {selectedVisit.person_met && selectedVisit.person_met !== 'null'
-                        ? selectedVisit.person_met
-                        : '-'}
-                    </p>
-                  </div>
-
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
-                    <p className="text-slate-400 font-medium">Contact Phone</p>
-                    <p className="text-slate-800 font-semibold font-mono flex items-center gap-1.5 text-sm">
-                      <Phone size={14} className="text-slate-400 shrink-0" />
-                      {selectedVisit.contact_phone || (selectedVisit as any).contact_no || '-'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Meeting Remarks & Requirements */}
-                <div className="p-3.5 bg-slate-50/70 border border-slate-200 rounded-xl space-y-1">
-                  <p className="text-xs font-semibold text-slate-500">Meeting Remarks &amp; Requirements</p>
-                  <p className="text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap">
-                    {(selectedVisit.remarks || selectedVisit.raw_remarks || '')
-                      .replace(
-                        /\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi,
-                        '',
-                      )
-                      .trim() || 'No detailed remarks recorded for this visit.'}
-                  </p>
-                </div>
-
-                {/* Next Action Pill */}
-                {selectedVisit.follow_up_action && selectedVisit.follow_up_action !== '-' && (
-                  <div className="p-3 bg-blue-50 border border-blue-200/80 rounded-xl flex items-start gap-2.5">
-                    <Calendar size={16} className="text-blue-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">Next Follow-up Action</p>
-                      <p className="text-xs font-semibold text-blue-800 mt-0.5">
-                        {selectedVisit.follow_up_action}
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1 shadow-2xs">
+                      <p className="text-slate-400 font-medium">Contact Phone</p>
+                      <p className="text-slate-800 font-semibold font-mono flex items-center gap-1.5 text-sm">
+                        <Phone size={14} className="text-slate-400 shrink-0" />
+                        {selectedVisit.contact_phone || (selectedVisit as any).contact_no || '-'}
                       </p>
                     </div>
                   </div>
-                )}
+
+                  {/* Meeting Remarks & Requirements */}
+                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1 shadow-2xs">
+                    <p className="text-xs font-semibold text-slate-500">Meeting Remarks &amp; Requirements</p>
+                    <p className="text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap">
+                      {(selectedVisit.remarks || selectedVisit.raw_remarks || '')
+                        .replace(
+                          /\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi,
+                          '',
+                        )
+                        .trim() || 'No detailed remarks recorded for this visit.'}
+                    </p>
+                  </div>
+
+                  {/* Follow-up Action (White background card, shows "None" if empty) */}
+                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1 shadow-2xs">
+                    <p className="text-xs font-semibold text-slate-500">Follow-up Action</p>
+                    <p className="text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap font-medium">
+                      {selectedVisit.follow_up_action && selectedVisit.follow_up_action.trim() && selectedVisit.follow_up_action !== '-'
+                        ? selectedVisit.follow_up_action.trim()
+                        : 'None'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* View Mode Footer (Bottom Right Action Buttons) */}
+                <div className="pt-3 border-t border-slate-100 flex justify-end items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    disabled={actionLoading}
+                    className="px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                    <Trash2 size={14} />
+                    Delete Visit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer">
+                    <Edit2 size={13} />
+                    Edit Visit
+                  </button>
+                </div>
               </div>
             ) : (
               /* Edit Mode Form */
@@ -1097,7 +1154,7 @@ export default function VisitsPage() {
                     disabled={actionLoading}
                     className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
                     <Check size={16} />
-                    {actionLoading ? 'Saving...' : 'Save Changes'}
+                    {actionLoading ? 'Saving...' : 'Save'}
                   </button>
                 </div>
               </form>
