@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Check, ChevronDown } from 'lucide-react';
 import {
   formatLocalDate,
@@ -37,15 +37,35 @@ export type DateFilterRange = {
 interface DateFilterControlProps {
   onChange: (range: DateFilterRange) => void;
   initialPreset?: FilterPreset;
+  value?: DateFilterRange;
+  resetKey?: number | string;
 }
 
-export default function DateFilterControl({ onChange, initialPreset = 'this_month' }: DateFilterControlProps) {
-  const [preset, setPreset] = useState<FilterPreset>(initialPreset);
-  const [showCustom, setShowCustom] = useState(initialPreset === 'custom');
-
+export default function DateFilterControl({ onChange, initialPreset = 'this_month', value, resetKey }: DateFilterControlProps) {
+  const [preset, setPreset] = useState<FilterPreset>(value?.preset || initialPreset);
+  const [showCustom, setShowCustom] = useState((value?.preset || initialPreset) === 'custom');
   const todayStr = formatLocalDate();
-  const [customFrom, setCustomFrom] = useState(getDaysAgo(7));
-  const [customTo, setCustomTo] = useState(todayStr);
+
+  const [customFrom, setCustomFrom] = useState(value?.from || getDaysAgo(7));
+  const [customTo, setCustomTo] = useState(value?.to || todayStr);
+
+  useEffect(() => {
+    if (resetKey !== undefined) {
+      setPreset(initialPreset);
+      setShowCustom(initialPreset === 'custom');
+      setCustomFrom(getDaysAgo(7));
+      setCustomTo(todayStr);
+    }
+  }, [resetKey, initialPreset, todayStr]);
+
+  useEffect(() => {
+    if (value && value.preset !== preset) {
+      setPreset(value.preset);
+      setShowCustom(value.preset === 'custom');
+      if (value.from) setCustomFrom(value.from);
+      if (value.to) setCustomTo(value.to);
+    }
+  }, [value]);
 
   const handleSelectPreset = (newPreset: FilterPreset) => {
     setPreset(newPreset);
