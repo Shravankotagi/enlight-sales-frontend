@@ -761,9 +761,7 @@ export default function OrdersPage() {
                   return (
                     <tr
                       key={ord.id || idx}
-                      onClick={() => setSelectedDrawerOrder(ord)}
-                      className="hover:bg-blue-50/80 transition-colors cursor-pointer group select-none"
-                      title="Click anywhere on row to view full Order Details in table format">
+                      className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                       <td className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
@@ -781,9 +779,9 @@ export default function OrdersPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 font-mono text-xs text-blue-700 font-semibold text-center">
-                        <span className="inline-flex items-center justify-center gap-1.5 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-md border border-blue-200 group-hover:border-blue-600 transition-all font-bold shadow-2xs">
-                          <FileText size={13} /> {ord.po_number || 'PO-2026-AUTO'}
+                      <td className="px-4 py-3.5 text-center">
+                        <span className="inline-flex items-center justify-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
+                          <FileText size={13} className="text-slate-500" /> {ord.po_number || 'PO-2026-AUTO'}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
@@ -801,12 +799,9 @@ export default function OrdersPage() {
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleViewPoDocument(ord);
-                          }}
+                          onClick={() => setSelectedDrawerOrder(ord)}
                           className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 inline-flex items-center gap-1 shadow-2xs"
-                          title="View Original Purchase Order Image / Document">
+                          title="View Order Details">
                           <Eye size={13} className="text-slate-600" />
                           <span>View PO</span>
                         </button>
@@ -904,9 +899,10 @@ export default function OrdersPage() {
               <div className="flex items-center gap-2 self-end sm:self-center">
                 {selectedDrawerOrder.media_urls && selectedDrawerOrder.media_urls.length > 0 && (
                   <button
+                    type="button"
                     onClick={() => handleViewPoDocument(selectedDrawerOrder)}
-                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs">
-                    <ImageIcon size={14} /> View Original PO
+                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300 shadow-2xs">
+                    <Eye size={14} className="text-slate-600" /> View Original PO
                   </button>
                 )}
                 <button
@@ -924,12 +920,12 @@ export default function OrdersPage() {
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider text-[11px]">
                     <tr>
-                      <th className="px-4 py-3 text-center">Sr.</th>
+                      <th className="px-4 py-3 text-left">Sr.</th>
                       <th className="px-4 py-3 text-left">Material Description &amp; SKU</th>
-                      <th className="px-4 py-3 text-center">Dimensions / Specs</th>
-                      <th className="px-4 py-3 text-center">Quantity</th>
-                      <th className="px-4 py-3 text-center">Unit Rate (₹/MT)</th>
-                      <th className="px-4 py-3 text-center">Line Amount (₹)</th>
+                      <th className="px-4 py-3 text-left">Dimensions / Specs</th>
+                      <th className="px-4 py-3 text-left">Quantity</th>
+                      <th className="px-4 py-3 text-left">Unit Rate (₹/MT)</th>
+                      <th className="px-4 py-3 text-left">Line Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -944,16 +940,16 @@ export default function OrdersPage() {
 
                         return (
                           <tr key={iIdx} className="hover:bg-slate-50">
-                            <td className="px-4 py-3.5 font-medium text-slate-400 text-center font-mono">{iIdx + 1}</td>
+                            <td className="px-4 py-3.5 font-medium text-slate-400 text-left font-mono">{iIdx + 1}</td>
                             <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
-                            <td className="px-4 py-3.5 text-slate-600 font-mono text-center">{dimensions}</td>
-                            <td className="px-4 py-3.5 text-right font-extrabold text-blue-600 font-mono">
+                            <td className="px-4 py-3.5 text-slate-600 font-mono text-left">{dimensions}</td>
+                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
                               {qtyNum > 0 ? `${qtyNum.toLocaleString('en-IN')} ${item.unit || 'MT'}` : '—'}
                             </td>
-                            <td className="px-4 py-3.5 text-right font-semibold text-slate-700 font-mono">
+                            <td className="px-4 py-3.5 text-left font-semibold text-slate-700 font-mono">
                               {rateNum > 0 ? `₹${rateNum.toLocaleString('en-IN')}` : '—'}
                             </td>
-                            <td className="px-4 py-3.5 text-right font-bold text-emerald-700 font-mono">
+                            <td className="px-4 py-3.5 text-left font-bold text-emerald-700 font-mono">
                               ₹{amtNum.toLocaleString('en-IN')}
                             </td>
                           </tr>
@@ -964,12 +960,12 @@ export default function OrdersPage() {
                         const { materialDescription, dimensions } = extractCleanProductAndSpecs('Steel Material Requirements', '');
                         return (
                           <tr>
-                            <td className="px-4 py-3.5 font-medium text-slate-400 text-center font-mono">1</td>
+                            <td className="px-4 py-3.5 font-medium text-slate-400 text-left font-mono">1</td>
                             <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
-                            <td className="px-4 py-3.5 text-slate-600 font-mono text-center">{dimensions}</td>
-                            <td className="px-4 py-3.5 text-right font-extrabold text-blue-600 font-mono">—</td>
-                            <td className="px-4 py-3.5 text-right font-semibold text-slate-700 font-mono">—</td>
-                            <td className="px-4 py-3.5 text-right font-bold text-emerald-700 font-mono">
+                            <td className="px-4 py-3.5 text-slate-600 font-mono text-left">{dimensions}</td>
+                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">—</td>
+                            <td className="px-4 py-3.5 text-left font-semibold text-slate-700 font-mono">—</td>
+                            <td className="px-4 py-3.5 text-left font-bold text-emerald-700 font-mono">
                               ₹{Number(selectedDrawerOrder.total_amount || 0).toLocaleString('en-IN')}
                             </td>
                           </tr>
