@@ -273,6 +273,7 @@ export default function OrdersPage() {
   const [shareOrder, setShareOrder] = useState<Order | null>(null);
   const [sendEmail, setSendEmail] = useState('shravankotagi314@gmail.com');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [resendNotice, setResendNotice] = useState('');
 
   useEffect(() => {
     const handleOutsideClick = () => setOpenActionMenuId(null);
@@ -518,10 +519,24 @@ export default function OrdersPage() {
     }
   };
 
-  const handleOpenSendModal = (ord: Order) => {
+  const handleOpenSendModal = async (ord: Order) => {
     setShareOrder(ord);
     setSendEmail((ord as any).customer_email || 'shravankotagi314@gmail.com');
+    setResendNotice('');
     setShowSendModal(true);
+
+    try {
+      const res = await dealsApi.getOne(ord.id);
+      const fullDeal = res?.data?.data || res?.data;
+      if (fullDeal) {
+        setShareOrder(fullDeal);
+        if (fullDeal.customer_email) {
+          setSendEmail(fullDeal.customer_email);
+        }
+      }
+    } catch (e) {
+      console.warn('Non-blocking full deal load notice:', e);
+    }
   };
 
   const parseSafeIsoDate = (dateStr?: string) => {
@@ -871,58 +886,123 @@ export default function OrdersPage() {
 
       {showSendModal && shareOrder && (
         <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150"
-          onClick={() => setShowSendModal(false)}>
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => {
+            setShowSendModal(false);
+            setResendNotice('');
+          }}>
           <div
-            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto"
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto"
             onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                  <Send size={18} />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">Share Order / PO Quotation</h2>
-                  <p className="text-xs text-slate-500 font-mono">PO Ref: {shareOrder.po_number || 'PO-2026-AUTO'}</p>
-                </div>
-              </div>
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Send className="text-purple-600" size={22} />
+                Send Quotation
+              </h2>
               <button
-                onClick={() => setShowSendModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100">
-                <X size={18} />
+                onClick={() => {
+                  setShowSendModal(false);
+                  setResendNotice('');
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            {(() => {
+              const activeLineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
+                ? shareOrder.deal_items.map((i: any) => {
+                    const rawSku = i.sku_text || 'Steel Material';
+                    const rawDims = i.dimensions || '';
+                    const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
+                    return {
+                      sku_text: materialDescription,
+                      dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
+                      quantity: Number(i.quantity) || 0,
+                      unit: normalizeUnit(i.unit) || 'MT',
+                      rate: Number(i.rate) || 0,
+                      amount: Number(i.amount) || 0,
+                    };
+                  })
+                : [
+                    {
+                      sku_text: 'Steel Material',
+                      dimensions: '',
+                      quantity: 0,
+                      unit: 'MT',
+                      rate: 0,
+                      amount: Number(shareOrder.total_amount) || 0,
+                    },
+                  ];
+
+              const subtotal = activeLineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0) || Number(shareOrder.total_amount) || 0;
+              const qBreakdown = calculateQuotationBreakdown(subtotal);
+              const summaryItemsText = activeLineItems
+                .filter((i: any) => i.quantity > 0 || i.sku_text !== 'Steel Material')
+                .map((i: any) => `${i.sku_text || 'Item'} (${i.quantity} ${i.unit || 'MT'})`)
+                .join(' · ');
+
+              return (
+                <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-2">
+                  <div className="font-bold text-purple-900 flex items-center justify-between">
+                    <span>Commercial Proposal Summary</span>
+                    <span className="font-extrabold text-emerald-800">Total: {qBreakdown.formattedGrandTotal}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 flex justify-between font-mono">
+                    <span>Sub Total: {qBreakdown.formattedSubtotal}</span>
+                    <span>CGST: {qBreakdown.formattedCGST} | SGST: {qBreakdown.formattedSGST}</span>
+                  </div>
+                  <p className="text-slate-700 font-mono text-[11px]">
+                    {shareOrder.customer_name || 'Customer'}{summaryItemsText ? ` · ${summaryItemsText}` : ''}
+                  </p>
+                  <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
+                    <span><strong>Official PDF Quotation:</strong> The formatted PDF document and original client PO document will be attached to this email.</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Customer / Recipient Email</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Customer Email Address <span className="text-red-500 font-bold">*</span>
+                </label>
                 <input
                   type="email"
+                  required
+                  placeholder="e.g. shravankotagi314@gmail.com"
                   value={sendEmail}
                   onChange={e => setSendEmail(e.target.value)}
-                  placeholder="e.g. client@company.com"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-slate-700">
-                <div className="font-bold text-slate-900">{shareOrder.customer_name || 'Customer'}</div>
-                <div className="text-slate-500 text-[11px]">
-                  Amount: <span className="font-bold text-slate-800">₹{Number(shareOrder.total_amount || 0).toLocaleString('en-IN')}</span>
+              {resendNotice && (
+                <div className={`p-3 rounded-xl text-xs font-bold border ${
+                  resendNotice.toLowerCase().includes('dispatched') ||
+                  resendNotice.toLowerCase().includes('sent') ||
+                  resendNotice.toLowerCase().includes('generated') ||
+                  resendNotice.toLowerCase().includes('recorded') ||
+                  resendNotice.toLowerCase().includes('success')
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                    : 'bg-rose-50 text-rose-900 border-rose-200'
+                }`}>
+                  {resendNotice}
                 </div>
-                <div className="text-slate-500 text-[11px]">
-                  Delivery: <span className="font-medium text-slate-700">{shareOrder.delivery_location || 'Standard Delivery'}</span>
-                </div>
-              </div>
+              )}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+            <div className="pt-2 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setShowSendModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                onClick={() => {
+                  setShowSendModal(false);
+                  setResendNotice('');
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
                 Cancel
               </button>
+
               <button
                 type="button"
                 disabled={sendingEmail || !sendEmail.trim()}
@@ -935,6 +1015,7 @@ export default function OrdersPage() {
                   }
                   try {
                     setSendingEmail(true);
+                    setResendNotice('');
 
                     const lineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
                       ? shareOrder.deal_items.map((i: any) => {
@@ -963,7 +1044,7 @@ export default function OrdersPage() {
                           },
                         ];
 
-                    const subtotal = lineItems.reduce((s, i) => s + (i.amount || 0), 0) || Number(shareOrder.total_amount) || 0;
+                    const subtotal = lineItems.reduce((s: number, i: any) => s + (i.amount || 0), 0) || Number(shareOrder.total_amount) || 0;
 
                     const payload = {
                       customer_email: targetEmail,
@@ -980,23 +1061,32 @@ export default function OrdersPage() {
                         lineItems,
                         totalAmount: subtotal,
                         isOrder: true,
+                        media_urls: shareOrder.media_urls || undefined,
                       },
                     };
 
                     const res = await inquiriesApi.sendQuotation(shareOrder.id, payload);
                     const msg = res?.data?.message || res?.data?.data?.message || `PO Quotation dispatched to ${targetEmail}!`;
+                    setResendNotice(msg);
                     toast.success(msg);
-                    setShowSendModal(false);
+                    if (res?.data?.email_sent !== false) {
+                      setTimeout(() => {
+                        setShowSendModal(false);
+                        setResendNotice('');
+                      }, 2500);
+                    }
                   } catch (err: any) {
                     console.error('Error sending PO document:', err);
-                    toast.error(err?.response?.data?.message || 'Failed to dispatch PO document via email');
+                    const errMsg = err?.response?.data?.message || 'Failed to dispatch PO document via email';
+                    setResendNotice(errMsg);
+                    toast.error(errMsg);
                   } finally {
                     setSendingEmail(false);
                   }
                 }}
-                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50">
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
                 {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>{sendingEmail ? 'Sending Document...' : 'Send Document'}</span>
+                <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}</span>
               </button>
             </div>
           </div>
