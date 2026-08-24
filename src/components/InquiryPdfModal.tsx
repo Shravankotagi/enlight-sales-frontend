@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, Download, Check, Copy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { customersApi } from '../lib/api';
-import { calculateQuotationBreakdown, formatIndianCurrency } from '../utils/pricingEngine';
+import { calculateQuotationBreakdown, formatIndianCurrency, normalizeUnit } from '../utils/pricingEngine';
 
 interface InquiryItem {
   id: string;
@@ -105,7 +105,8 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
 
   const totalQuantity = lineItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-  const primaryUnit = lineItems.find(i => i.unit)?.unit || lineItems[0]?.unit || 'MT';
+  const distinctUnits = Array.from(new Set(lineItems.map(i => normalizeUnit(i.unit) || 'MT')));
+  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
 
   const piNumber = (() => {
     const inq = inquiry as any;

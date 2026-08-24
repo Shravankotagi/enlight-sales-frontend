@@ -28,7 +28,7 @@ import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
-import { calculateQuotationBreakdown } from '../utils/pricingEngine';
+import { calculateQuotationBreakdown, normalizeUnit } from '../utils/pricingEngine';
 
 interface DealItem {
   id?: string;
@@ -402,7 +402,7 @@ export default function OrdersPage() {
               dimensions: i.dimensions || '',
               hsn_code: i.hsn_code || i.hsn || '7208',
               quantity: Number(i.quantity) || 0,
-              unit: i.unit || 'MT',
+              unit: normalizeUnit(i.unit) || 'MT',
               rate: Number(i.rate) || 0,
               amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
             }));
@@ -925,22 +925,78 @@ export default function OrdersPage() {
               </button>
               <button
                 type="button"
-                disabled={sendingEmail}
+                disabled={sendingEmail || !sendEmail.trim()}
                 onClick={async () => {
+                  if (!shareOrder) return;
+                  const targetEmail = sendEmail.trim();
+                  if (!targetEmail) {
+                    toast.error('Please enter a valid recipient email address');
+                    return;
+                  }
                   try {
                     setSendingEmail(true);
-                    await new Promise(r => setTimeout(r, 600));
-                    toast.success(`PO document dispatched to ${sendEmail}`);
+
+                    const lineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
+                      ? shareOrder.deal_items.map((i: any) => {
+                          const rawSku = i.sku_text || 'Steel Material';
+                          const rawDims = i.dimensions || '';
+                          const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
+                          return {
+                            sku_text: materialDescription,
+                            dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
+                            hsn_code: i.hsn_code || '7208',
+                            quantity: Number(i.quantity) || 0,
+                            unit: normalizeUnit(i.unit) || 'MT',
+                            rate: Number(i.rate) || 0,
+                            amount: Number(i.amount) || 0,
+                          };
+                        })
+                      : [
+                          {
+                            sku_text: 'Steel Material',
+                            dimensions: '',
+                            hsn_code: '7208',
+                            quantity: 0,
+                            unit: 'MT',
+                            rate: 0,
+                            amount: Number(shareOrder.total_amount) || 0,
+                          },
+                        ];
+
+                    const subtotal = lineItems.reduce((s, i) => s + (i.amount || 0), 0) || Number(shareOrder.total_amount) || 0;
+
+                    const payload = {
+                      customer_email: targetEmail,
+                      customer_name: shareOrder.customer_name || 'Customer',
+                      details: {
+                        companyName: shareOrder.customer_name || 'Customer',
+                        customerName: shareOrder.customer_name || 'Customer',
+                        customerPhone: shareOrder.customer_phone || '',
+                        salespersonName: (shareOrder as any).salesperson_name || 'Sales Representative',
+                        poNumber: shareOrder.po_number || 'PO-2026-AUTO',
+                        poDate: shareOrder.po_date || new Date().toISOString().split('T')[0],
+                        deliveryLocation: shareOrder.delivery_location || '',
+                        paymentTerms: shareOrder.payment_terms || '30 Days Credit',
+                        lineItems,
+                        totalAmount: subtotal,
+                        isOrder: true,
+                      },
+                    };
+
+                    const res = await inquiriesApi.sendQuotation(shareOrder.id, payload);
+                    const msg = res?.data?.message || res?.data?.data?.message || `PO Quotation dispatched to ${targetEmail}!`;
+                    toast.success(msg);
                     setShowSendModal(false);
-                  } catch {
-                    toast.error('Failed to send PO document');
+                  } catch (err: any) {
+                    console.error('Error sending PO document:', err);
+                    toast.error(err?.response?.data?.message || 'Failed to dispatch PO document via email');
                   } finally {
                     setSendingEmail(false);
                   }
                 }}
                 className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50">
                 {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>Send Document</span>
+                <span>{sendingEmail ? 'Sending Document...' : 'Send Document'}</span>
               </button>
             </div>
           </div>
@@ -1247,7 +1303,7 @@ export default function OrdersPage() {
                               className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                             />
                             <select
-                              value={item.unit || 'MT'}
+                              value={normalizeUnit(item.unit) || 'MT'}
                               onChange={(e) => {
                                 const updated = [...formLineItems];
                                 updated[idx] = { ...updated[idx], unit: e.target.value };
@@ -1256,7 +1312,7 @@ export default function OrdersPage() {
                               className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
-                              <option value="Pieces">Pcs</option>
+                              <option value="Pcs">Pcs</option>
                               <option value="KG">KG</option>
                               <option value="Sheets">Sheets</option>
                             </select>
@@ -1339,8 +1395,8 @@ export default function OrdersPage() {
                   const qBreakdown = calculateQuotationBreakdown(subtotal);
 
                   const totalQty = formLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                  const distinctUnits = Array.from(new Set(formLineItems.map(i => i.unit || 'MT')));
-                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
+                  const distinctUnits = Array.from(new Set(formLineItems.map(i => normalizeUnit(i.unit) || 'MT')));
+                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
                   const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
 
                   return (

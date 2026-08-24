@@ -16,6 +16,7 @@ import {
   calculateLineItems,
   calculateSubtotal,
   calculateQuotationBreakdown,
+  normalizeUnit,
 } from '../utils/pricingEngine';
 
 interface InquiryItem {
@@ -567,7 +568,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     dimensions: item.dimensions || '',
     hsn_code: item.hsn_code || (item as any).hsn || '',
     quantity: item.quantity,
-    unit: item.unit || 'MT',
+    unit: normalizeUnit(item.unit) || 'MT',
     rate: item.rate,
     amount: item.amount,
   }));
@@ -2195,7 +2196,7 @@ export default function InquiriesPage() {
                                 className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                               />
                               <select
-                                value={item.unit || 'MT'}
+                                value={normalizeUnit(item.unit) || 'MT'}
                                 onChange={(e) => {
                                   const updated = [...(editDetails.lineItems || [])];
                                   updated[idx] = { ...updated[idx], unit: e.target.value };
@@ -2206,7 +2207,7 @@ export default function InquiriesPage() {
                                 className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
-                                <option value="Pieces">Pcs</option>
+                                <option value="Pcs">Pcs</option>
                                 <option value="KG">KG</option>
                                 <option value="Sheets">Sheets</option>
                               </select>
@@ -2305,8 +2306,8 @@ export default function InquiriesPage() {
                     const qBreakdown = calculateQuotationBreakdown(subtotal);
 
                     const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => i.unit || 'MT')));
-                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
+                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => normalizeUnit(i.unit) || 'MT')));
+                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
                     const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
 
                     return (

@@ -47,15 +47,15 @@ export interface PricingSummary {
 export function normalizeUnit(rawUnit?: string): string {
   if (!rawUnit || typeof rawUnit !== 'string') return 'MT';
   const u = rawUnit.trim().toUpperCase();
-  if (u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS') return 'KG';
-  if (u === 'MT' || u === 'TON' || u === 'TONS' || u === 'TONNE' || u === 'TONNES' || u === 'METRIC TON' || u === 'METRIC TONS') return 'MT';
-  if (u === 'PCS' || u === 'PIECE' || u === 'PIECES') return 'Pcs';
-  if (u === 'SHEET' || u === 'SHEETS') return 'Sheets';
-  if (u === 'PLATE' || u === 'PLATES') return 'Plates';
+  if (u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' || u === 'KILOGRAMME') return 'KG';
+  if (u === 'MT' || u === 'TON' || u === 'TONS' || u === 'TONNE' || u === 'TONNES' || u === 'METRIC TON' || u === 'METRIC TONS' || u === 'M.T.' || u === 'MTS' || u === 'T') return 'MT';
+  if (u === 'PCS' || u === 'PC' || u === 'PIECE' || u === 'PIECES' || u === 'PIECE(S)') return 'Pcs';
+  if (u === 'SHEET' || u === 'SHEETS' || u === 'SHT' || u === 'SHTS') return 'Sheets';
+  if (u === 'PLATE' || u === 'PLATES' || u === 'PLT' || u === 'PLTS') return 'Plates';
   if (u === 'COIL' || u === 'COILS') return 'Coils';
   if (u === 'BAR' || u === 'BARS') return 'Bars';
-  if (u === 'NOS' || u === 'NUMBER' || u === 'NUMBERS') return 'Nos';
-  if (u === 'BUNDLE' || u === 'BUNDLES') return 'Bundles';
+  if (u === 'NOS' || u === 'NO' || u === 'NO.' || u === 'NUMBER' || u === 'NUMBERS' || u === 'NUM') return 'Nos';
+  if (u === 'BUNDLE' || u === 'BUNDLES' || u === 'BDL' || u === 'BDLS') return 'Bundles';
   if (u === 'PIPE' || u === 'PIPES' || u === 'TUBE' || u === 'TUBES') return 'Pipes';
   return rawUnit.trim();
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Printer, Copy, Check } from 'lucide-react';
-import { calculateQuotationBreakdown, formatIndianCurrency } from '../utils/pricingEngine';
+import { calculateQuotationBreakdown, formatIndianCurrency, normalizeUnit } from '../utils/pricingEngine';
 
 interface DealItem {
   id?: string;
@@ -60,8 +60,8 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
 
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
   const totalQuantity = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-  const firstUnit = items[0]?.unit || 'MT';
-  const isSingleUnit = items.every(i => (i.unit || 'MT').toUpperCase() === firstUnit.toUpperCase());
+  const distinctUnits = Array.from(new Set(items.map(i => normalizeUnit(i.unit) || 'MT')));
+  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
 
   const dealRefId = deal.id ? `#${deal.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-DEAL';
   const poNumber = deal.po_number || `PO-${new Date().getFullYear()}-AUTO`;
@@ -239,7 +239,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
             
             {/* Bottom Left: Items in Total */}
             <div className="text-xs font-semibold text-slate-700 pt-1">
-              <span>Items in Total {formatIndianCurrency(totalQuantity, true)} {isSingleUnit ? firstUnit : ''}</span>
+              <span>Items in Total {formatIndianCurrency(totalQuantity, true)} {primaryUnit}</span>
               
               <div className="text-[11px] text-slate-500 mt-4 space-y-1">
                 <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>
