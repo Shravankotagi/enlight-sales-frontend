@@ -327,15 +327,13 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 </div>
               </div>
 
-              {/* Right Column: Order Date & Salesperson (Both together on the right, aligned with bottom) */}
-              <div className="flex flex-col items-start sm:items-end justify-end space-y-1.5 text-[12px] pb-1">
-                <div className="flex items-center gap-6 text-slate-700">
-                  <span className="font-medium text-slate-700 w-28 sm:text-right">Order Date :</span>
-                  <span className="font-medium text-slate-900 w-32 text-left">{createdDate}</span>
-                </div>
-                <div className="flex items-center gap-6 text-slate-700">
-                  <span className="font-medium text-slate-700 w-28 sm:text-right">Sales person :</span>
-                  <span className="font-medium text-slate-900 w-32 text-left capitalize">{salesperson}</span>
+              {/* Right Column: Order Date & Salesperson (Neatly aligned one below the other) */}
+              <div className="flex flex-col items-start sm:items-end justify-end pb-1">
+                <div className="grid grid-cols-[85px_auto] gap-x-3 gap-y-1.5 text-[12px]">
+                  <span className="font-normal text-slate-700">Order Date :</span>
+                  <span className="font-normal text-slate-900">{createdDate}</span>
+                  <span className="font-normal text-slate-700">Sales person :</span>
+                  <span className="font-normal text-slate-900 capitalize">{salesperson}</span>
                 </div>
               </div>
             </div>
