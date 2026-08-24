@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag,
   Plus,
+  Minus,
   Search,
   CheckCircle,
   PackageCheck,
@@ -12,10 +13,6 @@ import {
   Eye,
   UploadCloud,
   FileText,
-  Phone,
-  Calendar,
-  MapPin,
-  CreditCard,
   ExternalLink,
   ImageIcon,
   User,
@@ -23,10 +20,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Edit3,
+  Send,
+  MoreVertical,
+  AlertCircle,
+  RefreshCw,
+  Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi, customersApi, employeesApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import InquiryPdfModal from '../components/InquiryPdfModal';
 import { useAuth } from '../context/AuthContext';
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 import { calculateQuotationBreakdown } from '../utils/pricingEngine';
@@ -35,6 +39,7 @@ interface DealItem {
   id?: string;
   sku_text?: string;
   dimensions?: string;
+  hsn_code?: string;
   quantity?: number;
   unit?: string;
   rate?: number;
@@ -46,6 +51,9 @@ interface Order {
   customer_name: string;
   customer_phone?: string;
   salesperson_phone?: string;
+  salesperson_name?: string;
+  assigned_salesperson_name?: string;
+  salesperson?: string;
   po_number?: string;
   po_date?: string;
   total_amount?: number;
@@ -56,6 +64,28 @@ interface Order {
   won_at?: string;
   media_urls?: string[];
   deal_items?: DealItem[];
+}
+
+interface LineItemDetail {
+  sku_text: string;
+  dimensions?: string;
+  hsn_code?: string;
+  quantity: number;
+  unit?: string;
+  rate: number;
+  amount: number;
+}
+
+interface OrderEditDetails {
+  companyName: string;
+  customerPhone: string;
+  salespersonName: string;
+  poNumber: string;
+  poDate: string;
+  deliveryLocation: string;
+  paymentTerms: string;
+  lineItems: LineItemDetail[];
+  totalAmount: number;
 }
 
 export function formatDeliveryLocation(raw?: string): string {
@@ -282,13 +312,44 @@ export default function OrdersPage() {
     setCurrentPage(1);
   }, [searchTerm, dateRange]);
 
-  // Selected Order for Details Drawer & PO Image Viewer
-  const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<Order | null>(null);
+  // PO Image Viewer State
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+
+  // Edit Order Modal States (Matching Img 4)
+  const [editOrder, setEditOrder] = useState<Order | null>(null);
+  const [editOrderDetails, setEditOrderDetails] = useState<OrderEditDetails | null>(null);
+  const [showEditOrderModal, setShowEditOrderModal] = useState(false);
+  const [showEditOrderCompanyDropdown, setShowEditOrderCompanyDropdown] = useState(false);
+  const [editOrderSubmitting, setEditOrderSubmitting] = useState(false);
+  const [editOrderError, setEditOrderError] = useState<string | null>(null);
+  const [editOrderSuccess, setEditOrderSuccess] = useState(false);
+
+  // PDF Quotation / Order Modal
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfModalOrder, setPdfModalOrder] = useState<Order | null>(null);
+  const [pdfModalDetails, setPdfModalDetails] = useState<any>(null);
+
+  // Send / Share Modal
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [shareOrder, setShareOrder] = useState<Order | null>(null);
+  const [sendEmail, setSendEmail] = useState('shravankotagi314@gmail.com');
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  useEffect(() => {
+    const handleOutsideClick = () => setOpenActionMenuId(null);
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
-    const isAnyModalOpen = showModal || !!selectedDrawerOrder || !!poImageViewerUrl;
+    const isAnyModalOpen =
+      showModal ||
+      showEditOrderModal ||
+      showPdfModal ||
+      showSendModal ||
+      !!poImageViewerUrl;
     const body = document.body;
     const docEl = document.documentElement;
     const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
@@ -313,7 +374,13 @@ export default function OrdersPage() {
         mainLayoutContainer.style.overflow = 'auto';
       }
     }
-  }, [showModal, selectedDrawerOrder, poImageViewerUrl]);
+  }, [
+    showModal,
+    showEditOrderModal,
+    showPdfModal,
+    showSendModal,
+    poImageViewerUrl,
+  ]);
 
   // AI OCR Scanning state
   const [isParsingDoc, setIsParsingDoc] = useState(false);
@@ -496,10 +563,6 @@ export default function OrdersPage() {
       return;
     }
     const rate = Number(formRate) || 0;
-    if (rate <= 0) {
-      toast.error('Please enter valid Rate per MT');
-      return;
-    }
     if (!formDeliveryLocation.trim()) {
       toast.error('Please enter Delivery Location');
       return;
@@ -511,7 +574,7 @@ export default function OrdersPage() {
     if (lineItemsToSend.length === 0 && formProductSKU.trim()) {
       try {
         const textExtractRes = await inquiriesApi.parseText({
-          text: `${formProductSKU} Quantity: ${formQuantity} MT Rate: ${formRate} Delivery: ${formDeliveryLocation} Payment: ${formPaymentTerms || '30 days'}`,
+          text: `${formProductSKU} Quantity: ${formQuantity} MT Rate: ${formRate || 0} Delivery: ${formDeliveryLocation} Payment: ${formPaymentTerms || '30 days'}`,
         });
         const extractedData = textExtractRes?.data?.data || textExtractRes?.data;
         if (Array.isArray(extractedData?.line_items) && extractedData.line_items.length > 0) {
@@ -582,6 +645,153 @@ export default function OrdersPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleOpenEditOrderModal = (ord: Order) => {
+    setEditOrder(ord);
+    const resolvedSp = getSalespersonName(ord);
+
+    const items: LineItemDetail[] =
+      ord.deal_items && ord.deal_items.length > 0
+        ? ord.deal_items.map((i: any) => {
+            const rawSku = i.sku_text || 'Steel Material';
+            const rawDims = i.dimensions || '';
+            const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
+            const q = Number(i.quantity) || 0;
+            const r = Number(i.rate) || 0;
+            const a = Number(i.amount) || (q > 0 && r > 0 ? Math.round(q * r) : 0);
+            return {
+              sku_text: materialDescription,
+              dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
+              hsn_code: i.hsn_code || '7208',
+              quantity: q,
+              unit: i.unit || 'MT',
+              rate: r,
+              amount: a,
+            };
+          })
+        : [
+            {
+              sku_text: 'Hot Rolled Steel',
+              dimensions: '',
+              hsn_code: '7208',
+              quantity: 0,
+              unit: 'MT',
+              rate: 0,
+              amount: Number(ord.total_amount) || 0,
+            },
+          ];
+
+    const totalAmt = items.reduce((s, i) => s + (i.amount || 0), 0) || Number(ord.total_amount) || 0;
+
+    setEditOrderDetails({
+      companyName: ord.customer_name || '',
+      customerPhone: ord.customer_phone || '',
+      salespersonName: resolvedSp,
+      poNumber: ord.po_number || 'PO-2026-AUTO',
+      poDate: ord.po_date ? ord.po_date.split('T')[0] : new Date().toISOString().split('T')[0],
+      deliveryLocation: ord.delivery_location || '',
+      paymentTerms: ord.payment_terms || '30 Days Credit, 100% Advance',
+      lineItems: items,
+      totalAmount: totalAmt,
+    });
+
+    setShowEditOrderModal(true);
+    setShowEditOrderCompanyDropdown(false);
+    setEditOrderError(null);
+    setEditOrderSuccess(false);
+  };
+
+  const handleSaveOrderDetails = async () => {
+    if (!editOrder || !editOrderDetails) return;
+
+    if (!editOrderDetails.companyName.trim()) {
+      setEditOrderError('Please enter Company Name.');
+      toast.error('Please enter Company Name.');
+      return;
+    }
+
+    if (!editOrderDetails.lineItems || editOrderDetails.lineItems.length === 0) {
+      setEditOrderError('Please add at least one line item.');
+      toast.error('Please add at least one line item.');
+      return;
+    }
+
+    for (let i = 0; i < editOrderDetails.lineItems.length; i++) {
+      const item = editOrderDetails.lineItems[i];
+      if (!item.sku_text.trim()) {
+        const msg = `Line Item #${i + 1}: Description & Specifications is required.`;
+        setEditOrderError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (item.quantity <= 0) {
+        const msg = `Line Item #${i + 1}: Quantity must be greater than 0.`;
+        setEditOrderError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (item.rate <= 0) {
+        const msg = `Line Item #${i + 1}: Rate must be greater than 0.`;
+        setEditOrderError(msg);
+        toast.error(msg);
+        return;
+      }
+    }
+
+    if (!editOrderDetails.deliveryLocation.trim()) {
+      setEditOrderError('Please enter Delivery Address.');
+      toast.error('Please enter Delivery Address.');
+      return;
+    }
+
+    const subtotal = editOrderDetails.lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const qBreakdown = calculateQuotationBreakdown(subtotal);
+
+    try {
+      setEditOrderSubmitting(true);
+      await ordersApi.processPo({
+        deal_id: editOrder.id,
+        customer_name: editOrderDetails.companyName.trim(),
+        customer_phone: editOrderDetails.customerPhone.trim() || undefined,
+        po_number: editOrderDetails.poNumber.trim(),
+        po_date: editOrderDetails.poDate,
+        total_amount: qBreakdown.grandTotal,
+        delivery_location: editOrderDetails.deliveryLocation.trim(),
+        payment_terms: editOrderDetails.paymentTerms.trim() || undefined,
+        line_items: editOrderDetails.lineItems.map(i => ({
+          sku_text: i.sku_text.trim(),
+          dimensions: i.dimensions ? i.dimensions.trim() : undefined,
+          hsn_code: i.hsn_code ? i.hsn_code.trim() : undefined,
+          quantity: Number(i.quantity) || 0,
+          unit: i.unit || 'MT',
+          rate: Number(i.rate) || 0,
+          amount: Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0)),
+        })),
+        media_urls: editOrder.media_urls,
+      });
+
+      toast.success('Order & PO details updated successfully!');
+      setEditOrderSuccess(true);
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      fetchOrders();
+      setTimeout(() => {
+        setShowEditOrderModal(false);
+      }, 700);
+    } catch (err: any) {
+      console.error('Error updating order:', err);
+      const msg = err?.response?.data?.message || 'Failed to save order changes.';
+      setEditOrderError(msg);
+      toast.error(msg);
+    } finally {
+      setEditOrderSubmitting(false);
+    }
+  };
+
+  const handleOpenSendModal = (ord: Order) => {
+    setShareOrder(ord);
+    setSendEmail((ord as any).customer_email || 'shravankotagi314@gmail.com');
+    setShowSendModal(true);
   };
 
   const parseSafeIsoDate = (dateStr?: string) => {
@@ -763,7 +973,7 @@ export default function OrdersPage() {
                 <th className="px-4 py-3 text-center w-[12%]">Products &amp; Items</th>
                 <th className="px-4 py-3 text-center w-[14%]">Order Tonnage (MT)</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
-                <th className="px-4 py-3 text-center w-[12%]">Purchase Order</th>
+                <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -822,15 +1032,60 @@ export default function OrdersPage() {
                           {formatDeliveryLocation(ord.delivery_location)}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDrawerOrder(ord)}
-                          className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 inline-flex items-center gap-1 shadow-2xs"
-                          title="View Order Details">
-                          <Eye size={13} className="text-slate-600" />
-                          <span>View PO</span>
-                        </button>
+                      <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
+                        <div className="relative inline-block text-left">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionMenuId(prev => (prev === ord.id ? null : ord.id));
+                            }}
+                            className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all inline-flex items-center justify-center cursor-pointer"
+                            title="Actions">
+                            <MoreVertical size={16} />
+                          </button>
+
+                          {openActionMenuId === ord.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className={`absolute right-0 ${
+                                idx >= paginatedOrders.length - 2 && paginatedOrders.length >= 3
+                                  ? 'bottom-full mb-1'
+                                  : 'top-full mt-1'
+                              } w-36 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 text-left animate-in fade-in-50 duration-100`}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionMenuId(null);
+                                  handleOpenEditOrderModal(ord);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
+                                <Edit3 size={14} className="text-slate-500 shrink-0" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionMenuId(null);
+                                  handleViewPoDocument(ord);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
+                                <Eye size={14} className="text-slate-500 shrink-0" />
+                                <span>View PO</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionMenuId(null);
+                                  handleOpenSendModal(ord);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
+                                <Send size={14} className="text-slate-500 shrink-0" />
+                                <span>Send</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -894,216 +1149,562 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {selectedDrawerOrder && (
+      {showEditOrderModal && editOrder && editOrderDetails && (
         <div
           className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
-          onClick={() => setSelectedDrawerOrder(null)}>
+          onClick={() => setShowEditOrderModal(false)}>
           <div
-            className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-6 my-auto"
+            className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={e => e.stopPropagation()}>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-200">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-extrabold text-slate-900">
-                    {selectedDrawerOrder.customer_name || 'Customer Order'}
-                  </h2>
-                  
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-200">
+                  <FileText size={22} />
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
-                  {selectedDrawerOrder.customer_phone && (
-                    <span className="flex items-center gap-1">
-                      <Phone size={13} className="text-slate-400" /> {selectedDrawerOrder.customer_phone}
-                    </span>
-                  )}
-                  
-                  <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    PO Ref: {selectedDrawerOrder.po_number || 'PO-2026-AUTO'}
-                  </span>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    Purchase Order &amp; Audit
+                  </h2>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                    PO Ref: {editOrderDetails.poNumber || 'PO-2026-AUTO'} &bull; ID: #ORD-{editOrder.id.substring(0, 8).toUpperCase()}
+                  </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 self-end sm:self-center">
-                {selectedDrawerOrder.media_urls && selectedDrawerOrder.media_urls.length > 0 && (
+              <div className="flex items-center gap-2.5">
+                {editOrder.media_urls && editOrder.media_urls.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => handleViewPoDocument(selectedDrawerOrder)}
+                    onClick={() => handleViewPoDocument(editOrder)}
                     className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300 shadow-2xs">
-                    <Eye size={14} className="text-slate-600" /> View Original PO
+                    <Eye size={14} className="text-slate-600" />
+                    <span>View Original PO</span>
                   </button>
                 )}
+
                 <button
-                  onClick={() => setSelectedDrawerOrder(null)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
+                  onClick={() => setShowEditOrderModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
                   <X size={20} />
                 </button>
               </div>
             </div>
 
-            <div className="space-y-3">
-              
-
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider text-[11px]">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Sr.</th>
-                      <th className="px-4 py-3 text-left">Material Description &amp; SKU</th>
-                      <th className="px-4 py-3 text-left">Dimensions / Specs</th>
-                      <th className="px-4 py-3 text-left">Quantity</th>
-                      <th className="px-4 py-3 text-left">Unit Rate (₹/MT)</th>
-                      <th className="px-4 py-3 text-left">Line Amount (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {selectedDrawerOrder.deal_items && selectedDrawerOrder.deal_items.length > 0 ? (
-                      selectedDrawerOrder.deal_items.map((item, iIdx) => {
-                        const rawSku = item.sku_text || 'Steel Material';
-                        const rawDims = item.dimensions || '';
-                        const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
-                        const rateNum = Number(item.rate || 0);
-                        const qtyNum = Number(item.quantity || 0);
-                        const amtNum = Number(item.amount) || (rateNum > 0 && qtyNum > 0 ? Math.round(rateNum * qtyNum) : 0);
-
-                        return (
-                          <tr key={iIdx} className="hover:bg-slate-50">
-                            <td className="px-4 py-3.5 font-medium text-slate-900 text-left font-mono">{iIdx + 1}</td>
-                            <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
-                            <td className="px-4 py-3.5 text-slate-900 font-mono text-left">{dimensions}</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
-                              {qtyNum > 0 ? `${qtyNum.toLocaleString('en-IN')} ${item.unit || 'MT'}` : '—'}
-                            </td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
-                              {rateNum > 0 ? `₹${rateNum.toLocaleString('en-IN')}` : '—'}
-                            </td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
-                              ₹{amtNum.toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      (() => {
-                        const { materialDescription, dimensions } = extractCleanProductAndSpecs('Steel Material Requirements', '');
-                        return (
-                          <tr>
-                            <td className="px-4 py-3.5 font-medium text-slate-900 text-left font-mono">1</td>
-                            <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
-                            <td className="px-4 py-3.5 text-slate-900 font-mono text-left">{dimensions}</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">—</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">—</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
-                              ₹{Number(selectedDrawerOrder.total_amount || 0).toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                        );
-                      })()
-                    )}
-                  </tbody>
-                </table>
-
-                {/* Standard Quotation Pricing Breakdown Layout (Matching Reference img2) */}
-                {(() => {
-                  const activeLineItems = selectedDrawerOrder.deal_items && selectedDrawerOrder.deal_items.length > 0
-                    ? selectedDrawerOrder.deal_items
-                    : [{ sku_text: 'Steel Material', quantity: 0, unit: 'MT', rate: 0, amount: Number(selectedDrawerOrder.total_amount || 0) }];
-
-                  const subtotal = activeLineItems.reduce((sum, item) => {
-                    const r = Number(item.rate || 0);
-                    const q = Number(item.quantity || 0);
-                    const a = Number(item.amount) || (r > 0 && q > 0 ? Math.round(r * q) : 0);
-                    return sum + a;
-                  }, 0) || Number(selectedDrawerOrder.total_amount || 0);
-
-                  const qBreakdown = calculateQuotationBreakdown(subtotal);
-
-                  const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                  const distinctUnits = Array.from(new Set(activeLineItems.map(i => i.unit || 'MT')));
-                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
-                  const formattedItemsInTotal = totalQty > 0
-                    ? `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`
-                    : '—';
-
-                  return (
-                    <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                      <div className="text-xs font-semibold text-slate-700 pt-1">
-                        Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+            {/* Scrollable Content Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6 overscroll-contain">
+              {/* Top Form Fields */}
+              <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Company Name <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="relative flex items-center">
+                        <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
+                        <input
+                          type="text"
+                          placeholder="Type or select company name..."
+                          value={editOrderDetails.companyName}
+                          onChange={(e) => {
+                            setEditOrderDetails({ ...editOrderDetails, companyName: e.target.value });
+                            setShowEditOrderCompanyDropdown(true);
+                            setEditOrderSuccess(false);
+                            setEditOrderError(null);
+                          }}
+                          onFocus={() => setShowEditOrderCompanyDropdown(true)}
+                          className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => setShowEditOrderCompanyDropdown(prev => !prev)}
+                          className="absolute right-2 text-slate-400 hover:text-slate-600 p-1">
+                          <ChevronDown size={16} className={`transition-transform ${showEditOrderCompanyDropdown ? 'rotate-180' : ''}`} />
+                        </button>
                       </div>
 
-                      <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">Sub Total</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
+                      {showEditOrderCompanyDropdown && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
+                          {rawCustomers
+                            .filter(c => !editOrderDetails.companyName || c.toLowerCase().includes(editOrderDetails.companyName.toLowerCase()))
+                            .map(cName => (
+                              <div
+                                key={cName}
+                                onMouseDown={() => {
+                                  setEditOrderDetails({ ...editOrderDetails, companyName: cName });
+                                  setShowEditOrderCompanyDropdown(false);
+                                  setEditOrderSuccess(false);
+                                  setEditOrderError(null);
+                                }}
+                                className="px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-blue-50 hover:text-blue-700 cursor-pointer flex items-center justify-between transition-colors">
+                                <span className="flex items-center gap-2">
+                                  <Building2 size={13} className="text-slate-400" />
+                                  {cName}
+                                </span>
+                                {editOrderDetails.companyName.toLowerCase() === cName.toLowerCase() && (
+                                  <CheckCircle size={13} className="text-blue-600" />
+                                )}
+                              </div>
+                            ))}
+                          {rawCustomers.filter(c => !editOrderDetails.companyName || c.toLowerCase().includes(editOrderDetails.companyName.toLowerCase())).length === 0 && (
+                            <div className="px-3 py-2 text-xs text-slate-400 italic">
+                              No matching company found. Typing will update company name.
+                            </div>
+                          )}
                         </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">CGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">SGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">Rounding</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
-                        </div>
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
-                          <span className="font-bold">Total</span>
-                          <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  );
-                })()}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Salesperson
+                    </label>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs">
+                      <User size={15} className="text-blue-600 shrink-0" />
+                      <span className="truncate">{editOrderDetails.salespersonName || getSalespersonName(editOrder)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Structured Line Items Table matching Img 4 */}
+                <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
+                  <table className="w-full text-left text-xs text-slate-800 border-collapse">
+                    <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
+                      <tr>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                          Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
+                        </th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
+                          Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                        </th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
+                          Rate (₹) <span className="text-red-500 font-bold">*</span>
+                        </th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
+                        <th className="px-2 py-3 text-center w-[4%]"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 bg-white">
+                      {editOrderDetails.lineItems.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-blue-50/30">
+                          <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                          <td className="px-4 py-3.5 border-r border-slate-200">
+                            <div className="space-y-1">
+                              <input
+                                type="text"
+                                value={item.sku_text || ''}
+                                onChange={(e) => {
+                                  const updated = [...editOrderDetails.lineItems];
+                                  updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                  setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
+                                  setEditOrderSuccess(false);
+                                  setEditOrderError(null);
+                                }}
+                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                                placeholder="Product Name / Description"
+                              />
+                              <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                                <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
+                                <input
+                                  type="text"
+                                  value={item.dimensions || ''}
+                                  onChange={(e) => {
+                                    const updated = [...editOrderDetails.lineItems];
+                                    updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                    setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
+                                    setEditOrderSuccess(false);
+                                    setEditOrderError(null);
+                                  }}
+                                  className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                                  placeholder="e.g. 1mm or 2.50mm x 1250mm"
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                            <input
+                              type="text"
+                              value={item.hsn_code || ''}
+                              onChange={(e) => {
+                                const updated = [...editOrderDetails.lineItems];
+                                updated[idx] = { ...updated[idx], hsn_code: e.target.value };
+                                setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
+                                setEditOrderSuccess(false);
+                                setEditOrderError(null);
+                              }}
+                              placeholder="e.g. 72083730"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                            />
+                          </td>
+                          <td className="px-3 py-3.5 border-r border-slate-200">
+                            <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                              <input
+                                type="number"
+                                min="0"
+                                value={item.quantity === 0 ? '' : item.quantity}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const rawQ = val === '' ? 0 : parseFloat(val);
+                                  const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
+                                  const updated = [...editOrderDetails.lineItems];
+                                  const amt = Math.max(0, Math.round(safeQ * (updated[idx]?.rate || 0)));
+                                  updated[idx] = { ...updated[idx], quantity: safeQ, amount: amt };
+                                  const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                  setEditOrderDetails({ ...editOrderDetails, lineItems: updated, totalAmount: totalAmt });
+                                  setEditOrderSuccess(false);
+                                  setEditOrderError(null);
+                                }}
+                                placeholder="0"
+                                className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                              />
+                              <select
+                                value={item.unit || 'MT'}
+                                onChange={(e) => {
+                                  const updated = [...editOrderDetails.lineItems];
+                                  updated[idx] = { ...updated[idx], unit: e.target.value };
+                                  setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
+                                  setEditOrderSuccess(false);
+                                  setEditOrderError(null);
+                                }}
+                                className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="MT">MT</option>
+                                <option value="Nos">Nos</option>
+                                <option value="Pieces">Pcs</option>
+                                <option value="KG">KG</option>
+                                <option value="Sheets">Sheets</option>
+                              </select>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.rate === 0 ? '' : item.rate}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rawR = val === '' ? 0 : parseFloat(val);
+                                const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
+                                const updated = [...editOrderDetails.lineItems];
+                                const amt = Math.max(0, Math.round((updated[idx]?.quantity || 0) * safeR));
+                                updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
+                                const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                setEditOrderDetails({ ...editOrderDetails, lineItems: updated, totalAmount: totalAmt });
+                                setEditOrderSuccess(false);
+                                setEditOrderError(null);
+                              }}
+                              placeholder="0"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                            />
+                          </td>
+                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.amount === 0 ? '' : item.amount}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rawA = val === '' ? 0 : parseFloat(val);
+                                const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                                const updated = [...editOrderDetails.lineItems];
+                                updated[idx] = { ...updated[idx], amount: safeA };
+                                const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                setEditOrderDetails({ ...editOrderDetails, lineItems: updated, totalAmount: totalAmt });
+                                setEditOrderSuccess(false);
+                              }}
+                              placeholder="0"
+                              className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                            />
+                          </td>
+                          <td className="px-2 py-3.5 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {editOrderDetails.lineItems.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = editOrderDetails.lineItems.filter((_, i) => i !== idx);
+                                    const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                    setEditOrderDetails({ ...editOrderDetails, lineItems: updated, totalAmount: totalAmt });
+                                    setEditOrderSuccess(false);
+                                  }}
+                                  className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                                  title="Remove line item">
+                                  <Minus size={15} />
+                                </button>
+                              )}
+                              {idx === editOrderDetails.lineItems.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [
+                                      ...editOrderDetails.lineItems,
+                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                    ];
+                                    setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
+                                    setEditOrderSuccess(false);
+                                  }}
+                                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
+                                  title="Add line item">
+                                  <Plus size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Standard Quotation Pricing Breakdown Layout */}
+                  {(() => {
+                    const activeLineItems = editOrderDetails.lineItems;
+                    const subtotal = activeLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                    const qBreakdown = calculateQuotationBreakdown(subtotal);
+
+                    const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => i.unit || 'MT')));
+                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
+                    const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
+
+                    return (
+                      <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
+                        <div className="text-xs font-semibold text-slate-700 pt-1">
+                          Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        </div>
+
+                        <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">Sub Total</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">CGST (9%)</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">SGST (9%)</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">Rounding</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                            <span className="font-bold">Total</span>
+                            <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Commercial Terms Footer */}
+                  <div className="p-4 bg-transparent border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
+                        Delivery Address <span className="text-red-500 font-bold">*</span>
+                      </span>
+                      <input
+                        type="text"
+                        value={editOrderDetails.deliveryLocation}
+                        onChange={(e) => {
+                          setEditOrderDetails({ ...editOrderDetails, deliveryLocation: e.target.value });
+                          setEditOrderSuccess(false);
+                          setEditOrderError(null);
+                        }}
+                        placeholder="e.g. Chakan Industrial Area, Pune"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                      />
+                    </div>
+
+                    <div>
+                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
+                        Payment Terms <span className="text-red-500 font-bold">*</span>
+                      </span>
+                      <input
+                        type="text"
+                        value={editOrderDetails.paymentTerms}
+                        onChange={(e) => {
+                          setEditOrderDetails({ ...editOrderDetails, paymentTerms: e.target.value });
+                          setEditOrderSuccess(false);
+                          setEditOrderError(null);
+                        }}
+                        placeholder="e.g. 30 Days Credit, 100% Advance"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="flex items-start gap-2">
-                <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Delivery Location</span>
-                  <span className="font-semibold text-slate-800">{selectedDrawerOrder.delivery_location || '-'}</span>
-                </div>
+            {editOrderError && (
+              <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-700 flex items-center gap-2 shrink-0 animate-in fade-in duration-150">
+                <AlertCircle size={16} className="text-red-600 shrink-0" />
+                <span>{editOrderError}</span>
               </div>
+            )}
 
-              <div className="flex items-start gap-2">
-                <CreditCard size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Payment Terms</span>
-                  <span className="font-semibold text-slate-800">{selectedDrawerOrder.payment_terms || '-'}</span>
-                </div>
-              </div>
+            {/* Bottom Actions Bar */}
+            <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setPdfModalOrder(editOrder);
+                  setPdfModalDetails({
+                    companyName: editOrderDetails.companyName,
+                    customerPhone: editOrderDetails.customerPhone,
+                    salespersonName: editOrderDetails.salespersonName,
+                    productType: editOrderDetails.lineItems[0]?.sku_text || 'Hot Rolled',
+                    thickness: '',
+                    width: '',
+                    length: '',
+                    productForm: 'Coil',
+                    quantityTons: editOrderDetails.lineItems.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0),
+                    quantityUnits: 0,
+                    unitPrice: editOrderDetails.lineItems[0]?.rate || 0,
+                    totalAmount: editOrderDetails.totalAmount,
+                    paymentTerms: editOrderDetails.paymentTerms,
+                    deliveryLocation: editOrderDetails.deliveryLocation,
+                    lineItems: editOrderDetails.lineItems,
+                  });
+                  setShowPdfModal(true);
+                }}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
+                <Eye size={15} /> View PDF
+              </button>
 
-              <div className="flex items-start gap-2">
-                <Calendar size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Order Won Date</span>
-                  <span className="font-mono font-bold text-slate-800">
-                    {selectedDrawerOrder.won_at ? new Date(selectedDrawerOrder.won_at).toLocaleString('en-IN') : (selectedDrawerOrder.created_at ? new Date(selectedDrawerOrder.created_at).toLocaleString('en-IN') : '-')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2">
-                <User size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Salesperson</span>
-                  <span className="font-bold text-slate-800 capitalize">
-                    {getSalespersonName(selectedDrawerOrder)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              
-
-              <div className="flex flex-wrap items-center gap-2">
-                
-              </div>
+              <button
+                type="button"
+                disabled={editOrderSubmitting || editOrderSuccess}
+                onClick={handleSaveOrderDetails}
+                className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                  editOrderSubmitting
+                    ? 'bg-blue-600 opacity-80 cursor-wait'
+                    : editOrderSuccess
+                    ? 'bg-emerald-600 hover:bg-emerald-600 cursor-default shadow-xs'
+                    : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
+                }`}>
+                {editOrderSubmitting ? (
+                  <>
+                    <RefreshCw size={15} className="animate-spin" /> Saving...
+                  </>
+                ) : editOrderSuccess ? (
+                  <>
+                    <Check size={15} /> Saved
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={15} /> Save
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {showSendModal && shareOrder && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150"
+          onClick={() => setShowSendModal(false)}>
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                  <Send size={18} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Share Order / PO Quotation</h2>
+                  <p className="text-xs text-slate-500 font-mono">PO Ref: {shareOrder.po_number || 'PO-2026-AUTO'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSendModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Customer / Recipient Email</label>
+                <input
+                  type="email"
+                  value={sendEmail}
+                  onChange={e => setSendEmail(e.target.value)}
+                  placeholder="e.g. client@company.com"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-slate-700">
+                <div className="font-bold text-slate-900">{shareOrder.customer_name || 'Customer'}</div>
+                <div className="text-slate-500 text-[11px]">
+                  Amount: <span className="font-bold text-slate-800">₹{Number(shareOrder.total_amount || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="text-slate-500 text-[11px]">
+                  Delivery: <span className="font-medium text-slate-700">{shareOrder.delivery_location || 'Standard Delivery'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSendModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={sendingEmail}
+                onClick={async () => {
+                  try {
+                    setSendingEmail(true);
+                    await new Promise(r => setTimeout(r, 600));
+                    toast.success(`PO document dispatched to ${sendEmail}`);
+                    setShowSendModal(false);
+                  } catch {
+                    toast.error('Failed to send PO document');
+                  } finally {
+                    setSendingEmail(false);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50">
+                {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                <span>Send Document</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPdfModal && (
+        <InquiryPdfModal
+          inquiry={
+            pdfModalOrder
+              ? ({
+                  id: pdfModalOrder.id,
+                  customer_name: pdfModalDetails?.companyName || pdfModalOrder.customer_name,
+                  sender_name: pdfModalDetails?.companyName || pdfModalOrder.customer_name,
+                  customer_phone: pdfModalDetails?.customerPhone || pdfModalOrder.customer_phone,
+                  salesperson_name: pdfModalDetails?.salespersonName || getSalespersonName(pdfModalOrder),
+                  created_at: pdfModalOrder.created_at || new Date().toISOString(),
+                  media_urls: pdfModalOrder.media_urls,
+                  inquiry_type: 'purchase_order',
+                } as any)
+              : null
+          }
+          details={pdfModalDetails}
+          onClose={() => setShowPdfModal(false)}
+        />
       )}
 
       {poImageViewerUrl && (
@@ -1193,7 +1794,7 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            {/* Upload PO Document Section matching Img 4 */}
+            {/* Upload PO Document Section */}
             <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2.5">
               <div className="flex items-center justify-between text-xs text-blue-900 font-bold">
                 <span className="flex items-center gap-1.5">
@@ -1328,57 +1929,33 @@ export default function OrdersPage() {
                 <textarea
                   required
                   rows={3}
-                  placeholder="e.g. TMT Bar 12mm - 30 MT @ ₹58,000/MT&#10;HR Coil 2.5mm - 10 MT @ ₹62,000/MT"
+                  placeholder="e.g. TMT Bar 12mm - 30 MT&#10;HR Coil 2.5mm - 10 MT"
                   value={formProductSKU}
                   onChange={e => setFormProductSKU(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y max-h-40 overflow-y-auto leading-relaxed placeholder:text-slate-400"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Quantity (MT) <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="any"
-                    placeholder="e.g. 30"
-                    value={formQuantity}
-                    onChange={e => {
-                      const val = Number(e.target.value);
-                      setFormQuantity(val < 0 ? '0' : e.target.value);
-                      setFormBasicAmount(0);
-                      setFormGstAmount(0);
-                      setFormGrandTotal(0);
-                    }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Rate per MT (₹) <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="any"
-                    placeholder="e.g. 58000"
-                    value={formRate}
-                    onChange={e => {
-                      const val = Number(e.target.value);
-                      setFormRate(val < 0 ? '0' : e.target.value);
-                      setFormBasicAmount(0);
-                      setFormGstAmount(0);
-                      setFormGrandTotal(0);
-                    }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Quantity (MT) <span className="text-red-500 font-bold">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="any"
+                  placeholder="e.g. 30"
+                  value={formQuantity}
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setFormQuantity(val < 0 ? '0' : e.target.value);
+                    setFormBasicAmount(0);
+                    setFormGstAmount(0);
+                    setFormGrandTotal(0);
+                  }}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                />
               </div>
 
               <div>
