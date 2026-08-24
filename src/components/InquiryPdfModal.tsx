@@ -79,7 +79,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   });
 
   const customerAddress = details.deliveryLocation || matchedCustomer?.address || matchedCustomer?.billing_address || (inquiry as any)?.customer_address || '';
-  const customerGstin = matchedCustomer?.gstin || matchedCustomer?.gst_number || (inquiry as any)?.customer_gstin || '';
+  const customerGstin = (details as any)?.gstin || matchedCustomer?.gstin || matchedCustomer?.gst_number || (inquiry as any)?.customer_gstin || (inquiry as any)?.ai_extraction_json?.gstin || (inquiry as any)?.ai_extraction_json?.gst_number || '';
 
   // Build line items list — prefer dynamic lineItems, fall back to single item
   const lineItems: LineItemDetail[] =
@@ -105,6 +105,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
 
   const totalQuantity = lineItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+  const primaryUnit = lineItems.find(i => i.unit)?.unit || lineItems[0]?.unit || 'MT';
 
   const piNumber = (() => {
     const inq = inquiry as any;
@@ -294,46 +295,28 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 {/* Bill To */}
                 <div className="space-y-0.5">
                   <p className="font-bold text-slate-800 mb-0.5">Bill To</p>
-                  <p className="font-bold text-slate-900 uppercase text-[12px]">{details.companyName || 'STANDARD RETAIL PRIVATE LIMITED'}</p>
-                  {customerAddress ? (
-                    customerAddress.split(',').map((part: string, idx: number) => (
-                      <p key={idx} className="text-slate-600 leading-tight">{part.trim()}</p>
-                    ))
-                  ) : (
-                    <>
-                      <p className="text-slate-600 leading-tight">1302/A, NAMAN MIDTOWN, TULSI PIPE ROAD, ELPHINSTONE</p>
-                      <p className="text-slate-600 leading-tight">PAREL, MUMBAI</p>
-                      <p className="text-slate-600 leading-tight">Mumbai</p>
-                      <p className="text-slate-600 leading-tight">400013 Maharashtra</p>
-                      <p className="text-slate-600 leading-tight">India</p>
-                    </>
-                  )}
-                  {customerGstin ? (
+                  <p className="font-bold text-slate-900 uppercase text-[12px]">{details.companyName || (inquiry as any)?.customer_name || 'Customer'}</p>
+                  {customerAddress && customerAddress.split(',').map((part: string, idx: number) => (
+                    <p key={idx} className="text-slate-600 leading-tight">{part.trim()}</p>
+                  ))}
+                  {customerGstin && (
                     <p className="text-slate-700 font-medium text-[12px] pt-0.5">GSTIN {customerGstin}</p>
-                  ) : (
-                    <p className="text-slate-700 font-medium text-[12px] pt-0.5">GSTIN 27AAOCS2064H1Z4</p>
                   )}
                 </div>
 
                 {/* Ship To */}
                 <div className="space-y-0.5 pt-0.5">
                   <p className="font-bold text-slate-800 mb-0.5">Ship To</p>
-                  <p className="font-bold text-slate-900 uppercase text-[12px]">{details.companyName || 'STANDARD RETAIL PRIVATE LIMITED'}</p>
+                  <p className="font-bold text-slate-900 uppercase text-[12px]">{details.companyName || (inquiry as any)?.customer_name || 'Customer'}</p>
                   {details.deliveryLocation ? (
                     details.deliveryLocation.split(',').map((part: string, idx: number) => (
                       <p key={idx} className="text-slate-600 leading-tight">{part.trim()}</p>
                     ))
-                  ) : (
-                    <>
-                      <p className="text-slate-600 leading-tight">C/O Sunweta Steels Ltd</p>
-                      <p className="text-slate-600 leading-tight">Plot No.A - 10/2, MIDC,</p>
-                      <p className="text-slate-600 leading-tight">Taloja</p>
-                      <p className="text-slate-600 leading-tight">Dist. Raigad</p>
-                      <p className="text-slate-600 leading-tight">Mumbai</p>
-                      <p className="text-slate-600 leading-tight">410208 Maharashtra</p>
-                      <p className="text-slate-600 leading-tight">India</p>
-                    </>
-                  )}
+                  ) : (customerAddress && customerAddress !== details.deliveryLocation) ? (
+                    customerAddress.split(',').map((part: string, idx: number) => (
+                      <p key={idx} className="text-slate-600 leading-tight">{part.trim()}</p>
+                    ))
+                  ) : null}
                 </div>
 
                 {/* Place Of Supply */}
@@ -387,18 +370,13 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                           </div>
                           {item.dimensions && (
                             <div className="text-[11px] text-slate-600 font-normal mt-0.5">
-                              {item.dimensions} {unit === 'MT' ? '1 Coil' : ''}
+                              {item.dimensions}
                             </div>
                           )}
                         </td>
                         <td className="px-3 py-3 text-center font-normal text-slate-700 text-[12px]">{hsn}</td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="font-normal text-slate-900 text-[12px]">
-                            {formatIndianCurrency(qty, true)}
-                          </div>
-                          <div className="text-[11px] text-slate-500 font-normal">
-                            {unit.toLowerCase() === 'mt' ? 'kg' : unit.toLowerCase()}
-                          </div>
+                        <td className="px-4 py-3 text-right font-normal text-slate-900 text-[12px] whitespace-nowrap">
+                          {formatIndianCurrency(qty, true)} {unit}
                         </td>
                         <td className="px-4 py-3 text-right font-normal text-slate-800 text-[12px]">
                           {rate > 0 ? formatIndianCurrency(rate, true) : '0.00'}
@@ -418,7 +396,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
               <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
                 <div>
-                  <span>Items in Total <strong className="font-bold">{formatIndianCurrency(totalQuantity, true)}</strong></span>
+                  <span>Items in Total <strong className="font-bold">{formatIndianCurrency(totalQuantity, true)} {primaryUnit}</strong></span>
                 </div>
                 {details.paymentTerms && (
                   <div>
