@@ -455,7 +455,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Positive Outcome</p>
+            <p className="text-xs text-slate-500 font-medium">Positive</p>
             <p className="text-2xl font-bold text-emerald-600 mt-1">{positiveVisits}</p>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
@@ -465,7 +465,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Neutral / Discussion</p>
+            <p className="text-xs text-slate-500 font-medium">Neutral</p>
             <p className="text-2xl font-bold text-amber-600 mt-1">{neutralVisits}</p>
           </div>
           <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
@@ -475,7 +475,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Not Interested</p>
+            <p className="text-xs text-slate-500 font-medium">Negative</p>
             <p className="text-2xl font-bold text-rose-600 mt-1">{negativeVisits}</p>
           </div>
           <div className="p-3 bg-rose-50 text-rose-600 rounded-lg">
@@ -504,8 +504,8 @@ export default function VisitsPage() {
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500">
             <option value="all">All Outcomes</option>
             <option value="positive">Positive 🟢</option>
-            <option value="neutral">Neutral / Discussion 🟡</option>
-            <option value="negative">Not Interested 🔴</option>
+            <option value="neutral">Neutral 🟡</option>
+            <option value="negative">Negative 🔴</option>
           </select>
         </div>
       </div>
@@ -622,7 +622,7 @@ export default function VisitsPage() {
                           </span>
                         ) : (
                           <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800 inline-flex items-center gap-1">
-                            Closed 🔴
+                            Negative 🔴
                           </span>
                         )}
                       </td>
@@ -870,11 +870,11 @@ export default function VisitsPage() {
                     </span>
                   ) : getNormalizedOutcome(selectedVisit) === 'neutral' ? (
                     <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
-                      <Clock size={12} /> Neutral / Discussion 🟡
+                      <Clock size={12} /> Neutral 🟡
                     </span>
                   ) : (
                     <span className="px-3 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Closed / Red 🔴
+                      <CheckCircle2 size={12} /> Negative 🔴
                     </span>
                   )}
                 </div>
