@@ -1797,20 +1797,22 @@ export default function InquiriesPage() {
                               <span>Final Quotation</span>
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActionMenuId(null);
-                                setShareInquiry(inq);
-                                setShareDetails(details);
-                                setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
-                                setShowQuotationModal(true);
-                              }}
-                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
-                              <Send size={14} className="text-slate-500 shrink-0" />
-                              <span>Share Quotation</span>
-                            </button>
+                            {(isConfirmed || isQuoted) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenActionMenuId(null);
+                                  setShareInquiry(inq);
+                                  setShareDetails(details);
+                                  setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
+                                  setShowQuotationModal(true);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
+                                <Send size={14} className="text-slate-500 shrink-0" />
+                                <span>Share Quotation</span>
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
