@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
@@ -642,6 +642,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { effectivePhone, employee, viewingAs } = useAuth();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1160,6 +1161,14 @@ export default function InquiriesPage() {
       setSelectedInquiry(updatedObj);
       setDrawerFileBase64(null);
 
+      // Invalidate all related caches so Pipeline cards and KRA metrics update immediately
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+
       // Update in-memory inquiries list so item stays in list immediately
       setInquiries(prev => (Array.isArray(prev) ? prev.map(item => item.id === selectedInquiry.id ? updatedObj : item) : []));
     } catch (err) {
@@ -1481,6 +1490,14 @@ export default function InquiriesPage() {
 
       // Prepend local inquiry so it appears immediately with full ai_extraction_json
       setInquiries(prev => [newInquiry, ...(Array.isArray(prev) ? prev : [])]);
+
+      // Invalidate all related caches so Pipeline and Kanban reflect the new inquiry immediately
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
 
       setTimeout(() => fetchMonthlyInquiries(), 2000);
     } catch (err: any) {

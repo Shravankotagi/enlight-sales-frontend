@@ -20,11 +20,6 @@ const LOST_REASONS = [
   'Competitor relationship', 'Customer silent', 'Cancelled by customer',
 ];
 
-function formatINR(amount: number) {
-  if (!amount) return '-';
-  return '₹' + Number(amount).toLocaleString('en-IN');
-}
-
 function DealCard({ deal, onStageChange, onSelect, onDelete }: {
   deal: any;
   onStageChange: (id: string, stage: string, reason?: string) => void;
@@ -78,12 +73,35 @@ function DealCard({ deal, onStageChange, onSelect, onDelete }: {
         </div>
       )}
 
-      {deal.total_amount > 0 && (
-        <div className="flex items-center gap-1 text-sm font-semibold text-gray-700">
-          <IndianRupee size={12} />
-          {formatINR(deal.total_amount)}
-        </div>
-      )}
+      {(() => {
+        let computedTotal = Number(deal.total_amount) || 0;
+        if (
+          computedTotal <= 0 &&
+          Array.isArray(deal.deal_items) &&
+          deal.deal_items.length > 0
+        ) {
+          const subtotal = deal.deal_items.reduce((sum: number, item: any) => {
+            const amt =
+              Number(item.amount) ||
+              (Number(item.quantity) || 0) *
+                (Number(item.rate || item.quoted_price || item.price_per_mt) || 0);
+            return sum + amt;
+          }, 0);
+          if (subtotal > 0) {
+            computedTotal = subtotal + Math.round(subtotal * 0.18);
+          }
+        }
+
+        if (computedTotal > 0) {
+          return (
+            <div className="flex items-center gap-1 text-sm font-bold text-gray-900 my-1.5">
+              <IndianRupee size={13} className="text-gray-700" />
+              <span>{Number(computedTotal).toLocaleString('en-IN')}</span>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       <div className="mt-3 flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
         {['qualified', 'quoted', 'negotiation', 'won', 'lost'].map(stage => (
