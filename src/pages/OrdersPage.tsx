@@ -16,7 +16,6 @@ import {
   Calendar,
   MapPin,
   CreditCard,
-  Package,
   ExternalLink,
   ImageIcon,
   User,
@@ -30,7 +29,7 @@ import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
-import { calculatePricingSummary } from '../utils/pricingEngine';
+import { calculateQuotationBreakdown } from '../utils/pricingEngine';
 
 interface DealItem {
   id?: string;
@@ -140,6 +139,51 @@ export function formatDeliveryLocation(raw?: string): string {
   return text;
 }
 
+export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: string): {
+  materialDescription: string;
+  dimensions: string;
+} {
+  let sku = (rawSku || '').trim();
+  let dims = (rawDimensions || '').trim();
+
+  // If dimensions already provided, remove that exact dimension string from sku
+  if (dims) {
+    const escapedDims = dims.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
+    sku = sku.replace(new RegExp(`\\b${escapedDims}\\b`, 'gi'), '');
+    sku = sku.replace(new RegExp(escapedDims, 'gi'), '');
+  }
+
+  // Multi-dimension pattern: e.g. 8X6000X1500, 10X6000X1500, 1250x2500, 1.2 x 1250 x 2500, 1250*2500
+  const multiDimRegex = /\b\d+(?:\.\d+)?\s*[xX*×]\s*\d+(?:\.\d+)?(?:\s*[xX*×]\s*\d+(?:\.\d+)?)?(?:\s*mm)?\b/gi;
+  if (!dims) {
+    const match = sku.match(multiDimRegex);
+    if (match && match[0]) {
+      dims = match[0].trim();
+      sku = sku.replace(match[0], '');
+    }
+  } else {
+    sku = sku.replace(multiDimRegex, '');
+  }
+
+  // Thickness patterns if dimensions already extracted or present: e.g. "8 MM THK", "10 MM THK", "1.2mm", "1.4 mm"
+  if (dims && dims !== '—' && dims !== '-') {
+    sku = sku.replace(/\b\d+(?:\.\d+)?\s*(?:mm\s*thk|mm|thk|thick)\b/gi, '');
+  }
+
+  // Strip standalone pieces/quantity counts if embedded in SKU text like "50PCS", "43 PCS", "100 NOS"
+  sku = sku.replace(/\b\d+\s*(?:pcs|nos|pieces|sheets|plates|coils|bundle|bundles)\b/gi, '');
+
+  // Strip standalone empty brackets/parentheses like "()", "[]", "--", excessive dashes or commas
+  sku = sku.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '');
+  sku = sku.replace(/\s*,\s*$/, '').replace(/^[\s,-]+|[\s,-]+$/g, '');
+  sku = sku.replace(/\s{2,}/g, ' ').trim();
+
+  return {
+    materialDescription: sku || (rawSku || 'Steel Material').trim(),
+    dimensions: dims || '—',
+  };
+}
+
 export default function OrdersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
@@ -214,14 +258,29 @@ export default function OrdersPage() {
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
     const isAnyModalOpen = showModal || !!selectedDrawerOrder || !!poImageViewerUrl;
+    const body = document.body;
+    const docEl = document.documentElement;
+    const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
+
     if (isAnyModalOpen) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
+      body.style.overflow = 'hidden';
+      docEl.style.overflow = 'hidden';
+      if (mainLayoutContainer) {
+        mainLayoutContainer.style.overflow = 'hidden';
+      }
       return () => {
-        document.body.style.overflow = originalOverflow || 'unset';
+        body.style.overflow = 'unset';
+        docEl.style.overflow = 'unset';
+        if (mainLayoutContainer) {
+          mainLayoutContainer.style.overflow = 'auto';
+        }
       };
     } else {
-      document.body.style.overflow = 'unset';
+      body.style.overflow = 'unset';
+      docEl.style.overflow = 'unset';
+      if (mainLayoutContainer) {
+        mainLayoutContainer.style.overflow = 'auto';
+      }
     }
   }, [showModal, selectedDrawerOrder, poImageViewerUrl]);
 
@@ -827,9 +886,7 @@ export default function OrdersPage() {
                   <h2 className="text-xl font-extrabold text-slate-900">
                     {selectedDrawerOrder.customer_name || 'Customer Order'}
                   </h2>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                    <CheckCircle size={12} /> Won / Confirmed 
-                  </span>
+                  
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
                   {selectedDrawerOrder.customer_phone && (
@@ -837,9 +894,7 @@ export default function OrdersPage() {
                       <Phone size={13} className="text-slate-400" /> {selectedDrawerOrder.customer_phone}
                     </span>
                   )}
-                  <span className="flex items-center gap-1">
-                    <Calendar size={13} className="text-slate-400" /> Order Date &amp; Time: {selectedDrawerOrder.created_at ? new Date(selectedDrawerOrder.created_at).toLocaleString('en-IN') : (selectedDrawerOrder.won_at ? new Date(selectedDrawerOrder.won_at).toLocaleString('en-IN') : selectedDrawerOrder.po_date || '-')}
-                  </span>
+                  
                   <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                     PO Ref: {selectedDrawerOrder.po_number || 'PO-2026-AUTO'}
                   </span>
@@ -851,7 +906,7 @@ export default function OrdersPage() {
                   <button
                     onClick={() => handleViewPoDocument(selectedDrawerOrder)}
                     className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs">
-                    <ImageIcon size={14} /> View Original PO Image 
+                    <ImageIcon size={14} /> View Original PO
                   </button>
                 )}
                 <button
@@ -863,80 +918,120 @@ export default function OrdersPage() {
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                <Package size={14} className="text-blue-600" /> Extracted Line Items &amp; Commercial Breakdown
-              </h3>
+              
 
               <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider text-[11px]">
                     <tr>
                       <th className="px-4 py-3 text-center">Sr.</th>
-                      <th className="px-4 py-3 text-center">Material Description &amp; SKU</th>
+                      <th className="px-4 py-3 text-left">Material Description &amp; SKU</th>
                       <th className="px-4 py-3 text-center">Dimensions / Specs</th>
                       <th className="px-4 py-3 text-center">Quantity</th>
                       <th className="px-4 py-3 text-center">Unit Rate (₹/MT)</th>
                       <th className="px-4 py-3 text-center">Line Amount (₹)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  <tbody className="divide-y divide-slate-200 bg-white">
                     {selectedDrawerOrder.deal_items && selectedDrawerOrder.deal_items.length > 0 ? (
                       selectedDrawerOrder.deal_items.map((item, iIdx) => {
+                        const rawSku = item.sku_text || 'Steel Material';
+                        const rawDims = item.dimensions || '';
+                        const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
                         const rateNum = Number(item.rate || 0);
                         const qtyNum = Number(item.quantity || 0);
                         const amtNum = Number(item.amount) || (rateNum > 0 && qtyNum > 0 ? Math.round(rateNum * qtyNum) : 0);
 
                         return (
                           <tr key={iIdx} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-medium text-slate-400">{iIdx + 1}</td>
-                            <td className="px-4 py-3 font-bold text-slate-900">{item.sku_text || 'Steel Material'}</td>
-                            <td className="px-4 py-3 text-slate-600 font-mono">{item.dimensions || '-'}</td>
-                            <td className="px-4 py-3 text-right font-extrabold text-blue-600 font-mono">
-                              {qtyNum > 0 ? `${qtyNum} ${item.unit || 'MT'}` : '-'}
+                            <td className="px-4 py-3.5 font-medium text-slate-400 text-center font-mono">{iIdx + 1}</td>
+                            <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
+                            <td className="px-4 py-3.5 text-slate-600 font-mono text-center">{dimensions}</td>
+                            <td className="px-4 py-3.5 text-right font-extrabold text-blue-600 font-mono">
+                              {qtyNum > 0 ? `${qtyNum.toLocaleString('en-IN')} ${item.unit || 'MT'}` : '—'}
                             </td>
-                            <td className="px-4 py-3 text-right font-semibold text-slate-700 font-mono">
-                              {rateNum > 0 ? `₹${rateNum.toLocaleString('en-IN')}` : '-'}
+                            <td className="px-4 py-3.5 text-right font-semibold text-slate-700 font-mono">
+                              {rateNum > 0 ? `₹${rateNum.toLocaleString('en-IN')}` : '—'}
                             </td>
-                            <td className="px-4 py-3 text-right font-bold text-emerald-700 font-mono">
+                            <td className="px-4 py-3.5 text-right font-bold text-emerald-700 font-mono">
                               ₹{amtNum.toLocaleString('en-IN')}
                             </td>
                           </tr>
                         );
                       })
                     ) : (
-                      <tr>
-                        <td className="px-4 py-3 font-medium text-slate-400">1</td>
-                        <td className="px-4 py-3 font-bold text-slate-900">Steel Material Requirements</td>
-                        <td className="px-4 py-3 text-slate-600 font-mono">-</td>
-                        <td className="px-4 py-3 text-right font-extrabold text-blue-600 font-mono">-</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-700 font-mono">-</td>
-                        <td className="px-4 py-3 text-right font-bold text-emerald-700 font-mono">
-                          ₹{Number(selectedDrawerOrder.total_amount || 0).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
+                      (() => {
+                        const { materialDescription, dimensions } = extractCleanProductAndSpecs('Steel Material Requirements', '');
+                        return (
+                          <tr>
+                            <td className="px-4 py-3.5 font-medium text-slate-400 text-center font-mono">1</td>
+                            <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
+                            <td className="px-4 py-3.5 text-slate-600 font-mono text-center">{dimensions}</td>
+                            <td className="px-4 py-3.5 text-right font-extrabold text-blue-600 font-mono">—</td>
+                            <td className="px-4 py-3.5 text-right font-semibold text-slate-700 font-mono">—</td>
+                            <td className="px-4 py-3.5 text-right font-bold text-emerald-700 font-mono">
+                              ₹{Number(selectedDrawerOrder.total_amount || 0).toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                        );
+                      })()
                     )}
                   </tbody>
-                  <tfoot className="bg-slate-50 font-bold border-t border-slate-300 text-xs">
-                    {(() => {
-                      const pricing = calculatePricingSummary({
-                        lineItems: selectedDrawerOrder.deal_items || [],
-                        total_amount: Number(selectedDrawerOrder.total_amount || 0),
-                      });
-                      const totalVal = pricing.grandTotal;
-
-                      return (
-                        <tr className="bg-emerald-100/90 text-emerald-950 font-black">
-                          <td colSpan={4} className="px-4 py-3 font-extrabold text-xs uppercase tracking-wide">
-                            Total Order Value (Incl. 18% GST)
-                          </td>
-                          <td colSpan={2} className="px-4 py-3 text-right font-black text-emerald-900 text-base font-mono">
-                            ₹{totalVal.toLocaleString('en-IN')}
-                          </td>
-                        </tr>
-                      );
-                    })()}
-                  </tfoot>
                 </table>
+
+                {/* Standard Quotation Pricing Breakdown Layout (Matching Reference img2) */}
+                {(() => {
+                  const activeLineItems = selectedDrawerOrder.deal_items && selectedDrawerOrder.deal_items.length > 0
+                    ? selectedDrawerOrder.deal_items
+                    : [{ sku_text: 'Steel Material', quantity: 0, unit: 'MT', rate: 0, amount: Number(selectedDrawerOrder.total_amount || 0) }];
+
+                  const subtotal = activeLineItems.reduce((sum, item) => {
+                    const r = Number(item.rate || 0);
+                    const q = Number(item.quantity || 0);
+                    const a = Number(item.amount) || (r > 0 && q > 0 ? Math.round(r * q) : 0);
+                    return sum + a;
+                  }, 0) || Number(selectedDrawerOrder.total_amount || 0);
+
+                  const qBreakdown = calculateQuotationBreakdown(subtotal);
+
+                  const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                  const distinctUnits = Array.from(new Set(activeLineItems.map(i => i.unit || 'MT')));
+                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
+                  const formattedItemsInTotal = totalQty > 0
+                    ? `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`
+                    : '—';
+
+                  return (
+                    <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
+                      <div className="text-xs font-semibold text-slate-700 pt-1">
+                        Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      </div>
+
+                      <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Sub Total</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">CGST (9%)</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">SGST (9%)</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Rounding</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                          <span className="font-bold">Total</span>
+                          <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -979,22 +1074,10 @@ export default function OrdersPage() {
             </div>
 
             <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedDrawerOrder(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
-                Close Details
-              </button>
+              
 
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleViewPoDocument(selectedDrawerOrder);
-                  }}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5">
-                  <Eye size={15} /> View Original PO Document
-                </button>
+                
               </div>
             </div>
           </div>
