@@ -793,12 +793,10 @@ export default function OrdersPage() {
                       className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                       <td className="px-5 py-3.5 text-left">
-                        <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                          <Building2 size={15} className="text-slate-700 shrink-0" />
+                        <div className="font-bold text-slate-900 text-sm">
                           <span className="truncate">{ord.customer_name || 'Customer'}</span>
                         </div>
-                        <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
-                          <Calendar size={12} className="text-slate-400 shrink-0" />
+                        <div className="text-xs text-slate-500 mt-0.5">
                           <span className="font-mono">
                             {ord.created_at
                               ? new Date(ord.created_at).toLocaleString('en-IN')
@@ -809,8 +807,8 @@ export default function OrdersPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        <span className="inline-flex items-center justify-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
-                          <FileText size={13} className="text-slate-500" /> {ord.po_number || 'PO-2026-AUTO'}
+                        <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
+                          {ord.po_number || 'PO-2026-AUTO'}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
@@ -820,8 +818,7 @@ export default function OrdersPage() {
                         {ordTonnage > 0 ? `${ordTonnage.toLocaleString('en-IN')} MT` : '—'}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
-                        <span className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200 text-slate-800 font-semibold text-xs">
-                          <MapPin size={12} className="text-rose-500 shrink-0" />
+                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200 text-slate-800 font-semibold text-xs">
                           {formatDeliveryLocation(ord.delivery_location)}
                         </span>
                       </td>

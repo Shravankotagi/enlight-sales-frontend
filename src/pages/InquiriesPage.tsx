@@ -1758,12 +1758,10 @@ export default function InquiriesPage() {
                     className="hover:bg-slate-50/75 transition-colors">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                     <td className="px-5 py-3.5 text-left">
-                      <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                        <Building2 size={15} className="text-slate-700 shrink-0" />
+                      <div className="font-bold text-slate-900 text-sm">
                         <span className="truncate">{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
-                        <Calendar size={12} className="text-slate-400 shrink-0" />
+                      <div className="text-xs text-slate-500 mt-0.5">
                         <span className="font-mono">{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
                       </div>
                     </td>
