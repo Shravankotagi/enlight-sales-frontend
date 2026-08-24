@@ -570,7 +570,7 @@ export default function VisitsPage() {
                 <th className="px-4 py-3.5 text-left min-w-[150px]">Contact Person</th>
                 <th className="px-4 py-3.5 text-left min-w-[170px]">Date &amp; Location</th>
                 <th className="px-4 py-3.5 text-center min-w-[130px]">Outcome</th>
-                <th className="px-4 py-3.5 text-center w-20">Actions</th>
+                <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -668,7 +668,7 @@ export default function VisitsPage() {
                       </td>
 
                       {/* 5. Actions (Bordered 3-dots dropdown matching Inquiries tab) */}
-                      <td className="px-4 py-3.5 text-center relative whitespace-nowrap">
+                      <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
                         <div className="relative inline-block text-left">
                           <button
                             type="button"
