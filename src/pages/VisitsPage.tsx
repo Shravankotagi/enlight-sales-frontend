@@ -19,11 +19,16 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { getFirstDayOfMonth, getLastDayOfMonth, formatLocalDate } from '../utils/dateUtils';
+import {
+  getFirstDayOfMonth,
+  getLastDayOfMonth,
+  formatLocalDate,
+  getDaysAgo,
+} from '../utils/dateUtils';
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 
 interface CustomerVisit {
@@ -62,6 +67,56 @@ export default function VisitsPage() {
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 15;
+
+  // Date Filter Presets (Matching Inquiry tab pattern)
+  const [dayPreset, setDayPreset] = useState<string>('this_month');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
+  const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
+
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
+  });
+
+  const handleDayPresetChange = (preset: string) => {
+    setDayPreset(preset);
+    if (preset === 'today') {
+      const today = formatLocalDate();
+      setDateRange({ from: today, to: today });
+      setShowCustomDate(false);
+    } else if (preset === '7_days') {
+      setDateRange({ from: getDaysAgo(7), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === '30_days') {
+      setDateRange({ from: getDaysAgo(30), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === '90_days') {
+      setDateRange({ from: getDaysAgo(90), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === 'this_month') {
+      setDateRange({ from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
+      setShowCustomDate(false);
+    } else if (preset === 'custom') {
+      setShowCustomDate(true);
+    }
+  };
+
+  const handleCustomFromChange = (val: string) => {
+    setCustomFrom(val);
+    if (val && customTo) {
+      setDateRange({ from: val, to: customTo });
+    } else if (val) {
+      setDateRange({ from: val, to: val });
+    }
+  };
+
+  const handleCustomToChange = (val: string) => {
+    setCustomTo(val);
+    if (customFrom && val) {
+      setDateRange({ from: customFrom, to: val });
+    }
+  };
 
   // Close active action dropdown when clicking outside
   useEffect(() => {
@@ -115,7 +170,6 @@ export default function VisitsPage() {
   const customerDirectory = useMemo<CustomerDirectoryItem[]>(() => {
     const dirMap = new Map<string, CustomerDirectoryItem>();
 
-    // 1. Ingest registered recurring customers
     customers.forEach(c => {
       const rawName = (c?.customer_name || '').trim();
       if (!rawName) return;
@@ -139,7 +193,6 @@ export default function VisitsPage() {
       });
     });
 
-    // 2. Ingest and enrich from past visits
     visits.forEach(v => {
       const rawName = (v?.customer_name || '').trim();
       if (!rawName) return;
@@ -175,28 +228,26 @@ export default function VisitsPage() {
 
   const handleSelectCustomerForCreate = (cust: CustomerDirectoryItem) => {
     setFormCustomerName(cust.customer_name);
+    if (formErrors.customerName) setFormErrors(prev => ({ ...prev, customerName: false }));
     if (cust.contact_person) {
       setFormPersonMet(cust.contact_person);
+      if (formErrors.personMet) setFormErrors(prev => ({ ...prev, personMet: false }));
     }
     if (cust.contact_phone) {
       setFormContactPhone(cust.contact_phone);
+      if (formErrors.contactPhone) setFormErrors(prev => ({ ...prev, contactPhone: false }));
     }
     if (cust.location && !formLocation) {
       setFormLocation(cust.location);
+      if (formErrors.location) setFormErrors(prev => ({ ...prev, location: false }));
     }
   };
 
   const handleSelectCustomerForEdit = (cust: CustomerDirectoryItem) => {
     setEditCustomerName(cust.customer_name);
-    if (cust.contact_person) {
-      setEditPersonMet(cust.contact_person);
-    }
-    if (cust.contact_phone) {
-      setEditContactPhone(cust.contact_phone);
-    }
-    if (cust.location && !editLocation) {
-      setEditLocation(cust.location);
-    }
+    if (cust.contact_person) setEditPersonMet(cust.contact_person);
+    if (cust.contact_phone) setEditContactPhone(cust.contact_phone);
+    if (cust.location && !editLocation) setEditLocation(cust.location);
   };
 
   const getSalespersonDisplayName = (v: CustomerVisit) => {
@@ -219,12 +270,6 @@ export default function VisitsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
-  });
-
   // Create Form state
   const [formCustomerName, setFormCustomerName] = useState('');
   const [formPersonMet, setFormPersonMet] = useState('');
@@ -234,6 +279,21 @@ export default function VisitsPage() {
   const [formRemarks, setFormRemarks] = useState('');
   const [formFollowup, setFormFollowup] = useState('');
   const [formVisitDate, setFormVisitDate] = useState(formatLocalDate());
+  const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
+
+  // Reset form and open Add New Visit modal cleanly
+  const handleOpenAddModal = () => {
+    setFormCustomerName('');
+    setFormPersonMet('');
+    setFormContactPhone('');
+    setFormLocation('');
+    setFormOutcome('positive');
+    setFormRemarks('');
+    setFormFollowup('');
+    setFormVisitDate(formatLocalDate());
+    setFormErrors({});
+    setShowModal(true);
+  };
 
   // Edit Form state
   const [editCustomerName, setEditCustomerName] = useState('');
@@ -269,39 +329,51 @@ export default function VisitsPage() {
 
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formCustomerName.trim()) return;
+
+    // Required Field Validation & Highlighting
+    const errors: Record<string, boolean> = {};
+    if (!formCustomerName.trim()) errors.customerName = true;
+    if (!formPersonMet.trim()) errors.personMet = true;
+    if (!formContactPhone.trim()) errors.contactPhone = true;
+    if (!formLocation.trim()) errors.location = true;
+    if (!formVisitDate) errors.visitDate = true;
+    if (!formOutcome) errors.outcome = true;
+    if (!formRemarks.trim()) errors.remarks = true;
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
 
     try {
       setSubmitting(true);
       await visitsApi.create({
-        customer_name: formCustomerName,
-        person_met: formPersonMet,
-        contact_phone: formContactPhone,
-        location: formLocation,
+        customer_name: formCustomerName.trim(),
+        person_met: formPersonMet.trim(),
+        contact_phone: formContactPhone.trim(),
+        location: formLocation.trim(),
         outcome: formOutcome,
-        remarks: formRemarks,
-        follow_up_action: formFollowup,
+        remarks: formRemarks.trim(),
+        follow_up_action: formFollowup.trim(),
         visited_at: new Date(formVisitDate).toISOString(),
       });
 
       setShowModal(false);
-      // Reset form
-      setFormCustomerName('');
-      setFormPersonMet('');
-      setFormContactPhone('');
-      setFormLocation('');
-      setFormOutcome('positive');
-      setFormRemarks('');
-      setFormFollowup('');
-      setFormVisitDate(formatLocalDate());
-
+      handleOpenAddModal(); // Reset form
       fetchVisits();
     } catch (err) {
       console.error('Error creating visit:', err);
-      alert('Failed to log visit. Please try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const getNormalizedOutcome = (v: any) => {
+    const o = (v?.outcome || '').toLowerCase();
+    const r = (v?.remarks || '').toLowerCase();
+    if (o === 'neutral' || r.includes('neutral')) return 'neutral';
+    if (o === 'negative' || o === 'closed' || r.includes('negative') || r.includes('closed')) return 'negative';
+    return 'positive';
   };
 
   const openVisitDetails = (v: CustomerVisit, editMode = false) => {
@@ -358,7 +430,6 @@ export default function VisitsPage() {
       await fetchVisits();
     } catch (err) {
       console.error('Error updating visit:', err);
-      alert('Failed to update visit details. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -380,7 +451,6 @@ export default function VisitsPage() {
       fetchVisits();
     } catch (err) {
       console.error('Error deleting visit:', err);
-      alert('Failed to delete visit. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -413,20 +483,9 @@ export default function VisitsPage() {
   });
 
   const totalVisits = visits.length;
-
-  const getNormalizedOutcome = (v: any) => {
-    const o = (v?.outcome || '').toLowerCase();
-    const r = (v?.remarks || '').toLowerCase();
-    if (o === 'neutral' || r.includes('neutral')) return 'neutral';
-    if (o === 'negative' || o === 'closed' || r.includes('negative') || r.includes('closed')) return 'negative';
-    return 'positive';
-  };
-
   const positiveVisits = visits.filter(v => getNormalizedOutcome(v) === 'positive').length;
   const neutralVisits = visits.filter(v => getNormalizedOutcome(v) === 'neutral').length;
   const negativeVisits = visits.filter(v => getNormalizedOutcome(v) === 'negative').length;
-
-  const [dateFilterResetKey, setDateFilterResetKey] = useState(0);
 
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
@@ -441,9 +500,11 @@ export default function VisitsPage() {
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterOutcome('all');
-    setDateFilterResetKey(k => k + 1);
+    setDayPreset('this_month');
+    setShowCustomDate(false);
+    setCustomFrom('');
+    setCustomTo('');
     setDateRange({
-      preset: 'this_month',
       from: getFirstDayOfMonth(),
       to: getLastDayOfMonth(),
     });
@@ -454,23 +515,23 @@ export default function VisitsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <MapPin className="text-blue-600" size={28} />
-            Customer Visits Log
+            Customer Field Visits Log
           </h1>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={fetchVisits}
-            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs"
+            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
             title="Refresh">
             <RefreshCw size={18} className={loading ? 'animate-spin text-blue-600' : ''} />
           </button>
           <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all">
-            <Plus size={18} />
+            onClick={handleOpenAddModal}
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
+            <Plus size={15} />
             Log Customer Visit
           </button>
         </div>
@@ -519,43 +580,90 @@ export default function VisitsPage() {
         </div>
       </div>
 
-      {/* Unified Filter & Search Bar */}
-      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
-        {/* Search Input */}
-        <div className="relative w-full sm:w-72">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder={canViewSalesperson ? 'Search Customer, Contact, Location, Rep...' : 'Search Customer, Contact, Location, Remarks...'}
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400 bg-white"
-          />
+      {/* Filter & Search Bar - Single Row matching Inquiry tab layout */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* 1. Compact Search Bar with Clear (X) Icon */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+            <input
+              type="text"
+              placeholder={canViewSalesperson ? 'Search Customer, Location, Rep...' : 'Search Customer, Location, Remarks...'}
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                title="Clear Search">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* 2. Date Preset Dropdown with 'This Month' default */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+            <select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="this_month">This Month</option>
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 3. Outcome Dropdown */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <select
+              value={filterOutcome}
+              onChange={e => setFilterOutcome(e.target.value)}
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all">All Outcomes ({visits.length})</option>
+              <option value="positive">Positive ({positiveVisits})</option>
+              <option value="neutral">Neutral ({neutralVisits})</option>
+              <option value="negative">Negative ({negativeVisits})</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 4. Clear Filter Button */}
+          {(searchTerm || filterOutcome !== 'all' || dayPreset !== 'this_month') && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+              Clear Filter
+            </button>
+          )}
         </div>
 
-        {/* Date Filter */}
-        <DateFilterControl onChange={setDateRange} resetKey={dateFilterResetKey} />
-
-        {/* Outcome Filter Dropdown */}
-        <div className="relative inline-flex items-center">
-          <select
-            value={filterOutcome}
-            onChange={e => setFilterOutcome(e.target.value)}
-            className="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer transition-all">
-            <option value="all">All ({visits.length})</option>
-            <option value="positive">Positive ({positiveVisits})</option>
-            <option value="neutral">Neutral ({neutralVisits})</option>
-            <option value="negative">Negative ({negativeVisits})</option>
-          </select>
-        </div>
-
-        {/* Clear Filter Button */}
-        {(searchTerm || filterOutcome !== 'all' || dateRange.preset !== 'this_month') && (
-          <button
-            onClick={handleClearFilters}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100/90 hover:bg-slate-200/80 rounded-xl transition-colors shadow-2xs cursor-pointer">
-            Clear Filter
-          </button>
+        {/* Custom Range Inputs */}
+        {showCustomDate && (
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <span className="text-slate-500 font-semibold">From:</span>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={e => handleCustomFromChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+            <span className="text-slate-500 font-semibold">To:</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={e => handleCustomToChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+          </div>
         )}
       </div>
 
@@ -637,10 +745,10 @@ export default function VisitsPage() {
                           <Calendar size={12} className="text-slate-400 shrink-0" />
                           {v.visited_at
                             ? new Date(v.visited_at).toLocaleDateString('en-IN', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
                             : '-'}
                         </div>
                         {loc && loc !== '-' && (
@@ -667,7 +775,7 @@ export default function VisitsPage() {
                         )}
                       </td>
 
-                      {/* 5. Actions (Bordered 3-dots dropdown matching Inquiries tab) */}
+                      {/* 5. Actions */}
                       <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
                         <div className="relative inline-block text-left">
                           <button
@@ -695,7 +803,7 @@ export default function VisitsPage() {
                                   setActiveActionMenuId(null);
                                   openVisitDetails(v, false);
                                 }}
-                                className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors">
+                                className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors cursor-pointer">
                                 <Eye size={14} className="text-slate-400" />
                                 View
                               </button>
@@ -705,7 +813,7 @@ export default function VisitsPage() {
                                   setActiveActionMenuId(null);
                                   openVisitDetails(v, true);
                                 }}
-                                className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors">
+                                className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors cursor-pointer">
                                 <Edit2 size={14} className="text-slate-400" />
                                 Edit
                               </button>
@@ -716,7 +824,7 @@ export default function VisitsPage() {
                                   setSelectedVisit(v);
                                   setShowDeleteModal(true);
                                 }}
-                                className="w-full px-3.5 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors border-t border-slate-100">
+                                className="w-full px-3.5 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors border-t border-slate-100 cursor-pointer">
                                 <Trash2 size={14} className="text-rose-500" />
                                 Delete
                               </button>
@@ -732,7 +840,7 @@ export default function VisitsPage() {
           </table>
         </div>
 
-        {/* Pagination Controls matching reference image */}
+        {/* Pagination Controls */}
         <div className="px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div>
             Showing <span className="font-bold text-slate-900">{filtered.length === 0 ? 0 : startIndex + 1}</span> to{' '}
@@ -780,90 +888,140 @@ export default function VisitsPage() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <MapPin className="text-blue-600" size={20} />
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <MapPin className="text-blue-600" size={18} />
                 Log Customer Field Visit
               </h2>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
-                <X size={20} />
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
+                <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleCreateVisit} className="flex flex-col flex-1 overflow-hidden mt-3">
-              <div className="overflow-y-auto flex-1 space-y-4 pr-1.5 py-1">
+              <div className="overflow-y-auto flex-1 space-y-4 pr-1.5 py-1 text-xs">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-semibold text-slate-700">
-                      Customer / Company Name *
+                      Customer / Company Name <span className="text-rose-500">*</span>
                     </label>
-                    <span className="text-[11px] text-slate-400 font-normal">Select existing or type new</span>
                   </div>
                   <CustomerCombobox
                     value={formCustomerName}
-                    onChange={setFormCustomerName}
+                    onChange={val => {
+                      setFormCustomerName(val);
+                      if (formErrors.customerName) setFormErrors(prev => ({ ...prev, customerName: false }));
+                    }}
                     onSelectCustomer={handleSelectCustomerForCreate}
                     customers={customerDirectory}
-                    placeholder="Select existing customer or type new..."
+                    placeholder="Search or enter company name..."
                     required
                   />
+                  {formErrors.customerName && (
+                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select or enter customer name.</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Person Met</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Person Met <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="text"
                       placeholder="e.g. Suresh Patel"
                       value={formPersonMet}
-                      onChange={e => setFormPersonMet(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={e => {
+                        setFormPersonMet(e.target.value);
+                        if (formErrors.personMet) setFormErrors(prev => ({ ...prev, personMet: false }));
+                      }}
+                      className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                        formErrors.personMet ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                      }`}
                     />
+                    {formErrors.personMet && (
+                      <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter person met.</p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Contact Phone <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="text"
                       placeholder="e.g. 9822012345"
                       value={formContactPhone}
-                      onChange={e => setFormContactPhone(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={e => {
+                        setFormContactPhone(e.target.value);
+                        if (formErrors.contactPhone) setFormErrors(prev => ({ ...prev, contactPhone: false }));
+                      }}
+                      className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                        formErrors.contactPhone ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                      }`}
                     />
+                    {formErrors.contactPhone && (
+                      <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter contact phone.</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">City / Location</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      City / Location <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="text"
                       placeholder="e.g. Chakan, Pune"
                       value={formLocation}
-                      onChange={e => setFormLocation(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={e => {
+                        setFormLocation(e.target.value);
+                        if (formErrors.location) setFormErrors(prev => ({ ...prev, location: false }));
+                      }}
+                      className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                        formErrors.location ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                      }`}
                     />
+                    {formErrors.location && (
+                      <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter location.</p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Date</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Visit Date <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="date"
                       value={formVisitDate}
-                      onChange={e => setFormVisitDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={e => {
+                        setFormVisitDate(e.target.value);
+                        if (formErrors.visitDate) setFormErrors(prev => ({ ...prev, visitDate: false }));
+                      }}
+                      className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all cursor-pointer ${
+                        formErrors.visitDate ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                      }`}
                     />
+                    {formErrors.visitDate && (
+                      <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select visit date.</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Outcome</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Visit Outcome <span className="text-rose-500">*</span>
+                    </label>
                     <select
                       value={formOutcome}
-                      onChange={e => setFormOutcome(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                      onChange={e => {
+                        setFormOutcome(e.target.value);
+                        if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer">
                       <option value="positive">Positive</option>
                       <option value="neutral">Neutral</option>
                       <option value="negative">Negative</option>
@@ -877,35 +1035,46 @@ export default function VisitsPage() {
                       placeholder="e.g. Send rate quotation"
                       value={formFollowup}
                       onChange={e => setFormFollowup(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Meeting Remarks &amp; Requirements <span className="text-rose-500">*</span>
+                  </label>
                   <textarea
                     rows={3}
                     placeholder="Details of discussion, product requirements..."
                     value={formRemarks}
-                    onChange={e => setFormRemarks(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={e => {
+                      setFormRemarks(e.target.value);
+                      if (formErrors.remarks) setFormErrors(prev => ({ ...prev, remarks: false }));
+                    }}
+                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                      formErrors.remarks ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                    }`}
                   />
+                  {formErrors.remarks && (
+                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter meeting remarks.</p>
+                  )}
                 </div>
               </div>
 
+              {/* Action Buttons matching Inquiry style */}
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0 mt-3">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all shadow-2xs cursor-pointer">
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50">
-                  {submitting ? 'Saving...' : 'Save Visit Log'}
+                  className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5">
+                  {submitting ? <RefreshCw size={14} className="animate-spin" /> : 'Save Visit Log'}
                 </button>
               </div>
             </form>
@@ -924,7 +1093,7 @@ export default function VisitsPage() {
                   <MapPin size={20} />
                 </span>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">
+                  <h2 className="text-base font-bold text-slate-900">
                     {isEditing ? 'Edit Visit Details' : selectedVisit.customer_name || 'Customer Visit'}
                   </h2>
                   {!isEditing && (
@@ -932,10 +1101,10 @@ export default function VisitsPage() {
                       <Calendar size={12} />
                       {selectedVisit.visited_at
                         ? new Date(selectedVisit.visited_at).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })
                         : 'Recent Visit'}
                       {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
                       {canViewSalesperson && getSalespersonDisplayName(selectedVisit) && (
@@ -946,7 +1115,7 @@ export default function VisitsPage() {
                 </div>
               </div>
 
-              {/* Header Right: Outcome Badge (View Mode) & Close Button */}
+              {/* Header Right: Outcome Badge (View Mode) & Close Button (No Duplicate Cancel Button) */}
               <div className="flex items-center gap-2">
                 {!isEditing && (
                   <div>
@@ -966,17 +1135,9 @@ export default function VisitsPage() {
                   </div>
                 )}
 
-                {isEditing && (
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">
-                    Cancel
-                  </button>
-                )}
-
                 <button
                   onClick={() => setSelectedVisit(null)}
-                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors ml-1"
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors ml-1 cursor-pointer"
                   title="Close">
                   <X size={20} />
                 </button>
@@ -1008,31 +1169,31 @@ export default function VisitsPage() {
                     </div>
                   </div>
 
-                  {/* Meeting Remarks & Requirements */}
-                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1 shadow-2xs">
+                  {/* Meeting Remarks & Requirements (Independently Scrollable) */}
+                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-2xs">
                     <p className="text-xs font-semibold text-slate-500">Meeting Remarks &amp; Requirements</p>
-                    <p className="text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap">
+                    <div className="max-h-36 overflow-y-auto pr-1 text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap font-normal">
                       {(selectedVisit.remarks || selectedVisit.raw_remarks || '')
                         .replace(
                           /\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi,
                           '',
                         )
                         .trim() || 'No detailed remarks recorded for this visit.'}
-                    </p>
+                    </div>
                   </div>
 
-                  {/* Follow-up Action (White background card, shows "None" if empty) */}
-                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1 shadow-2xs">
+                  {/* Follow-up Action (Independently Scrollable) */}
+                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-2xs">
                     <p className="text-xs font-semibold text-slate-500">Follow-up Action</p>
-                    <p className="text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap font-medium">
+                    <div className="max-h-24 overflow-y-auto pr-1 text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap font-medium">
                       {selectedVisit.follow_up_action && selectedVisit.follow_up_action.trim() && selectedVisit.follow_up_action !== '-'
                         ? selectedVisit.follow_up_action.trim()
                         : 'None'}
-                    </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* View Mode Footer (Bottom Right Action Buttons) */}
+                {/* View Mode Footer */}
                 <div className="pt-3 border-t border-slate-100 flex justify-end items-center gap-2 shrink-0">
                   <button
                     type="button"
@@ -1045,7 +1206,7 @@ export default function VisitsPage() {
                   <button
                     type="button"
                     onClick={() => setIsEditing(true)}
-                    className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer">
+                    className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer">
                     <Edit2 size={13} />
                     Edit Visit
                   </button>
@@ -1053,76 +1214,75 @@ export default function VisitsPage() {
               </div>
             ) : (
               /* Edit Mode Form */
-              <form onSubmit={handleUpdateVisit} className="flex flex-col flex-1 overflow-hidden mt-3">
+              <form onSubmit={handleUpdateVisit} className="flex flex-col flex-1 overflow-hidden mt-3 text-xs">
                 <div className="overflow-y-auto flex-1 space-y-3.5 pr-1.5 py-1">
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-semibold text-slate-700">
-                        Customer / Company Name *
+                      <label className="block font-semibold text-slate-700">
+                        Customer / Company Name <span className="text-rose-500">*</span>
                       </label>
-                      <span className="text-[11px] text-slate-400 font-normal">Select existing or type new</span>
                     </div>
                     <CustomerCombobox
                       value={editCustomerName}
                       onChange={setEditCustomerName}
                       onSelectCustomer={handleSelectCustomerForEdit}
                       customers={customerDirectory}
-                      placeholder="Select existing customer or type new..."
+                      placeholder="Search or enter company name..."
                       required
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Person Met</label>
+                      <label className="block font-semibold text-slate-700 mb-1">Person Met</label>
                       <input
                         type="text"
                         value={editPersonMet}
                         onChange={e => setEditPersonMet(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
+                      <label className="block font-semibold text-slate-700 mb-1">Contact Phone</label>
                       <input
                         type="text"
                         value={editContactPhone}
                         onChange={e => setEditContactPhone(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">City / Location</label>
+                      <label className="block font-semibold text-slate-700 mb-1">City / Location</label>
                       <input
                         type="text"
                         value={editLocation}
                         onChange={e => setEditLocation(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Date</label>
+                      <label className="block font-semibold text-slate-700 mb-1">Visit Date</label>
                       <input
                         type="date"
                         value={editVisitDate}
                         onChange={e => setEditVisitDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Outcome</label>
+                      <label className="block font-semibold text-slate-700 mb-1">Visit Outcome</label>
                       <select
                         value={editOutcome}
                         onChange={e => setEditOutcome(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
                         <option value="positive">Positive</option>
                         <option value="neutral">Neutral</option>
                         <option value="negative">Negative</option>
@@ -1130,41 +1290,42 @@ export default function VisitsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
+                      <label className="block font-semibold text-slate-700 mb-1">Follow-up Action</label>
                       <input
                         type="text"
                         placeholder="e.g. Send rate quotation"
                         value={editFollowup}
                         onChange={e => setEditFollowup(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
                     <textarea
                       rows={3}
                       placeholder="Details of discussion, product requirements..."
                       value={editRemarks}
                       onChange={e => setEditRemarks(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                     />
                   </div>
                 </div>
 
+                {/* Single Cancel button in footer */}
                 <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0 mt-3">
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                    className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all shadow-2xs cursor-pointer">
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
-                    <Check size={16} />
+                    className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5 cursor-pointer">
+                    <Check size={15} />
                     {actionLoading ? 'Saving...' : 'Save'}
                   </button>
                 </div>
@@ -1198,14 +1359,14 @@ export default function VisitsPage() {
                 type="button"
                 onClick={() => setShowDeleteModal(false)}
                 disabled={actionLoading}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all cursor-pointer">
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={executeDeleteVisit}
                 disabled={actionLoading}
-                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
+                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5 cursor-pointer">
                 <Trash2 size={14} />
                 {actionLoading ? 'Deleting...' : 'Delete Visit'}
               </button>
