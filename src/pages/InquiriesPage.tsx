@@ -1750,15 +1750,15 @@ export default function InquiriesPage() {
 
       {/* Main Inquiries Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
-        <table className="w-full table-fixed text-center border-collapse text-xs">
+        <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-3 py-3.5 text-center w-[6%]">#</th>
-              <th className="px-4 py-3.5 text-center w-[24%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[18%]">Source Channel</th>
+              <th className="px-3 py-3.5 text-center w-[5%]">#</th>
+              <th className="px-6 py-3.5 text-left w-[32%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Source Channel</th>
               <th className="px-4 py-3.5 text-center w-[18%]">Status</th>
-              <th className="px-4 py-3.5 text-center w-[16%]">Actions</th>
+              <th className="px-4 py-3.5 text-center w-[13%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -1808,7 +1808,7 @@ export default function InquiriesPage() {
                         rate: Number(item.rate) || 0,
                         amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
                       })),
-                      totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
+                      totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0),
                     };
                   }
                   return {
@@ -1826,7 +1826,7 @@ export default function InquiriesPage() {
                     key={inq.id || idx}
                     className="hover:bg-slate-50/75 transition-colors">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-6 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
                         {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
                       </div>
