@@ -7,6 +7,7 @@ import {
   ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
+import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
 import { useAuth } from '../context/AuthContext';
@@ -1114,7 +1115,22 @@ export default function InquiriesPage() {
       ? cleanPhoneDigits
       : '';
 
-    if (!customerName) return;
+    if (!customerName) {
+      toast.error('Please enter Company Name');
+      return;
+    }
+    if (!formProductSKU.trim()) {
+      toast.error('Please enter Product Description / SKU');
+      return;
+    }
+    if (!formPaymentTerms.trim()) {
+      toast.error('Please enter Payment Terms');
+      return;
+    }
+    if (!formDeliveryLocation.trim()) {
+      toast.error('Please enter Delivery Location');
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -2553,8 +2569,11 @@ export default function InquiriesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Terms</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Payment Terms <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <input
+                    required
                     type="text"
                     placeholder="e.g. 30 Days Credit, 100% Advance"
                     value={formPaymentTerms}
@@ -2565,8 +2584,11 @@ export default function InquiriesPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Delivery Location</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Delivery Location <span className="text-red-500 font-bold">*</span>
+                </label>
                 <input
+                  required
                   type="text"
                   placeholder="e.g. Chakan Industrial Area, Pune"
                   value={formDeliveryLocation}
