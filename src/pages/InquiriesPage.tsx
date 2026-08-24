@@ -610,9 +610,17 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     return null;
   })();
 
+  const salespersonName =
+    (inq as any)?.salesperson_name ||
+    (inq as any)?.assigned_salesperson_name ||
+    aiJson.salespersonName ||
+    aiJson.salesperson_name ||
+    '';
+
   return {
     companyName,
     customerPhone,
+    salespersonName,
     productType,
     thickness,
     width,
@@ -642,7 +650,7 @@ export default function InquiriesPage() {
     employee?.name ||
     (selectedInquiry as any)?.salesperson_name ||
     (selectedInquiry as any)?.assigned_salesperson_name ||
-    'Sales Representative';
+    'Shravan Kotagi';
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
@@ -2302,7 +2310,7 @@ export default function InquiriesPage() {
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Send className="text-purple-600" size={22} />
-                Send Price Quotation (Resend API)
+                Send Quotation
               </h2>
               <button
                 onClick={() => {
@@ -2346,7 +2354,9 @@ export default function InquiriesPage() {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Customer Email Address *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Customer Email Address <span className="text-red-500 font-bold">*</span>
+                </label>
                 <input
                   type="email"
                   required
@@ -2355,10 +2365,6 @@ export default function InquiriesPage() {
                   onChange={e => setQuotationEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
                 />
-              </div>
-
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed font-medium">
-                 <strong>Resend Test Sandbox Mode:</strong> In Resend test mode, emails can <strong>ONLY</strong> be delivered to your registered Resend account email (<strong>shravankotagi314@gmail.com</strong>). Verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline font-bold text-amber-950">resend.com/domains</a> to send to any custom customer email address.
               </div>
 
               {resendNotice && (

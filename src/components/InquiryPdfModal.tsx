@@ -114,7 +114,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
     ? new Date(inquiry.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  const salesperson = details.salespersonName || viewingAs?.name || employee?.name || (inquiry as any)?.salesperson_name || 'Sales Representative';
+  const salesperson = details.salespersonName || viewingAs?.name || employee?.name || (inquiry as any)?.salesperson_name || (inquiry as any)?.assigned_salesperson_name || 'Shravan Kotagi';
 
   const handleCopyRef = () => {
     navigator.clipboard.writeText(inquiryRefId);
@@ -388,7 +388,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </div>
           </div>
 
-          {/* Authorized Signature Section with Official Stamp */}
+          {/* Authorized Signature Section */}
           <div className="pt-6 border-t border-slate-200 flex justify-between items-end">
             <div>
               <p className="font-extrabold text-slate-900 text-xs">Enlight Metals Private Limited</p>
@@ -396,14 +396,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </div>
 
             <div className="text-right flex flex-col items-center sm:items-end">
-              {/* Stamp Graphic & Signature Line */}
-              <div className="relative flex items-center justify-center mb-1">
-                <div className="w-28 h-14 border-2 border-indigo-700/80 rounded-full flex flex-col items-center justify-center p-1 text-center rotate-[-4deg] shadow-2xs">
-                  <span className="text-[7px] font-extrabold text-indigo-900 uppercase tracking-tighter">ENLIGHT METALS PVT. LTD.</span>
-                  <span className="text-[9px] font-serif italic text-indigo-800 font-bold my-[-2px]">Authorized</span>
-                  <span className="text-[6.5px] font-bold text-indigo-700 uppercase tracking-widest"> PUNE </span>
-                </div>
-              </div>
               <div className="h-0.5 bg-slate-300 w-36 mb-1"></div>
               <p className="font-bold text-slate-800 text-xs">Authorized Signature</p>
             </div>
