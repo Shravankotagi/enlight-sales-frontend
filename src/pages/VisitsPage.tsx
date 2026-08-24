@@ -408,7 +408,7 @@ export default function VisitsPage() {
     return matchesSearch && matchesOutcome;
   });
 
-  const totalVisits = filtered.length;
+  const totalVisits = visits.length;
 
   const getNormalizedOutcome = (v: any) => {
     const o = (v?.outcome || '').toLowerCase();
@@ -418,9 +418,22 @@ export default function VisitsPage() {
     return 'positive';
   };
 
-  const positiveVisits = filtered.filter(v => getNormalizedOutcome(v) === 'positive').length;
-  const neutralVisits = filtered.filter(v => getNormalizedOutcome(v) === 'neutral').length;
-  const negativeVisits = filtered.filter(v => getNormalizedOutcome(v) === 'negative').length;
+  const positiveVisits = visits.filter(v => getNormalizedOutcome(v) === 'positive').length;
+  const neutralVisits = visits.filter(v => getNormalizedOutcome(v) === 'neutral').length;
+  const negativeVisits = visits.filter(v => getNormalizedOutcome(v) === 'negative').length;
+
+  const [dateFilterResetKey, setDateFilterResetKey] = useState(0);
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFilterOutcome('all');
+    setDateFilterResetKey(k => k + 1);
+    setDateRange({
+      preset: 'this_month',
+      from: getFirstDayOfMonth(),
+      to: getLastDayOfMonth(),
+    });
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -431,22 +444,18 @@ export default function VisitsPage() {
             <MapPin className="text-blue-600" size={28} />
             Customer Visits Log
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Track customer field visits, meetings, feedback, and sales follow-up commitments.
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <DateFilterControl onChange={setDateRange} />
+        <div className="flex items-center gap-3">
           <button
             onClick={fetchVisits}
-            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
+            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs"
             title="Refresh">
             <RefreshCw size={18} className={loading ? 'animate-spin text-blue-600' : ''} />
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all">
             <Plus size={18} />
             Log Customer Visit
           </button>
@@ -496,30 +505,44 @@ export default function VisitsPage() {
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
-        <div className="relative w-full sm:w-80">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Unified Filter & Search Bar */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
+        {/* Search Input */}
+        <div className="relative w-full sm:w-72">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
-            placeholder={canViewSalesperson ? 'Search customer, contact, location, salesperson...' : 'Search customer, contact, location, remarks...'}
+            placeholder={canViewSalesperson ? 'Search Customer, Contact, Location, Rep...' : 'Search Customer, Contact, Location, Remarks...'}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400 bg-white"
           />
         </div>
 
-        <div className="flex gap-2 w-full sm:w-auto">
+        {/* Date Filter */}
+        <DateFilterControl onChange={setDateRange} resetKey={dateFilterResetKey} />
+
+        {/* Outcome Filter Dropdown */}
+        <div className="relative inline-flex items-center">
           <select
             value={filterOutcome}
             onChange={e => setFilterOutcome(e.target.value)}
-            className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="all">All Outcomes</option>
-            <option value="positive">Positive 🟢</option>
-            <option value="neutral">Neutral 🟡</option>
-            <option value="negative">Negative 🔴</option>
+            className="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer transition-all">
+            <option value="all">All ({visits.length})</option>
+            <option value="positive">Positive ({positiveVisits}) 🟢</option>
+            <option value="neutral">Neutral ({neutralVisits}) 🟡</option>
+            <option value="negative">Negative ({negativeVisits}) 🔴</option>
           </select>
         </div>
+
+        {/* Clear Filter Button */}
+        {(searchTerm || filterOutcome !== 'all' || dateRange.preset !== 'this_month') && (
+          <button
+            onClick={handleClearFilters}
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100/90 hover:bg-slate-200/80 rounded-xl transition-colors shadow-2xs cursor-pointer">
+            Clear Filter
+          </button>
+        )}
       </div>
 
       {/* Data Table */}
