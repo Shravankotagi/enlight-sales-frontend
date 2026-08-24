@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   MapPin,
   Plus,
@@ -10,17 +10,18 @@ import {
   X,
   User,
   Phone,
-  Map,
+  Map as MapIcon,
   Edit2,
   Trash2,
   Calendar,
   Package,
-  Eye,
   Check,
 } from 'lucide-react';
-import { visitsApi } from '../lib/api';
+import { visitsApi, employeesApi, customersApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getFirstDayOfMonth, getLastDayOfMonth, formatLocalDate } from '../utils/dateUtils';
+import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 
 interface CustomerVisit {
   id: string;
@@ -39,15 +40,164 @@ interface CustomerVisit {
   follow_up?: string;
   followup?: string;
   visited_at: string;
+  salesperson_phone?: string;
+  salesperson_name?: string;
 }
 
 export default function VisitsPage() {
+  const { isSalesManager, isAdmin } = useAuth();
+  const canViewSalesperson = isSalesManager || isAdmin;
+
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Fetch employees list for salesperson name mapping
+  useEffect(() => {
+    if (canViewSalesperson) {
+      employeesApi
+        .getAll()
+        .then(res => {
+          const raw = res?.data;
+          const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+          setEmployees(list);
+        })
+        .catch(() => setEmployees([]));
+    }
+  }, [canViewSalesperson]);
+
+  // Fetch customers list for combobox & autofill
+  useEffect(() => {
+    customersApi
+      .getAll()
+      .then(res => {
+        const raw = res?.data;
+        const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+        setCustomers(list);
+      })
+      .catch(err => {
+        console.error('Error fetching customers directory:', err);
+        setCustomers([]);
+      });
+  }, []);
+
+  const employeeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    employees.forEach(emp => {
+      if (emp.phone) {
+        const clean = emp.phone.replace(/\D/g, '').slice(-10);
+        if (clean) map.set(clean, emp.name);
+      }
+    });
+    return map;
+  }, [employees]);
+
+  // Build unified customer directory combining registered customers + existing visits
+  const customerDirectory = useMemo<CustomerDirectoryItem[]>(() => {
+    const dirMap = new Map<string, CustomerDirectoryItem>();
+
+    // 1. Ingest registered recurring customers
+    customers.forEach(c => {
+      const rawName = (c?.customer_name || '').trim();
+      if (!rawName) return;
+      const key = rawName.toLowerCase();
+
+      let contactPerson = (c?.contact_person || '').trim();
+      if (!contactPerson && c?.notes) {
+        const match = c.notes.match(/Contact:\s*([^|]+)/i);
+        if (match && match[1]) contactPerson = match[1].trim();
+      }
+
+      const phone = (c?.customer_phone || c?.phone || c?.contact_no || '').trim();
+      const loc = (c?.customer_address || c?.address || c?.city || '').trim();
+
+      dirMap.set(key, {
+        id: c.id,
+        customer_name: rawName,
+        contact_person: contactPerson || undefined,
+        contact_phone: phone || undefined,
+        location: loc || undefined,
+      });
+    });
+
+    // 2. Ingest and enrich from past visits
+    visits.forEach(v => {
+      const rawName = (v?.customer_name || '').trim();
+      if (!rawName) return;
+      const key = rawName.toLowerCase();
+      const existing = dirMap.get(key);
+
+      const personMet =
+        v.person_met && v.person_met !== 'null' && v.person_met !== 'Contact Person'
+          ? v.person_met.trim()
+          : undefined;
+      const phone = (v.contact_phone || v.contact_no || '').trim();
+      const loc = (v.location || v.customer_address || '').trim();
+
+      if (!existing) {
+        dirMap.set(key, {
+          id: v.id,
+          customer_name: rawName,
+          contact_person: personMet,
+          contact_phone: phone || undefined,
+          location: loc || undefined,
+        });
+      } else {
+        if (!existing.contact_person && personMet) existing.contact_person = personMet;
+        if (!existing.contact_phone && phone) existing.contact_phone = phone;
+        if (!existing.location && loc) existing.location = loc;
+      }
+    });
+
+    return Array.from(dirMap.values()).sort((a, b) =>
+      a.customer_name.localeCompare(b.customer_name)
+    );
+  }, [customers, visits]);
+
+  const handleSelectCustomerForCreate = (cust: CustomerDirectoryItem) => {
+    setFormCustomerName(cust.customer_name);
+    if (cust.contact_person) {
+      setFormPersonMet(cust.contact_person);
+    }
+    if (cust.contact_phone) {
+      setFormContactPhone(cust.contact_phone);
+    }
+    if (cust.location && !formLocation) {
+      setFormLocation(cust.location);
+    }
+  };
+
+  const handleSelectCustomerForEdit = (cust: CustomerDirectoryItem) => {
+    setEditCustomerName(cust.customer_name);
+    if (cust.contact_person) {
+      setEditPersonMet(cust.contact_person);
+    }
+    if (cust.contact_phone) {
+      setEditContactPhone(cust.contact_phone);
+    }
+    if (cust.location && !editLocation) {
+      setEditLocation(cust.location);
+    }
+  };
+
+  const getSalespersonDisplayName = (v: CustomerVisit) => {
+    if (v.salesperson_name && v.salesperson_name !== v.salesperson_phone) {
+      return v.salesperson_name;
+    }
+    if (v.salesperson_phone) {
+      const cleanPhone = v.salesperson_phone.replace(/\D/g, '').slice(-10);
+      if (cleanPhone && employeeMap.has(cleanPhone)) {
+        return employeeMap.get(cleanPhone);
+      }
+      return v.salesperson_phone;
+    }
+    return null;
+  };
 
   // Details & Edit Modal States
   const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
@@ -232,6 +382,7 @@ export default function VisitsPage() {
       }
     }
 
+    const repName = getSalespersonDisplayName(v) || '';
     const matchesSearch =
       (v?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.person_met || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -239,7 +390,8 @@ export default function VisitsPage() {
       (v?.customer_address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.remarks || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.follow_up_action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      repName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesOutcome = filterOutcome === 'all' || (v?.outcome || '').toLowerCase() === filterOutcome.toLowerCase();
     return matchesSearch && matchesOutcome;
   });
@@ -264,11 +416,11 @@ export default function VisitsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <MapPin className="text-emerald-600" size={28} />
-            Field Customer Visits
+            <MapPin className="text-blue-600" size={28} />
+            Customer Visits Log
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Log and track customer field meetings, requirement notes, and follow-up activities.
+            Track customer field visits, meetings, feedback, and sales follow-up commitments.
           </p>
         </div>
 
@@ -278,11 +430,11 @@ export default function VisitsPage() {
             onClick={fetchVisits}
             className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
             title="Refresh">
-            <RefreshCw size={18} className={loading ? 'animate-spin text-emerald-600' : ''} />
+            <RefreshCw size={18} className={loading ? 'animate-spin text-blue-600' : ''} />
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg flex items-center gap-2 shadow-sm transition-colors">
             <Plus size={18} />
             Log Customer Visit
           </button>
@@ -293,7 +445,7 @@ export default function VisitsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Visits Logged</p>
+            <p className="text-xs text-slate-500 font-medium">Total Visits</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{totalVisits}</p>
           </div>
           <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
@@ -303,7 +455,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Positive Outcomes 🟢</p>
+            <p className="text-xs text-slate-500 font-medium">Positive Outcome</p>
             <p className="text-2xl font-bold text-emerald-600 mt-1">{positiveVisits}</p>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
@@ -313,7 +465,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Neutral / Discussion 🟡</p>
+            <p className="text-xs text-slate-500 font-medium">Neutral / Discussion</p>
             <p className="text-2xl font-bold text-amber-600 mt-1">{neutralVisits}</p>
           </div>
           <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
@@ -323,7 +475,7 @@ export default function VisitsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Not Interested / Closed 🔴</p>
+            <p className="text-xs text-slate-500 font-medium">Not Interested</p>
             <p className="text-2xl font-bold text-rose-600 mt-1">{negativeVisits}</p>
           </div>
           <div className="p-3 bg-rose-50 text-rose-600 rounded-lg">
@@ -332,16 +484,16 @@ export default function VisitsPage() {
         </div>
       </div>
 
-      {/* Filter & Search */}
+      {/* Filters & Search */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
         <div className="relative w-full sm:w-80">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search customer, person met, city, remarks..."
+            placeholder={canViewSalesperson ? 'Search customer, contact, location, salesperson...' : 'Search customer, contact, location, remarks...'}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
 
@@ -349,7 +501,7 @@ export default function VisitsPage() {
           <select
             value={filterOutcome}
             onChange={e => setFilterOutcome(e.target.value)}
-            className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500">
             <option value="all">All Outcomes</option>
             <option value="positive">Positive 🟢</option>
             <option value="neutral">Neutral / Discussion 🟡</option>
@@ -369,20 +521,19 @@ export default function VisitsPage() {
                 <th className="px-4 py-3">Outcome</th>
                 <th className="px-4 py-3">Discussion &amp; Requirements</th>
                 <th className="px-4 py-3">Next Action</th>
-                <th className="px-3 py-3 text-right"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
-                    <RefreshCw size={20} className="animate-spin inline mr-2 text-emerald-600" />
+                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
+                    <RefreshCw size={20} className="animate-spin inline mr-2 text-blue-600" />
                     Loading visit logs...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
                     <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-slate-600 font-medium">No visit logs found.</p>
                     <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
@@ -394,6 +545,7 @@ export default function VisitsPage() {
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const loc = v.location || (v as any).city || (v as any).customer_address || '-';
                   const rawRemarks = v.raw_remarks || v.remarks || '';
+                  const salespersonName = getSalespersonDisplayName(v);
 
                   // Follow-up Action Extraction
                   const followUp =
@@ -420,10 +572,10 @@ export default function VisitsPage() {
                     <tr
                       key={v.id || idx}
                       onClick={() => openVisitDetails(v)}
-                      className="hover:bg-emerald-50/40 cursor-pointer transition-colors group">
+                      className="hover:bg-blue-50/40 cursor-pointer transition-colors group">
                       {/* 1. Customer & Date */}
                       <td className="px-4 py-3.5 min-w-[190px]">
-                        <div className="font-bold text-slate-900 text-sm group-hover:text-emerald-700 transition-colors">
+                        <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {v.customer_name || 'Customer'}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 mt-1">
@@ -433,7 +585,13 @@ export default function VisitsPage() {
                           </span>
                           {loc && loc !== '-' && (
                             <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                              • <Map size={11} className="text-slate-400 shrink-0" /> {loc}
+                              • <MapIcon size={11} className="text-slate-400 shrink-0" /> {loc}
+                            </span>
+                          )}
+                          {/* Salesperson tag visible ONLY to Sales Managers & Admin */}
+                          {canViewSalesperson && salespersonName && (
+                            <span className="text-slate-500 font-medium inline-flex items-center gap-1 whitespace-nowrap">
+                              • <User size={11} className="text-slate-400 shrink-0" /> {salespersonName}
                             </span>
                           )}
                         </div>
@@ -486,13 +644,6 @@ export default function VisitsPage() {
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-
-                      {/* 6. Quick Action Icon */}
-                      <td className="px-3 py-3.5 text-right">
-                        <span className="p-1.5 text-slate-400 group-hover:text-emerald-600 group-hover:bg-emerald-50 rounded-lg inline-flex transition-colors">
-                          <Eye size={16} />
-                        </span>
-                      </td>
                     </tr>
                   );
                 })
@@ -508,7 +659,7 @@ export default function VisitsPage() {
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <MapPin className="text-emerald-600" size={20} />
+                <MapPin className="text-blue-600" size={20} />
                 Log Customer Field Visit
               </h2>
               <button
@@ -520,14 +671,19 @@ export default function VisitsPage() {
 
             <form onSubmit={handleCreateVisit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Customer / Company Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Vardhman Steels"
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Customer / Company Name *
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-normal">Select existing or type new</span>
+                </div>
+                <CustomerCombobox
                   value={formCustomerName}
-                  onChange={e => setFormCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                  onChange={setFormCustomerName}
+                  onSelectCustomer={handleSelectCustomerForCreate}
+                  customers={customerDirectory}
+                  placeholder="Select existing customer or type new..."
+                  required
                 />
               </div>
 
@@ -539,7 +695,7 @@ export default function VisitsPage() {
                     placeholder="e.g. Suresh Patel"
                     value={formPersonMet}
                     onChange={e => setFormPersonMet(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -550,7 +706,7 @@ export default function VisitsPage() {
                     placeholder="e.g. 9822012345"
                     value={formContactPhone}
                     onChange={e => setFormContactPhone(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -563,7 +719,7 @@ export default function VisitsPage() {
                     placeholder="e.g. Chakan, Pune"
                     value={formLocation}
                     onChange={e => setFormLocation(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -573,7 +729,7 @@ export default function VisitsPage() {
                     type="date"
                     value={formVisitDate}
                     onChange={e => setFormVisitDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -584,7 +740,7 @@ export default function VisitsPage() {
                   <select
                     value={formOutcome}
                     onChange={e => setFormOutcome(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                     <option value="positive">Positive 🟢</option>
                     <option value="neutral">Neutral 🟡</option>
                     <option value="negative">Negative 🔴</option>
@@ -598,7 +754,7 @@ export default function VisitsPage() {
                     placeholder="e.g. Send rate quotation"
                     value={formFollowup}
                     onChange={e => setFormFollowup(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -610,7 +766,7 @@ export default function VisitsPage() {
                   placeholder="Details of discussion, product requirements..."
                   value={formRemarks}
                   onChange={e => setFormRemarks(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -624,7 +780,7 @@ export default function VisitsPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50">
+                  className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50">
                   {submitting ? 'Saving...' : 'Save Visit Log'}
                 </button>
               </div>
@@ -641,7 +797,7 @@ export default function VisitsPage() {
             <div className="flex justify-between items-start pb-3 border-b border-slate-100">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                  <span className="p-2 bg-blue-50 text-blue-600 rounded-lg">
                     <MapPin size={20} />
                   </span>
                   <div>
@@ -649,7 +805,7 @@ export default function VisitsPage() {
                       {isEditing ? 'Edit Visit Details' : selectedVisit.customer_name || 'Customer Visit'}
                     </h2>
                     {!isEditing && (
-                      <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
                         <Calendar size={12} />
                         {selectedVisit.visited_at
                           ? new Date(selectedVisit.visited_at).toLocaleDateString('en-IN', {
@@ -659,6 +815,9 @@ export default function VisitsPage() {
                             })
                           : 'Recent Visit'}
                         {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
+                        {canViewSalesperson && getSalespersonDisplayName(selectedVisit) && (
+                          <span>• Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedVisit)}</strong></span>
+                        )}
                       </p>
                     )}
                   </div>
@@ -671,10 +830,10 @@ export default function VisitsPage() {
                   <>
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1.5 transition-colors"
+                      className="px-3.5 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
                       title="Edit Visit">
                       <Edit2 size={13} />
-                      Edit
+                      Edit Visit
                     </button>
                     <button
                       onClick={handleDeleteClick}
@@ -786,13 +945,19 @@ export default function VisitsPage() {
               /* Edit Mode Form */
               <form onSubmit={handleUpdateVisit} className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Customer / Company Name *</label>
-                  <input
-                    type="text"
-                    required
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Customer / Company Name *
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-normal">Select existing or type new</span>
+                  </div>
+                  <CustomerCombobox
                     value={editCustomerName}
-                    onChange={e => setEditCustomerName(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    onChange={setEditCustomerName}
+                    onSelectCustomer={handleSelectCustomerForEdit}
+                    customers={customerDirectory}
+                    placeholder="Select existing customer or type new..."
+                    required
                   />
                 </div>
 
@@ -803,7 +968,7 @@ export default function VisitsPage() {
                       type="text"
                       value={editPersonMet}
                       onChange={e => setEditPersonMet(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
@@ -813,7 +978,7 @@ export default function VisitsPage() {
                       type="text"
                       value={editContactPhone}
                       onChange={e => setEditContactPhone(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -825,7 +990,7 @@ export default function VisitsPage() {
                       type="text"
                       value={editLocation}
                       onChange={e => setEditLocation(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
@@ -835,7 +1000,7 @@ export default function VisitsPage() {
                       type="date"
                       value={editVisitDate}
                       onChange={e => setEditVisitDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -846,7 +1011,7 @@ export default function VisitsPage() {
                     <select
                       value={editOutcome}
                       onChange={e => setEditOutcome(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                       <option value="positive">Positive 🟢</option>
                       <option value="neutral">Neutral 🟡</option>
                       <option value="negative">Negative 🔴</option>
@@ -860,7 +1025,7 @@ export default function VisitsPage() {
                       placeholder="e.g. Send rate quotation"
                       value={editFollowup}
                       onChange={e => setEditFollowup(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -872,7 +1037,7 @@ export default function VisitsPage() {
                     placeholder="e.g. HR Coil 2.5mm x 1250mm"
                     value={editRequirement}
                     onChange={e => setEditRequirement(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -882,7 +1047,7 @@ export default function VisitsPage() {
                     rows={2}
                     value={editRemarks}
                     onChange={e => setEditRemarks(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -896,7 +1061,7 @@ export default function VisitsPage() {
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
+                    className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
                     <Check size={16} />
                     {actionLoading ? 'Saving...' : 'Save Changes'}
                   </button>
