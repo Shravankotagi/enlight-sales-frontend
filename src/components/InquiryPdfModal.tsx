@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Download, Check, Copy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { customersApi } from '../lib/api';
+import { customersApi, inquiriesApi } from '../lib/api';
 import { calculateQuotationBreakdown, formatIndianCurrency, normalizeUnit } from '../utils/pricingEngine';
 
 interface InquiryItem {
@@ -150,18 +150,56 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
     return viewingAs?.name || employee?.name || 'Vedant Goel';
   })();
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
   const handleCopyRef = () => {
     navigator.clipboard.writeText(piNumber);
     setCopiedRef(true);
     setTimeout(() => setCopiedRef(false), 2000);
   };
 
-  const handlePrintDownload = () => {
-    window.print();
+  const handlePrintDownload = async () => {
+    try {
+      setDownloadingPdf(true);
+      const res = await inquiriesApi.generatePdf({
+        piNumber,
+        companyName: details.companyName || (inquiry as any)?.customer_name || 'Customer',
+        customerPhone: details.customerPhone,
+        productType: details.productType,
+        thickness: details.thickness,
+        width: details.width,
+        length: details.length,
+        quantityTons: details.quantityTons,
+        unitPrice: details.unitPrice,
+        totalAmount: computedSubtotal,
+        paymentTerms: details.paymentTerms,
+        deliveryLocation: details.deliveryLocation || customerAddress,
+        customerAddress,
+        customerGstin,
+        salespersonName: salesperson,
+        lineItems,
+      });
+
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `Quotation_${piNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (e) {
+      console.warn('Direct PDF download fallback to print:', e);
+      window.print();
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   return (
     <div
+      id="printable-inquiry-modal"
       className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-[9999] animate-in fade-in duration-200"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -172,22 +210,47 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             size: A4 portrait;
             margin: 10mm 15mm;
           }
+          html, body {
+            height: auto !important;
+            min-height: 100% !important;
+            overflow: visible !important;
+            background: #ffffff !important;
+          }
           body * {
             visibility: hidden !important;
           }
-          #printable-inquiry-pdf, #printable-inquiry-pdf * {
+          #printable-inquiry-modal,
+          #printable-inquiry-modal * {
             visibility: visible !important;
           }
-          #printable-inquiry-pdf {
+          #printable-inquiry-modal {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-shadow: none !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            background: white !important;
             border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          #printable-inquiry-pdf,
+          #printable-inquiry-pdf * {
+            visibility: visible !important;
+          }
+          #printable-inquiry-pdf {
+            position: relative !important;
+            width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
             background: white !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -198,6 +261,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
           .page-break-before {
             page-break-before: always !important;
             break-before: page !important;
+            display: block !important;
+            height: auto !important;
+            padding-top: 15mm !important;
           }
         }
       `}</style>
@@ -227,9 +293,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
             <button
               type="button"
+              disabled={downloadingPdf}
               onClick={handlePrintDownload}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-colors">
-              <Download size={14} /> Download / Print PDF
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-60">
+              <Download size={14} /> {downloadingPdf ? 'Downloading...' : 'Download PDF'}
             </button>
 
             <button
