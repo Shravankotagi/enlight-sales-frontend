@@ -2049,18 +2049,18 @@ export default function InquiriesPage() {
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
                         <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[30%]">
+                        <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">HSN/SAC</th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[22%] text-center">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
                           Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
                           Rate (₹) <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
-                        <th className="px-2 py-3 text-center w-[3%]"></th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
+                        <th className="px-2 py-3 text-center w-[4%]"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
@@ -2179,7 +2179,7 @@ export default function InquiriesPage() {
                               className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                             />
                           </td>
-                          <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200">
+                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
                             <input
                               type="number"
                               min="0"
@@ -2195,7 +2195,7 @@ export default function InquiriesPage() {
                                 setSaveSuccess(false);
                               }}
                               placeholder="0"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                             />
                           </td>
                           <td className="px-2 py-3.5 text-center">
