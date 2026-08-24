@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical, AlertCircle
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical, AlertCircle, Loader2
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -674,6 +674,7 @@ export default function InquiriesPage() {
 
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
+  const [viewingDocLoading, setViewingDocLoading] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 25;
@@ -886,7 +887,19 @@ export default function InquiriesPage() {
 
   const handleOpenDrawer = (inq: InquiryItem) => {
     setSelectedInquiry(inq);
-    setDrawerFileBase64(null);
+    const initialMedia = (inq.media_urls?.[0] && (inq.media_urls[0].startsWith('data:') || inq.media_urls[0].startsWith('http'))) ? inq.media_urls[0] : null;
+    setDrawerFileBase64(initialMedia);
+
+    if (!initialMedia && (inq.has_media || inq.media_urls?.includes('attached_document') || (inq.raw_text && inq.raw_text.trim().startsWith('[Inquiry Attachment:')))) {
+      inquiriesApi.getOne(inq.id).then(res => {
+        const fullInq = res?.data?.data || res?.data;
+        const dbMedia = fullInq?.media_urls?.[0];
+        if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
+          setDrawerFileBase64(dbMedia);
+        }
+      }).catch(() => {});
+    }
+
     setShowEditDrawer(true);
     setShowEditCompanyDropdown(false);
 
@@ -1527,22 +1540,31 @@ export default function InquiriesPage() {
       return;
     }
 
-    // Immediately open text view for zero latency
-    setImageViewerUrl(`extracted_preview://${inq.id}`);
+    const isDocumentInquiry =
+      inq.has_media ||
+      inq.media_urls?.includes('attached_document') ||
+      (inq.raw_text && inq.raw_text.trim().startsWith('[Inquiry Attachment:'));
 
-    // If media is attached in DB, asynchronously fetch and upgrade viewer
-    if (inq.has_media || inq.media_urls?.includes('attached_document')) {
+    if (isDocumentInquiry) {
       try {
+        setViewingDocLoading(true);
         const res = await inquiriesApi.getOne(inq.id);
         const fullInq = res?.data?.data || res?.data;
         const dbMedia = fullInq?.media_urls?.[0];
         if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
+          setDrawerFileBase64(dbMedia);
           setImageViewerUrl(dbMedia);
+          return;
         }
       } catch (e) {
         console.warn('Error fetching full inquiry doc:', e);
+      } finally {
+        setViewingDocLoading(false);
       }
     }
+
+    // Only open text view if inquiry is genuinely a plain text inquiry
+    setImageViewerUrl(`extracted_preview://${inq.id}`);
   };
 
   return (
@@ -1923,9 +1945,15 @@ export default function InquiriesPage() {
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
+                  disabled={viewingDocLoading}
                   onClick={() => handleViewInquiryDocument(selectedInquiry)}
-                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300 shadow-2xs">
-                  <Eye size={14} className="text-slate-600" /> View Original Inquiry
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300 shadow-2xs">
+                  {viewingDocLoading ? (
+                    <Loader2 size={14} className="animate-spin text-blue-600" />
+                  ) : (
+                    <Eye size={14} className="text-slate-600" />
+                  )}
+                  <span>{viewingDocLoading ? 'Loading Document...' : 'View Original Inquiry'}</span>
                 </button>
 
                 <button
