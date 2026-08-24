@@ -24,6 +24,8 @@ interface InquiryItem {
   customer_name?: string;
   customer_phone?: string;
   sender_phone?: string;
+  salesperson_name?: string;
+  assigned_salesperson_name?: string;
   salesperson_phone?: string;
   raw_text?: string;
   inquiry_type?: string;
@@ -1688,11 +1690,24 @@ export default function InquiriesPage() {
                   const parsed = parseInquiryText(inq.raw_text || '', inq);
                   const ai = inq?.ai_extraction_json || {};
                   const lineItemsSrc = ai.line_items || ai.lineItems || [];
+                  const activeSalesperson =
+                    inq.salesperson_name ||
+                    (inq as any).assigned_salesperson_name ||
+                    (inq as any).salesperson ||
+                    ai.salespersonName ||
+                    ai.salesperson_name ||
+                    ai.salesperson ||
+                    parsed.salespersonName ||
+                    viewingAs?.name ||
+                    employee?.name ||
+                    'Vedant Goel';
+
                   if (lineItemsSrc.length > 0) {
                     return {
                       ...parsed,
                       companyName: parsed.companyName,
                       customerPhone: parsed.customerPhone,
+                      salespersonName: activeSalesperson,
                       lineItems: lineItemsSrc.map((item: any) => ({
                         sku_text: item.sku_text || item.sku || item.product_name || '',
                         dimensions: item.dimensions || '',
@@ -1705,7 +1720,10 @@ export default function InquiriesPage() {
                       totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
                     };
                   }
-                  return parsed;
+                  return {
+                    ...parsed,
+                    salespersonName: activeSalesperson,
+                  };
                 })();
                 const st = (inq.status || '').toLowerCase();
                 const isQuoted = st === 'quoted' || st === 'quotation_sent';
@@ -1794,7 +1812,7 @@ export default function InquiriesPage() {
                               }}
                               className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
                               <Eye size={14} className="text-slate-500 shrink-0" />
-                              <span>Final Quotation</span>
+                              <span>View PDF</span>
                             </button>
 
                             {(isConfirmed || isQuoted) && (
