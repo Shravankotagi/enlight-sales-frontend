@@ -14,7 +14,6 @@ import {
   Edit2,
   Trash2,
   Calendar,
-  Package,
   Check,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
@@ -229,7 +228,6 @@ export default function VisitsPage() {
   const [editOutcome, setEditOutcome] = useState('positive');
   const [editRemarks, setEditRemarks] = useState('');
   const [editFollowup, setEditFollowup] = useState('');
-  const [editRequirement, setEditRequirement] = useState('');
   const [editVisitDate, setEditVisitDate] = useState(formatLocalDate());
 
   const fetchVisits = async () => {
@@ -308,7 +306,6 @@ export default function VisitsPage() {
         .trim(),
     );
     setEditFollowup(v.follow_up_action || (v as any).followup || (v as any).follow_up || '');
-    setEditRequirement(v.material_requirement || (v as any).requirement || '');
   };
 
   const handleUpdateVisit = async (e: React.FormEvent) => {
@@ -325,7 +322,6 @@ export default function VisitsPage() {
         outcome: editOutcome,
         remarks: editRemarks,
         follow_up_action: editFollowup,
-        material_requirement: editRequirement,
         visited_at: new Date(editVisitDate).toISOString(),
       };
 
@@ -900,24 +896,9 @@ export default function VisitsPage() {
                   </div>
                 </div>
 
-                {/* Requirements Tag if any */}
-                {(selectedVisit.material_requirement || (selectedVisit as any).requirement) && (
-                  <div className="p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl flex items-center gap-2">
-                    <Package size={16} className="text-indigo-600 shrink-0" />
-                    <div>
-                      <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wide">
-                        Material Requirements Discussed
-                      </p>
-                      <p className="text-xs font-semibold text-indigo-700 mt-0.5">
-                        {selectedVisit.material_requirement || (selectedVisit as any).requirement}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Meeting Remarks */}
+                {/* Meeting Remarks & Requirements */}
                 <div className="p-3.5 bg-slate-50/70 border border-slate-200 rounded-xl space-y-1">
-                  <p className="text-xs font-semibold text-slate-500">Meeting Remarks &amp; Notes</p>
+                  <p className="text-xs font-semibold text-slate-500">Meeting Remarks &amp; Requirements</p>
                   <p className="text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap">
                     {(selectedVisit.raw_remarks || selectedVisit.remarks || '')
                       .replace(
@@ -1031,20 +1012,10 @@ export default function VisitsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Material Requirement</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. HR Coil 2.5mm x 1250mm"
-                    value={editRequirement}
-                    onChange={e => setEditRequirement(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Notes</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
                   <textarea
                     rows={2}
+                    placeholder="Details of discussion, product requirements..."
                     value={editRemarks}
                     onChange={e => setEditRemarks(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
