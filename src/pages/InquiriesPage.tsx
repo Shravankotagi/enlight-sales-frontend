@@ -731,6 +731,24 @@ export default function InquiriesPage() {
     }
   }, [showModal, showEditDrawer, showPdfModal, showQuotationModal, imageViewerUrl]);
 
+  const handleClearAllFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setDayPreset('30_days');
+    setShowCustomDate(false);
+    const defaultFrom = getDaysAgo(30);
+    const defaultTo = formatLocalDate();
+    setCustomFrom(defaultFrom);
+    setCustomTo(defaultTo);
+    setDateRange({
+      preset: '30_days' as any,
+      from: defaultFrom,
+      to: defaultTo,
+    });
+    setCurrentPage(1);
+    setOpenActionMenuId(null);
+  };
+
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
     const today = formatLocalDate();
@@ -754,12 +772,22 @@ export default function InquiriesPage() {
 
   const handleCustomFromChange = (val: string) => {
     setCustomFrom(val);
-    setDateRange({ preset: 'custom', from: val, to: customTo });
+    let effectiveTo = customTo;
+    if (val && customTo && val > customTo) {
+      effectiveTo = val;
+      setCustomTo(val);
+    }
+    setDateRange({ preset: 'custom', from: val, to: effectiveTo });
   };
 
   const handleCustomToChange = (val: string) => {
     setCustomTo(val);
-    setDateRange({ preset: 'custom', from: customFrom, to: val });
+    let effectiveFrom = customFrom;
+    if (val && customFrom && customFrom > val) {
+      effectiveFrom = val;
+      setCustomFrom(val);
+    }
+    setDateRange({ preset: 'custom', from: effectiveFrom, to: val });
   };
 
   // Form state for Manual Log & File Upload
@@ -1543,7 +1571,7 @@ export default function InquiriesPage() {
       {/* Filter & Search Bar - Compact Single Row */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          {/* 1. Compact Search Bar */}
+          {/* 1. Compact Search Bar with Clear (X) Icon */}
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
             <input
@@ -1551,8 +1579,17 @@ export default function InquiriesPage() {
               placeholder="Search Customer, Items, Date..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
+              className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                title="Clear Search">
+                <X size={14} />
+              </button>
+            )}
           </div>
 
           {/* 2. Days Filter Dropdown */}
@@ -1586,40 +1623,48 @@ export default function InquiriesPage() {
             </select>
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
+
+          {/* 4. Clear Filter Button */}
+          <button
+            type="button"
+            onClick={handleClearAllFilters}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs">
+            Clear Filter
+          </button>
         </div>
 
         {/* Custom Range Picker Inputs */}
         {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs">
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
             <span className="text-slate-500 font-semibold">From:</span>
             <input
               type="date"
               value={customFrom}
               onChange={e => handleCustomFromChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
             />
             <span className="text-slate-500 font-semibold">To:</span>
             <input
               type="date"
               value={customTo}
               onChange={e => handleCustomToChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
             />
           </div>
         )}
       </div>
 
       {/* Main Inquiries Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <th className="px-3 py-3.5 text-center w-[4%]">#</th>
-              <th className="px-5 py-3.5 text-left w-[24%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Items Summary</th>
+              <th className="px-5 py-3.5 text-left w-[28%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[24%]">Items Summary</th>
               <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
               <th className="px-4 py-3.5 text-center w-[18%]">Status</th>
-              <th className="px-4 py-3.5 text-center w-[26%]">Actions</th>
+              <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -1705,37 +1750,52 @@ export default function InquiriesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      {openActionMenuId === inq.id ? (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center justify-center gap-1.5 animate-in fade-in zoom-in-95 duration-100">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionMenuId(null);
-                              handleOpenDrawer(inq);
-                            }}
-                            className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 flex items-center gap-1 shadow-2xs">
-                            <Edit3 size={13} className="text-slate-600" />
-                            <span>Edit</span>
-                          </button>
+                      <div className="relative inline-block text-left">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionMenuId(prev => (prev === inq.id ? null : inq.id));
+                          }}
+                          className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all inline-flex items-center justify-center"
+                          title="Actions">
+                          <MoreVertical size={16} />
+                        </button>
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionMenuId(null);
-                              setPdfModalInquiry(inq);
-                              setPdfModalDetails(details);
-                              setShowPdfModal(true);
-                            }}
-                            className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 flex items-center gap-1 shadow-2xs">
-                            <Eye size={13} className="text-slate-600" />
-                            <span>View PDF</span>
-                          </button>
+                        {openActionMenuId === inq.id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className={`absolute right-0 ${
+                              idx >= paginatedInquiries.length - 2 && paginatedInquiries.length >= 3
+                                ? 'bottom-full mb-1'
+                                : 'top-full mt-1'
+                            } w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionMenuId(null);
+                                handleOpenDrawer(inq);
+                              }}
+                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
+                              <Edit3 size={14} className="text-slate-500 shrink-0" />
+                              <span>Edit</span>
+                            </button>
 
-                          {isConfirmed && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionMenuId(null);
+                                setPdfModalInquiry(inq);
+                                setPdfModalDetails(details);
+                                setShowPdfModal(true);
+                              }}
+                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
+                              <Eye size={14} className="text-slate-500 shrink-0" />
+                              <span>Final Quotation</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1746,23 +1806,13 @@ export default function InquiriesPage() {
                                 setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
                                 setShowQuotationModal(true);
                               }}
-                              className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 flex items-center gap-1 shadow-2xs">
-                              <Send size={13} className="text-slate-600" />
-                              <span>Share</span>
+                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
+                              <Send size={14} className="text-slate-500 shrink-0" />
+                              <span>Share Quotation</span>
                             </button>
-                          )}
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenActionMenuId(inq.id);
-                          }}
-                          className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all">
-                          <MoreVertical size={16} />
-                        </button>
-                      )}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
