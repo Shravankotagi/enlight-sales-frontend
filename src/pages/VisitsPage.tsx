@@ -15,6 +15,8 @@ import {
   Trash2,
   Calendar,
   Check,
+  MoreVertical,
+  Eye,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -55,6 +57,15 @@ export default function VisitsPage() {
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+
+  // Close active action dropdown when clicking outside
+  useEffect(() => {
+    if (!activeActionMenuId) return;
+    const handleClickOutside = () => setActiveActionMenuId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeActionMenuId]);
 
   // Fetch employees list for salesperson name mapping
   useEffect(() => {
@@ -289,9 +300,9 @@ export default function VisitsPage() {
     }
   };
 
-  const openVisitDetails = (v: CustomerVisit) => {
+  const openVisitDetails = (v: CustomerVisit, editMode = false) => {
     setSelectedVisit(v);
-    setIsEditing(false);
+    setIsEditing(editMode);
     setEditCustomerName(v.customer_name || '');
     setEditPersonMet(v.person_met && v.person_met !== 'null' ? v.person_met : '');
     setEditContactPhone(v.contact_phone || (v as any).contact_no || '');
@@ -522,19 +533,20 @@ export default function VisitsPage() {
                 <th className="px-4 py-3">Outcome</th>
                 <th className="px-4 py-3">Discussion &amp; Requirements</th>
                 <th className="px-4 py-3">Next Action</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline mr-2 text-blue-600" />
                     Loading visit logs...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
                     <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-slate-600 font-medium">No visit logs found.</p>
                     <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
@@ -572,8 +584,7 @@ export default function VisitsPage() {
                   return (
                     <tr
                       key={v.id || idx}
-                      onClick={() => openVisitDetails(v)}
-                      className="hover:bg-blue-50/40 cursor-pointer transition-colors group">
+                      className="hover:bg-slate-50/70 transition-colors group">
                       {/* 1. Customer & Date */}
                       <td className="px-4 py-3.5 min-w-[190px]">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
@@ -644,6 +655,60 @@ export default function VisitsPage() {
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
+                      </td>
+
+                      {/* 6. Actions (3-dots dropdown) */}
+                      <td className="px-4 py-3.5 text-right relative whitespace-nowrap">
+                        <div className="inline-block text-left">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveActionMenuId(prev => prev === v.id ? null : v.id);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                            title="Actions">
+                            <MoreVertical size={16} />
+                          </button>
+
+                          {activeActionMenuId === v.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-4 top-10 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1.5 min-w-[130px] text-left animate-in fade-in-50 duration-100">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  openVisitDetails(v, false);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors">
+                                <Eye size={14} className="text-slate-400" />
+                                View
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  openVisitDetails(v, true);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors">
+                                <Edit2 size={14} className="text-slate-400" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  setSelectedVisit(v);
+                                  setShowDeleteModal(true);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors border-t border-slate-100">
+                                <Trash2 size={14} className="text-rose-500" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -812,10 +877,10 @@ export default function VisitsPage() {
                         <Calendar size={12} />
                         {selectedVisit.visited_at
                           ? new Date(selectedVisit.visited_at).toLocaleDateString('en-IN', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })
                           : 'Recent Visit'}
                         {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
                         {canViewSalesperson && getSalespersonDisplayName(selectedVisit) && (
