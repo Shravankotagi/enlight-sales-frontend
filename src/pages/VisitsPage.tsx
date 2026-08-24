@@ -20,9 +20,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Save,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 import {
   getFirstDayOfMonth,
   getLastDayOfMonth,
@@ -64,6 +66,7 @@ export default function VisitsPage() {
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isSavedSuccess, setIsSavedSuccess] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 15;
@@ -292,6 +295,7 @@ export default function VisitsPage() {
     setFormFollowup('');
     setFormVisitDate(formatLocalDate());
     setFormErrors({});
+    setIsSavedSuccess(false);
     setShowModal(true);
   };
 
@@ -358,11 +362,26 @@ export default function VisitsPage() {
         visited_at: new Date(formVisitDate).toISOString(),
       });
 
-      setShowModal(false);
-      handleOpenAddModal(); // Reset form
-      fetchVisits();
-    } catch (err) {
+      setIsSavedSuccess(true);
+      toast.success('Visit log saved successfully!');
+
+      setTimeout(() => {
+        setIsSavedSuccess(false);
+        setShowModal(false);
+        setFormCustomerName('');
+        setFormPersonMet('');
+        setFormContactPhone('');
+        setFormLocation('');
+        setFormOutcome('positive');
+        setFormRemarks('');
+        setFormFollowup('');
+        setFormVisitDate(formatLocalDate());
+        setFormErrors({});
+        fetchVisits();
+      }, 800);
+    } catch (err: any) {
       console.error('Error creating visit:', err);
+      toast.error('Failed to save visit log. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -427,9 +446,11 @@ export default function VisitsPage() {
       setVisits(prev => prev.map(item => (item.id === selectedVisit.id ? updatedObj : item)));
       setSelectedVisit(updatedObj);
       setIsEditing(false);
+      toast.success('Visit details updated successfully!');
       await fetchVisits();
     } catch (err) {
       console.error('Error updating visit:', err);
+      toast.error('Failed to update visit details.');
     } finally {
       setActionLoading(false);
     }
@@ -448,9 +469,11 @@ export default function VisitsPage() {
       setVisits(prev => prev.filter(item => item.id !== selectedVisit.id));
       setShowDeleteModal(false);
       setSelectedVisit(null);
+      toast.success('Visit record deleted');
       fetchVisits();
     } catch (err) {
       console.error('Error deleting visit:', err);
+      toast.error('Failed to delete visit record.');
     } finally {
       setActionLoading(false);
     }
@@ -900,10 +923,17 @@ export default function VisitsPage() {
             </div>
 
             <form onSubmit={handleCreateVisit} className="flex flex-col flex-1 overflow-hidden mt-3">
-              <div className="overflow-y-auto flex-1 space-y-4 pr-1.5 py-1 text-xs">
+              <div className="overflow-y-auto flex-1 space-y-4 px-3.5 py-2.5 text-xs">
+                {isSavedSuccess && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-2 animate-fadeIn">
+                    <CheckCircle2 size={16} className="text-emerald-600" />
+                    Visit log saved successfully! Redirecting...
+                  </div>
+                )}
+
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-700">
+                    <label className="block font-semibold text-slate-700">
                       Customer / Company Name <span className="text-rose-500">*</span>
                     </label>
                   </div>
@@ -925,7 +955,7 @@ export default function VisitsPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block font-semibold text-slate-700 mb-1">
                       Person Met <span className="text-rose-500">*</span>
                     </label>
                     <input
@@ -946,7 +976,7 @@ export default function VisitsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block font-semibold text-slate-700 mb-1">
                       Contact Phone <span className="text-rose-500">*</span>
                     </label>
                     <input
@@ -969,7 +999,7 @@ export default function VisitsPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block font-semibold text-slate-700 mb-1">
                       City / Location <span className="text-rose-500">*</span>
                     </label>
                     <input
@@ -990,7 +1020,7 @@ export default function VisitsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block font-semibold text-slate-700 mb-1">
                       Visit Date <span className="text-rose-500">*</span>
                     </label>
                     <input
@@ -1012,7 +1042,7 @@ export default function VisitsPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block font-semibold text-slate-700 mb-1">
                       Visit Outcome <span className="text-rose-500">*</span>
                     </label>
                     <select
@@ -1021,7 +1051,7 @@ export default function VisitsPage() {
                         setFormOutcome(e.target.value);
                         if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer">
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
                       <option value="positive">Positive</option>
                       <option value="neutral">Neutral</option>
                       <option value="negative">Negative</option>
@@ -1029,19 +1059,19 @@ export default function VisitsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Follow-up Action</label>
                     <input
                       type="text"
                       placeholder="e.g. Send rate quotation"
                       value={formFollowup}
                       onChange={e => setFormFollowup(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block font-semibold text-slate-700 mb-1">
                     Meeting Remarks &amp; Requirements <span className="text-rose-500">*</span>
                   </label>
                   <textarea
@@ -1052,7 +1082,7 @@ export default function VisitsPage() {
                       setFormRemarks(e.target.value);
                       if (formErrors.remarks) setFormErrors(prev => ({ ...prev, remarks: false }));
                     }}
-                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
                       formErrors.remarks ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
                     }`}
                   />
@@ -1062,7 +1092,7 @@ export default function VisitsPage() {
                 </div>
               </div>
 
-              {/* Action Buttons matching Inquiry style */}
+              {/* Action Buttons matching Inquiry tab pattern (Save Icon & Primary styling) */}
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0 mt-3">
                 <button
                   type="button"
@@ -1072,9 +1102,10 @@ export default function VisitsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5">
-                  {submitting ? <RefreshCw size={14} className="animate-spin" /> : 'Save Visit Log'}
+                  disabled={submitting || isSavedSuccess}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50">
+                  <Save size={15} />
+                  {submitting ? 'Saving...' : isSavedSuccess ? 'Saved!' : 'Save Visit Log'}
                 </button>
               </div>
             </form>
@@ -1115,7 +1146,7 @@ export default function VisitsPage() {
                 </div>
               </div>
 
-              {/* Header Right: Outcome Badge (View Mode) & Close Button (No Duplicate Cancel Button) */}
+              {/* Header Right: Outcome Badge (View Mode) & Close Button */}
               <div className="flex items-center gap-2">
                 {!isEditing && (
                   <div>
@@ -1215,7 +1246,7 @@ export default function VisitsPage() {
             ) : (
               /* Edit Mode Form */
               <form onSubmit={handleUpdateVisit} className="flex flex-col flex-1 overflow-hidden mt-3 text-xs">
-                <div className="overflow-y-auto flex-1 space-y-3.5 pr-1.5 py-1">
+                <div className="overflow-y-auto flex-1 space-y-3.5 px-3.5 py-2.5">
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block font-semibold text-slate-700">
@@ -1324,7 +1355,7 @@ export default function VisitsPage() {
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5 cursor-pointer">
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer">
                     <Check size={15} />
                     {actionLoading ? 'Saving...' : 'Save'}
                   </button>
