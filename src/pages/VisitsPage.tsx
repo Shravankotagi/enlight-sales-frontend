@@ -651,9 +651,9 @@ export default function VisitsPage() {
 
       {/* Log Visit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <MapPin className="text-blue-600" size={20} />
                 Log Customer Field Visit
@@ -665,108 +665,110 @@ export default function VisitsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateVisit} className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Customer / Company Name *
-                  </label>
-                  <span className="text-[11px] text-slate-400 font-normal">Select existing or type new</span>
-                </div>
-                <CustomerCombobox
-                  value={formCustomerName}
-                  onChange={setFormCustomerName}
-                  onSelectCustomer={handleSelectCustomerForCreate}
-                  customers={customerDirectory}
-                  placeholder="Select existing customer or type new..."
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateVisit} className="flex flex-col flex-1 overflow-hidden mt-3">
+              <div className="overflow-y-auto flex-1 space-y-4 pr-1.5 py-1">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Person Met</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Suresh Patel"
-                    value={formPersonMet}
-                    onChange={e => setFormPersonMet(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Customer / Company Name *
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-normal">Select existing or type new</span>
+                  </div>
+                  <CustomerCombobox
+                    value={formCustomerName}
+                    onChange={setFormCustomerName}
+                    onSelectCustomer={handleSelectCustomerForCreate}
+                    customers={customerDirectory}
+                    placeholder="Select existing customer or type new..."
+                    required
                   />
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Person Met</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Suresh Patel"
+                      value={formPersonMet}
+                      onChange={e => setFormPersonMet(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 9822012345"
+                      value={formContactPhone}
+                      onChange={e => setFormContactPhone(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">City / Location</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Chakan, Pune"
+                      value={formLocation}
+                      onChange={e => setFormLocation(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Date</label>
+                    <input
+                      type="date"
+                      value={formVisitDate}
+                      onChange={e => setFormVisitDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Outcome</label>
+                    <select
+                      value={formOutcome}
+                      onChange={e => setFormOutcome(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                      <option value="positive">Positive 🟢</option>
+                      <option value="neutral">Neutral 🟡</option>
+                      <option value="negative">Negative 🔴</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Send rate quotation"
+                      value={formFollowup}
+                      onChange={e => setFormFollowup(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 9822012345"
-                    value={formContactPhone}
-                    onChange={e => setFormContactPhone(e.target.value)}
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Details of discussion, product requirements..."
+                    value={formRemarks}
+                    onChange={e => setFormRemarks(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">City / Location</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Chakan, Pune"
-                    value={formLocation}
-                    onChange={e => setFormLocation(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Date</label>
-                  <input
-                    type="date"
-                    value={formVisitDate}
-                    onChange={e => setFormVisitDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Outcome</label>
-                  <select
-                    value={formOutcome}
-                    onChange={e => setFormOutcome(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                    <option value="positive">Positive 🟢</option>
-                    <option value="neutral">Neutral 🟡</option>
-                    <option value="negative">Negative 🔴</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Send rate quotation"
-                    value={formFollowup}
-                    onChange={e => setFormFollowup(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
-                <textarea
-                  rows={2}
-                  placeholder="Details of discussion, product requirements..."
-                  value={formRemarks}
-                  onChange={e => setFormRemarks(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0 mt-3">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
@@ -787,10 +789,10 @@ export default function VisitsPage() {
 
       {/* Interactive Visit Details & Edit Modal */}
       {selectedVisit && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
             {/* Modal Header */}
-            <div className="flex justify-between items-start pb-3 border-b border-slate-100">
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="p-2 bg-blue-50 text-blue-600 rounded-lg">
@@ -856,7 +858,7 @@ export default function VisitsPage() {
 
             {/* View Mode */}
             {!isEditing ? (
-              <div className="space-y-4">
+              <div className="overflow-y-auto flex-1 space-y-4 pr-1.5 py-3">
                 {/* Status & Outcome Banner */}
                 <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-xs font-semibold text-slate-600">Visit Outcome Status:</span>
@@ -924,105 +926,107 @@ export default function VisitsPage() {
               </div>
             ) : (
               /* Edit Mode Form */
-              <form onSubmit={handleUpdateVisit} className="space-y-3.5">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Customer / Company Name *
-                    </label>
-                    <span className="text-[11px] text-slate-400 font-normal">Select existing or type new</span>
-                  </div>
-                  <CustomerCombobox
-                    value={editCustomerName}
-                    onChange={setEditCustomerName}
-                    onSelectCustomer={handleSelectCustomerForEdit}
-                    customers={customerDirectory}
-                    placeholder="Select existing customer or type new..."
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleUpdateVisit} className="flex flex-col flex-1 overflow-hidden mt-3">
+                <div className="overflow-y-auto flex-1 space-y-3.5 pr-1.5 py-1">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Person Met</label>
-                    <input
-                      type="text"
-                      value={editPersonMet}
-                      onChange={e => setEditPersonMet(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Customer / Company Name *
+                      </label>
+                      <span className="text-[11px] text-slate-400 font-normal">Select existing or type new</span>
+                    </div>
+                    <CustomerCombobox
+                      value={editCustomerName}
+                      onChange={setEditCustomerName}
+                      onSelectCustomer={handleSelectCustomerForEdit}
+                      customers={customerDirectory}
+                      placeholder="Select existing customer or type new..."
+                      required
                     />
                   </div>
 
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Person Met</label>
+                      <input
+                        type="text"
+                        value={editPersonMet}
+                        onChange={e => setEditPersonMet(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
+                      <input
+                        type="text"
+                        value={editContactPhone}
+                        onChange={e => setEditContactPhone(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">City / Location</label>
+                      <input
+                        type="text"
+                        value={editLocation}
+                        onChange={e => setEditLocation(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Date</label>
+                      <input
+                        type="date"
+                        value={editVisitDate}
+                        onChange={e => setEditVisitDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Outcome</label>
+                      <select
+                        value={editOutcome}
+                        onChange={e => setEditOutcome(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="positive">Positive 🟢</option>
+                        <option value="neutral">Neutral 🟡</option>
+                        <option value="negative">Negative 🔴</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Send rate quotation"
+                        value={editFollowup}
+                        onChange={e => setEditFollowup(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
-                    <input
-                      type="text"
-                      value={editContactPhone}
-                      onChange={e => setEditContactPhone(e.target.value)}
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Details of discussion, product requirements..."
+                      value={editRemarks}
+                      onChange={e => setEditRemarks(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">City / Location</label>
-                    <input
-                      type="text"
-                      value={editLocation}
-                      onChange={e => setEditLocation(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Date</label>
-                    <input
-                      type="date"
-                      value={editVisitDate}
-                      onChange={e => setEditVisitDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Visit Outcome</label>
-                    <select
-                      value={editOutcome}
-                      onChange={e => setEditOutcome(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                      <option value="positive">Positive 🟢</option>
-                      <option value="neutral">Neutral 🟡</option>
-                      <option value="negative">Negative 🔴</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Follow-up Action</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Send rate quotation"
-                      value={editFollowup}
-                      onChange={e => setEditFollowup(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Meeting Remarks &amp; Requirements</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Details of discussion, product requirements..."
-                    value={editRemarks}
-                    onChange={e => setEditRemarks(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
+                <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0 mt-3">
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
