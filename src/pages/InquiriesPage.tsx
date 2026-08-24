@@ -6,7 +6,7 @@ import {
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical, AlertCircle, Loader2
 } from 'lucide-react';
-import { inquiriesApi, customersApi } from '../lib/api';
+import { inquiriesApi, customersApi, employeesApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -859,6 +859,61 @@ export default function InquiriesPage() {
     },
   });
 
+  const { data: rawEmployees = [] } = useQuery<any[]>({
+    queryKey: ['employees-list-inquiries'],
+    queryFn: async () => {
+      const res = await employeesApi.getAll().catch(() => null);
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const getSalespersonName = (inq?: InquiryItem | null, details?: ExtractedDetails | null) => {
+    if (details?.salespersonName && details.salespersonName !== 'Sales Representative' && details.salespersonName !== 'Unknown') {
+      return details.salespersonName;
+    }
+    if ((inq as any)?.salesperson_name && (inq as any).salesperson_name !== 'Sales Representative') {
+      return (inq as any).salesperson_name;
+    }
+    if ((inq as any)?.assigned_salesperson_name && (inq as any).assigned_salesperson_name !== 'Sales Representative') {
+      return (inq as any).assigned_salesperson_name;
+    }
+    if ((inq as any)?.salesperson && (inq as any).salesperson !== 'Sales Representative') {
+      return (inq as any).salesperson;
+    }
+
+    const ai = (inq?.ai_extraction_json as any) || {};
+    if (ai.salespersonName && ai.salespersonName !== 'Sales Representative') return ai.salespersonName;
+    if (ai.salesperson_name && ai.salesperson_name !== 'Sales Representative') return ai.salesperson_name;
+
+    const phone = ((inq?.salesperson_phone || inq?.sender_phone || '') as string).replace(/\D/g, '');
+    if (phone && rawEmployees && rawEmployees.length > 0) {
+      const p10 = phone.slice(-10);
+      const found = rawEmployees.find((e: any) => {
+        const ePhone = (e.phone || '').replace(/\D/g, '');
+        return ePhone.endsWith(p10) || p10.endsWith(ePhone.slice(-10));
+      });
+      if (found?.name) return found.name;
+    }
+
+    if (inq?.sender_name && rawEmployees && rawEmployees.length > 0) {
+      const sName = inq.sender_name.toLowerCase().trim();
+      if (!sName.includes('unknown') && !sName.includes('customer') && !sName.includes('retail') && !sName.includes('steel') && !sName.includes('ltd')) {
+        const found = rawEmployees.find((e: any) =>
+          (e.name || '').toLowerCase().trim() === sName ||
+          sName.includes((e.name || '').toLowerCase().trim())
+        );
+        if (found?.name) return found.name;
+      }
+    }
+
+    if (viewingAs?.name) return viewingAs.name;
+    if (employee && !employee.role?.toLowerCase().includes('admin')) return employee.name;
+
+    return 'Max';
+  };
+
   useEffect(() => {
     if (Array.isArray(rawInquiries)) {
       setInquiries(prev => {
@@ -908,6 +963,7 @@ export default function InquiriesPage() {
 
     const ai = (inq.ai_extraction_json as any) || {};
     const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
+    const resolvedSp = getSalespersonName(inq);
 
     if (lineItemsSrc.length > 0) {
       // Has structured line items in ai_extraction_json — use directly for ALL inquiries (review, confirmed, etc.)
@@ -930,7 +986,7 @@ export default function InquiriesPage() {
       setEditDetails({
         companyName: parsed.companyName || '',
         customerPhone: parsed.customerPhone || '',
-        salespersonName: activeSalespersonName,
+        salespersonName: resolvedSp,
         productType: frozenLineItems[0]?.sku_text || ai.productType || 'Hot Rolled',
         thickness: ai.thickness || '',
         width: ai.width || '',
@@ -950,7 +1006,7 @@ export default function InquiriesPage() {
       const parsed = parseInquiryText(inq.raw_text || '', inq);
       setEditDetails({
         ...parsed,
-        salespersonName: activeSalespersonName,
+        salespersonName: resolvedSp,
       });
     }
 
@@ -2036,7 +2092,7 @@ export default function InquiriesPage() {
                     </label>
                     <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs">
                       <User size={15} className="text-blue-600 shrink-0" />
-                      <span className="truncate">{activeSalespersonName}</span>
+                      <span className="truncate">{editDetails.salespersonName || getSalespersonName(selectedInquiry)}</span>
                     </div>
                   </div>
                 </div>
