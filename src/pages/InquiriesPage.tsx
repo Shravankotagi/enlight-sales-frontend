@@ -705,14 +705,29 @@ export default function InquiriesPage() {
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
     const isAnyModalOpen = showModal || showEditDrawer || showPdfModal || showQuotationModal || !!imageViewerUrl;
+    const body = document.body;
+    const docEl = document.documentElement;
+    const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
+
     if (isAnyModalOpen) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
+      body.style.overflow = 'hidden';
+      docEl.style.overflow = 'hidden';
+      if (mainLayoutContainer) {
+        mainLayoutContainer.style.overflow = 'hidden';
+      }
       return () => {
-        document.body.style.overflow = originalOverflow || 'unset';
+        body.style.overflow = 'unset';
+        docEl.style.overflow = 'unset';
+        if (mainLayoutContainer) {
+          mainLayoutContainer.style.overflow = 'auto';
+        }
       };
     } else {
-      document.body.style.overflow = 'unset';
+      body.style.overflow = 'unset';
+      docEl.style.overflow = 'unset';
+      if (mainLayoutContainer) {
+        mainLayoutContainer.style.overflow = 'auto';
+      }
     }
   }, [showModal, showEditDrawer, showPdfModal, showQuotationModal, imageViewerUrl]);
 
@@ -1813,10 +1828,10 @@ export default function InquiriesPage() {
       {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
       {showEditDrawer && selectedInquiry && editDetails && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-150"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overscroll-contain animate-in fade-in duration-150"
           onClick={handleCloseDrawer}>
           <div
-            className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto"
+            className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={e => e.stopPropagation()}>
             {/* Drawer Header (Fixed Top) */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
@@ -1851,7 +1866,7 @@ export default function InquiriesPage() {
             </div>
 
             {/* Scrollable Content Body */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+            <div className="p-6 overflow-y-auto flex-1 space-y-6 overscroll-contain">
 
               {/* Editable Fields Form */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
@@ -2177,7 +2192,7 @@ export default function InquiriesPage() {
                   <div className="p-4 bg-transparent border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
                       <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
-                        Delivery Address / Location <span className="text-red-500 font-bold">*</span>
+                        Delivery Address <span className="text-red-500 font-bold">*</span>
                       </span>
                       <input
                         type="text"
@@ -2518,8 +2533,8 @@ export default function InquiriesPage() {
 
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto my-auto">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overscroll-contain animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto my-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={22} />
