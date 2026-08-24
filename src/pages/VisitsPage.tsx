@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   MapPin,
   Plus,
@@ -14,7 +15,6 @@ import {
   Edit2,
   Trash2,
   Calendar,
-  Check,
   MoreVertical,
   Eye,
   ChevronLeft,
@@ -55,6 +55,7 @@ interface CustomerVisit {
 }
 
 export default function VisitsPage() {
+  const navigate = useNavigate();
   const { isSalesManager, isAdmin } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
@@ -378,7 +379,8 @@ export default function VisitsPage() {
         setFormVisitDate(formatLocalDate());
         setFormErrors({});
         fetchVisits();
-      }, 800);
+        navigate('/visits');
+      }, 600);
     } catch (err: any) {
       console.error('Error creating visit:', err);
       toast.error('Failed to save visit log. Please try again.');
@@ -448,6 +450,7 @@ export default function VisitsPage() {
       setIsEditing(false);
       toast.success('Visit details updated successfully!');
       await fetchVisits();
+      navigate('/visits');
     } catch (err) {
       console.error('Error updating visit:', err);
       toast.error('Failed to update visit details.');
@@ -1092,20 +1095,20 @@ export default function VisitsPage() {
                 </div>
               </div>
 
-              {/* Action Buttons matching Inquiry tab pattern (Save Icon & Primary styling) */}
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0 mt-3">
+              {/* Action Buttons with Pill-Shaped "Save" Button */}
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all shadow-2xs cursor-pointer">
+                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting || isSavedSuccess}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50">
-                  <Save size={15} />
-                  {submitting ? 'Saving...' : isSavedSuccess ? 'Saved!' : 'Save Visit Log'}
+                  className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50">
+                  <Save size={16} />
+                  {submitting ? 'Saving...' : isSavedSuccess ? 'Saved!' : 'Save'}
                 </button>
               </div>
             </form>
@@ -1344,19 +1347,19 @@ export default function VisitsPage() {
                   </div>
                 </div>
 
-                {/* Single Cancel button in footer */}
-                <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0 mt-3">
+                {/* Single Pill-Shaped Cancel/Save buttons in footer */}
+                <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all shadow-2xs cursor-pointer">
+                    className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer">
-                    <Check size={15} />
+                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50">
+                    <Save size={16} />
                     {actionLoading ? 'Saving...' : 'Save'}
                   </button>
                 </div>
