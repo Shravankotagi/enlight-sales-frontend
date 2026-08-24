@@ -300,8 +300,9 @@ export default function VisitsPage() {
       v.visited_at ? new Date(v.visited_at).toISOString().split('T')[0] : formatLocalDate(),
     );
     setEditOutcome(getNormalizedOutcome(v));
+    const remarksSource = v.remarks || v.raw_remarks || '';
     setEditRemarks(
-      (v.raw_remarks || v.remarks || '')
+      remarksSource
         .replace(/\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi, '')
         .trim(),
     );
@@ -314,14 +315,18 @@ export default function VisitsPage() {
 
     try {
       setActionLoading(true);
+      const cleanRemarks = editRemarks.trim();
       const updatedData = {
-        customer_name: editCustomerName,
-        person_met: editPersonMet,
-        contact_phone: editContactPhone,
-        location: editLocation,
+        customer_name: editCustomerName.trim(),
+        person_met: editPersonMet.trim(),
+        contact_phone: editContactPhone.trim(),
+        contact_no: editContactPhone.trim(),
+        location: editLocation.trim(),
+        customer_address: editLocation.trim(),
         outcome: editOutcome,
-        remarks: editRemarks,
-        follow_up_action: editFollowup,
+        remarks: cleanRemarks,
+        raw_remarks: cleanRemarks,
+        follow_up_action: editFollowup.trim(),
         visited_at: new Date(editVisitDate).toISOString(),
       };
 
@@ -335,7 +340,7 @@ export default function VisitsPage() {
       setVisits(prev => prev.map(item => (item.id === selectedVisit.id ? updatedObj : item)));
       setSelectedVisit(updatedObj);
       setIsEditing(false);
-      fetchVisits();
+      await fetchVisits();
     } catch (err) {
       console.error('Error updating visit:', err);
       alert('Failed to update visit details. Please try again.');
@@ -540,7 +545,7 @@ export default function VisitsPage() {
                   const outcomeLower = getNormalizedOutcome(v);
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const loc = v.location || (v as any).city || (v as any).customer_address || '-';
-                  const rawRemarks = v.raw_remarks || v.remarks || '';
+                  const rawRemarks = v.remarks || v.raw_remarks || '';
                   const salespersonName = getSalespersonDisplayName(v);
 
                   // Follow-up Action Extraction
@@ -902,7 +907,7 @@ export default function VisitsPage() {
                 <div className="p-3.5 bg-slate-50/70 border border-slate-200 rounded-xl space-y-1">
                   <p className="text-xs font-semibold text-slate-500">Meeting Remarks &amp; Requirements</p>
                   <p className="text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap">
-                    {(selectedVisit.raw_remarks || selectedVisit.remarks || '')
+                    {(selectedVisit.remarks || selectedVisit.raw_remarks || '')
                       .replace(
                         /\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi,
                         '',
