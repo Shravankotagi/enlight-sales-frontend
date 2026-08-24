@@ -15,22 +15,17 @@ import {
   FileText,
   ExternalLink,
   ImageIcon,
-  User,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Edit3,
   Send,
   MoreVertical,
-  AlertCircle,
   RefreshCw,
-  Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ordersApi, inquiriesApi, dealsApi, customersApi, employeesApi } from '../lib/api';
+import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import InquiryPdfModal from '../components/InquiryPdfModal';
 import { useAuth } from '../context/AuthContext';
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
 import { calculateQuotationBreakdown } from '../utils/pricingEngine';
@@ -74,18 +69,6 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
-}
-
-interface OrderEditDetails {
-  companyName: string;
-  customerPhone: string;
-  salespersonName: string;
-  poNumber: string;
-  poDate: string;
-  deliveryLocation: string;
-  paymentTerms: string;
-  lineItems: LineItemDetail[];
-  totalAmount: number;
 }
 
 export function formatDeliveryLocation(raw?: string): string {
@@ -216,38 +199,7 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs } = useAuth();
-
-  const { data: rawEmployees = [] } = useQuery<{ id: string; name: string; phone: string }[]>({
-    queryKey: ['employees-list-all'],
-    queryFn: async () => {
-      const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-    },
-    staleTime: 60000,
-  });
-
-  const getSalespersonName = (order?: Order | null) => {
-    if (!order) return viewingAs?.name || employee?.name || 'Vedant Goel';
-    if ((order as any).salesperson_name) return (order as any).salesperson_name;
-    if ((order as any).assigned_salesperson_name) return (order as any).assigned_salesperson_name;
-    if ((order as any).salesperson) return (order as any).salesperson;
-
-    const phone = (order.salesperson_phone || '').replace(/\D/g, '');
-    if (phone) {
-      const p10 = phone.slice(-10);
-      const found = rawEmployees.find(e => {
-        const ePhone = (e.phone || '').replace(/\D/g, '');
-        return ePhone.endsWith(p10) || p10.endsWith(ePhone.slice(-10));
-      });
-      if (found?.name) return found.name;
-    }
-
-    if (viewingAs?.name) return viewingAs.name;
-    if (employee?.name) return employee.name;
-    return 'Vedant Goel';
-  };
+  const { effectivePhone } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
@@ -316,20 +268,6 @@ export default function OrdersPage() {
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
 
-  // Edit Order Modal States (Matching Img 4)
-  const [editOrder, setEditOrder] = useState<Order | null>(null);
-  const [editOrderDetails, setEditOrderDetails] = useState<OrderEditDetails | null>(null);
-  const [showEditOrderModal, setShowEditOrderModal] = useState(false);
-  const [showEditOrderCompanyDropdown, setShowEditOrderCompanyDropdown] = useState(false);
-  const [editOrderSubmitting, setEditOrderSubmitting] = useState(false);
-  const [editOrderError, setEditOrderError] = useState<string | null>(null);
-  const [editOrderSuccess, setEditOrderSuccess] = useState(false);
-
-  // PDF Quotation / Order Modal
-  const [showPdfModal, setShowPdfModal] = useState(false);
-  const [pdfModalOrder, setPdfModalOrder] = useState<Order | null>(null);
-  const [pdfModalDetails, setPdfModalDetails] = useState<any>(null);
-
   // Send / Share Modal
   const [showSendModal, setShowSendModal] = useState(false);
   const [shareOrder, setShareOrder] = useState<Order | null>(null);
@@ -346,8 +284,6 @@ export default function OrdersPage() {
   useEffect(() => {
     const isAnyModalOpen =
       showModal ||
-      showEditOrderModal ||
-      showPdfModal ||
       showSendModal ||
       !!poImageViewerUrl;
     const body = document.body;
@@ -376,8 +312,6 @@ export default function OrdersPage() {
     }
   }, [
     showModal,
-    showEditOrderModal,
-    showPdfModal,
     showSendModal,
     poImageViewerUrl,
   ]);
@@ -391,18 +325,20 @@ export default function OrdersPage() {
   const [formCustomerPhone, setFormCustomerPhone] = useState('');
   const [formPoNumber, setFormPoNumber] = useState('');
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
-  const [formProductSKU, setFormProductSKU] = useState('');
-  const [formQuantity, setFormQuantity] = useState('');
-  const [formRate, setFormRate] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
-  const [formExtractedItems, setFormExtractedItems] = useState<DealItem[]>([]);
+  const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
+    {
+      sku_text: '',
+      dimensions: '',
+      hsn_code: '7208',
+      quantity: 0,
+      unit: 'MT',
+      rate: 0,
+      amount: 0,
+    },
+  ]);
   const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
-
-  // Commercial breakdown state
-  const [formBasicAmount, setFormBasicAmount] = useState<number>(0);
-  const [formGstAmount, setFormGstAmount] = useState<number>(0);
-  const [formGrandTotal, setFormGrandTotal] = useState<number>(0);
 
   const isPdf = (url?: string) => {
     if (!url) return false;
@@ -460,50 +396,17 @@ export default function OrdersPage() {
             setFormPaymentTerms(extraction.payment_terms);
           }
 
-          if (extraction.basic_amount || extraction.po_basic_value) {
-            setFormBasicAmount(Number(extraction.basic_amount || extraction.po_basic_value) || 0);
-          }
-          if (extraction.gst_amount || extraction.tax_amount) {
-            setFormGstAmount(Number(extraction.gst_amount || extraction.tax_amount) || 0);
-          }
-          if (extraction.total_amount || extraction.grand_total) {
-            setFormGrandTotal(Number(extraction.total_amount || extraction.grand_total) || 0);
-          }
-
           if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
-            const mappedItems: DealItem[] = extraction.line_items.map((i: any) => ({
+            const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => ({
               sku_text: i.sku_text || i.description || 'Material',
               dimensions: i.dimensions || '',
+              hsn_code: i.hsn_code || i.hsn || '7208',
               quantity: Number(i.quantity) || 0,
               unit: i.unit || 'MT',
               rate: Number(i.rate) || 0,
               amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
             }));
-            setFormExtractedItems(mappedItems);
-
-            const totalQty = mappedItems.reduce((s, i) => s + (i.quantity || 0), 0);
-            const totalAmt = mappedItems.reduce((s, i) => s + (i.amount || 0), 0);
-            const avgRate = totalQty > 0 ? Math.round(totalAmt / totalQty) : (mappedItems[0]?.rate || 0);
-
-            if (mappedItems.length === 1) {
-              const item = mappedItems[0];
-              const skuText = item.sku_text || 'Material';
-              const dimStr = item.dimensions && !skuText.includes(item.dimensions) ? ` (${item.dimensions})` : '';
-              setFormProductSKU(`1. ${skuText}${dimStr} - ${item.quantity} ${item.unit || 'MT'}`);
-            } else {
-              setFormProductSKU(
-                mappedItems
-                  .map((i, idx) => {
-                    const skuText = i.sku_text || 'Material';
-                    const dimStr = i.dimensions && !skuText.includes(i.dimensions) ? ` (${i.dimensions})` : '';
-                    return `${idx + 1}. ${skuText}${dimStr} - ${i.quantity} ${i.unit || 'MT'}`;
-                  })
-                  .join('\n')
-              );
-            }
-
-            setFormQuantity(totalQty > 0 ? String(totalQty) : '');
-            setFormRate(avgRate > 0 ? String(avgRate) : '');
+            setFormLineItems(mappedItems);
           }
 
           toast.success('PO Document parsed! Fields auto-filled.');
@@ -517,27 +420,6 @@ export default function OrdersPage() {
     };
     reader.readAsDataURL(file);
   };
-
-  const basicValue =
-    formBasicAmount > 0
-      ? formBasicAmount
-      : formExtractedItems.length > 0
-      ? formExtractedItems.reduce((s, i) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0)
-      : Math.round((Number(formQuantity) || 0) * (Number(formRate) || 0));
-
-  const gstValue =
-    formGstAmount > 0
-      ? formGstAmount
-      : basicValue > 0
-      ? Math.round(basicValue * 0.18)
-      : 0;
-
-  const totalDealValue =
-    formGrandTotal > 0
-      ? formGrandTotal
-      : basicValue > 0
-      ? basicValue + gstValue
-      : 0;
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -553,56 +435,33 @@ export default function OrdersPage() {
       toast.error('Please select PO Date');
       return;
     }
-    if (!formProductSKU.trim()) {
-      toast.error('Please enter Product Description / SKU');
-      return;
-    }
-    const qty = Number(formQuantity) || 0;
-    if (qty <= 0) {
-      toast.error('Please enter valid Quantity');
-      return;
-    }
-    const rate = Number(formRate) || 0;
     if (!formDeliveryLocation.trim()) {
       toast.error('Please enter Delivery Location');
       return;
     }
+    if (formLineItems.length === 0) {
+      toast.error('Please add at least one line item');
+      return;
+    }
 
-    const computedAmt = qty > 0 && rate > 0 ? qty * rate : 0;
-
-    let lineItemsToSend = formExtractedItems;
-    if (lineItemsToSend.length === 0 && formProductSKU.trim()) {
-      try {
-        const textExtractRes = await inquiriesApi.parseText({
-          text: `${formProductSKU} Quantity: ${formQuantity} MT Rate: ${formRate || 0} Delivery: ${formDeliveryLocation} Payment: ${formPaymentTerms || '30 days'}`,
-        });
-        const extractedData = textExtractRes?.data?.data || textExtractRes?.data;
-        if (Array.isArray(extractedData?.line_items) && extractedData.line_items.length > 0) {
-          lineItemsToSend = extractedData.line_items.map((i: any) => ({
-            sku_text: i.sku_text || i.sku || i.product_name || i.description || formProductSKU,
-            dimensions: i.dimensions || '',
-            quantity: Number(i.quantity) || qty || 0,
-            unit: i.unit || 'MT',
-            rate: Number(i.rate) || rate || 0,
-            amount: Number(i.amount) || Math.round((Number(i.quantity) || qty || 0) * (Number(i.rate) || rate || 0)),
-          }));
-        }
-      } catch (e) {
-        console.warn('Fallback manual single line item for order creation');
+    for (let i = 0; i < formLineItems.length; i++) {
+      const item = formLineItems[i];
+      if (!item.sku_text.trim()) {
+        toast.error(`Line Item #${i + 1}: Description & Specifications is required.`);
+        return;
+      }
+      if (item.quantity <= 0) {
+        toast.error(`Line Item #${i + 1}: Quantity must be greater than 0.`);
+        return;
+      }
+      if (item.rate <= 0) {
+        toast.error(`Line Item #${i + 1}: Rate must be greater than 0.`);
+        return;
       }
     }
 
-    if (lineItemsToSend.length === 0 && formProductSKU.trim()) {
-      lineItemsToSend = [{
-        sku_text: formProductSKU.trim(),
-        quantity: qty,
-        unit: 'MT',
-        rate: rate,
-        amount: computedAmt,
-      }];
-    }
-
-    const finalOrderValue = totalDealValue > 0 ? totalDealValue : (basicValue > 0 ? basicValue : computedAmt);
+    const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const qBreakdown = calculateQuotationBreakdown(subtotal);
 
     try {
       setSubmitting(true);
@@ -611,10 +470,18 @@ export default function OrdersPage() {
         customer_phone: formCustomerPhone.trim() || undefined,
         po_number: formPoNumber.trim(),
         po_date: formPoDate,
-        total_amount: finalOrderValue,
+        total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim() || undefined,
-        line_items: lineItemsToSend,
+        line_items: formLineItems.map(i => ({
+          sku_text: i.sku_text.trim(),
+          dimensions: i.dimensions ? i.dimensions.trim() : undefined,
+          hsn_code: i.hsn_code ? i.hsn_code.trim() : undefined,
+          quantity: Number(i.quantity) || 0,
+          unit: i.unit || 'MT',
+          rate: Number(i.rate) || 0,
+          amount: Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0)),
+        })),
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
 
@@ -625,15 +492,19 @@ export default function OrdersPage() {
       setFormCustomerPhone('');
       setFormPoNumber('');
       setFormPoDate(new Date().toISOString().split('T')[0]);
-      setFormProductSKU('');
-      setFormQuantity('');
-      setFormRate('');
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
-      setFormExtractedItems([]);
-      setFormBasicAmount(0);
-      setFormGstAmount(0);
-      setFormGrandTotal(0);
+      setFormLineItems([
+        {
+          sku_text: '',
+          dimensions: '',
+          hsn_code: '7208',
+          quantity: 0,
+          unit: 'MT',
+          rate: 0,
+          amount: 0,
+        },
+      ]);
       setPoFileName('');
       setFormUploadedBase64(null);
 
@@ -644,147 +515,6 @@ export default function OrdersPage() {
       toast.error(err?.response?.data?.message || 'Failed to create order. Please try again.');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleOpenEditOrderModal = (ord: Order) => {
-    setEditOrder(ord);
-    const resolvedSp = getSalespersonName(ord);
-
-    const items: LineItemDetail[] =
-      ord.deal_items && ord.deal_items.length > 0
-        ? ord.deal_items.map((i: any) => {
-            const rawSku = i.sku_text || 'Steel Material';
-            const rawDims = i.dimensions || '';
-            const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
-            const q = Number(i.quantity) || 0;
-            const r = Number(i.rate) || 0;
-            const a = Number(i.amount) || (q > 0 && r > 0 ? Math.round(q * r) : 0);
-            return {
-              sku_text: materialDescription,
-              dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
-              hsn_code: i.hsn_code || '7208',
-              quantity: q,
-              unit: i.unit || 'MT',
-              rate: r,
-              amount: a,
-            };
-          })
-        : [
-            {
-              sku_text: 'Hot Rolled Steel',
-              dimensions: '',
-              hsn_code: '7208',
-              quantity: 0,
-              unit: 'MT',
-              rate: 0,
-              amount: Number(ord.total_amount) || 0,
-            },
-          ];
-
-    const totalAmt = items.reduce((s, i) => s + (i.amount || 0), 0) || Number(ord.total_amount) || 0;
-
-    setEditOrderDetails({
-      companyName: ord.customer_name || '',
-      customerPhone: ord.customer_phone || '',
-      salespersonName: resolvedSp,
-      poNumber: ord.po_number || 'PO-2026-AUTO',
-      poDate: ord.po_date ? ord.po_date.split('T')[0] : new Date().toISOString().split('T')[0],
-      deliveryLocation: ord.delivery_location || '',
-      paymentTerms: ord.payment_terms || '30 Days Credit, 100% Advance',
-      lineItems: items,
-      totalAmount: totalAmt,
-    });
-
-    setShowEditOrderModal(true);
-    setShowEditOrderCompanyDropdown(false);
-    setEditOrderError(null);
-    setEditOrderSuccess(false);
-  };
-
-  const handleSaveOrderDetails = async () => {
-    if (!editOrder || !editOrderDetails) return;
-
-    if (!editOrderDetails.companyName.trim()) {
-      setEditOrderError('Please enter Company Name.');
-      toast.error('Please enter Company Name.');
-      return;
-    }
-
-    if (!editOrderDetails.lineItems || editOrderDetails.lineItems.length === 0) {
-      setEditOrderError('Please add at least one line item.');
-      toast.error('Please add at least one line item.');
-      return;
-    }
-
-    for (let i = 0; i < editOrderDetails.lineItems.length; i++) {
-      const item = editOrderDetails.lineItems[i];
-      if (!item.sku_text.trim()) {
-        const msg = `Line Item #${i + 1}: Description & Specifications is required.`;
-        setEditOrderError(msg);
-        toast.error(msg);
-        return;
-      }
-      if (item.quantity <= 0) {
-        const msg = `Line Item #${i + 1}: Quantity must be greater than 0.`;
-        setEditOrderError(msg);
-        toast.error(msg);
-        return;
-      }
-      if (item.rate <= 0) {
-        const msg = `Line Item #${i + 1}: Rate must be greater than 0.`;
-        setEditOrderError(msg);
-        toast.error(msg);
-        return;
-      }
-    }
-
-    if (!editOrderDetails.deliveryLocation.trim()) {
-      setEditOrderError('Please enter Delivery Address.');
-      toast.error('Please enter Delivery Address.');
-      return;
-    }
-
-    const subtotal = editOrderDetails.lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    const qBreakdown = calculateQuotationBreakdown(subtotal);
-
-    try {
-      setEditOrderSubmitting(true);
-      await ordersApi.processPo({
-        deal_id: editOrder.id,
-        customer_name: editOrderDetails.companyName.trim(),
-        customer_phone: editOrderDetails.customerPhone.trim() || undefined,
-        po_number: editOrderDetails.poNumber.trim(),
-        po_date: editOrderDetails.poDate,
-        total_amount: qBreakdown.grandTotal,
-        delivery_location: editOrderDetails.deliveryLocation.trim(),
-        payment_terms: editOrderDetails.paymentTerms.trim() || undefined,
-        line_items: editOrderDetails.lineItems.map(i => ({
-          sku_text: i.sku_text.trim(),
-          dimensions: i.dimensions ? i.dimensions.trim() : undefined,
-          hsn_code: i.hsn_code ? i.hsn_code.trim() : undefined,
-          quantity: Number(i.quantity) || 0,
-          unit: i.unit || 'MT',
-          rate: Number(i.rate) || 0,
-          amount: Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0)),
-        })),
-        media_urls: editOrder.media_urls,
-      });
-
-      toast.success('Order & PO details updated successfully!');
-      setEditOrderSuccess(true);
-      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      fetchOrders();
-      setTimeout(() => {
-        setShowEditOrderModal(false);
-      }, 700);
-    } catch (err: any) {
-      console.error('Error updating order:', err);
-      const msg = err?.response?.data?.message || 'Failed to save order changes.';
-      setEditOrderError(msg);
-      toast.error(msg);
-    } finally {
-      setEditOrderSubmitting(false);
     }
   };
 
@@ -1057,16 +787,6 @@ export default function OrdersPage() {
                                 type="button"
                                 onClick={() => {
                                   setOpenActionMenuId(null);
-                                  handleOpenEditOrderModal(ord);
-                                }}
-                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                                <Edit3 size={14} className="text-slate-500 shrink-0" />
-                                <span>Edit</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenActionMenuId(null);
                                   handleViewPoDocument(ord);
                                 }}
                                 className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
@@ -1149,465 +869,6 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {showEditOrderModal && editOrder && editOrderDetails && (
-        <div
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
-          onClick={() => setShowEditOrderModal(false)}>
-          <div
-            className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
-            onClick={e => e.stopPropagation()}>
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-200">
-                  <FileText size={22} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    Purchase Order &amp; Audit
-                  </h2>
-                  <p className="text-xs text-slate-500 font-mono mt-0.5">
-                    PO Ref: {editOrderDetails.poNumber || 'PO-2026-AUTO'} &bull; ID: #ORD-{editOrder.id.substring(0, 8).toUpperCase()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                {editOrder.media_urls && editOrder.media_urls.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => handleViewPoDocument(editOrder)}
-                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300 shadow-2xs">
-                    <Eye size={14} className="text-slate-600" />
-                    <span>View Original PO</span>
-                  </button>
-                )}
-
-                <button
-                  onClick={() => setShowEditOrderModal(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable Content Body */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6 overscroll-contain">
-              {/* Top Form Fields */}
-              <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Company Name <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <div className="relative">
-                      <div className="relative flex items-center">
-                        <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
-                        <input
-                          type="text"
-                          placeholder="Type or select company name..."
-                          value={editOrderDetails.companyName}
-                          onChange={(e) => {
-                            setEditOrderDetails({ ...editOrderDetails, companyName: e.target.value });
-                            setShowEditOrderCompanyDropdown(true);
-                            setEditOrderSuccess(false);
-                            setEditOrderError(null);
-                          }}
-                          onFocus={() => setShowEditOrderCompanyDropdown(true)}
-                          className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                        />
-                        <button
-                          type="button"
-                          tabIndex={-1}
-                          onClick={() => setShowEditOrderCompanyDropdown(prev => !prev)}
-                          className="absolute right-2 text-slate-400 hover:text-slate-600 p-1">
-                          <ChevronDown size={16} className={`transition-transform ${showEditOrderCompanyDropdown ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-
-                      {showEditOrderCompanyDropdown && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
-                          {rawCustomers
-                            .filter(c => !editOrderDetails.companyName || c.toLowerCase().includes(editOrderDetails.companyName.toLowerCase()))
-                            .map(cName => (
-                              <div
-                                key={cName}
-                                onMouseDown={() => {
-                                  setEditOrderDetails({ ...editOrderDetails, companyName: cName });
-                                  setShowEditOrderCompanyDropdown(false);
-                                  setEditOrderSuccess(false);
-                                  setEditOrderError(null);
-                                }}
-                                className="px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-blue-50 hover:text-blue-700 cursor-pointer flex items-center justify-between transition-colors">
-                                <span className="flex items-center gap-2">
-                                  <Building2 size={13} className="text-slate-400" />
-                                  {cName}
-                                </span>
-                                {editOrderDetails.companyName.toLowerCase() === cName.toLowerCase() && (
-                                  <CheckCircle size={13} className="text-blue-600" />
-                                )}
-                              </div>
-                            ))}
-                          {rawCustomers.filter(c => !editOrderDetails.companyName || c.toLowerCase().includes(editOrderDetails.companyName.toLowerCase())).length === 0 && (
-                            <div className="px-3 py-2 text-xs text-slate-400 italic">
-                              No matching company found. Typing will update company name.
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Salesperson
-                    </label>
-                    <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs">
-                      <User size={15} className="text-blue-600 shrink-0" />
-                      <span className="truncate">{editOrderDetails.salespersonName || getSalespersonName(editOrder)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Structured Line Items Table matching Img 4 */}
-                <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
-                  <table className="w-full text-left text-xs text-slate-800 border-collapse">
-                    <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
-                      <tr>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
-                          Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
-                        </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
-                          Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
-                        </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                          Rate (₹) <span className="text-red-500 font-bold">*</span>
-                        </th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
-                        <th className="px-2 py-3 text-center w-[4%]"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 bg-white">
-                      {editOrderDetails.lineItems.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-blue-50/30">
-                          <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
-                          <td className="px-4 py-3.5 border-r border-slate-200">
-                            <div className="space-y-1">
-                              <input
-                                type="text"
-                                value={item.sku_text || ''}
-                                onChange={(e) => {
-                                  const updated = [...editOrderDetails.lineItems];
-                                  updated[idx] = { ...updated[idx], sku_text: e.target.value };
-                                  setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
-                                  setEditOrderSuccess(false);
-                                  setEditOrderError(null);
-                                }}
-                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
-                                placeholder="Product Name / Description"
-                              />
-                              <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
-                                <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
-                                <input
-                                  type="text"
-                                  value={item.dimensions || ''}
-                                  onChange={(e) => {
-                                    const updated = [...editOrderDetails.lineItems];
-                                    updated[idx] = { ...updated[idx], dimensions: e.target.value };
-                                    setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
-                                    setEditOrderSuccess(false);
-                                    setEditOrderError(null);
-                                  }}
-                                  className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
-                                  placeholder="e.g. 1mm or 2.50mm x 1250mm"
-                                />
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
-                            <input
-                              type="text"
-                              value={item.hsn_code || ''}
-                              onChange={(e) => {
-                                const updated = [...editOrderDetails.lineItems];
-                                updated[idx] = { ...updated[idx], hsn_code: e.target.value };
-                                setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
-                                setEditOrderSuccess(false);
-                                setEditOrderError(null);
-                              }}
-                              placeholder="e.g. 72083730"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                            />
-                          </td>
-                          <td className="px-3 py-3.5 border-r border-slate-200">
-                            <div className="flex items-center gap-1.5 w-full min-w-[135px]">
-                              <input
-                                type="number"
-                                min="0"
-                                value={item.quantity === 0 ? '' : item.quantity}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const rawQ = val === '' ? 0 : parseFloat(val);
-                                  const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
-                                  const updated = [...editOrderDetails.lineItems];
-                                  const amt = Math.max(0, Math.round(safeQ * (updated[idx]?.rate || 0)));
-                                  updated[idx] = { ...updated[idx], quantity: safeQ, amount: amt };
-                                  const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                  setEditOrderDetails({ ...editOrderDetails, lineItems: updated, totalAmount: totalAmt });
-                                  setEditOrderSuccess(false);
-                                  setEditOrderError(null);
-                                }}
-                                placeholder="0"
-                                className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
-                              />
-                              <select
-                                value={item.unit || 'MT'}
-                                onChange={(e) => {
-                                  const updated = [...editOrderDetails.lineItems];
-                                  updated[idx] = { ...updated[idx], unit: e.target.value };
-                                  setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
-                                  setEditOrderSuccess(false);
-                                  setEditOrderError(null);
-                                }}
-                                className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
-                                <option value="MT">MT</option>
-                                <option value="Nos">Nos</option>
-                                <option value="Pieces">Pcs</option>
-                                <option value="KG">KG</option>
-                                <option value="Sheets">Sheets</option>
-                              </select>
-                            </div>
-                          </td>
-                          <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
-                            <input
-                              type="number"
-                              min="0"
-                              value={item.rate === 0 ? '' : item.rate}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const rawR = val === '' ? 0 : parseFloat(val);
-                                const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
-                                const updated = [...editOrderDetails.lineItems];
-                                const amt = Math.max(0, Math.round((updated[idx]?.quantity || 0) * safeR));
-                                updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
-                                const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                setEditOrderDetails({ ...editOrderDetails, lineItems: updated, totalAmount: totalAmt });
-                                setEditOrderSuccess(false);
-                                setEditOrderError(null);
-                              }}
-                              placeholder="0"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
-                            />
-                          </td>
-                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
-                            <input
-                              type="number"
-                              min="0"
-                              value={item.amount === 0 ? '' : item.amount}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const rawA = val === '' ? 0 : parseFloat(val);
-                                const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
-                                const updated = [...editOrderDetails.lineItems];
-                                updated[idx] = { ...updated[idx], amount: safeA };
-                                const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                setEditOrderDetails({ ...editOrderDetails, lineItems: updated, totalAmount: totalAmt });
-                                setEditOrderSuccess(false);
-                              }}
-                              placeholder="0"
-                              className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                            />
-                          </td>
-                          <td className="px-2 py-3.5 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              {editOrderDetails.lineItems.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = editOrderDetails.lineItems.filter((_, i) => i !== idx);
-                                    const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                    setEditOrderDetails({ ...editOrderDetails, lineItems: updated, totalAmount: totalAmt });
-                                    setEditOrderSuccess(false);
-                                  }}
-                                  className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
-                                  title="Remove line item">
-                                  <Minus size={15} />
-                                </button>
-                              )}
-                              {idx === editOrderDetails.lineItems.length - 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = [
-                                      ...editOrderDetails.lineItems,
-                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
-                                    ];
-                                    setEditOrderDetails({ ...editOrderDetails, lineItems: updated });
-                                    setEditOrderSuccess(false);
-                                  }}
-                                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
-                                  title="Add line item">
-                                  <Plus size={16} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  {/* Standard Quotation Pricing Breakdown Layout */}
-                  {(() => {
-                    const activeLineItems = editOrderDetails.lineItems;
-                    const subtotal = activeLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                    const qBreakdown = calculateQuotationBreakdown(subtotal);
-
-                    const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => i.unit || 'MT')));
-                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
-                    const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
-
-                    return (
-                      <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                        <div className="text-xs font-semibold text-slate-700 pt-1">
-                          Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
-                        </div>
-
-                        <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">Sub Total</span>
-                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">CGST (9%)</span>
-                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">SGST (9%)</span>
-                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">Rounding</span>
-                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
-                          </div>
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
-                            <span className="font-bold">Total</span>
-                            <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Commercial Terms Footer */}
-                  <div className="p-4 bg-transparent border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
-                        Delivery Address <span className="text-red-500 font-bold">*</span>
-                      </span>
-                      <input
-                        type="text"
-                        value={editOrderDetails.deliveryLocation}
-                        onChange={(e) => {
-                          setEditOrderDetails({ ...editOrderDetails, deliveryLocation: e.target.value });
-                          setEditOrderSuccess(false);
-                          setEditOrderError(null);
-                        }}
-                        placeholder="e.g. Chakan Industrial Area, Pune"
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                      />
-                    </div>
-
-                    <div>
-                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
-                        Payment Terms <span className="text-red-500 font-bold">*</span>
-                      </span>
-                      <input
-                        type="text"
-                        value={editOrderDetails.paymentTerms}
-                        onChange={(e) => {
-                          setEditOrderDetails({ ...editOrderDetails, paymentTerms: e.target.value });
-                          setEditOrderSuccess(false);
-                          setEditOrderError(null);
-                        }}
-                        placeholder="e.g. 30 Days Credit, 100% Advance"
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {editOrderError && (
-              <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-700 flex items-center gap-2 shrink-0 animate-in fade-in duration-150">
-                <AlertCircle size={16} className="text-red-600 shrink-0" />
-                <span>{editOrderError}</span>
-              </div>
-            )}
-
-            {/* Bottom Actions Bar */}
-            <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-              <button
-                type="button"
-                onClick={() => {
-                  setPdfModalOrder(editOrder);
-                  setPdfModalDetails({
-                    companyName: editOrderDetails.companyName,
-                    customerPhone: editOrderDetails.customerPhone,
-                    salespersonName: editOrderDetails.salespersonName,
-                    productType: editOrderDetails.lineItems[0]?.sku_text || 'Hot Rolled',
-                    thickness: '',
-                    width: '',
-                    length: '',
-                    productForm: 'Coil',
-                    quantityTons: editOrderDetails.lineItems.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0),
-                    quantityUnits: 0,
-                    unitPrice: editOrderDetails.lineItems[0]?.rate || 0,
-                    totalAmount: editOrderDetails.totalAmount,
-                    paymentTerms: editOrderDetails.paymentTerms,
-                    deliveryLocation: editOrderDetails.deliveryLocation,
-                    lineItems: editOrderDetails.lineItems,
-                  });
-                  setShowPdfModal(true);
-                }}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs">
-                <Eye size={15} /> View PDF
-              </button>
-
-              <button
-                type="button"
-                disabled={editOrderSubmitting || editOrderSuccess}
-                onClick={handleSaveOrderDetails}
-                className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                  editOrderSubmitting
-                    ? 'bg-blue-600 opacity-80 cursor-wait'
-                    : editOrderSuccess
-                    ? 'bg-emerald-600 hover:bg-emerald-600 cursor-default shadow-xs'
-                    : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
-                }`}>
-                {editOrderSubmitting ? (
-                  <>
-                    <RefreshCw size={15} className="animate-spin" /> Saving...
-                  </>
-                ) : editOrderSuccess ? (
-                  <>
-                    <Check size={15} /> Saved
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle size={15} /> Save
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showSendModal && shareOrder && (
         <div
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150"
@@ -1686,27 +947,6 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {showPdfModal && (
-        <InquiryPdfModal
-          inquiry={
-            pdfModalOrder
-              ? ({
-                  id: pdfModalOrder.id,
-                  customer_name: pdfModalDetails?.companyName || pdfModalOrder.customer_name,
-                  sender_name: pdfModalDetails?.companyName || pdfModalOrder.customer_name,
-                  customer_phone: pdfModalDetails?.customerPhone || pdfModalOrder.customer_phone,
-                  salesperson_name: pdfModalDetails?.salespersonName || getSalespersonName(pdfModalOrder),
-                  created_at: pdfModalOrder.created_at || new Date().toISOString(),
-                  media_urls: pdfModalOrder.media_urls,
-                  inquiry_type: 'purchase_order',
-                } as any)
-              : null
-          }
-          details={pdfModalDetails}
-          onClose={() => setShowPdfModal(false)}
-        />
-      )}
-
       {poImageViewerUrl && (
         <div
           className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
@@ -1781,7 +1021,7 @@ export default function OrdersPage() {
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingBag className="text-blue-600" size={20} />
@@ -1922,83 +1162,248 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Product Description / SKU <span className="text-red-500 font-bold">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="e.g. TMT Bar 12mm - 30 MT&#10;HR Coil 2.5mm - 10 MT"
-                  value={formProductSKU}
-                  onChange={e => setFormProductSKU(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y max-h-40 overflow-y-auto leading-relaxed placeholder:text-slate-400"
-                />
-              </div>
+              {/* Structured Line Items Table matching Img 2 */}
+              <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
+                <table className="w-full text-left text-xs text-slate-800 border-collapse">
+                  <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
+                    <tr>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                        Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
+                        Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
+                        Rate (₹) <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
+                      <th className="px-2 py-3 text-center w-[4%]"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {formLineItems.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-blue-50/30">
+                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td className="px-4 py-3.5 border-r border-slate-200">
+                          <div className="space-y-1">
+                            <input
+                              type="text"
+                              value={item.sku_text || ''}
+                              onChange={(e) => {
+                                const updated = [...formLineItems];
+                                updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                setFormLineItems(updated);
+                              }}
+                              className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                              placeholder="Product Name / Description"
+                            />
+                            <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                              <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
+                              <input
+                                type="text"
+                                value={item.dimensions || ''}
+                                onChange={(e) => {
+                                  const updated = [...formLineItems];
+                                  updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                  setFormLineItems(updated);
+                                }}
+                                className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                                placeholder="e.g. 8X6000X1500"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                          <input
+                            type="text"
+                            value={item.hsn_code || ''}
+                            onChange={(e) => {
+                              const updated = [...formLineItems];
+                              updated[idx] = { ...updated[idx], hsn_code: e.target.value };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="e.g. 7208"
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          />
+                        </td>
+                        <td className="px-3 py-3.5 border-r border-slate-200">
+                          <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.quantity === 0 ? '' : item.quantity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rawQ = val === '' ? 0 : parseFloat(val);
+                                const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
+                                const updated = [...formLineItems];
+                                const amt = Math.max(0, Math.round(safeQ * (updated[idx]?.rate || 0)));
+                                updated[idx] = { ...updated[idx], quantity: safeQ, amount: amt };
+                                setFormLineItems(updated);
+                              }}
+                              placeholder="0"
+                              className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                            />
+                            <select
+                              value={item.unit || 'MT'}
+                              onChange={(e) => {
+                                const updated = [...formLineItems];
+                                updated[idx] = { ...updated[idx], unit: e.target.value };
+                                setFormLineItems(updated);
+                              }}
+                              className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              <option value="MT">MT</option>
+                              <option value="Nos">Nos</option>
+                              <option value="Pieces">Pcs</option>
+                              <option value="KG">KG</option>
+                              <option value="Sheets">Sheets</option>
+                            </select>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.rate === 0 ? '' : item.rate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const rawR = val === '' ? 0 : parseFloat(val);
+                              const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
+                              const updated = [...formLineItems];
+                              const amt = Math.max(0, Math.round((updated[idx]?.quantity || 0) * safeR));
+                              updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="0"
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                          />
+                        </td>
+                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.amount === 0 ? '' : item.amount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const rawA = val === '' ? 0 : parseFloat(val);
+                              const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                              const updated = [...formLineItems];
+                              updated[idx] = { ...updated[idx], amount: safeA };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="0"
+                            className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          />
+                        </td>
+                        <td className="px-2 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {formLineItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = formLineItems.filter((_, i) => i !== idx);
+                                  setFormLineItems(updated);
+                                }}
+                                className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                                title="Remove line item">
+                                <Minus size={15} />
+                              </button>
+                            )}
+                            {idx === formLineItems.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [
+                                    ...formLineItems,
+                                    { sku_text: '', dimensions: '', hsn_code: '7208', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                  ];
+                                  setFormLineItems(updated);
+                                }}
+                                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
+                                title="Add line item">
+                                <Plus size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Quantity (MT) <span className="text-red-500 font-bold">*</span>
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  step="any"
-                  placeholder="e.g. 30"
-                  value={formQuantity}
-                  onChange={e => {
-                    const val = Number(e.target.value);
-                    setFormQuantity(val < 0 ? '0' : e.target.value);
-                    setFormBasicAmount(0);
-                    setFormGstAmount(0);
-                    setFormGrandTotal(0);
-                  }}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                />
-              </div>
+                {/* Standard Quotation Pricing Breakdown Layout */}
+                {(() => {
+                  const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                  const qBreakdown = calculateQuotationBreakdown(subtotal);
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Delivery Location <span className="text-red-500 font-bold">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={2}
-                  placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
-                  value={formDeliveryLocation}
-                  onChange={e => setFormDeliveryLocation(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y max-h-32 overflow-y-auto leading-relaxed placeholder:text-slate-400 font-medium"
-                />
-              </div>
+                  const totalQty = formLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                  const distinctUnits = Array.from(new Set(formLineItems.map(i => i.unit || 'MT')));
+                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
+                  const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
 
-              {basicValue > 0 && (
-                <div className="p-3.5 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 rounded-xl border border-blue-200 space-y-2">
-                  <div className="flex justify-between items-center text-xs text-slate-600">
-                    <span className="font-semibold">PO Basic Value:</span>
-                    <span className="font-mono font-bold text-slate-800">
-                      ₹{basicValue.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-slate-600">
-                    <span className="font-semibold">GST Value (18% / SGST+CGST):</span>
-                    <span className="font-mono font-bold text-amber-700">
-                      +₹{gstValue.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="pt-2 border-t border-blue-200/80 flex justify-between items-center">
-                    <div>
-                      <p className="text-xs font-bold text-blue-900">Total Deal Value (Incl. GST):</p>
-                      <p className="text-[10px] text-slate-500">
-                        Official PO amount for Sales Achievement &amp; Payment Tracking
-                      </p>
+                  return (
+                    <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
+                      <div className="text-xs font-semibold text-slate-700 pt-1">
+                        Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      </div>
+
+                      <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Sub Total</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">CGST (9%)</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">SGST (9%)</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Rounding</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                          <span className="font-bold">Total</span>
+                          <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-lg font-bold text-blue-900 font-mono">
-                      ₹{totalDealValue.toLocaleString('en-IN')}
-                    </p>
-                  </div>
+                  );
+                })()}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Delivery Location <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
+                    value={formDeliveryLocation}
+                    onChange={e => setFormDeliveryLocation(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
+                  />
                 </div>
-              )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Payment Terms <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 30 Days Credit, 100% Advance"
+                    value={formPaymentTerms}
+                    onChange={e => setFormPaymentTerms(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
+                  />
+                </div>
+              </div>
 
               <div className="pt-2 flex justify-end gap-2">
                 <button
