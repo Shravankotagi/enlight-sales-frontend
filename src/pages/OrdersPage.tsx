@@ -897,7 +897,7 @@ export default function OrdersPage() {
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Send className="text-purple-600" size={22} />
-                Send Quotation
+                Share Quotation
               </h2>
               <button
                 onClick={() => {
