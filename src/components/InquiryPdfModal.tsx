@@ -11,6 +11,8 @@ interface InquiryItem {
   customer_name?: string;
   customer_phone?: string;
   sender_phone?: string;
+  salesperson_name?: string;
+  assigned_salesperson_name?: string;
   raw_text?: string;
   inquiry_type?: string;
   status?: string;
@@ -104,26 +106,47 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   const totalQuantity = lineItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
 
-  const piNumber = inquiry.id
-    ? (inquiry.id.startsWith('PI-') ? inquiry.id : `PI-${inquiry.id.substring(0, 5).toUpperCase()}`)
-    : 'PI-00051';
+  const piNumber = (() => {
+    const inq = inquiry as any;
+    if (inq.pi_number) return inq.pi_number;
+    if (inq.quotation_number) return inq.quotation_number;
+    if (inq.ai_extraction_json?.pi_number) return inq.ai_extraction_json.pi_number;
+    if (inq.ai_extraction_json?.quotation_number) return inq.ai_extraction_json.quotation_number;
+    if (inq.deal_number) return inq.deal_number.replace(/^DEAL-/i, 'PI-');
+    if (typeof inq.id === 'string') {
+      if (inq.id.startsWith('PI-')) return inq.id;
+      const cleanHex = inq.id.replace(/[^0-9a-f]/gi, '');
+      if (cleanHex.length >= 4) {
+        const numericVal = parseInt(cleanHex.substring(0, 6), 16);
+        const seq = (numericVal % 900) + 51;
+        return `PI-00${String(seq).padStart(3, '0')}`;
+      }
+      return `PI-${inq.id.substring(0, 5).toUpperCase()}`;
+    }
+    return 'PI-00051';
+  })();
   
   const createdDate = inquiry.created_at
     ? new Date(inquiry.created_at).toLocaleDateString('en-GB')
     : new Date().toLocaleDateString('en-GB');
 
   // Dynamic Sales Representative name from account / inquiry / logged in context
-  const salesperson =
-    details.salespersonName ||
-    (inquiry as any)?.salesperson_name ||
-    (inquiry as any)?.assigned_salesperson_name ||
-    (inquiry as any)?.salesperson ||
-    (inquiry as any)?.ai_extraction_json?.salespersonName ||
-    (inquiry as any)?.ai_extraction_json?.salesperson_name ||
-    (inquiry as any)?.ai_extraction_json?.salesperson ||
-    viewingAs?.name ||
-    employee?.name ||
-    'Vedant Goel';
+  const salesperson = (() => {
+    const raw =
+      details.salespersonName ||
+      inquiry.salesperson_name ||
+      inquiry.assigned_salesperson_name ||
+      (inquiry as any)?.salesperson ||
+      (inquiry as any)?.ai_extraction_json?.salespersonName ||
+      (inquiry as any)?.ai_extraction_json?.salesperson_name ||
+      (inquiry as any)?.ai_extraction_json?.salesperson ||
+      viewingAs?.name ||
+      employee?.name;
+    if (raw && typeof raw === 'string' && raw.trim() && raw.trim().toLowerCase() !== 'sales representative') {
+      return raw.trim();
+    }
+    return viewingAs?.name || employee?.name || 'Vedant Goel';
+  })();
 
   const handleCopyRef = () => {
     navigator.clipboard.writeText(piNumber);
@@ -264,9 +287,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               </div>
             </div>
 
-            {/* Addresses & Supply Section: Bill To, Ship To (Left) & Order Date, Salesperson (Right) */}
+            {/* Addresses & Supply Section: Bill To, Ship To, Sales Person (Left) & Order Date (Right) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-2 pb-2">
-              {/* Left Column: Bill To, Ship To, Place of Supply */}
+              {/* Left Column: Bill To, Ship To, Sales Person */}
               <div className="space-y-4 text-slate-700 text-[12px]">
                 {/* Bill To */}
                 <div className="space-y-0.5">
@@ -313,23 +336,20 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   )}
                 </div>
 
-                {/* Place Of Supply */}
+                {/* Sales person (Replaces Place of Supply) */}
                 <div className="pt-2">
-                  <p className="font-bold text-slate-800 text-[12px]">
-                    Place Of Supply: <span className="font-normal text-slate-700">Maharashtra (27)</span>
+                  <p className="text-slate-800 text-[12px]">
+                    <span className="font-bold text-slate-800">Sales person : </span>
+                    <span className="font-normal text-slate-900">{salesperson}</span>
                   </p>
                 </div>
               </div>
 
-              {/* Right Column: Order Date & Salesperson */}
+              {/* Right Column: Order Date */}
               <div className="flex flex-col items-start sm:items-end justify-end space-y-2 text-[12px] pb-2">
                 <div className="flex items-center gap-6 text-slate-700">
                   <span className="font-medium text-slate-700 w-28 sm:text-right">Order Date :</span>
                   <span className="font-medium text-slate-900 w-32 text-left">{createdDate}</span>
-                </div>
-                <div className="flex items-center gap-6 text-slate-700">
-                  <span className="font-medium text-slate-700 w-28 sm:text-right">Sales person :</span>
-                  <span className="font-medium text-slate-900 w-32 text-left">{salesperson}</span>
                 </div>
               </div>
             </div>
@@ -392,9 +412,17 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
             {/* Financial Totals & Summary Block — Exact Reference Style */}
             <div className="flex flex-col sm:flex-row justify-between items-start pt-4 gap-6 border-t border-slate-200 mt-2">
-              {/* Bottom Left: Total Items */}
-              <div className="text-[12px] font-normal text-slate-800 pt-1">
-                <span>Items in Total <strong className="font-bold">{formatIndianCurrency(totalQuantity, true)}</strong></span>
+              {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
+              <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
+                <div>
+                  <span>Items in Total <strong className="font-bold">{formatIndianCurrency(totalQuantity, true)}</strong></span>
+                </div>
+                {details.paymentTerms && (
+                  <div>
+                    <span>Payment Terms : </span>
+                    <span className="font-medium text-slate-900">{details.paymentTerms}</span>
+                  </div>
+                )}
               </div>
 
               {/* Bottom Right: Financial Breakdown Calculation */}
