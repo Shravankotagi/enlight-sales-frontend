@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   MapPin,
   Plus,
@@ -55,7 +54,6 @@ interface CustomerVisit {
 }
 
 export default function VisitsPage() {
-  const navigate = useNavigate();
   const { isSalesManager, isAdmin } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
@@ -369,6 +367,7 @@ export default function VisitsPage() {
       setTimeout(() => {
         setIsSavedSuccess(false);
         setShowModal(false);
+        setSelectedVisit(null);
         setFormCustomerName('');
         setFormPersonMet('');
         setFormContactPhone('');
@@ -379,8 +378,7 @@ export default function VisitsPage() {
         setFormVisitDate(formatLocalDate());
         setFormErrors({});
         fetchVisits();
-        navigate('/visits');
-      }, 600);
+      }, 500);
     } catch (err: any) {
       console.error('Error creating visit:', err);
       toast.error('Failed to save visit log. Please try again.');
@@ -446,11 +444,10 @@ export default function VisitsPage() {
       };
 
       setVisits(prev => prev.map(item => (item.id === selectedVisit.id ? updatedObj : item)));
-      setSelectedVisit(updatedObj);
+      setSelectedVisit(null);
       setIsEditing(false);
       toast.success('Visit details updated successfully!');
       await fetchVisits();
-      navigate('/visits');
     } catch (err) {
       console.error('Error updating visit:', err);
       toast.error('Failed to update visit details.');
