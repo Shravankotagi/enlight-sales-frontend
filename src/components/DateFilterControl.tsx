@@ -22,6 +22,8 @@ export type FilterPreset =
   | 'custom'
   | '7_days'
   | '14_days'
+  | '30_days'
+  | '90_days'
   | 'monthly';
 
 export type DateFilterRange = {
@@ -51,6 +53,22 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
     if (newPreset === 'today') {
       setShowCustom(false);
       onChange({ preset: 'today', from: todayStr, to: todayStr });
+    } else if (newPreset === '7_days') {
+      const fromStr = getDaysAgo(7);
+      setShowCustom(false);
+      onChange({ preset: '7_days', from: fromStr, to: todayStr });
+    } else if (newPreset === '14_days') {
+      const fromStr = getDaysAgo(14);
+      setShowCustom(false);
+      onChange({ preset: '14_days', from: fromStr, to: todayStr });
+    } else if (newPreset === '30_days') {
+      const fromStr = getDaysAgo(30);
+      setShowCustom(false);
+      onChange({ preset: '30_days', from: fromStr, to: todayStr });
+    } else if (newPreset === '90_days') {
+      const fromStr = getDaysAgo(90);
+      setShowCustom(false);
+      onChange({ preset: '90_days', from: fromStr, to: todayStr });
     } else if (newPreset === 'this_week') {
       const fromStr = getFirstDayOfWeek();
       const toStr = getLastDayOfWeek();
@@ -74,14 +92,6 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
     } else if (newPreset === 'custom') {
       setShowCustom(true);
       onChange({ preset: 'custom', from: customFrom, to: customTo });
-    } else if (newPreset === '7_days') {
-      const fromStr = getDaysAgo(7);
-      setShowCustom(false);
-      onChange({ preset: '7_days', from: fromStr, to: todayStr });
-    } else if (newPreset === '14_days') {
-      const fromStr = getDaysAgo(14);
-      setShowCustom(false);
-      onChange({ preset: '14_days', from: fromStr, to: todayStr });
     }
   };
 
@@ -114,8 +124,10 @@ export default function DateFilterControl({ onChange, initialPreset = 'this_mont
           className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs appearance-none cursor-pointer transition-all"
         >
           <option value="today">Today</option>
-          <option value="this_week">This Week</option>
+          <option value="7_days">Last 7 Days</option>
+          <option value="30_days">Last 30 Days</option>
           <option value="this_month">This Month</option>
+          <option value="90_days">Last 90 Days</option>
           <option value="this_quarter">This Quarter</option>
           <option value="this_year">This Year</option>
           <option value="custom">Custom Range</option>

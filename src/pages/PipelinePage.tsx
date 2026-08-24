@@ -2,9 +2,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import { AlertCircle, IndianRupee, Trash2 } from 'lucide-react';
-
 import toast from 'react-hot-toast';
 import DealDetailDrawer from '../components/DealDetailDrawer';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
 const STAGES = [
   { key: 'new_inquiry', label: 'New Deals', color: 'bg-blue-50 border-blue-200' },
@@ -119,30 +120,27 @@ export default function PipelinePage() {
   const [lostModal, setLostModal] = useState<{ dealId: string; reason: string } | null>(null);
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
+  });
 
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  const years = [2025, 2026, 2027];
-
-  const fromDate = new Date(Date.UTC(selectedYear, selectedMonth, 1, 0, 0, 0)).toISOString();
-  const toDate = new Date(Date.UTC(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)).toISOString();
+  const fromDate = dateRange.from ? (dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`) : undefined;
+  const toDate = dateRange.to ? (dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`) : undefined;
 
   useEffect(() => {
     document.title = 'Pipeline - Enlight Sales OS';
   }, []);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['kanban', selectedMonth, selectedYear],
+    queryKey: ['kanban', dateRange],
     queryFn: () => dealsApi.getKanban({ from: fromDate, to: toDate }).then(r => r.data?.data ?? r.data),
     refetchInterval: 15000,
   });
 
   const { data: pipelineData } = useQuery({
-    queryKey: ['pipeline', selectedMonth, selectedYear],
+    queryKey: ['pipeline', dateRange],
     queryFn: () => dealsApi.getPipeline({ from: fromDate, to: toDate }).then(r => r.data?.data ?? r.data),
     refetchInterval: 15000,
   });
@@ -237,27 +235,8 @@ export default function PipelinePage() {
             </div>
           )}
 
-          {/* Month/Year Selector */}
-          <div className="flex gap-2">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {months.map((m, idx) => (
-                <option key={m} value={idx}>{m}</option>
-              ))}
-            </select>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="text-sm border border-gray-300 rounded-xl px-3 py-2 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {years.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </div>
+          {/* Unified Date Range Filter */}
+          <DateFilterControl onChange={setDateRange} initialPreset="30_days" />
         </div>
       </div>
 

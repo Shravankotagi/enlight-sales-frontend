@@ -3,16 +3,26 @@ import { inquiriesApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, AlertCircle, CheckCircle, Clock, History, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
 export default function LogsPage() {
   const { effectivePhone } = useAuth();
   const [tab, setTab] = useState<'review' | 'all'>('review');
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
+  });
+
+  const fromDate = dateRange.from ? (dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`) : undefined;
+  const toDate = dateRange.to ? (dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`) : undefined;
 
   const { data: reviewData, isLoading: reviewLoading, refetch: refetchReview } = useQuery({
-    queryKey: ['logs-review', effectivePhone],
+    queryKey: ['logs-review', effectivePhone, dateRange],
     queryFn: () =>
       inquiriesApi
-        .getReviewQueue({ salesperson_phone: effectivePhone })
+        .getReviewQueue({ salesperson_phone: effectivePhone, from: fromDate, to: toDate })
         .then((r) => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -20,10 +30,10 @@ export default function LogsPage() {
   });
 
   const { data: allData, isLoading: allLoading, refetch: refetchAll } = useQuery({
-    queryKey: ['logs-all', effectivePhone],
+    queryKey: ['logs-all', effectivePhone, dateRange],
     queryFn: () =>
       inquiriesApi
-        .getAll({ salesperson_phone: effectivePhone })
+        .getAll({ salesperson_phone: effectivePhone, from: fromDate, to: toDate })
         .then((r) => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -31,10 +41,10 @@ export default function LogsPage() {
   });
 
   const { data: statsData } = useQuery({
-    queryKey: ['logs-stats', effectivePhone],
+    queryKey: ['logs-stats', effectivePhone, dateRange],
     queryFn: () =>
       inquiriesApi
-        .getStats({ salesperson_phone: effectivePhone })
+        .getStats({ salesperson_phone: effectivePhone, from: fromDate, to: toDate })
         .then((r) => r?.data?.data || r?.data || {}),
   });
 
@@ -57,7 +67,7 @@ export default function LogsPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <History className="text-indigo-600" size={28} />
@@ -68,7 +78,7 @@ export default function LogsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {statsData && (
             <div className="flex gap-2 sm:gap-3">
               {[
@@ -84,9 +94,11 @@ export default function LogsPage() {
             </div>
           )}
 
+          <DateFilterControl onChange={setDateRange} initialPreset="30_days" />
+
           <button
             onClick={handleRefresh}
-            className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+            className="p-2 bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors shadow-2xs"
             title="Refresh">
             <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
           </button>
