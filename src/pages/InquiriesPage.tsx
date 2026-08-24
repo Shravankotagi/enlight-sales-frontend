@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, Clock, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical, AlertCircle
 } from 'lucide-react';
 import { inquiriesApi, customersApi } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -658,6 +658,7 @@ export default function InquiriesPage() {
   const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [showEditCompanyDropdown, setShowEditCompanyDropdown] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
   const [pdfModalDetails, setPdfModalDetails] = useState<ExtractedDetails | null>(null);
@@ -897,6 +898,7 @@ export default function InquiriesPage() {
 
     setSaveSuccess(isConfirmedState);
     setIsQuotationSent(isQuotedState);
+    setDrawerError(null);
   };
 
   const handleCloseDrawer = () => {
@@ -905,6 +907,7 @@ export default function InquiriesPage() {
     setSelectedInquiry(null);
     setEditDetails(null);
     setDrawerFileBase64(null);
+    setDrawerError(null);
   };
 
   useEffect(() => {
@@ -927,11 +930,65 @@ export default function InquiriesPage() {
 
   const handleSaveDrawerDetails = async () => {
     if (!selectedInquiry || !editDetails) return;
+
+    // Strict validation for all compulsory fields (marked with red asterisks)
+    if (!editDetails.companyName || !editDetails.companyName.trim()) {
+      const msg = 'Please enter Company Name.';
+      setDrawerError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    const currentItems = editDetails.lineItems && editDetails.lineItems.length > 0
+      ? editDetails.lineItems
+      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+
+    if (currentItems.length === 0) {
+      const msg = 'Please add at least one line item.';
+      setDrawerError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    for (let i = 0; i < currentItems.length; i++) {
+      const item = currentItems[i];
+      if (!item.sku_text || !item.sku_text.trim()) {
+        const msg = `Line Item #${i + 1}: Description & Specifications is required.`;
+        setDrawerError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (!item.quantity || Number(item.quantity) <= 0) {
+        const msg = `Line Item #${i + 1}: Quantity must be greater than 0.`;
+        setDrawerError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (!item.rate || Number(item.rate) <= 0) {
+        const msg = `Line Item #${i + 1}: Rate (₹) is required and must be greater than 0.`;
+        setDrawerError(msg);
+        toast.error(msg);
+        return;
+      }
+    }
+
+    if (!editDetails.deliveryLocation || !editDetails.deliveryLocation.trim()) {
+      const msg = 'Please enter Delivery Address / Location.';
+      setDrawerError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    if (!editDetails.paymentTerms || !editDetails.paymentTerms.trim()) {
+      const msg = 'Please enter Payment Terms.';
+      setDrawerError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    setDrawerError(null);
     try {
       setSubmitting(true);
-      const currentItems = editDetails.lineItems && editDetails.lineItems.length > 0
-        ? editDetails.lineItems
-        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
 
       const baseAmt = currentItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
       const qBreakdown = calculateQuotationBreakdown(baseAmt);
@@ -1457,7 +1514,7 @@ export default function InquiriesPage() {
           <button
             onClick={() => navigate('/orders')}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
-            <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders / POs 
+            <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
           </button>
 
           <button
@@ -1814,6 +1871,7 @@ export default function InquiriesPage() {
                             setEditDetails({ ...editDetails, companyName: e.target.value });
                             setShowEditCompanyDropdown(true);
                             setSaveSuccess(false);
+                            setDrawerError(null);
                           }}
                           onFocus={() => setShowEditCompanyDropdown(true)}
                           className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
@@ -1838,6 +1896,7 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, companyName: cName });
                                   setShowEditCompanyDropdown(false);
                                   setSaveSuccess(false);
+                                  setDrawerError(null);
                                 }}
                                 className="px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-blue-50 hover:text-blue-700 cursor-pointer flex items-center justify-between transition-colors">
                                 <span className="flex items-center gap-2">
@@ -1883,7 +1942,9 @@ export default function InquiriesPage() {
                         <th className="px-3 py-3 border-r border-slate-700 w-[22%] text-center">
                           Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">Rate (₹)</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
+                          Rate (₹) <span className="text-red-500 font-bold">*</span>
+                        </th>
                         <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
                         <th className="px-2 py-3 text-center w-[3%]"></th>
                       </tr>
@@ -1905,6 +1966,7 @@ export default function InquiriesPage() {
                                   updated[idx] = { ...updated[idx], sku_text: e.target.value };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
+                                  setDrawerError(null);
                                 }}
                                 className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
                                 placeholder="Product Name / Description"
@@ -1919,6 +1981,7 @@ export default function InquiriesPage() {
                                     updated[idx] = { ...updated[idx], dimensions: e.target.value };
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
+                                    setDrawerError(null);
                                   }}
                                   className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
                                   placeholder="e.g. 1mm or 2.50mm x 1250mm"
@@ -1935,6 +1998,7 @@ export default function InquiriesPage() {
                                 updated[idx] = { ...updated[idx], hsn_code: e.target.value };
                                 setEditDetails({ ...editDetails, lineItems: updated });
                                 setSaveSuccess(false);
+                                setDrawerError(null);
                               }}
                               placeholder="e.g. 72083730"
                               className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
@@ -1957,6 +2021,7 @@ export default function InquiriesPage() {
                                   const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
+                                  setDrawerError(null);
                                 }}
                                 placeholder="0"
                                 className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
@@ -1968,6 +2033,7 @@ export default function InquiriesPage() {
                                   updated[idx] = { ...updated[idx], unit: e.target.value };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
+                                  setDrawerError(null);
                                 }}
                                 className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
@@ -1993,6 +2059,7 @@ export default function InquiriesPage() {
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
                                 setSaveSuccess(false);
+                                setDrawerError(null);
                               }}
                               placeholder="0"
                               className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
@@ -2109,13 +2176,16 @@ export default function InquiriesPage() {
                   {/* Commercial Terms Footer (Background Removed to match popup) */}
                   <div className="p-4 bg-transparent border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
-                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">Delivery Address / Location</span>
+                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
+                        Delivery Address / Location <span className="text-red-500 font-bold">*</span>
+                      </span>
                       <input
                         type="text"
                         value={editDetails.deliveryLocation}
                         onChange={(e) => {
                           setEditDetails({ ...editDetails, deliveryLocation: e.target.value });
                           setSaveSuccess(false);
+                          setDrawerError(null);
                         }}
                         placeholder="e.g. Chakan Industrial Area, Pune"
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
@@ -2123,13 +2193,16 @@ export default function InquiriesPage() {
                     </div>
 
                     <div>
-                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">Payment Terms</span>
+                      <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
+                        Payment Terms <span className="text-red-500 font-bold">*</span>
+                      </span>
                       <input
                         type="text"
                         value={editDetails.paymentTerms}
                         onChange={(e) => {
                           setEditDetails({ ...editDetails, paymentTerms: e.target.value });
                           setSaveSuccess(false);
+                          setDrawerError(null);
                         }}
                         placeholder="e.g. 30 Days Credit, 100% Advance"
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
@@ -2139,6 +2212,13 @@ export default function InquiriesPage() {
                 </div>
               </div>
             </div>
+
+            {drawerError && (
+              <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-700 flex items-center gap-2 shrink-0 animate-in fade-in duration-150">
+                <AlertCircle size={16} className="text-red-600 shrink-0" />
+                <span>{drawerError}</span>
+              </div>
+            )}
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
