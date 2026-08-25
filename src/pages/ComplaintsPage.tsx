@@ -462,6 +462,12 @@ export default function ComplaintsPage() {
     });
   };
 
+  const hasProduct = (comp: Complaint) => {
+    if (!comp.affected_product) return false;
+    const trimmed = comp.affected_product.trim();
+    return trimmed !== '' && trimmed !== '-';
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -698,7 +704,7 @@ export default function ComplaintsPage() {
           </table>
         </div>
 
-        {/* Pagination Controls */}
+        {/* Pagination Controls - Visits Tab Style */}
         <div className="px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div>
             Showing <span className="font-bold text-slate-900">{filtered.length === 0 ? 0 : startIndex + 1}</span> to{' '}
@@ -745,7 +751,7 @@ export default function ComplaintsPage() {
       {selectedComplaint && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto space-y-4">
-            {/* Modal Header */}
+            {/* Modal Header with Top-Right Status Badge & Single Close X Button */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">{selectedComplaint.customer_name}</h2>
@@ -768,36 +774,37 @@ export default function ComplaintsPage() {
                 </div>
               </div>
 
-              <button
-                onClick={() => setSelectedComplaint(null)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg">
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Badges & Overview Block */}
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="px-2.5 py-1 font-semibold rounded-lg bg-blue-50 text-blue-700 border border-blue-200/60">
-                  {selectedComplaint.complaint_type || 'General Issue'}
-                </span>
-                {selectedComplaint.affected_product && (
-                  <span className="px-2.5 py-1 font-medium rounded-lg bg-slate-200/70 text-slate-700 flex items-center gap-1">
-                    <Package size={12} /> {selectedComplaint.affected_product}
-                  </span>
-                )}
-              </div>
-              <div>
+              {/* Status Badge beside single Close Button */}
+              <div className="flex items-center gap-3 shrink-0">
                 {selectedComplaint.status === 'resolved' ? (
                   <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
-                    <CheckCircle2 size={12} /> Resolved
+                    <CheckCircle2 size={12} className="text-emerald-600" /> Resolved
                   </span>
                 ) : (
                   <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 inline-flex items-center gap-1">
-                    <Clock size={12} /> Pending
+                    <Clock size={12} className="text-amber-600" /> Pending
                   </span>
                 )}
+
+                <button
+                  onClick={() => setSelectedComplaint(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors cursor-pointer"
+                  title="Close">
+                  <X size={18} />
+                </button>
               </div>
+            </div>
+
+            {/* Badges & Overview Block (Complaint Type & Optional Affected Product) */}
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center gap-2 shrink-0">
+              <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 border border-blue-200/60">
+                {selectedComplaint.complaint_type || 'General Issue'}
+              </span>
+              {hasProduct(selectedComplaint) && (
+                <span className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white border border-slate-200 text-slate-700 flex items-center gap-1 shadow-2xs">
+                  <Package size={12} className="text-slate-400" /> Product: <strong className="text-slate-900">{selectedComplaint.affected_product}</strong>
+                </span>
+              )}
             </div>
 
             {/* Complaint Description Block */}
@@ -812,7 +819,7 @@ export default function ComplaintsPage() {
             <div className="p-3.5 bg-blue-50/40 border border-blue-100 rounded-xl space-y-2.5 shrink-0">
               <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <CheckCircle2 size={14} className="text-blue-600" />
-                Corrective Action &amp; Resolution
+                Corrective Action &amp; Resolution Notes
               </p>
 
               {selectedComplaint.status === 'resolved' ? (
@@ -837,15 +844,8 @@ export default function ComplaintsPage() {
               )}
             </div>
 
-            {/* Modal Bottom Right Action Buttons */}
+            {/* Modal Bottom Right Action Buttons (No Close button here) */}
             <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedComplaint(null)}
-                className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
-                Close
-              </button>
-
               <button
                 type="button"
                 onClick={() => {
@@ -893,13 +893,13 @@ export default function ComplaintsPage() {
               </h2>
               <button
                 onClick={() => setEditingComplaint(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleSaveEdit} className="flex flex-col flex-1 overflow-hidden">
-              <div className="space-y-3.5 py-4 overflow-y-auto flex-1 pr-1 text-xs">
+              <div className="space-y-4 py-4 px-1 overflow-y-auto flex-1 text-xs">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Company / Customer Name <span className="text-rose-500">*</span>
@@ -1009,13 +1009,13 @@ export default function ComplaintsPage() {
               </h2>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleCreateComplaint} className="flex flex-col flex-1 overflow-hidden">
-              <div className="space-y-3.5 py-4 overflow-y-auto flex-1 pr-1 text-xs">
+              <div className="space-y-4 py-4 px-1 overflow-y-auto flex-1 text-xs">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Company / Customer Name <span className="text-rose-500">*</span>
