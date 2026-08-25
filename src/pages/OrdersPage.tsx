@@ -924,9 +924,7 @@ export default function OrdersPage() {
                         {ordTonnage > 0 ? `${ordTonnage.toLocaleString('en-IN')} MT` : '—'}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
-                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200 text-slate-800 font-semibold text-xs">
-                          {formatDeliveryLocation(ord.delivery_location)}
-                        </span>
+                        {formatDeliveryLocation(ord.delivery_location)}
                       </td>
                       <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
                         <div className="relative inline-block text-left">
@@ -1661,12 +1659,7 @@ export default function OrdersPage() {
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                  Cancel
-                </button>
+                
                 <button
                   type="submit"
                   disabled={submitting}
