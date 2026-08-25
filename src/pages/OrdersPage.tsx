@@ -271,7 +271,7 @@ export default function OrdersPage() {
     setCurrentPage(1);
   };
 
-  const { data: rawOrders = [], isLoading: loading, refetch: fetchOrders } = useQuery<Order[]>({
+  const { data: rawOrders = [], isLoading: loading, isFetching, refetch: fetchOrders } = useQuery<Order[]>({
     queryKey: ['orders-list', effectivePhone, dateRange],
     queryFn: async () => {
       const params: any = {};
@@ -734,8 +734,18 @@ export default function OrdersPage() {
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => {
+              fetchOrders();
+              queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+            }}
+            title="Refresh Orders"
+            className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+            <RefreshCw size={16} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+          </button>
+
+          <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-sm transition-colors">
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-sm transition-colors cursor-pointer">
             <Plus size={18} />
             Create New Order
           </button>
