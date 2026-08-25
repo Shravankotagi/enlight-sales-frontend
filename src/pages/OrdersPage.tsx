@@ -886,14 +886,12 @@ export default function OrdersPage() {
               ) : (
                 paginatedOrders.map((ord, idx) => {
                   const globalIdx = startIndex + idx + 1;
-                  const itemCount = (ord?.deal_items && ord.deal_items.length > 0) ? ord.deal_items.length : 1;
-
-                  const ordTonnage = (ord?.deal_items || []).reduce((iSum: number, i: any) => {
-                    const q = Number(i?.quantity || 0);
-                    const u = (i?.unit || 'MT').toUpperCase().trim();
-                    const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
-                    return iSum + inMt;
-                  }, 0);
+                  const ordLineItems = (ord?.deal_items && ord.deal_items.length > 0) ? ord.deal_items : [];
+                  const ordTonnage = calculateTotalTonnageMt(ordLineItems);
+                  const tonnageFormatted = ordTonnage.totalMt > 0
+                    ? `(${ordTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
+                    : '';
+                  const itemCount = ordLineItems.length > 0 ? ordLineItems.length : 1;
 
                   return (
                     <tr
@@ -921,11 +919,14 @@ export default function OrdersPage() {
                           {ord.po_number || 'PO-2026-AUTO'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
+                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                         {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+                        {tonnageFormatted && (
+                          <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap font-mono text-xs">
-                        {ordTonnage > 0 ? `${ordTonnage.toLocaleString('en-IN')} MT` : '—'}
+                        {ordTonnage.totalMt > 0 ? `${ordTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT` : '—'}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
                         {formatDeliveryLocation(ord.delivery_location)}

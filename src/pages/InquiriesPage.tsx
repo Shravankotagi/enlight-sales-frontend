@@ -1970,8 +1970,8 @@ export default function InquiriesPage() {
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <th className="px-3 py-3.5 text-center w-[4%]">#</th>
-              <th className="px-6 py-3.5 text-left w-[28%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[13%]">Items Summary</th>
+              <th className="px-6 py-3.5 text-left w-[25%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Items Summary</th>
               <th className="px-4 py-3.5 text-center w-[13%]">Source Channel</th>
               <th className="px-4 py-3.5 text-center w-[14%]">Inquiry Status</th>
               <th className="px-4 py-3.5 text-center w-[15%]">Deal Status</th>
@@ -2037,6 +2037,18 @@ export default function InquiriesPage() {
                 const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
                 const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
                 const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
+                const rowLineItems = (details.lineItems && details.lineItems.length > 0)
+                  ? details.lineItems
+                  : [{
+                      sku_text: details.productType || '',
+                      dimensions: [details.thickness, details.width, details.length].filter(Boolean).join(' x '),
+                      quantity: details.quantityTons || 0,
+                      unit: 'MT',
+                    }];
+                const rowTonnage = calculateTotalTonnageMt(rowLineItems);
+                const tonnageFormatted = rowTonnage.totalMt > 0
+                  ? `(${rowTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
+                  : '';
                 const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
 
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
@@ -2087,8 +2099,11 @@ export default function InquiriesPage() {
                         {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
+                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+                      {tonnageFormatted && (
+                        <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
                       {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
