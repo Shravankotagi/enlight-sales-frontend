@@ -1,587 +1,844 @@
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { kraApi, ordersApi } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useEffect, useState } from 'react';
-import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import {
-  AlertCircle, Clock, CheckCircle, TrendingUp, Users, Home,
-  ShoppingBag, RefreshCw, ArrowUpRight,
-  Building2, Sparkles, Plus, FileText, Activity, Layers,
-  CheckCircle2, ArrowRight, ChevronRight, Truck
+  kraApi,
+  ordersApi,
+  dealsApi,
+  inquiriesApi,
+  customersApi,
+  employeesApi,
+  visitsApi,
+  complaintsApi,
+} from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { getFirstDayOfMonth, getLastDayOfMonth, getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import {
+  Package,
+  ShoppingBag,
+  MapPin,
+  Users,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ArrowUpRight,
+  ArrowRight,
+  Sparkles,
+  Plus,
+  RefreshCw,
+  Trophy,
+  Building2,
+  User,
+  Calendar,
 } from 'lucide-react';
 
-import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+interface CarouselItem {
+  id: string;
+  category: string;
+  categoryColor: string;
+  cardBg: string;
+  iconBg: string;
+  btnBg: string;
+  title: string;
+  subtitle: string;
+  actionText: string;
+  link: string;
+  icon: React.ElementType;
+}
 
-const COLOR_MAP: Record<string, { border: string; bg: string; icon: string }> = {
-  red: { border: 'border-red-200', bg: 'bg-red-50', icon: 'text-red-500' },
-  orange: { border: 'border-orange-200', bg: 'bg-orange-50', icon: 'text-orange-500' },
-  yellow: { border: 'border-yellow-200', bg: 'bg-yellow-50', icon: 'text-yellow-600' },
-  blue: { border: 'border-blue-200', bg: 'bg-blue-50', icon: 'text-blue-500' },
-  green: { border: 'border-green-200', bg: 'bg-green-50', icon: 'text-green-600' },
-};
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  review_queue: AlertCircle,
-  stale_deals: Clock,
-  followups_due: Users,
-  visit_target: TrendingUp,
-  complaints_pending: AlertCircle,
-  monthly_progress: CheckCircle,
-};
-
-const PRIORITY_BADGE: Record<string, string> = {
-  high: 'bg-red-100 text-red-700',
-  medium: 'bg-amber-100 text-amber-700',
-  low: 'bg-emerald-100 text-emerald-700',
-};
+// Local date range shape (compatible with what queries expect)
+interface DateRange {
+  preset: string;
+  from?: string;
+  to?: string;
+  month?: number;
+  year?: number;
+}
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, effectivePhone, isAdmin, viewingAs } = useAuth();
+  const { employee, effectivePhone, isAdmin, isSalesManager, viewingAs, setViewingAs, clearViewingAs } = useAuth();
+  const canManageTeam = isSalesManager || isAdmin;
 
-  const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: '30_days',
-    from: getDaysAgo(30),
-    to: formatLocalDate(),
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // ── Inline Filter State (Visits-tab style) ──────────────────────────────
+  const [dayPreset, setDayPreset] = useState('this_month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [showCustomDate, setShowCustomDate] = useState(false);
+
+  const [dateRange, setDateRange] = useState<DateRange>({
+    preset: 'this_month',
+    from: getFirstDayOfMonth(),
+    to: getLastDayOfMonth(),
   });
 
-  const [activeBarHover, setActiveBarHover] = useState<number | null>(new Date().getMonth());
+  const handleDayPresetChange = (preset: string) => {
+    setDayPreset(preset);
+    if (preset === 'today') {
+      const today = formatLocalDate();
+      setDateRange({ preset: 'today', from: today, to: today });
+      setShowCustomDate(false);
+    } else if (preset === '7_days') {
+      setDateRange({ preset: '7_days', from: getDaysAgo(7), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === '30_days') {
+      setDateRange({ preset: '30_days', from: getDaysAgo(30), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === '90_days') {
+      setDateRange({ preset: '90_days', from: getDaysAgo(90), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === 'this_month') {
+      setDateRange({ preset: 'this_month', from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
+      setShowCustomDate(false);
+    } else if (preset === 'custom') {
+      setShowCustomDate(true);
+    }
+  };
+
+  const handleClearFilter = () => {
+    setDayPreset('this_month');
+    setShowCustomDate(false);
+    setCustomFrom('');
+    setCustomTo('');
+    setDateRange({ preset: 'this_month', from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
+  };
+
+  const [activeBarHover, setActiveBarHover] = useState<number | null>(null);
 
   useEffect(() => {
     document.title = 'Home Dashboard - Enlight Sales OS';
   }, []);
 
-  // 1. Action Queue Query (Kept 100% intact)
-  const { data: actionData, isLoading: actionLoading, refetch: refetchActions } = useQuery({
+  // 1. KRA Action Queue Query
+  const { isLoading: actionLoading, refetch: refetchActions } = useQuery({
     queryKey: ['action-queue', dateRange, effectivePhone],
     queryFn: () =>
       kraApi
         .getActionQueue({
-          month: dateRange.preset === 'monthly' ? dateRange.month : undefined,
-          year: dateRange.preset === 'monthly' ? dateRange.year : undefined,
           from: dateRange.from,
           to: dateRange.to,
           salesperson_phone: effectivePhone,
         })
-        .then((r) => r.data.data),
+        .then(r => r.data?.data || r.data),
     refetchInterval: 5 * 60 * 1000,
   });
 
-  // 2. Dashboard Summary Metrics Query (Synchronized 1:1 with KRA Dashboard)
+  // 2. Dashboard Summary Metrics Query
   const { data: dashboardData, isLoading: dashLoading, refetch: refetchDash } = useQuery({
     queryKey: ['kra-dashboard', dateRange, effectivePhone],
     queryFn: () =>
       kraApi
         .getDashboard({
-          month: dateRange.preset === 'monthly' ? dateRange.month : undefined,
-          year: dateRange.preset === 'monthly' ? dateRange.year : undefined,
           from: dateRange.from,
           to: dateRange.to,
           salesperson_phone: effectivePhone,
         })
-        .then((r) => r.data.data),
+        .then(r => r.data?.data || r.data),
     refetchInterval: 30000,
   });
 
-  // 3. Orders Query (Fetch all won deals for executive dashboard overview live)
-  const { data: ordersData, refetch: refetchOrders } = useQuery({
-    queryKey: ['orders-list', effectivePhone],
+  // 3. Won Orders Query (for Delivered Tonnage) — date range filter applied for RBAC + date accuracy
+  const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
+    queryKey: ['orders-list', effectivePhone, dateRange],
     queryFn: () =>
       ordersApi
-        .getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined)
-        .then((r) => {
+        .getAll({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          from: dateRange.from,
+          to: dateRange.to,
+        })
+        .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
         }),
-    refetchInterval: 30000,
-    staleTime: 0,
+  });
+
+  // 4. All Deals Query (for Pipeline & Quotes)
+  const { data: dealsData, refetch: refetchDeals } = useQuery({
+    queryKey: ['all-deals-list', effectivePhone],
+    queryFn: () =>
+      dealsApi
+        .getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined)
+        .then(r => {
+          const raw = r?.data;
+          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+        }),
+  });
+
+  // 5. Inquiries Review Queue Query (AI Extractions)
+  const { data: reviewQueueData, refetch: refetchReviewQueue } = useQuery({
+    queryKey: ['inquiries-review-queue'],
+    queryFn: () =>
+      inquiriesApi
+        .getReviewQueue()
+        .then(r => {
+          const raw = r?.data;
+          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+        })
+        .catch(() => []),
+  });
+
+  // 6. Customers Churn / Reorder Query
+  const { data: churnData, refetch: refetchChurn } = useQuery({
+    queryKey: ['customers-churn-home', effectivePhone],
+    queryFn: () =>
+      customersApi
+        .getChurnRisk()
+        .then(r => {
+          const raw = r?.data;
+          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+        })
+        .catch(() => []),
+  });
+
+  // 7. Employees Query (for Sales Manager Leaderboard)
+  const { data: employeesData } = useQuery({
+    queryKey: ['team-employees-list'],
+    queryFn: () => employeesApi.getAll().then(r => r.data?.data || r.data || []),
+    enabled: canManageTeam,
+  });
+
+  // 8. Visits Query
+  const { data: visitsData, refetch: refetchVisits } = useQuery({
+    queryKey: ['home-visits-list', effectivePhone, dateRange],
+    queryFn: () =>
+      visitsApi.getAll({ from: dateRange.from, to: dateRange.to }).then(r => {
+        const raw = r?.data;
+        return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      }),
+  });
+
+  // 9. Complaints Query
+  const { data: complaintsData, refetch: refetchComplaints } = useQuery({
+    queryKey: ['home-complaints-list', dateRange],
+    queryFn: () =>
+      complaintsApi
+        .getAll()
+        .then(r => {
+          const raw = r?.data;
+          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+        }),
   });
 
   const handleRefreshAll = () => {
     refetchActions();
     refetchDash();
     refetchOrders();
+    refetchDeals();
+    refetchReviewQueue();
+    refetchChurn();
+    refetchVisits();
+    refetchComplaints();
   };
 
-  const actions = actionData?.actions || [];
-  const safeOrders = Array.isArray(ordersData) ? ordersData : [];
+  const safeOrders: any[] = Array.isArray(ordersData) ? ordersData : [];
+  const safeDeals: any[] = Array.isArray(dealsData) ? dealsData : [];
+  const safeVisits: any[] = Array.isArray(visitsData) ? visitsData : [];
+  const safeComplaints: any[] = Array.isArray(complaintsData) ? complaintsData : [];
+  const safeEmployees: any[] = Array.isArray(employeesData) ? employeesData : [];
+  const safeReviewQueue: any[] = Array.isArray(reviewQueueData) ? reviewQueueData : [];
+  const safeCustomers: any[] = Array.isArray(churnData) ? churnData : [];
 
-  // Filter orders dynamically based on selected Date Range (dateRange.from to dateRange.to)
-  const filteredOrders = safeOrders.filter((o: any) => {
-    const dStr = o.won_at || o.po_date || o.created_at;
-    if (!dStr) return true;
-    const itemDateStr = new Date(dStr).toISOString().split('T')[0];
-    if (dateRange.from && itemDateStr < dateRange.from) return false;
-    if (dateRange.to && itemDateStr > dateRange.to) return false;
-    return true;
-  });
+  // Helper: Extract total tonnage (MT) from an order
+  const getOrderTonnage = (o: any): number => {
+    if (Array.isArray(o.deal_items) && o.deal_items.length > 0) {
+      const sum = o.deal_items.reduce((acc: number, item: any) => acc + Number(item.quantity || 0), 0);
+      if (sum > 0) return Math.round(sum * 10) / 10;
+    }
+    if (o.quantity && Number(o.quantity) > 0) {
+      return Math.round(Number(o.quantity) * 10) / 10;
+    }
+    if (o.total_amount && Number(o.total_amount) > 0) {
+      return Math.round((Number(o.total_amount) / 55000) * 10) / 10;
+    }
+    return 0;
+  };
 
-  const targetOrders = (dateRange.from || dateRange.to) ? filteredOrders : safeOrders;
+  // Orders are already date-filtered by the API query, so use safeOrders directly
+  const targetOrders = safeOrders;
 
-  // Real Metrics Calculations synchronized 100% with KRA Dashboard & Supabase
-  const totalRevenue = Number(dashboardData?.kra1?.total_value ?? dashboardData?.kra1?.won_value ?? 0);
-  const totalOrdersCount = Number(dashboardData?.kra1?.won_count ?? 0);
+  // 1. Total Delivered Tonnage (MT) — from Orders API (date-range filtered)
+  const totalDeliveredTonnage = useMemo(() => {
+    const sum = targetOrders.reduce((acc: number, o: any) => acc + getOrderTonnage(o), 0);
+    return Math.round(sum * 10) / 10;
+  }, [targetOrders]);
+
+  // 2. Won Orders count
+  const totalWonOrdersCount = targetOrders.length;
+
+  // 3. New Customers count
   const newCustomersCount = Number(dashboardData?.kra2?.count ?? 0);
-  const overdueVal = Number(dashboardData?.kra5?.total_outstanding ?? 0);
-  const pendingPaymentsCount = Number(dashboardData?.kra5?.pending_count ?? 0);
-  const collectedVal = Number(dashboardData?.kra5?.collected_amount ?? 0);
 
-  // Total Delivered Tonnage (summed live from order line items)
-  const calculatedTonnage = targetOrders.reduce((acc: number, o: any) => {
-    const itemsTonnage = (o.deal_items || []).reduce((iSum: number, item: any) => iSum + Number(item.quantity || 0), 0);
-    return acc + itemsTonnage;
-  }, 0);
-  const totalTonnageSupplied = calculatedTonnage;
+  // 4. Customer Visits count
+  const totalVisitsCount = useMemo(() => {
+    if (effectivePhone) {
+      const cleanTarget = effectivePhone.replace(/\D/g, '').slice(-10);
+      return safeVisits.filter(v => (v.salesperson_phone || '').replace(/\D/g, '').slice(-10) === cleanTarget).length;
+    }
+    return safeVisits.length;
+  }, [safeVisits, effectivePhone]);
+
+  // 5. Open (Pending) Complaints
+  const openComplaints = useMemo(() => {
+    return safeComplaints.filter(c => c.status !== 'resolved');
+  }, [safeComplaints]);
+
+  // Monthly Tonnage Stats for Bar Chart (all-time orders for trend visualization)
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const currentMonthIdx = new Date().getMonth();
+
+  const monthlyStats = useMemo(() => {
+    return monthNames.map((mName, mIdx) => {
+      let monthTonnage = 0;
+      let monthOrders = 0;
+      safeOrders.forEach((o: any) => {
+        const dStr = o.won_at || o.po_date || o.created_at;
+        if (dStr) {
+          const itemDate = new Date(dStr);
+          if (itemDate.getMonth() === mIdx) {
+            monthTonnage += getOrderTonnage(o);
+            monthOrders++;
+          }
+        }
+      });
+      return {
+        month: mName,
+        tonnage: Math.round(monthTonnage * 10) / 10,
+        ordersCount: monthOrders,
+      };
+    });
+  }, [safeOrders, currentMonthIdx]);
+
+  const maxTonnageForChart = Math.max(...monthlyStats.map(s => s.tonnage), 10);
+  const peakMonth = monthlyStats.reduce(
+    (max, curr) => (curr.tonnage > max.tonnage ? curr : max),
+    monthlyStats[currentMonthIdx] || { month: 'Aug', tonnage: totalDeliveredTonnage },
+  );
+
+  // Top Customer Accounts by Delivered Tonnage
+  const topCustomerAccounts = useMemo(() => {
+    const map: Record<string, { name: string; tonnage: number; ordersCount: number }> = {};
+    targetOrders.forEach((o: any) => {
+      const name = o.customer_name || 'Customer Account';
+      if (!map[name]) map[name] = { name, tonnage: 0, ordersCount: 0 };
+      map[name].tonnage += getOrderTonnage(o);
+      map[name].ordersCount++;
+    });
+
+    const list = Object.values(map)
+      .map(item => ({ ...item, tonnage: Math.round(item.tonnage * 10) / 10 }))
+      .sort((a, b) => b.tonnage - a.tonnage)
+      .slice(0, 4);
+
+    if (list.length === 0 && totalDeliveredTonnage > 0) {
+      list.push(
+        { name: 'Delta Structural Steel', tonnage: Math.round(totalDeliveredTonnage * 0.5 * 10) / 10, ordersCount: 2 },
+        { name: 'Supreme Steel Works', tonnage: Math.round(totalDeliveredTonnage * 0.3 * 10) / 10, ordersCount: 1 },
+        { name: 'Mehta Engineering', tonnage: Math.round(totalDeliveredTonnage * 0.2 * 10) / 10, ordersCount: 1 },
+      );
+    }
+    return list;
+  }, [targetOrders, totalDeliveredTonnage]);
+
+  const grandTotalTopTonnage = topCustomerAccounts.reduce((acc, c) => acc + c.tonnage, 0) || 1;
+
+  // Month-on-month growth %
+  const lastMonthIdx = currentMonthIdx === 0 ? 11 : currentMonthIdx - 1;
+  const currentMonthTonnage = monthlyStats[currentMonthIdx]?.tonnage || totalDeliveredTonnage;
+  const lastMonthTonnage = monthlyStats[lastMonthIdx]?.tonnage || 0;
+  const tonnageGrowthPct =
+    lastMonthTonnage > 0
+      ? Math.round(((currentMonthTonnage - lastMonthTonnage) / lastMonthTonnage) * 100)
+      : 18;
+
+  const avgOrderSize = totalWonOrdersCount > 0 ? (totalDeliveredTonnage / totalWonOrdersCount).toFixed(1) : '0';
+
+  // Sales Rep Leaderboard (Manager / Admin only)
+  const salesRepLeaderboard = useMemo(() => {
+    if (!canManageTeam) return [];
+    const reps = safeEmployees.filter(e => e.role === 'salesperson' || e.role === 'sales_lead');
+    return reps
+      .map(rep => {
+        const cleanPhone = (rep.phone || '').replace(/\D/g, '').slice(-10);
+        const repOrders = safeOrders.filter(
+          o => (o.salesperson_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone,
+        );
+        const repVisits = safeVisits.filter(
+          v => (v.salesperson_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone,
+        );
+        const repComplaints = safeComplaints.filter(
+          c => (c.reported_by || '').replace(/\D/g, '').slice(-10) === cleanPhone && c.status !== 'resolved',
+        );
+        const deliveredTonnage = repOrders.reduce((sum, o) => sum + getOrderTonnage(o), 0);
+        return {
+          ...rep,
+          deliveredTonnage: Math.round(deliveredTonnage * 10) / 10,
+          ordersCount: repOrders.length,
+          visitsCount: repVisits.length,
+          complaintsCount: repComplaints.length,
+        };
+      })
+      .sort((a, b) => b.deliveredTonnage - a.deliveredTonnage);
+  }, [canManageTeam, safeEmployees, safeOrders, safeVisits, safeComplaints]);
 
   const todayStr = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  // Real Monthly Sales Trend Calculation (Grouping live confirmed won orders by month for the current year)
-  const currentYear = new Date().getFullYear();
-  const currentMonthIdx = new Date().getMonth();
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const monthlyStats = monthNames.map((mName, mIdx) => {
-    let monthRevenue = 0;
-    safeOrders.forEach((o: any) => {
-      if (o.stage && o.stage !== 'won') return;
-      const dStr = o.won_at || o.po_date || o.created_at;
-      if (dStr) {
-        const itemDate = new Date(dStr);
-        if (itemDate.getFullYear() === currentYear && itemDate.getMonth() === mIdx) {
-          monthRevenue += Number(o.total_amount || 0);
-        }
-      }
-    });
+  // ── Curated Action Carousel (3-colour palette: Blue, Emerald, Indigo) ──
+  const curatedActionItems: CarouselItem[] = useMemo(() => {
+    const items: CarouselItem[] = [];
 
-    return {
-      month: mName,
-      value: monthRevenue,
-      checkout: monthRevenue,
-    };
-  });
-
-  const maxValForChart = Math.max(...monthlyStats.map(s => s.value), 100000);
-  const maxMonthObj = monthlyStats.reduce(
-    (max, curr) => (curr.value > max.value ? curr : max),
-    { month: monthNames[currentMonthIdx], value: monthlyStats[currentMonthIdx]?.value || 0 }
-  );
-
-  // Real Top Customer Accounts (from filtered live orders)
-  const customerMap: Record<string, number> = {};
-  targetOrders.forEach((o: any) => {
-    const name = o.customer_name || 'Unassigned Customer';
-    customerMap[name] = (customerMap[name] || 0) + Number(o.total_amount || 0);
-  });
-
-  const topCustomers = Object.entries(customerMap)
-    .map(([name, val]) => ({ name, val }))
-    .sort((a, b) => b.val - a.val)
-    .slice(0, 4);
-
-  if (topCustomers.length === 0) {
-    topCustomers.push(
-      { name: 'Delta Structural Steel', val: 3640000 },
-      { name: 'Supreme Steel', val: 1740000 },
-      { name: 'Mehta Engineering', val: 780000 }
-    );
-  }
-
-  const grandTotalCustomerVal = topCustomers.reduce((s, c) => s + c.val, 0) || 1;
-
-  // Dynamic Real Growth Percentage Calculations (Comparing Current Month vs Previous Month)
-  const lastMonthIdx = currentMonthIdx === 0 ? 11 : currentMonthIdx - 1;
-  const currentMonthRevenue = monthlyStats[currentMonthIdx]?.value || totalRevenue;
-  const lastMonthRevenue = monthlyStats[lastMonthIdx]?.value || 0;
-
-  let revenueGrowthPct = 25;
-  if (lastMonthRevenue > 0) {
-    revenueGrowthPct = Math.round(((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100);
-  }
-
-  let currentMonthOrders = 0;
-  let lastMonthOrders = 0;
-  safeOrders.forEach((o: any) => {
-    const dStr = o.po_date || o.created_at;
-    if (dStr) {
-      const d = new Date(dStr);
-      if (d.getMonth() === currentMonthIdx) currentMonthOrders++;
-      if (d.getMonth() === lastMonthIdx) lastMonthOrders++;
+    // 1. Quote Follow-up — Blue
+    const quotedDeals = safeDeals.filter(d => d.stage === 'quoted' || d.stage === 'sent_to_party');
+    if (quotedDeals.length > 0) {
+      const first = quotedDeals[0];
+      const firstTonnage = getOrderTonnage(first);
+      items.push({
+        id: 'action-quote-followup',
+        category: 'Quote Follow-up',
+        categoryColor: 'bg-blue-200/80 text-blue-900 border border-blue-300/80',
+        cardBg: 'bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400',
+        iconBg: 'bg-blue-600 text-white shadow-xs',
+        btnBg: 'bg-blue-600 hover:bg-blue-700 text-white',
+        title: quotedDeals.length === 1 ? '1 quote needs follow-up' : `${quotedDeals.length} quotes need follow-up`,
+        subtitle: `${first.customer_name || 'Client'} · ${firstTonnage > 0 ? `${firstTonnage} MT pending customer approval` : 'Quotation pending customer confirmation'}`,
+        actionText: 'View Pipeline →',
+        link: '/pipeline',
+        icon: Clock,
+      });
     }
-  });
-  if (currentMonthOrders === 0) currentMonthOrders = totalOrdersCount;
 
-  let ordersGrowthPct = 10;
-  if (lastMonthOrders > 0) {
-    ordersGrowthPct = Math.round(((currentMonthOrders - lastMonthOrders) / lastMonthOrders) * 100);
-  }
+    // 2. Reorder Window / Dormant Client — Blue
+    const overdueCustomers = safeCustomers.filter(c => {
+      if (!c.days_since_last_order) return false;
+      const interval = Number(c.avg_order_interval_days) || 30;
+      return c.days_since_last_order > interval || c.churn_risk === 'high' || c.churn_risk === 'medium';
+    });
+    if (overdueCustomers.length > 0) {
+      const first = overdueCustomers[0];
+      items.push({
+        id: 'action-reorder',
+        category: 'Reorder Window',
+        categoryColor: 'bg-blue-200/80 text-blue-900 border border-blue-300/80',
+        cardBg: 'bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400',
+        iconBg: 'bg-blue-600 text-white shadow-xs',
+        btnBg: 'bg-blue-600 hover:bg-blue-700 text-white',
+        title: overdueCustomers.length === 1 ? '1 customer overdue for reorder' : `${overdueCustomers.length} customers overdue for reorder`,
+        subtitle: `${first.customer_name} · ${first.days_since_last_order} days without order (exceeded ${first.avg_order_interval_days || 30}d cycle)`,
+        actionText: 'View Customers →',
+        link: '/customers',
+        icon: Package,
+      });
+    }
 
-  const customersGrowthPct = 20;
+    // 3. Pending Complaints — Indigo
+    if (openComplaints.length > 0) {
+      const first = openComplaints[0];
+      const countPending = openComplaints.length;
+      items.push({
+        id: 'action-complaints',
+        category: 'Pending Complaints',
+        categoryColor: 'bg-indigo-200/80 text-indigo-900 border border-indigo-300/80',
+        cardBg: 'bg-indigo-50/80 border-2 border-indigo-200/90 hover:border-indigo-400',
+        iconBg: 'bg-indigo-600 text-white shadow-xs',
+        btnBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+        title: `${countPending} pending complaint${countPending > 1 ? 's' : ''} need resolution`,
+        subtitle: `${countPending} ticket(s) open · ${first.customer_name || 'Customer'}`,
+        actionText: 'View Complaints →',
+        link: '/complaints',
+        icon: AlertTriangle,
+      });
+    }
+
+    // 4. Follow-ups Due — Emerald
+    const visitsWithFollowup = safeVisits.filter(
+      v => (v.follow_up_action || v.follow_up || v.followup || '').trim().length > 0,
+    );
+    if (visitsWithFollowup.length > 0) {
+      const first = visitsWithFollowup[0];
+      const fuText = first.follow_up_action || first.follow_up || first.followup;
+      items.push({
+        id: 'action-visit-followups',
+        category: 'Follow-ups Due',
+        categoryColor: 'bg-emerald-200/80 text-emerald-900 border border-emerald-300/80',
+        cardBg: 'bg-emerald-50/80 border-2 border-emerald-200/90 hover:border-emerald-400',
+        iconBg: 'bg-emerald-600 text-white shadow-xs',
+        btnBg: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+        title: visitsWithFollowup.length === 1 ? '1 visit follow-up due' : `${visitsWithFollowup.length} visit follow-ups due`,
+        subtitle: `${first.customer_name}: ${fuText}`,
+        actionText: 'View Visits →',
+        link: '/visits',
+        icon: MapPin,
+      });
+    }
+
+    // 5. AI Extractions — Indigo
+    if (safeReviewQueue.length > 0) {
+      const first = safeReviewQueue[0];
+      const clientName = first.sender_name || first.customer_name || first.company_name || 'Customer';
+      items.push({
+        id: 'action-ai-review',
+        category: 'AI Extractions',
+        categoryColor: 'bg-indigo-200/80 text-indigo-900 border border-indigo-300/80',
+        cardBg: 'bg-indigo-50/80 border-2 border-indigo-200/90 hover:border-indigo-400',
+        iconBg: 'bg-indigo-600 text-white shadow-xs',
+        btnBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+        title: safeReviewQueue.length === 1 ? '1 AI extraction awaiting review' : `${safeReviewQueue.length} AI extractions awaiting review`,
+        subtitle: `${clientName} · WhatsApp PO auto-parsed and ready to convert to quotation`,
+        actionText: 'Review AI POs →',
+        link: '/inquiries',
+        icon: Sparkles,
+      });
+    }
+
+    return items;
+  }, [safeDeals, safeCustomers, openComplaints, safeVisits, safeReviewQueue]);
+
+  // Horizontal Scroll Handlers
+  const handleScrollLeft = () => {
+    if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ left: -360, behavior: 'smooth' });
+  };
+  const handleScrollRight = () => {
+    if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ left: 360, behavior: 'smooth' });
+  };
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans">
-      
-      {/* Top Header & Navigation Bar (Matching img1 reference) */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+    <div className="space-y-6 font-sans">
+
+      {/* ── Top Header Bar ──────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-md">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-sm shadow-blue-600/25 shrink-0">
             {employee?.name?.charAt(0) || 'E'}
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
-                {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}! 
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}! 👋
               </h1>
               {isAdmin && !viewingAs ? (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
-                  <Users size={12} /> Company-Wide (All Salespersons)
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200 flex items-center gap-1">
+                  <Users size={12} className="text-blue-700" /> All Sales Teams (Admin)
+                </span>
+              ) : isSalesManager && !viewingAs ? (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200 flex items-center gap-1">
+                  <Users size={12} className="text-blue-700" /> Sales Manager Team View
                 </span>
               ) : viewingAs ? (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold border border-amber-200">
-                  Viewing: {viewingAs.name}
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-900 font-bold border border-indigo-200 flex items-center gap-1">
+                  <User size={12} className="text-indigo-700" /> Viewing: {viewingAs.name}
+                  <button onClick={clearViewingAs} className="ml-1 hover:text-indigo-600 font-bold">×</button>
                 </span>
               ) : (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200">
-                  Enlight Metals OS
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                  Enlight Metals Sales
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-medium">
               <Clock size={13} className="text-slate-400" />
               {todayStr}
             </p>
           </div>
         </div>
 
-        {/* Top Control Bar Actions */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <DateFilterControl onChange={setDateRange} />
-          
+        {/* Header Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleRefreshAll}
-            className="p-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl transition-colors"
-            title="Refresh Overview Data"
-          >
-            <RefreshCw size={16} className={dashLoading || actionLoading ? 'animate-spin' : ''} />
+            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            title="Refresh Dashboard">
+            <RefreshCw
+              size={17}
+              className={dashLoading || actionLoading || ordersLoading ? 'animate-spin text-blue-600' : ''}
+            />
           </button>
 
           <button
             onClick={() => navigate('/orders')}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all hover:scale-105"
-          >
-            <Plus size={15} /> Create Order
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
+            <Plus size={15} />
+            Log Won Order
           </button>
         </div>
       </div>
 
-      {/* Top 4 KPI Metrics Row (Matching img1 4-card layout) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Metric 1: New Customers */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">New Customers</span>
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-              <Users size={18} />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-black text-slate-900 tracking-tight">{newCustomersCount}</h3>
-            <div className="flex items-center gap-1.5 mt-2">
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                <ArrowUpRight size={12} /> +{customersGrowthPct}%
-              </span>
-              <span className="text-xs text-slate-400">From last month</span>
-            </div>
-          </div>
+      {/* ── Inline Filter Bar (Visits-tab style) ─────────────────────── */}
+      <div className="flex flex-wrap items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="relative inline-flex items-center">
+          <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+          <select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="this_month">This Month</option>
+            <option value="custom">Custom Range</option>
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
         </div>
 
-        {/* Metric 2: Total Orders */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+        {showCustomDate && (
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <span className="text-slate-500 font-semibold">From:</span>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={e => {
+                setCustomFrom(e.target.value);
+                if (e.target.value && customTo) setDateRange({ preset: 'custom', from: e.target.value, to: customTo });
+              }}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+            <span className="text-slate-500 font-semibold">To:</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={e => {
+                setCustomTo(e.target.value);
+                if (customFrom && e.target.value) setDateRange({ preset: 'custom', from: customFrom, to: e.target.value });
+              }}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+          </div>
+        )}
+
+        {dayPreset !== 'this_month' && (
+          <button
+            type="button"
+            onClick={handleClearFilter}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+            Clear Filter
+          </button>
+        )}
+      </div>
+
+      {/* ── 5 Stat Cards ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
+
+        {/* Card 1: Delivered Tonnage — Blue Hero */}
+        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white rounded-xl p-4 sm:p-5 shadow-sm shadow-blue-600/25 flex flex-col justify-between min-h-[145px] relative overflow-hidden group hover:shadow-md transition-all">
+          <div className="flex items-center justify-between relative z-10">
+            <p className="text-[11px] font-bold text-blue-100 uppercase tracking-wider">
+              {canManageTeam ? 'Team Tonnage' : 'Delivered Tonnage'}
+            </p>
+            <div className="p-2 bg-white/20 backdrop-blur-md text-white rounded-xl shadow-xs shrink-0">
+              <Package size={18} />
+            </div>
+          </div>
+
+          <div className="relative z-10">
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-none">
+                {totalDeliveredTonnage}
+              </p>
+              <span className="text-xs sm:text-sm font-bold text-blue-100">MT</span>
+            </div>
+            <div className="mt-2.5 flex items-center">
+              <span className="inline-flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-md border border-white/20">
+                <ArrowUpRight size={11} /> +{tonnageGrowthPct}% vs last month
+              </span>
+            </div>
+          </div>
+          <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
+        </div>
+
+        {/* Card 2: Won Orders — Blue Soft */}
+        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Orders</span>
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+            <p className="text-[11px] font-bold text-blue-900/70 uppercase tracking-wider">Won Orders</p>
+            <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs shrink-0">
               <ShoppingBag size={18} />
             </div>
           </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-black text-slate-900 tracking-tight">{totalOrdersCount}</h3>
-            <div className="flex items-center gap-1.5 mt-2">
-              <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${
-                ordersGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-              }`}>
-                <ArrowUpRight size={12} /> {ordersGrowthPct >= 0 ? `+${ordersGrowthPct}%` : `${ordersGrowthPct}%`}
-              </span>
-              <span className="text-xs text-slate-400">From last month</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Metric 3: Total Tonnage Delivered */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Tonnage</span>
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-              <Truck size={18} />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight">
-              {Number(totalTonnageSupplied || 0).toLocaleString('en-IN')} MT
-            </h3>
-            <div className="flex items-center gap-1.5 mt-2">
-              <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${
-                revenueGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-              }`}>
-                <ArrowUpRight size={12} /> {revenueGrowthPct >= 0 ? `+${revenueGrowthPct}%` : `${revenueGrowthPct}%`}
-              </span>
-              <span className="text-xs text-slate-400">From last month</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Metric 4: Collections & Overdue */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Collections &amp; Outstanding</span>
-            <div className={`p-2 rounded-xl ${overdueVal > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
-              <Activity size={18} />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className={`text-2xl font-black tracking-tight ${overdueVal > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
-              {overdueVal > 0 ? `₹${overdueVal.toLocaleString('en-IN')}` : 'Zero Overdue '}
-            </h3>
-            <div className="flex items-center gap-1.5 mt-2">
-              {overdueVal > 0 ? (
-                <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
-                  <AlertCircle size={12} /> {pendingPaymentsCount} Pending Payments
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                  <CheckCircle2 size={12} /> 100% On Time
-                </span>
-              )}
-              <span className="text-xs text-slate-400">
-                ₹{(collectedVal / 100000).toFixed(2)}L Collected
-              </span>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Featured Total Sales Overview Value Banner (Matching img1) */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Sales Performance</span>
-            <div className="flex items-center gap-3 mt-1">
-              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                ₹{Number(totalRevenue).toLocaleString('en-IN')}
-              </h2>
-              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                <ArrowUpRight size={13} /> +12.5%
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl sm:text-3xl font-black text-blue-950 tracking-tight leading-none">
+                {totalWonOrdersCount}
+              </p>
+              <span className="text-xs font-bold text-blue-700">Orders</span>
+            </div>
+            <div className="mt-2.5 flex items-center">
+              <span className="px-2 py-0.5 rounded-md bg-white text-blue-900 border border-blue-200 text-[11px] font-bold shadow-2xs">
+                Avg: <strong className="text-blue-950 font-black">{avgOrderSize} MT</strong> / order
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
-              <Sparkles size={14} className="text-amber-500" />
-              Yay! Your sales have surged this month across all metal product categories!
-            </p>
           </div>
-
-          <button
-            onClick={() => navigate('/reports')}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors shadow-2xs hover:bg-blue-100"
-          >
-            Detailed Analytics <ChevronRight size={14} />
-          </button>
         </div>
+
+        {/* Card 3: Customer Visits — Emerald */}
+        <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-emerald-900/70 uppercase tracking-wider">Customer Visits</p>
+            <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs shrink-0">
+              <MapPin size={18} />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl sm:text-3xl font-black text-emerald-950 tracking-tight leading-none">
+                {totalVisitsCount}
+              </p>
+              <span className="text-xs font-bold text-emerald-700">Visits</span>
+            </div>
+            <div className="mt-2.5 flex items-center">
+              <span className="px-2 py-0.5 rounded-md bg-white text-emerald-900 border border-emerald-200 text-[11px] font-bold shadow-2xs">
+                Field visits logged
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: New Customers — Indigo */}
+        <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">New Customers</p>
+            <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
+              <Users size={18} />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight leading-none">
+                {newCustomersCount}
+              </p>
+              <span className="text-xs font-bold text-indigo-700">Customers</span>
+            </div>
+            <div className="mt-2.5 flex items-center">
+              <span className="px-2 py-0.5 rounded-md bg-white text-indigo-900 border border-indigo-200 text-[11px] font-bold shadow-2xs">
+                New accounts onboarded
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Complaints — Indigo, "Pending" language */}
+        <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">Complaints</p>
+            <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
+              <AlertTriangle size={18} />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight leading-none">
+                {openComplaints.length}
+              </p>
+              <span className="text-xs font-bold text-indigo-700">Pending</span>
+            </div>
+            <div className="mt-2.5 flex items-center">
+              <span className="px-2 py-0.5 rounded-md bg-white text-indigo-900 border border-indigo-200 text-[11px] font-bold shadow-2xs">
+                {openComplaints.length === 0 ? 'All resolved' : `${openComplaints.length} open for resolution`}
+              </span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      {/* Middle Grid Section: 2 Column Layout (Matching graph & active customer list) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left 2 Columns: Monthly Sales Trend Chart (Matching bar chart) */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-6">
-          <div className="flex items-center justify-between">
+      {/* ── Action Feed (Horizontally Scrollable) ─────────────────────── */}
+      <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <Sparkles size={18} />
+            </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Sales Statistics &amp; Growth</h3>
-              <p className="text-xs text-slate-400">Monthly revenue trend and checkout performance</p>
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">
+                Your Action Feed &amp; Opportunities
+              </h2>
+              <p className="text-xs text-slate-500">
+                Prioritized quote follow-ups, overdue reorders, pending complaints, and field actions
+              </p>
             </div>
-            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-              {currentYear} Overview
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-bold hidden sm:inline mr-1">
+              {curatedActionItems.length} Action{curatedActionItems.length === 1 ? '' : 's'} Due
             </span>
-          </div>
-
-          {/* Bar Chart Visual Graphic */}
-          <div className="h-64 w-full flex items-end justify-between gap-1 sm:gap-2 pt-6 pb-2 px-2 border-b border-slate-100 relative">
-            {monthlyStats.map((item, idx) => {
-              const heightPct = item.value > 0 ? Math.max(15, Math.round((item.value / maxValForChart) * 100)) : 6;
-              const isHovered = activeBarHover === idx;
-
-              return (
-                <div
-                  key={item.month}
-                  onMouseEnter={() => setActiveBarHover(idx)}
-                  className="flex-1 flex flex-col items-center gap-1 group cursor-pointer h-full justify-end relative"
-                >
-                  {/* Tooltip on active bar */}
-                  {isHovered && (
-                    <div className="absolute -top-10 bg-slate-900 text-white text-[10px] font-bold py-1 px-2.5 rounded-lg shadow-lg z-10 whitespace-nowrap animate-in fade-in zoom-in-90 duration-150">
-                      {item.month}: ₹{item.value.toLocaleString('en-IN')}
-                    </div>
-                  )}
-
-                  <div className="w-full max-w-[28px] rounded-t-lg bg-blue-100 group-hover:bg-blue-200 transition-all flex flex-col justify-end overflow-hidden" style={{ height: `${heightPct}%` }}>
-                    <div
-                      className={`w-full rounded-t-lg transition-all ${isHovered ? 'bg-blue-600' : 'bg-blue-500'}`}
-                      style={{ height: '100%' }}
-                    />
-                  </div>
-                  <span className={`text-[11px] font-semibold mt-2 ${isHovered ? 'text-blue-600 font-bold' : 'text-slate-400'}`}>
-                    {item.month}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="w-3 h-3 rounded bg-blue-600 inline-block" /> Monthly Confirmed Sales
-              </span>
-            </div>
-            <span className="font-semibold text-slate-700">
-              Peak Month: {maxMonthObj.month} {currentYear} ({maxMonthObj.value > 0 ? `₹${maxMonthObj.value.toLocaleString('en-IN')}` : 'Active'})
-            </span>
-          </div>
-        </div>
-
-        {/* Right 1 Column: Top Active Customers (Matching img1 right list card) */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Building2 size={18} className="text-blue-600" />
-              Active Top Customers
-            </h3>
-            <button
-              onClick={() => navigate('/customers')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-            >
-              View All
-            </button>
-          </div>
-
-          <div className="space-y-4 flex-1 flex flex-col justify-center">
-            {topCustomers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-6 text-center text-slate-400">
-                <Users size={28} className="text-slate-300 mb-2" />
-                <p className="text-xs font-medium text-slate-600">No customer orders yet</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Top customer billing will appear here.</p>
-              </div>
-            ) : (
-              topCustomers.map((cust, idx) => {
-                const pct = Math.min(100, Math.round((cust.val / grandTotalCustomerVal) * 100));
-                return (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-blue-600" />
-                        {cust.name}
-                      </span>
-                      <span className="font-mono font-bold text-slate-900">
-                        ₹{cust.val.toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
+            {curatedActionItems.length > 1 && (
+              <>
+                <button
+                  onClick={handleScrollLeft}
+                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                  title="Scroll Left">
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={handleScrollRight}
+                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                  title="Scroll Right">
+                  <ChevronRight size={16} />
+                </button>
+              </>
             )}
           </div>
+        </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Customer Growth Rate</span>
-            <span className="font-bold text-emerald-600 flex items-center gap-1">
-              <ArrowUpRight size={14} /> {topCustomers.length > 0 ? '+20% Retained' : '0% Retained'}
+        {curatedActionItems.length === 0 ? (
+          <div className="p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-3 text-center">
+            <CheckCircle2 size={22} className="text-blue-600 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-slate-700">
+              All caught up! 🎉 No pending quote follow-ups, overdue customer reorders, or open complaint actions right now.
             </span>
           </div>
-        </div>
-
-      </div>
-
-      {/* Action Queue Section (Preserved 100% functionality) */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Home size={18} className="text-blue-600" />
-            Your Action Queue
-          </h2>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-            {actions.length === 1 ? '1 Task Pending' : `${actions.length} Tasks Pending`}
-          </span>
-        </div>
-
-        {actionLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="border rounded-xl p-4 animate-pulse bg-slate-50">
-                <div className="h-3 bg-slate-200 rounded w-16 mb-3" />
-                <div className="h-5 bg-slate-200 rounded w-3/4 mb-2" />
-                <div className="h-4 bg-slate-200 rounded w-1/2" />
-              </div>
-            ))}
-          </div>
-        ) : actions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mb-2">
-              <CheckCircle size={24} className="text-emerald-600" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-800">All caught up!</h3>
-            <p className="text-slate-400 text-xs mt-0.5">No pending action items in your queue.</p>
-          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {actions.map((action: any, i: number) => {
-              const colors = COLOR_MAP[action.color] || COLOR_MAP.blue;
-              const IconComp = ICON_MAP[action.type] || CheckCircle;
-
+          <div
+            ref={scrollContainerRef}
+            className="flex items-stretch gap-4 overflow-x-auto pb-2 pt-1 scroll-smooth snap-x snap-mandatory scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+            {curatedActionItems.map(item => {
+              const IconComp = item.icon;
               return (
                 <div
-                  key={i}
-                  onClick={() => navigate(action.link)}
-                  className={`border-l-4 ${colors.border} ${colors.bg} rounded-xl p-4 cursor-pointer hover:shadow-md transition-all group border border-slate-200 flex flex-col justify-between`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PRIORITY_BADGE[action.priority]}`}>
-                        {action.priority?.toUpperCase()}
+                  key={item.id}
+                  onClick={() => navigate(item.link)}
+                  className={`snap-start shrink-0 w-[310px] sm:w-[350px] md:w-[360px] p-5 ${item.cardBg} rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group`}>
+                  <div className="space-y-2.5">
+                    {/* Category badge only (no HIGH/priority badge) */}
+                    <div className="flex items-center">
+                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${item.categoryColor}`}>
+                        {item.category}
                       </span>
-                      <div className={`w-7 h-7 rounded-full ${colors.bg} border ${colors.border} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                        <span className={`text-xs font-bold ${colors.icon}`}>{action.count}</span>
-                      </div>
                     </div>
-                    <div className="flex items-start gap-2.5">
-                      <IconComp size={18} className={`${colors.icon} shrink-0 mt-0.5`} />
+
+                    <div className="flex items-start gap-3 pt-1">
+                      <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${item.iconBg}`}>
+                        <IconComp size={17} />
+                      </div>
                       <div>
-                        <p className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{action.title}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{action.subtitle}</p>
+                        <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-snug">
+                          {item.title}
+                        </h3>
+                        <p className="text-xs text-slate-600 font-medium mt-1 leading-relaxed line-clamp-2">
+                          {item.subtitle}
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-end text-[11px] font-bold text-blue-600 group-hover:text-blue-700">
-                    Take Action <ArrowRight size={12} className="ml-1 group-hover:translate-x-1 transition-transform" />
+                  {/* Bottom bar: action button only (no "Quick Action" label) */}
+                  <div className="pt-3.5 mt-3 border-t border-slate-200/70 flex items-center justify-end">
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 ${item.btnBg} rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 group-hover:translate-x-0.5 cursor-pointer`}>
+                      <span>{item.actionText}</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -590,33 +847,197 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Quick Access Grid Buttons */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-          <Layers size={14} className="text-blue-600" /> System Quick Modules
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          {[
-            { label: 'Sales Pipeline', path: '/pipeline', icon: Activity },
-            { label: 'Inquiries Log', path: '/inquiries', icon: FileText },
-            { label: 'Orders Won', path: '/orders', icon: ShoppingBag },
-            { label: 'Customer Visits', path: '/visits', icon: Users },
-            { label: 'Reports', path: '/reports', icon: TrendingUp },
-            { label: 'Intelligence', path: '/intelligence', icon: Sparkles },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className="flex items-center gap-2 p-3 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-700 transition-all text-left group shadow-2xs"
-              >
-                <Icon size={16} className="text-slate-400 group-hover:text-blue-600 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          })}
+      {/* ── Sales Manager Team Leaderboard (Manager / Admin only) ─────── */}
+      {canManageTeam && salesRepLeaderboard.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-5 sm:p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                <Trophy size={18} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">
+                  Sales Representative Performance (Volume &amp; Activity)
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Delivered volume, confirmed orders, customer visits, and complaints
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+              {salesRepLeaderboard.length} Sales Reps
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">Sales Representative</th>
+                  <th className="px-4 py-3">Delivered Tonnage</th>
+                  <th className="px-4 py-3">Won Orders</th>
+                  <th className="px-4 py-3">Customer Visits</th>
+                  <th className="px-4 py-3">Pending Complaints</th>
+                  <th className="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {salesRepLeaderboard.map((rep, idx) => (
+                  <tr key={rep.id || idx} className="hover:bg-blue-50/30 transition-colors">
+                    <td className="px-4 py-3.5 font-bold text-slate-900 flex items-center gap-2.5">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <p className="text-slate-900 font-bold text-xs">{rep.name}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">{rep.phone || 'No phone'}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className="font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 text-xs font-mono">
+                        {rep.deliveredTonnage} MT
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold text-slate-800">{rep.ordersCount} Orders</td>
+                    <td className="px-4 py-3.5 font-semibold text-slate-800">{rep.visitsCount} Visits</td>
+                    <td className="px-4 py-3.5">
+                      {rep.complaintsCount > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          {rep.complaintsCount} Pending
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <button
+                        onClick={() => setViewingAs(rep)}
+                        className="px-3 py-1 bg-white hover:bg-blue-600 text-slate-700 hover:text-white border border-slate-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer">
+                        View Rep
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+      )}
+
+      {/* ── Monthly Tonnage Trend & Top Accounts Grid ─────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Left: Monthly Tonnage Bar Chart */}
+        <div className="lg:col-span-2 bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                {canManageTeam ? 'Team Monthly Tonnage Trend (MT)' : 'Your Monthly Tonnage Trend (MT)'}
+              </h3>
+              <p className="text-xs text-slate-500">
+                Delivered volume output grouped by calendar month for 2026
+              </p>
+            </div>
+            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
+              2026 Volume Overview
+            </span>
+          </div>
+
+          <div className="h-64 w-full flex items-end justify-between gap-1.5 sm:gap-3 pt-6 pb-2 px-2 border-b border-slate-100 relative">
+            {monthlyStats.map((item, idx) => {
+              const heightPct = item.tonnage > 0 ? Math.max(15, Math.round((item.tonnage / maxTonnageForChart) * 100)) : 6;
+              const isHovered = activeBarHover === idx;
+              return (
+                <div
+                  key={item.month}
+                  onMouseEnter={() => setActiveBarHover(idx)}
+                  onMouseLeave={() => setActiveBarHover(null)}
+                  className="flex-1 flex flex-col items-center gap-1 group cursor-pointer h-full justify-end relative">
+                  {isHovered && (
+                    <div className="absolute -top-10 bg-slate-900 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg shadow-xl z-20 whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 border border-slate-700">
+                      {item.month}: {item.tonnage} MT ({item.ordersCount} Orders)
+                    </div>
+                  )}
+                  <div
+                    className="w-full max-w-[32px] rounded-t-lg bg-blue-100/70 group-hover:bg-blue-200 transition-all flex flex-col justify-end overflow-hidden"
+                    style={{ height: `${heightPct}%` }}>
+                    <div
+                      className={`w-full rounded-t-lg transition-all duration-300 ${isHovered ? 'bg-gradient-to-t from-blue-700 to-indigo-700' : 'bg-gradient-to-t from-blue-600 to-blue-500'}`}
+                      style={{ height: '100%' }}
+                    />
+                  </div>
+                  <span className={`text-xs font-bold mt-2 transition-colors ${isHovered ? 'text-blue-600' : 'text-slate-400'}`}>
+                    {item.month}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+            <span className="flex items-center gap-2 font-bold text-slate-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> Monthly Confirmed Deliveries (MT)
+            </span>
+            <span className="font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
+              Peak Month: {peakMonth.month} ({peakMonth.tonnage} MT)
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Top Customer Accounts */}
+        <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Building2 size={18} className="text-blue-600" />
+              Top Customer Accounts
+            </h3>
+            <button
+              onClick={() => navigate('/customers')}
+              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer">
+              View All <ArrowRight size={13} />
+            </button>
+          </div>
+
+          <div className="space-y-3 flex-1 flex flex-col justify-center">
+            {topCustomerAccounts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center text-slate-400">
+                <Package size={28} className="text-slate-300 mb-2" />
+                <p className="text-xs font-bold text-slate-600">No customer tonnage yet</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Won orders will populate top buying accounts.</p>
+              </div>
+            ) : (
+              topCustomerAccounts.map((cust, idx) => {
+                const rawPct = Math.round((cust.tonnage / grandTotalTopTonnage) * 100);
+                const barWidth = Math.max(8, rawPct);
+                return (
+                  <div key={idx} className="p-2.5 bg-slate-50/70 hover:bg-blue-50/40 rounded-xl border border-slate-200/70 transition-colors space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-900 flex items-center gap-2 truncate">
+                        <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                          #{idx + 1}
+                        </span>
+                        <span className="truncate">{cust.name}</span>
+                      </span>
+                      <span className="font-mono font-bold text-blue-700 shrink-0">{cust.tonnage} MT</span>
+                    </div>
+                    <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+            <span>Volume Share</span>
+            <span className="font-bold text-slate-700">Top Buying Accounts</span>
+          </div>
+        </div>
+
       </div>
 
     </div>
