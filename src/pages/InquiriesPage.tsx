@@ -1001,6 +1001,12 @@ export default function InquiriesPage() {
       return;
     }
 
+    const currentDealStage = (linked.stage || '').toLowerCase().trim();
+    if ((currentDealStage === 'new_inquiry' || currentDealStage === 'review' || !linked.stage) && (targetStage === 'won' || targetStage === 'lost')) {
+      toast.error(`Cannot mark deal as ${targetStage.toUpperCase()} from New Inquiry stage. The deal must first be Qualified or Quoted.`);
+      return;
+    }
+
     if (targetStage === 'lost') {
       setLostModal({ dealId: linked.id, inqId: inq.id, reason: '' });
       return;
@@ -1966,7 +1972,7 @@ export default function InquiriesPage() {
               <th className="px-6 py-3.5 text-left w-[28%]">Customer</th>
               <th className="px-4 py-3.5 text-center w-[13%]">Items Summary</th>
               <th className="px-4 py-3.5 text-center w-[13%]">Source Channel</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Status</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Inquiry Status</th>
               <th className="px-4 py-3.5 text-center w-[15%]">Deal Status</th>
               <th className="px-4 py-3.5 text-center w-[13%]">Actions</th>
             </tr>
@@ -2059,6 +2065,11 @@ export default function InquiriesPage() {
                   return getDealStageDisplay('new_inquiry');
                 })();
 
+                const currentStageLabel = dealStageInfo?.label || 'New Inquiry';
+                const isNewInquiryStage = currentStageLabel === 'New Inquiry';
+                const isClosedStage = currentStageLabel === 'Won' || currentStageLabel === 'Lost';
+                const canMarkWonOrLost = !isNewInquiryStage && !isClosedStage;
+
                 return (
                   <tr
                     key={inq.id || idx}
@@ -2130,61 +2141,67 @@ export default function InquiriesPage() {
                                 : 'top-full mt-1'
                             } w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
                             {/* 1. Update Status Button & Sub-Menu */}
-                            <div>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSubMenuInqId(prev => (prev === inq.id ? null : inq.id));
-                                }}
-                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center justify-between transition-colors cursor-pointer">
-                                <div className="flex items-center gap-2.5">
-                                  <RefreshCw size={14} className="text-blue-600 shrink-0" />
-                                  <span>Update Status</span>
-                                </div>
-                                <ChevronRight
-                                  size={14}
-                                  className={`text-slate-400 transition-transform ${
-                                    subMenuInqId === inq.id ? 'rotate-90 text-blue-600' : ''
-                                  }`}
-                                />
-                              </button>
+                            {!isClosedStage && (
+                              <div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSubMenuInqId(prev => (prev === inq.id ? null : inq.id));
+                                  }}
+                                  className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center justify-between transition-colors cursor-pointer">
+                                  <div className="flex items-center gap-2.5">
+                                    <RefreshCw size={14} className="text-blue-600 shrink-0" />
+                                    <span>Update Status</span>
+                                  </div>
+                                  <ChevronRight
+                                    size={14}
+                                    className={`text-slate-400 transition-transform ${
+                                      subMenuInqId === inq.id ? 'rotate-90 text-blue-600' : ''
+                                    }`}
+                                  />
+                                </button>
 
-                              {subMenuInqId === inq.id && (
-                                <div className="bg-slate-50 border-y border-slate-200 py-1 px-1 space-y-0.5 animate-in fade-in duration-100">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUpdateDealStage(inq, details, 'won');
-                                    }}
-                                    className="w-full px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>Won</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUpdateDealStage(inq, details, 'lost');
-                                    }}
-                                    className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                                    <span>Lost</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUpdateDealStage(inq, details, 'negotiation');
-                                    }}
-                                    className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                    <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                                    <span>Negotiation</span>
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                                {subMenuInqId === inq.id && (
+                                  <div className="bg-slate-50 border-y border-slate-200 py-1 px-1 space-y-0.5 animate-in fade-in duration-100">
+                                    {canMarkWonOrLost && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateDealStage(inq, details, 'won');
+                                        }}
+                                        className="w-full px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                        <span>Won</span>
+                                      </button>
+                                    )}
+                                    {canMarkWonOrLost && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateDealStage(inq, details, 'lost');
+                                        }}
+                                        className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                        <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                        <span>Lost</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateDealStage(inq, details, 'negotiation');
+                                      }}
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                      <span>Negotiation</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
 
                             {/* 2. View PDF */}
                             <button

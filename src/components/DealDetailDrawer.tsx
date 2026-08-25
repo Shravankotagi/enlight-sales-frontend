@@ -449,18 +449,22 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                   → Negotiation
                 </button>
               )}
-              <button
-                onClick={() => handleStageChange('won')}
-                className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                 Won
-              </button>
-              <button
-                onClick={() => setShowLostModal(true)}
-                className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                 Lost
-              </button>
+              {deal.stage !== 'new_inquiry' && deal.stage !== 'review' && (
+                <>
+                  <button
+                    onClick={() => handleStageChange('won')}
+                    className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                     Won
+                  </button>
+                  <button
+                    onClick={() => setShowLostModal(true)}
+                    className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                     Lost
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

@@ -104,19 +104,27 @@ function DealCard({ deal, onStageChange, onSelect, onDelete }: {
       })()}
 
       <div className="mt-3 flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
-        {['qualified', 'quoted', 'negotiation', 'won', 'lost'].map(stage => (
-          <button key={stage}
-            onClick={() => onStageChange(deal.id, stage)}
-            className={`text-xs px-2 py-1 rounded border transition-colors
-              ${stage === 'won'
-                ? 'border-green-300 text-green-700 hover:bg-green-50'
-                : stage === 'lost'
-                ? 'border-red-300 text-red-700 hover:bg-red-50'
-                : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}>
-            → {stage.charAt(0).toUpperCase() + stage.slice(1)}
-          </button>
-        ))}
+        {['qualified', 'quoted', 'negotiation', 'won', 'lost']
+          .filter(stage => {
+            const currentStage = (deal.stage || 'new_inquiry').toLowerCase().trim();
+            if ((currentStage === 'new_inquiry' || currentStage === 'review') && (stage === 'won' || stage === 'lost')) {
+              return false;
+            }
+            return true;
+          })
+          .map(stage => (
+            <button key={stage}
+              onClick={() => onStageChange(deal.id, stage)}
+              className={`text-xs px-2 py-1 rounded border transition-colors
+                ${stage === 'won'
+                  ? 'border-green-300 text-green-700 hover:bg-green-50'
+                  : stage === 'lost'
+                  ? 'border-red-300 text-red-700 hover:bg-red-50'
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}>
+              → {stage.charAt(0).toUpperCase() + stage.slice(1)}
+            </button>
+          ))}
       </div>
 
       <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
@@ -236,7 +244,7 @@ export default function PipelinePage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Sales Pipeline</h1>
-          <p className="text-gray-500 text-sm">Click a deal card to view details</p>
+          
         </div>
         <div className="flex flex-wrap items-center gap-4">
           {pipelineData && (
