@@ -6,7 +6,6 @@ import {
   Minus,
   Search,
   CheckCircle,
-  PackageCheck,
   Truck,
   X,
   Building2,
@@ -22,12 +21,13 @@ import {
   Send,
   MoreVertical,
   RefreshCw,
+  Calendar,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
-import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import { calculateQuotationBreakdown, normalizeUnit } from '../utils/pricingEngine';
 
 interface DealItem {
@@ -201,11 +201,70 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
 
+  const [dayPreset, setDayPreset] = useState<'today' | '7_days' | '30_days' | '90_days' | 'custom'>('30_days');
+  const [showCustomDate, setShowCustomDate] = useState(false);
+  const [customFrom, setCustomFrom] = useState(getDaysAgo(7));
+  const [customTo, setCustomTo] = useState(formatLocalDate());
+  const [filterStatus, setFilterStatus] = useState('all');
+
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
+
+  const handleDayPresetChange = (preset: string) => {
+    const todayStr = formatLocalDate();
+    setDayPreset(preset as any);
+
+    if (preset === 'today') {
+      setShowCustomDate(false);
+      setDateRange({ preset: 'today', from: todayStr, to: todayStr });
+    } else if (preset === '7_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '7_days', from: getDaysAgo(7), to: todayStr });
+    } else if (preset === '30_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '30_days', from: getDaysAgo(30), to: todayStr });
+    } else if (preset === '90_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '90_days', from: getDaysAgo(90), to: todayStr });
+    } else if (preset === 'custom') {
+      setShowCustomDate(true);
+      setDateRange({ preset: 'custom', from: customFrom, to: customTo });
+    }
+  };
+
+  const handleCustomFromChange = (val: string) => {
+    setCustomFrom(val);
+    if (val && customTo) {
+      setDateRange({ preset: 'custom', from: val, to: customTo });
+    }
+  };
+
+  const handleCustomToChange = (val: string) => {
+    setCustomTo(val);
+    if (customFrom && val) {
+      setDateRange({ preset: 'custom', from: customFrom, to: val });
+    }
+  };
+
+  const handleClearAllFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setDayPreset('30_days');
+    const todayStr = formatLocalDate();
+    const fromStr = getDaysAgo(30);
+    setDateRange({
+      preset: '30_days',
+      from: fromStr,
+      to: todayStr,
+    });
+    setShowCustomDate(false);
+    setCustomFrom(getDaysAgo(7));
+    setCustomTo(todayStr);
+    setCurrentPage(1);
+  };
 
   const { data: rawOrders = [], isLoading: loading, refetch: fetchOrders } = useQuery<Order[]>({
     queryKey: ['orders-list', effectivePhone, dateRange],
@@ -581,6 +640,14 @@ export default function OrdersPage() {
         }
       }
 
+      if (filterStatus === 'with_doc') {
+        const hasMedia = Array.isArray(o?.media_urls) && o.media_urls.length > 0;
+        if (!hasMedia) return false;
+      } else if (filterStatus === 'no_doc') {
+        const hasMedia = Array.isArray(o?.media_urls) && o.media_urls.length > 0;
+        if (hasMedia) return false;
+      }
+
       const itemsStr = (o?.deal_items || []).map((i: any) => i?.sku_text || '').join(' ');
       return (
         (o?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -595,8 +662,10 @@ export default function OrdersPage() {
       return timeB - timeA;
     });
 
+  const withDocCount = safeOrders.filter((o: Order) => Array.isArray(o?.media_urls) && o.media_urls.length > 0).length;
+  const withoutDocCount = safeOrders.length - withDocCount;
+
   const totalOrders = filtered.length;
-  const totalRevenue = filtered.reduce((sum: number, o: Order) => sum + Number(o?.total_amount || 0), 0);
   const totalTonnage = filtered.reduce((sum: number, o: Order) => {
     const itemsQty = (o?.deal_items || []).reduce((iSum: number, i: any) => {
       const q = Number(i?.quantity || 0);
@@ -644,7 +713,7 @@ export default function OrdersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <ShoppingBag className="text-blue-600" size={28} />
-            Completed &amp; Delivered Orders
+            Orders &amp; Delivery Management
           </h1>
           
         </div>
@@ -662,7 +731,7 @@ export default function OrdersPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Orders Won</p>
+            <p className="text-xs text-slate-500 font-medium">Total Orders</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{totalOrders}</p>
           </div>
           <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
@@ -670,19 +739,10 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Total Revenue Achieved</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">₹{totalRevenue.toLocaleString('en-IN')}</p>
-          </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
-            <PackageCheck size={22} />
-          </div>
-        </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Volume (MT)</p>
+            <p className="text-xs text-slate-500 font-medium">Total Tonnage (MT)</p>
             <p className="text-2xl font-bold text-indigo-600 mt-1">{totalTonnage.toLocaleString('en-IN')} MT</p>
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -693,18 +753,84 @@ export default function OrdersPage() {
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-72">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          {/* 1. Search Box with Clear ( X ) Icon */}
+          <div className="relative w-full sm:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search customer, PO number, location, product..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-2xs"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                title="Clear Search">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* 2. Days Filter Dropdown (Bold text, no This Month, This Year, This Quarter) */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+            <select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="today" className="font-bold">Today</option>
+              <option value="7_days" className="font-bold">Last 7 Days</option>
+              <option value="30_days" className="font-bold">Last 30 Days</option>
+              <option value="90_days" className="font-bold">Last 90 Days</option>
+              <option value="custom" className="font-bold">Custom Range</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 3. Status Filter Dropdown */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-bold">All Orders ({safeOrders.length})</option>
+              <option value="with_doc" className="font-bold">With PO Attachment ({withDocCount})</option>
+              <option value="no_doc" className="font-bold">Without Attachment ({withoutDocCount})</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 4. Clear Filter Button */}
+          <button
+            type="button"
+            onClick={handleClearAllFilters}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+            Clear Filter
+          </button>
+        </div>
+
+        {/* Custom Range Picker Inputs */}
+        {showCustomDate && (
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <span className="text-slate-500 font-semibold">From:</span>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={e => handleCustomFromChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono font-bold text-xs cursor-pointer"
+            />
+            <span className="text-slate-500 font-semibold">To:</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={e => handleCustomToChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono font-bold text-xs cursor-pointer"
             />
           </div>
-          <DateFilterControl onChange={setDateRange} />
-        </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -713,9 +839,9 @@ export default function OrdersPage() {
             <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
-                <th className="px-5 py-3 text-left w-[26%]">Customer</th>
+                <th className="px-5 py-3 text-left w-[26%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
-                <th className="px-4 py-3 text-center w-[12%]">Products &amp; Items</th>
+                <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
                 <th className="px-4 py-3 text-center w-[14%]">Order Tonnage (MT)</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
@@ -897,7 +1023,7 @@ export default function OrdersPage() {
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Send className="text-blue-600" size={22} />
-                Share Quotation
+                Share PO
               </h2>
               <button
                 onClick={() => {
@@ -913,9 +1039,9 @@ export default function OrdersPage() {
             <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
               <FileText size={18} className="text-blue-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-blue-950">Official Commercial Quotation</p>
+                <p className="font-bold text-blue-950">Official Commercial PO</p>
                 <p className="text-blue-800 text-[11px] mt-0.5 leading-relaxed">
-                  The complete 2-page PDF quotation for <strong>{shareOrder.customer_name || 'Customer'}</strong> with itemized rates, taxes, bank details, and commercial terms will be generated and dispatched directly to the customer.
+                  The complete orginal PO Document for <strong>{shareOrder.customer_name || 'Customer'}</strong> will be shared.
                 </p>
               </div>
             </div>
