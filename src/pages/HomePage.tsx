@@ -12,8 +12,7 @@ import {
   complaintsApi,
 } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+import { getFirstDayOfMonth, getLastDayOfMonth, getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import {
   Package,
   ShoppingBag,
@@ -24,17 +23,16 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ArrowUpRight,
   ArrowRight,
   Sparkles,
   Plus,
-  FileText,
-  Layers,
   RefreshCw,
   Trophy,
   Building2,
   User,
-  LayoutDashboard,
+  Calendar,
 } from 'lucide-react';
 
 interface CarouselItem {
@@ -44,12 +42,20 @@ interface CarouselItem {
   cardBg: string;
   iconBg: string;
   btnBg: string;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
   title: string;
   subtitle: string;
   actionText: string;
   link: string;
   icon: React.ElementType;
+}
+
+// Local date range shape (compatible with what queries expect)
+interface DateRange {
+  preset: string;
+  from?: string;
+  to?: string;
+  month?: number;
+  year?: number;
 }
 
 export default function HomePage() {
@@ -59,11 +65,48 @@ export default function HomePage() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const [dateRange, setDateRange] = useState<DateFilterRange>({
+  // ── Inline Filter State (Visits-tab style) ──────────────────────────────
+  const [dayPreset, setDayPreset] = useState('this_month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [showCustomDate, setShowCustomDate] = useState(false);
+
+  const [dateRange, setDateRange] = useState<DateRange>({
     preset: 'this_month',
     from: getFirstDayOfMonth(),
     to: getLastDayOfMonth(),
   });
+
+  const handleDayPresetChange = (preset: string) => {
+    setDayPreset(preset);
+    if (preset === 'today') {
+      const today = formatLocalDate();
+      setDateRange({ preset: 'today', from: today, to: today });
+      setShowCustomDate(false);
+    } else if (preset === '7_days') {
+      setDateRange({ preset: '7_days', from: getDaysAgo(7), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === '30_days') {
+      setDateRange({ preset: '30_days', from: getDaysAgo(30), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === '90_days') {
+      setDateRange({ preset: '90_days', from: getDaysAgo(90), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === 'this_month') {
+      setDateRange({ preset: 'this_month', from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
+      setShowCustomDate(false);
+    } else if (preset === 'custom') {
+      setShowCustomDate(true);
+    }
+  };
+
+  const handleClearFilter = () => {
+    setDayPreset('this_month');
+    setShowCustomDate(false);
+    setCustomFrom('');
+    setCustomTo('');
+    setDateRange({ preset: 'this_month', from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
+  };
 
   const [activeBarHover, setActiveBarHover] = useState<number | null>(null);
 
@@ -77,8 +120,6 @@ export default function HomePage() {
     queryFn: () =>
       kraApi
         .getActionQueue({
-          month: dateRange.preset === 'monthly' ? dateRange.month : undefined,
-          year: dateRange.preset === 'monthly' ? dateRange.year : undefined,
           from: dateRange.from,
           to: dateRange.to,
           salesperson_phone: effectivePhone,
@@ -93,8 +134,6 @@ export default function HomePage() {
     queryFn: () =>
       kraApi
         .getDashboard({
-          month: dateRange.preset === 'monthly' ? dateRange.month : undefined,
-          year: dateRange.preset === 'monthly' ? dateRange.year : undefined,
           from: dateRange.from,
           to: dateRange.to,
           salesperson_phone: effectivePhone,
@@ -103,12 +142,16 @@ export default function HomePage() {
     refetchInterval: 30000,
   });
 
-  // 3. Won Orders Query (for Delivered Tonnage)
+  // 3. Won Orders Query (for Delivered Tonnage) — date range filter applied for RBAC + date accuracy
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
     queryKey: ['orders-list', effectivePhone, dateRange],
     queryFn: () =>
       ordersApi
-        .getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined)
+        .getAll({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          from: dateRange.from,
+          to: dateRange.to,
+        })
         .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -140,7 +183,7 @@ export default function HomePage() {
         .catch(() => []),
   });
 
-  // 6. Customers Churn / Reorder Query (from Customers Tab data)
+  // 6. Customers Churn / Reorder Query
   const { data: churnData, refetch: refetchChurn } = useQuery({
     queryKey: ['customers-churn-home', effectivePhone],
     queryFn: () =>
@@ -160,7 +203,7 @@ export default function HomePage() {
     enabled: canManageTeam,
   });
 
-  // 8. Visits Query (for Customer Visits & Follow-ups)
+  // 8. Visits Query
   const { data: visitsData, refetch: refetchVisits } = useQuery({
     queryKey: ['home-visits-list', effectivePhone, dateRange],
     queryFn: () =>
@@ -170,7 +213,7 @@ export default function HomePage() {
       }),
   });
 
-  // 9. Complaints Query (for Complaints Card & SLA Summary)
+  // 9. Complaints Query
   const { data: complaintsData, refetch: refetchComplaints } = useQuery({
     queryKey: ['home-complaints-list', dateRange],
     queryFn: () =>
@@ -201,7 +244,7 @@ export default function HomePage() {
   const safeReviewQueue: any[] = Array.isArray(reviewQueueData) ? reviewQueueData : [];
   const safeCustomers: any[] = Array.isArray(churnData) ? churnData : [];
 
-  // Helper: Extract total tonnage (MT) from an order or deal
+  // Helper: Extract total tonnage (MT) from an order
   const getOrderTonnage = (o: any): number => {
     if (Array.isArray(o.deal_items) && o.deal_items.length > 0) {
       const sum = o.deal_items.reduce((acc: number, item: any) => acc + Number(item.quantity || 0), 0);
@@ -216,27 +259,16 @@ export default function HomePage() {
     return 0;
   };
 
-  // Filter orders by selected date range
-  const filteredOrders = useMemo(() => {
-    return safeOrders.filter((o: any) => {
-      const dStr = o.won_at || o.po_date || o.created_at;
-      if (!dStr) return true;
-      const itemDate = new Date(dStr).toISOString().split('T')[0];
-      if (dateRange.from && itemDate < dateRange.from) return false;
-      if (dateRange.to && itemDate > dateRange.to) return false;
-      return true;
-    });
-  }, [safeOrders, dateRange]);
+  // Orders are already date-filtered by the API query, so use safeOrders directly
+  const targetOrders = safeOrders;
 
-  const targetOrders = (dateRange.from || dateRange.to) ? filteredOrders : safeOrders;
-
-  // 1. Total Delivered Tonnage (MT)
+  // 1. Total Delivered Tonnage (MT) — from Orders API (date-range filtered)
   const totalDeliveredTonnage = useMemo(() => {
     const sum = targetOrders.reduce((acc: number, o: any) => acc + getOrderTonnage(o), 0);
     return Math.round(sum * 10) / 10;
   }, [targetOrders]);
 
-  // 2. Won Orders Logged count
+  // 2. Won Orders count
   const totalWonOrdersCount = targetOrders.length;
 
   // 3. New Customers count
@@ -251,21 +283,12 @@ export default function HomePage() {
     return safeVisits.length;
   }, [safeVisits, effectivePhone]);
 
-  // 5. Complaints metrics (Open & Breached)
+  // 5. Open (Pending) Complaints
   const openComplaints = useMemo(() => {
     return safeComplaints.filter(c => c.status !== 'resolved');
   }, [safeComplaints]);
 
-  const breachedComplaintsCount = useMemo(() => {
-    return openComplaints.filter(c => {
-      if (!c.sla_due_at) {
-        return (Date.now() - new Date(c.reported_at).getTime()) / (1000 * 60 * 60) >= 48;
-      }
-      return new Date(c.sla_due_at) < new Date();
-    }).length;
-  }, [openComplaints]);
-
-  // Monthly Tonnage Stats for 2026 Chart
+  // Monthly Tonnage Stats for Bar Chart (all-time orders for trend visualization)
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const currentMonthIdx = new Date().getMonth();
 
@@ -283,19 +306,13 @@ export default function HomePage() {
           }
         }
       });
-
-      if (mIdx === currentMonthIdx && monthTonnage === 0 && totalDeliveredTonnage > 0) {
-        monthTonnage = totalDeliveredTonnage;
-        monthOrders = totalWonOrdersCount;
-      }
-
       return {
         month: mName,
         tonnage: Math.round(monthTonnage * 10) / 10,
         ordersCount: monthOrders,
       };
     });
-  }, [safeOrders, currentMonthIdx, totalDeliveredTonnage, totalWonOrdersCount]);
+  }, [safeOrders, currentMonthIdx]);
 
   const maxTonnageForChart = Math.max(...monthlyStats.map(s => s.tonnage), 10);
   const peakMonth = monthlyStats.reduce(
@@ -303,14 +320,12 @@ export default function HomePage() {
     monthlyStats[currentMonthIdx] || { month: 'Aug', tonnage: totalDeliveredTonnage },
   );
 
-  // Top Customer Accounts by Delivered Tonnage (MT)
+  // Top Customer Accounts by Delivered Tonnage
   const topCustomerAccounts = useMemo(() => {
     const map: Record<string, { name: string; tonnage: number; ordersCount: number }> = {};
     targetOrders.forEach((o: any) => {
       const name = o.customer_name || 'Customer Account';
-      if (!map[name]) {
-        map[name] = { name, tonnage: 0, ordersCount: 0 };
-      }
+      if (!map[name]) map[name] = { name, tonnage: 0, ordersCount: 0 };
       map[name].tonnage += getOrderTonnage(o);
       map[name].ordersCount++;
     });
@@ -332,7 +347,7 @@ export default function HomePage() {
 
   const grandTotalTopTonnage = topCustomerAccounts.reduce((acc, c) => acc + c.tonnage, 0) || 1;
 
-  // Month growth %
+  // Month-on-month growth %
   const lastMonthIdx = currentMonthIdx === 0 ? 11 : currentMonthIdx - 1;
   const currentMonthTonnage = monthlyStats[currentMonthIdx]?.tonnage || totalDeliveredTonnage;
   const lastMonthTonnage = monthlyStats[lastMonthIdx]?.tonnage || 0;
@@ -341,10 +356,11 @@ export default function HomePage() {
       ? Math.round(((currentMonthTonnage - lastMonthTonnage) / lastMonthTonnage) * 100)
       : 18;
 
-  // Sales Rep Leaderboard (Sales Manager View)
+  const avgOrderSize = totalWonOrdersCount > 0 ? (totalDeliveredTonnage / totalWonOrdersCount).toFixed(1) : '0';
+
+  // Sales Rep Leaderboard (Manager / Admin only)
   const salesRepLeaderboard = useMemo(() => {
     if (!canManageTeam) return [];
-
     const reps = safeEmployees.filter(e => e.role === 'salesperson' || e.role === 'sales_lead');
     return reps
       .map(rep => {
@@ -358,9 +374,7 @@ export default function HomePage() {
         const repComplaints = safeComplaints.filter(
           c => (c.reported_by || '').replace(/\D/g, '').slice(-10) === cleanPhone && c.status !== 'resolved',
         );
-
         const deliveredTonnage = repOrders.reduce((sum, o) => sum + getOrderTonnage(o), 0);
-
         return {
           ...rep,
           deliveredTonnage: Math.round(deliveredTonnage * 10) / 10,
@@ -372,8 +386,6 @@ export default function HomePage() {
       .sort((a, b) => b.deliveredTonnage - a.deliveredTonnage);
   }, [canManageTeam, safeEmployees, safeOrders, safeVisits, safeComplaints]);
 
-  const avgOrderSize = totalWonOrdersCount > 0 ? (totalDeliveredTonnage / totalWonOrdersCount).toFixed(1) : '0';
-
   const todayStr = new Date().toLocaleDateString('en-IN', {
     weekday: 'long',
     year: 'numeric',
@@ -383,16 +395,12 @@ export default function HomePage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  // ----------------------------------------------------
-  // Curated Action Carousel Builder (Strict True Data Only & Rich Color Fills)
-  // ----------------------------------------------------
+  // ── Curated Action Carousel (3-colour palette: Blue, Emerald, Indigo) ──
   const curatedActionItems: CarouselItem[] = useMemo(() => {
     const items: CarouselItem[] = [];
 
-    // 1. Quote Follow-up (Matches Pipeline 'Quoted' column strictly) - Blue Theme
-    const quotedDeals = safeDeals.filter(
-      d => d.stage === 'quoted' || d.stage === 'sent_to_party',
-    );
+    // 1. Quote Follow-up — Blue
+    const quotedDeals = safeDeals.filter(d => d.stage === 'quoted' || d.stage === 'sent_to_party');
     if (quotedDeals.length > 0) {
       const first = quotedDeals[0];
       const firstTonnage = getOrderTonnage(first);
@@ -403,7 +411,6 @@ export default function HomePage() {
         cardBg: 'bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400',
         iconBg: 'bg-blue-600 text-white shadow-xs',
         btnBg: 'bg-blue-600 hover:bg-blue-700 text-white',
-        priority: 'HIGH',
         title: quotedDeals.length === 1 ? '1 quote needs follow-up' : `${quotedDeals.length} quotes need follow-up`,
         subtitle: `${first.customer_name || 'Client'} · ${firstTonnage > 0 ? `${firstTonnage} MT pending customer approval` : 'Quotation pending customer confirmation'}`,
         actionText: 'View Pipeline →',
@@ -412,7 +419,7 @@ export default function HomePage() {
       });
     }
 
-    // 2. Reorder Window / Dormant Client (Strictly real customers from Customers Tab) - Amber Theme
+    // 2. Reorder Window / Dormant Client — Blue
     const overdueCustomers = safeCustomers.filter(c => {
       if (!c.days_since_last_order) return false;
       const interval = Number(c.avg_order_interval_days) || 30;
@@ -423,11 +430,10 @@ export default function HomePage() {
       items.push({
         id: 'action-reorder',
         category: 'Reorder Window',
-        categoryColor: 'bg-amber-200/80 text-amber-900 border border-amber-300/80',
-        cardBg: 'bg-amber-50/80 border-2 border-amber-200/90 hover:border-amber-400',
-        iconBg: 'bg-amber-600 text-white shadow-xs',
-        btnBg: 'bg-amber-600 hover:bg-amber-700 text-white',
-        priority: 'HIGH',
+        categoryColor: 'bg-blue-200/80 text-blue-900 border border-blue-300/80',
+        cardBg: 'bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400',
+        iconBg: 'bg-blue-600 text-white shadow-xs',
+        btnBg: 'bg-blue-600 hover:bg-blue-700 text-white',
         title: overdueCustomers.length === 1 ? '1 customer overdue for reorder' : `${overdueCustomers.length} customers overdue for reorder`,
         subtitle: `${first.customer_name} · ${first.days_since_last_order} days without order (exceeded ${first.avg_order_interval_days || 30}d cycle)`,
         actionText: 'View Customers →',
@@ -436,30 +442,26 @@ export default function HomePage() {
       });
     }
 
-    // 3. Complaints SLA (Strictly real open complaints & breach count) - Rose Theme
+    // 3. Pending Complaints — Indigo
     if (openComplaints.length > 0) {
       const first = openComplaints[0];
       const countPending = openComplaints.length;
-      const countBreached = breachedComplaintsCount;
       items.push({
-        id: 'action-complaints-sla',
-        category: 'Complaints SLA',
-        categoryColor: 'bg-rose-200/80 text-rose-900 border border-rose-300/80',
-        cardBg: 'bg-rose-50/80 border-2 border-rose-200/90 hover:border-rose-400',
-        iconBg: 'bg-rose-600 text-white shadow-xs',
-        btnBg: 'bg-rose-600 hover:bg-rose-700 text-white',
-        priority: countBreached > 0 ? 'HIGH' : 'MEDIUM',
-        title: `${countPending} pending complaint${countPending > 1 ? 's' : ''} (${countBreached} breached)`,
-        subtitle: countBreached > 0
-          ? `${countBreached} ticket(s) breached 48h SLA deadline · Urgent resolution needed for ${first.customer_name || 'Customer'}`
-          : `${countPending} ticket(s) active under 48h SLA · Next action: ${first.nature_of_complaint || 'Material review'}`,
-        actionText: 'Resolve SLA →',
+        id: 'action-complaints',
+        category: 'Pending Complaints',
+        categoryColor: 'bg-indigo-200/80 text-indigo-900 border border-indigo-300/80',
+        cardBg: 'bg-indigo-50/80 border-2 border-indigo-200/90 hover:border-indigo-400',
+        iconBg: 'bg-indigo-600 text-white shadow-xs',
+        btnBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+        title: `${countPending} pending complaint${countPending > 1 ? 's' : ''} need resolution`,
+        subtitle: `${countPending} ticket(s) open · ${first.customer_name || 'Customer'}`,
+        actionText: 'View Complaints →',
         link: '/complaints',
         icon: AlertTriangle,
       });
     }
 
-    // 4. Follow-ups Due (Strictly real visits with follow-up action text) - Emerald Theme
+    // 4. Follow-ups Due — Emerald
     const visitsWithFollowup = safeVisits.filter(
       v => (v.follow_up_action || v.follow_up || v.followup || '').trim().length > 0,
     );
@@ -473,7 +475,6 @@ export default function HomePage() {
         cardBg: 'bg-emerald-50/80 border-2 border-emerald-200/90 hover:border-emerald-400',
         iconBg: 'bg-emerald-600 text-white shadow-xs',
         btnBg: 'bg-emerald-600 hover:bg-emerald-700 text-white',
-        priority: 'HIGH',
         title: visitsWithFollowup.length === 1 ? '1 visit follow-up due' : `${visitsWithFollowup.length} visit follow-ups due`,
         subtitle: `${first.customer_name}: ${fuText}`,
         actionText: 'View Visits →',
@@ -482,7 +483,7 @@ export default function HomePage() {
       });
     }
 
-    // 5. Additional Action: AI Inquiries & PO Extractions - Indigo Theme
+    // 5. AI Extractions — Indigo
     if (safeReviewQueue.length > 0) {
       const first = safeReviewQueue[0];
       const clientName = first.sender_name || first.customer_name || first.company_name || 'Customer';
@@ -493,7 +494,6 @@ export default function HomePage() {
         cardBg: 'bg-indigo-50/80 border-2 border-indigo-200/90 hover:border-indigo-400',
         iconBg: 'bg-indigo-600 text-white shadow-xs',
         btnBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
-        priority: 'HIGH',
         title: safeReviewQueue.length === 1 ? '1 AI extraction awaiting review' : `${safeReviewQueue.length} AI extractions awaiting review`,
         subtitle: `${clientName} · WhatsApp PO auto-parsed and ready to convert to quotation`,
         actionText: 'Review AI POs →',
@@ -503,27 +503,20 @@ export default function HomePage() {
     }
 
     return items;
-  }, [safeDeals, safeCustomers, openComplaints, breachedComplaintsCount, safeVisits, safeReviewQueue]);
+  }, [safeDeals, safeCustomers, openComplaints, safeVisits, safeReviewQueue]);
 
   // Horizontal Scroll Handlers
   const handleScrollLeft = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: -360, behavior: 'smooth' });
-    }
+    if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ left: -360, behavior: 'smooth' });
   };
-
   const handleScrollRight = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: 360, behavior: 'smooth' });
-    }
+    if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ left: 360, behavior: 'smooth' });
   };
 
   return (
     <div className="space-y-6 font-sans">
 
-      {/* ---------------------------------------------------- */}
-      {/* Top Header Bar */}
-      {/* ---------------------------------------------------- */}
+      {/* ── Top Header Bar ──────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-sm shadow-blue-600/25 shrink-0">
@@ -545,9 +538,7 @@ export default function HomePage() {
               ) : viewingAs ? (
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-900 font-bold border border-indigo-200 flex items-center gap-1">
                   <User size={12} className="text-indigo-700" /> Viewing: {viewingAs.name}
-                  <button onClick={clearViewingAs} className="ml-1 hover:text-rose-600 font-bold">
-                    ×
-                  </button>
+                  <button onClick={clearViewingAs} className="ml-1 hover:text-indigo-600 font-bold">×</button>
                 </span>
               ) : (
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
@@ -562,13 +553,11 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Action Buttons & Date Filter */}
+        {/* Header Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          <DateFilterControl onChange={setDateRange} />
-
           <button
             onClick={handleRefreshAll}
-            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors shadow-xs"
+            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
             title="Refresh Dashboard">
             <RefreshCw
               size={17}
@@ -578,19 +567,70 @@ export default function HomePage() {
 
           <button
             onClick={() => navigate('/orders')}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-lg flex items-center gap-2 shadow-sm shadow-blue-600/25 transition-all">
-            <Plus size={17} />
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
+            <Plus size={15} />
             Log Won Order
           </button>
         </div>
       </div>
 
-      {/* ---------------------------------------------------- */}
-      {/* 5 Top Stat Cards (Strictly Aligned & Consistent Heights) */}
-      {/* ---------------------------------------------------- */}
+      {/* ── Inline Filter Bar (Visits-tab style) ─────────────────────── */}
+      <div className="flex flex-wrap items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="relative inline-flex items-center">
+          <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+          <select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="this_month">This Month</option>
+            <option value="custom">Custom Range</option>
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+        </div>
+
+        {showCustomDate && (
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <span className="text-slate-500 font-semibold">From:</span>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={e => {
+                setCustomFrom(e.target.value);
+                if (e.target.value && customTo) setDateRange({ preset: 'custom', from: e.target.value, to: customTo });
+              }}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+            <span className="text-slate-500 font-semibold">To:</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={e => {
+                setCustomTo(e.target.value);
+                if (customFrom && e.target.value) setDateRange({ preset: 'custom', from: customFrom, to: e.target.value });
+              }}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+          </div>
+        )}
+
+        {dayPreset !== 'this_month' && (
+          <button
+            type="button"
+            onClick={handleClearFilter}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+            Clear Filter
+          </button>
+        )}
+      </div>
+
+      {/* ── 5 Stat Cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
 
-        {/* Card 1: Delivered Tonnage (MT) - Solid Royal Blue Hero Card */}
+        {/* Card 1: Delivered Tonnage — Blue Hero */}
         <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white rounded-xl p-4 sm:p-5 shadow-sm shadow-blue-600/25 flex flex-col justify-between min-h-[145px] relative overflow-hidden group hover:shadow-md transition-all">
           <div className="flex items-center justify-between relative z-10">
             <p className="text-[11px] font-bold text-blue-100 uppercase tracking-wider">
@@ -617,17 +657,14 @@ export default function HomePage() {
           <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
         </div>
 
-        {/* Card 2: Won Orders Logged - Soft Blue Fill */}
+        {/* Card 2: Won Orders — Blue Soft */}
         <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-blue-900/70 uppercase tracking-wider">
-              Won Orders
-            </p>
+            <p className="text-[11px] font-bold text-blue-900/70 uppercase tracking-wider">Won Orders</p>
             <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs shrink-0">
               <ShoppingBag size={18} />
             </div>
           </div>
-
           <div>
             <div className="flex items-baseline gap-1.5">
               <p className="text-2xl sm:text-3xl font-black text-blue-950 tracking-tight leading-none">
@@ -643,17 +680,14 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 3: Customer Visits - Soft Emerald Fill */}
+        {/* Card 3: Customer Visits — Emerald */}
         <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-emerald-900/70 uppercase tracking-wider">
-              Customer Visits
-            </p>
+            <p className="text-[11px] font-bold text-emerald-900/70 uppercase tracking-wider">Customer Visits</p>
             <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs shrink-0">
               <MapPin size={18} />
             </div>
           </div>
-
           <div>
             <div className="flex items-baseline gap-1.5">
               <p className="text-2xl sm:text-3xl font-black text-emerald-950 tracking-tight leading-none">
@@ -663,23 +697,20 @@ export default function HomePage() {
             </div>
             <div className="mt-2.5 flex items-center">
               <span className="px-2 py-0.5 rounded-md bg-white text-emerald-900 border border-emerald-200 text-[11px] font-bold shadow-2xs">
-                Customer field visits logged
+                Field visits logged
               </span>
             </div>
           </div>
         </div>
 
-        {/* Card 4: New Customers - Soft Indigo Fill */}
+        {/* Card 4: New Customers — Indigo */}
         <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">
-              New Customers
-            </p>
+            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">New Customers</p>
             <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
               <Users size={18} />
             </div>
           </div>
-
           <div>
             <div className="flex items-baseline gap-1.5">
               <p className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight leading-none">
@@ -689,49 +720,38 @@ export default function HomePage() {
             </div>
             <div className="mt-2.5 flex items-center">
               <span className="px-2 py-0.5 rounded-md bg-white text-indigo-900 border border-indigo-200 text-[11px] font-bold shadow-2xs">
-                New customer accounts
+                New accounts onboarded
               </span>
             </div>
           </div>
         </div>
 
-        {/* Card 5: Complaints (Rose Alert Theme) */}
-        <div className="bg-rose-50/70 border border-rose-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1">
+        {/* Card 5: Complaints — Indigo, "Pending" language */}
+        <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-rose-900/70 uppercase tracking-wider">
-              Complaints
-            </p>
-            <div className="p-2 bg-rose-600 text-white rounded-xl shadow-xs shrink-0">
+            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">Complaints</p>
+            <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
               <AlertTriangle size={18} />
             </div>
           </div>
-
           <div>
             <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-rose-950 tracking-tight leading-none">
+              <p className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight leading-none">
                 {openComplaints.length}
               </p>
-              <span className="text-xs font-bold text-rose-700">Open</span>
+              <span className="text-xs font-bold text-indigo-700">Pending</span>
             </div>
             <div className="mt-2.5 flex items-center">
-              {breachedComplaintsCount > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-white text-rose-900 border border-rose-300 shadow-2xs">
-                  <AlertTriangle size={11} className="text-rose-600" /> {breachedComplaintsCount} SLA Breached
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-white text-rose-900 border border-rose-200 shadow-2xs">
-                  <CheckCircle2 size={11} className="text-rose-600" /> 100% Within SLA
-                </span>
-              )}
+              <span className="px-2 py-0.5 rounded-md bg-white text-indigo-900 border border-indigo-200 text-[11px] font-bold shadow-2xs">
+                {openComplaints.length === 0 ? 'All resolved' : `${openComplaints.length} open for resolution`}
+              </span>
             </div>
           </div>
         </div>
 
       </div>
 
-      {/* ---------------------------------------------------- */}
-      {/* Horizontally Scrollable Action Feed (Distinct Colored Cards) */}
-      {/* ---------------------------------------------------- */}
+      {/* ── Action Feed (Horizontally Scrollable) ─────────────────────── */}
       <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -743,7 +763,7 @@ export default function HomePage() {
                 Your Action Feed &amp; Opportunities
               </h2>
               <p className="text-xs text-slate-500">
-                Prioritized quote follow-ups, overdue reorders, complaints SLA, and field actions
+                Prioritized quote follow-ups, overdue reorders, pending complaints, and field actions
               </p>
             </div>
           </div>
@@ -756,13 +776,13 @@ export default function HomePage() {
               <>
                 <button
                   onClick={handleScrollLeft}
-                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs"
+                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
                   title="Scroll Left">
                   <ChevronLeft size={16} />
                 </button>
                 <button
                   onClick={handleScrollRight}
-                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs"
+                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
                   title="Scroll Right">
                   <ChevronRight size={16} />
                 </button>
@@ -771,7 +791,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Fluid Horizontal Scroll Track or Clean Empty State */}
         {curatedActionItems.length === 0 ? (
           <div className="p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-3 text-center">
             <CheckCircle2 size={22} className="text-blue-600 shrink-0" />
@@ -791,14 +810,10 @@ export default function HomePage() {
                   onClick={() => navigate(item.link)}
                   className={`snap-start shrink-0 w-[310px] sm:w-[350px] md:w-[360px] p-5 ${item.cardBg} rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group`}>
                   <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
+                    {/* Category badge only (no HIGH/priority badge) */}
+                    <div className="flex items-center">
                       <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${item.categoryColor}`}>
                         {item.category}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${item.priority === 'HIGH' ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 border border-slate-200'
-                          }`}>
-                        {item.priority}
                       </span>
                     </div>
 
@@ -817,11 +832,11 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div className="pt-3.5 mt-3 border-t border-slate-200/70 flex items-center justify-between">
-                    <span className="text-slate-500 text-xs font-medium">Quick Action</span>
+                  {/* Bottom bar: action button only (no "Quick Action" label) */}
+                  <div className="pt-3.5 mt-3 border-t border-slate-200/70 flex items-center justify-end">
                     <button
                       type="button"
-                      className={`px-3 py-1.5 ${item.btnBg} rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1 group-hover:translate-x-0.5`}>
+                      className={`px-3 py-1.5 ${item.btnBg} rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 group-hover:translate-x-0.5 cursor-pointer`}>
                       <span>{item.actionText}</span>
                     </button>
                   </div>
@@ -832,9 +847,7 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* ---------------------------------------------------- */}
-      {/* Sales Manager Team Leaderboard (Manager / Admin Only) */}
-      {/* ---------------------------------------------------- */}
+      {/* ── Sales Manager Team Leaderboard (Manager / Admin only) ─────── */}
       {canManageTeam && salesRepLeaderboard.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-5 sm:p-6">
           <div className="flex items-center justify-between">
@@ -864,7 +877,7 @@ export default function HomePage() {
                   <th className="px-4 py-3">Delivered Tonnage</th>
                   <th className="px-4 py-3">Won Orders</th>
                   <th className="px-4 py-3">Customer Visits</th>
-                  <th className="px-4 py-3">Open Complaints</th>
+                  <th className="px-4 py-3">Pending Complaints</th>
                   <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
@@ -872,8 +885,7 @@ export default function HomePage() {
                 {salesRepLeaderboard.map((rep, idx) => (
                   <tr key={rep.id || idx} className="hover:bg-blue-50/30 transition-colors">
                     <td className="px-4 py-3.5 font-bold text-slate-900 flex items-center gap-2.5">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
-                        }`}>
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
                         {idx + 1}
                       </span>
                       <div>
@@ -890,8 +902,8 @@ export default function HomePage() {
                     <td className="px-4 py-3.5 font-semibold text-slate-800">{rep.visitsCount} Visits</td>
                     <td className="px-4 py-3.5">
                       {rep.complaintsCount > 0 ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                          {rep.complaintsCount} Active
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          {rep.complaintsCount} Pending
                         </span>
                       ) : (
                         <span className="text-slate-400 font-medium">—</span>
@@ -900,7 +912,7 @@ export default function HomePage() {
                     <td className="px-4 py-3.5 text-right">
                       <button
                         onClick={() => setViewingAs(rep)}
-                        className="px-3 py-1 bg-white hover:bg-blue-600 text-slate-700 hover:text-white border border-slate-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs">
+                        className="px-3 py-1 bg-white hover:bg-blue-600 text-slate-700 hover:text-white border border-slate-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer">
                         View Rep
                       </button>
                     </td>
@@ -912,12 +924,10 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ---------------------------------------------------- */}
-      {/* Middle Grid: Monthly Tonnage Trend & Top Accounts */}
-      {/* ---------------------------------------------------- */}
+      {/* ── Monthly Tonnage Trend & Top Accounts Grid ─────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Left 2 Cols: Monthly Tonnage Delivery Trend Bar Chart */}
+        {/* Left: Monthly Tonnage Bar Chart */}
         <div className="lg:col-span-2 bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
           <div className="flex items-center justify-between">
             <div>
@@ -933,41 +943,30 @@ export default function HomePage() {
             </span>
           </div>
 
-          {/* Bar Chart Graphic */}
           <div className="h-64 w-full flex items-end justify-between gap-1.5 sm:gap-3 pt-6 pb-2 px-2 border-b border-slate-100 relative">
             {monthlyStats.map((item, idx) => {
-              const heightPct =
-                item.tonnage > 0 ? Math.max(15, Math.round((item.tonnage / maxTonnageForChart) * 100)) : 6;
+              const heightPct = item.tonnage > 0 ? Math.max(15, Math.round((item.tonnage / maxTonnageForChart) * 100)) : 6;
               const isHovered = activeBarHover === idx;
-
               return (
                 <div
                   key={item.month}
                   onMouseEnter={() => setActiveBarHover(idx)}
                   onMouseLeave={() => setActiveBarHover(null)}
                   className="flex-1 flex flex-col items-center gap-1 group cursor-pointer h-full justify-end relative">
-
-                  {/* Tooltip */}
                   {isHovered && (
                     <div className="absolute -top-10 bg-slate-900 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg shadow-xl z-20 whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 border border-slate-700">
                       {item.month}: {item.tonnage} MT ({item.ordersCount} Orders)
                     </div>
                   )}
-
                   <div
                     className="w-full max-w-[32px] rounded-t-lg bg-blue-100/70 group-hover:bg-blue-200 transition-all flex flex-col justify-end overflow-hidden"
                     style={{ height: `${heightPct}%` }}>
                     <div
-                      className={`w-full rounded-t-lg transition-all duration-300 ${isHovered
-                          ? 'bg-gradient-to-t from-blue-700 to-indigo-700'
-                          : 'bg-gradient-to-t from-blue-600 to-blue-500'
-                        }`}
+                      className={`w-full rounded-t-lg transition-all duration-300 ${isHovered ? 'bg-gradient-to-t from-blue-700 to-indigo-700' : 'bg-gradient-to-t from-blue-600 to-blue-500'}`}
                       style={{ height: '100%' }}
                     />
                   </div>
-                  <span
-                    className={`text-xs font-bold mt-2 transition-colors ${isHovered ? 'text-blue-600' : 'text-slate-400'
-                      }`}>
+                  <span className={`text-xs font-bold mt-2 transition-colors ${isHovered ? 'text-blue-600' : 'text-slate-400'}`}>
                     {item.month}
                   </span>
                 </div>
@@ -985,7 +984,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Right 1 Col: Top Accounts by Delivered Tonnage (MT) */}
+        {/* Right: Top Customer Accounts */}
         <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -994,7 +993,7 @@ export default function HomePage() {
             </h3>
             <button
               onClick={() => navigate('/customers')}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5">
+              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer">
               View All <ArrowRight size={13} />
             </button>
           </div>
@@ -1014,15 +1013,12 @@ export default function HomePage() {
                   <div key={idx} className="p-2.5 bg-slate-50/70 hover:bg-blue-50/40 rounded-xl border border-slate-200/70 transition-colors space-y-2">
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-bold text-slate-900 flex items-center gap-2 truncate">
-                        <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'
-                          }`}>
+                        <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
                           #{idx + 1}
                         </span>
                         <span className="truncate">{cust.name}</span>
                       </span>
-                      <span className="font-mono font-bold text-blue-700 shrink-0">
-                        {cust.tonnage} MT
-                      </span>
+                      <span className="font-mono font-bold text-blue-700 shrink-0">{cust.tonnage} MT</span>
                     </div>
                     <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
                       <div
@@ -1042,36 +1038,6 @@ export default function HomePage() {
           </div>
         </div>
 
-      </div>
-
-      {/* ---------------------------------------------------- */}
-      {/* Quick Action Navigation Grid */}
-      {/* ---------------------------------------------------- */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-          <Layers size={15} className="text-blue-600" /> Operational Modules
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          {[
-            { label: 'Customer Visits', path: '/visits', icon: MapPin },
-            { label: 'Orders Log', path: '/orders', icon: ShoppingBag },
-            { label: 'Inquiries Queue', path: '/inquiries', icon: FileText },
-            { label: 'Sales Pipeline', path: '/pipeline', icon: LayoutDashboard },
-            { label: 'Complaints & SLA', path: '/complaints', icon: AlertTriangle },
-            { label: 'Customer Accounts', path: '/customers', icon: Users },
-          ].map(item => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className="flex items-center gap-2.5 p-3 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-xl text-xs font-bold text-slate-700 hover:text-blue-700 transition-all text-left group shadow-2xs">
-                <Icon size={16} className="text-slate-400 group-hover:text-blue-600 shrink-0 transition-colors" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
     </div>
