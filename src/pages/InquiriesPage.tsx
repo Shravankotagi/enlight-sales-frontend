@@ -507,15 +507,37 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const totalAmount = unitPrice > 0 ? Math.round(quantityTons * unitPrice) : 0;
 
   // 7. Delivery Location (Capture full delivery address as stated in text or aiJson)
-  let deliveryLocation = aiJson.delivery_location || aiJson.deliveryLocation || '';
-  if (!deliveryLocation) {
-    const locMatch =
-      textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to|location)\s*[:=-]?\s*([A-Za-z0-9\s,./#&-]+?)(?:\s*(?:payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|before|by|on\s+\d|gst\b)|\n{2,}|$)/i) ||
-      textRaw.match(/(?:delivered\s+(?:to\s+our\s+site\s+in|to\s+site\s+in|to|at)|delivery\s+(?:to|at)|site\s+in|location:?)\s+([A-Za-z0-9\s,./#&-]+?)(?:\s*[:\n]|\s*MS\s|\s*SS\s|\s*TMT\s|\s*HR\s|\s*CR\s|\s+for|\s+before|$)/i) ||
-      textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&-]+?)(?:\s+before|\s+by|\s+on|\s+within|$)/i);
-    if (locMatch && locMatch[1].trim().length > 2) {
-      deliveryLocation = locMatch[1].replace(/^[:\s]+|[:\s]+$/g, '').trim();
+  let fromJson = aiJson.delivery_location || aiJson.deliveryLocation || '';
+  if (fromJson && typeof fromJson === 'string') {
+    fromJson = fromJson.replace(/^[•\-\*:\s]+|[•\-\*:\s]+$/g, '').trim();
+  }
+
+  let fromText = '';
+  if (textRaw && typeof textRaw === 'string') {
+    // 1. Line-by-line match for bullet or key-value format (handles WhatsApp bot & email formats)
+    const lineMatch =
+      textRaw.match(/(?:^[•\-\*]?\s*(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^\n\r]+)/im) ||
+      textRaw.match(/(?:(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^\n\r]+)/i);
+    if (lineMatch && lineMatch[1].trim().length > 2) {
+      fromText = lineMatch[1].replace(/^[•\-\*:\s]+|[•\-\*:\s]+$/g, '').trim();
     }
+
+    // 2. Multiline block fallback
+    if (!fromText) {
+      const blockMatch =
+        textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to)\s*[:=-]?\s*([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s*(?:payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|email|contact|phone|before|by|on\s+\d|gst\b)|\n{2,}|$)/i) ||
+        textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s+before|\s+by|\s+on|\s+within|$)/i);
+      if (blockMatch && blockMatch[1].trim().length > 2) {
+        fromText = blockMatch[1].replace(/^[•\-\*:\s]+|[•\-\*:\s]+$/g, '').trim();
+      }
+    }
+  }
+
+  let deliveryLocation = fromJson;
+  if (fromText && fromText.length > fromJson.length) {
+    deliveryLocation = fromText;
+  } else if (!deliveryLocation) {
+    deliveryLocation = fromText;
   }
 
   // 8. Delivery Date (Capture target date e.g. "before 25 August" -> "2026-08-25")
@@ -999,7 +1021,9 @@ export default function InquiriesPage() {
         unitPrice: frozenLineItems[0]?.rate || ai.unitPrice || 0,
         totalAmount: frozenTotal,
         paymentTerms: ai.payment_terms || ai.paymentTerms || parsed.paymentTerms || '',
-        deliveryLocation: ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || '',
+        deliveryLocation: (parsed.deliveryLocation && parsed.deliveryLocation.length > (ai.delivery_location || ai.deliveryLocation || '').length)
+          ? parsed.deliveryLocation
+          : (ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || ''),
         deliveryDate: ai.delivery_date || ai.deliveryDate || '',
         lineItems: frozenLineItems,
       });
