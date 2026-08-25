@@ -55,6 +55,7 @@ export const customersApi = {
   getReorderQueue: (params?: any) => API.get('/customers/reorder-queue', { params }),
   getLossAnalytics: (params?: any) => API.get('/customers/loss-analytics', { params }),
   importClients: (data: any) => API.post('/customers/import', data),
+  update: (id: string, data: any) => API.patch(`/customers/${id}`, data),
 };
 
 export const kraApi = {
