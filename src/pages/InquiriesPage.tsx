@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical, AlertCircle, Loader2
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, AlertCircle, Loader2
 } from 'lucide-react';
-import { inquiriesApi, customersApi, employeesApi } from '../lib/api';
+import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -725,15 +725,30 @@ export default function InquiriesPage() {
   });
 
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [subMenuInqId, setSubMenuInqId] = useState<string | null>(null);
+  const [lostModal, setLostModal] = useState<{ dealId: string; inqId: string; reason: string } | null>(null);
+
+  const LOST_REASONS = [
+    'Price',
+    'Credit terms',
+    'Delivery timeline',
+    'Material unavailable',
+    'Spec mismatch',
+    'Competitor relationship',
+    'Customer silent',
+    'Cancelled by customer',
+  ];
 
   useEffect(() => {
     setCurrentPage(1);
     setOpenActionMenuId(null);
+    setSubMenuInqId(null);
   }, [searchTerm, filterStatus, dateRange]);
 
   useEffect(() => {
     const handleOutsideClick = () => {
       setOpenActionMenuId(null);
+      setSubMenuInqId(null);
     };
     document.addEventListener('click', handleOutsideClick);
     return () => document.removeEventListener('click', handleOutsideClick);
@@ -741,7 +756,7 @@ export default function InquiriesPage() {
 
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
-    const isAnyModalOpen = showModal || showEditDrawer || showPdfModal || showQuotationModal || !!imageViewerUrl;
+    const isAnyModalOpen = showModal || showEditDrawer || showPdfModal || showQuotationModal || !!imageViewerUrl || !!lostModal;
     const body = document.body;
     const docEl = document.documentElement;
     const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
@@ -902,6 +917,132 @@ export default function InquiriesPage() {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: rawDeals = [] } = useQuery<any[]>({
+    queryKey: ['deals', effectivePhone],
+    queryFn: async () => {
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      const res = await dealsApi.getAll(params).catch(() => null);
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
+      return list;
+    },
+    refetchInterval: 15000,
+  });
+
+  const getLinkedDeal = (inq: InquiryItem, companyName?: string) => {
+    if (!rawDeals || rawDeals.length === 0) return null;
+    const directMatch = rawDeals.find((d: any) => d.inquiry_id && d.inquiry_id === inq.id);
+    if (directMatch) return directMatch;
+
+    const cName = (companyName || inq.customer_name || inq.sender_name || '').toLowerCase().trim();
+    if (cName && !isProductOrGenericName(cName)) {
+      const matchingDeals = rawDeals.filter((d: any) => (d.customer_name || '').toLowerCase().trim() === cName);
+      if (matchingDeals.length > 0) {
+        const openDeal = matchingDeals.find((d: any) => !['won', 'lost'].includes((d.stage || '').toLowerCase()));
+        return openDeal || matchingDeals[0];
+      }
+    }
+    return null;
+  };
+
+  const getDealStageDisplay = (stage?: string) => {
+    if (!stage) return null;
+    const s = stage.toLowerCase().trim();
+    if (s === 'new_inquiry' || s === 'new' || s === 'new inquiry') {
+      return { label: 'New Inquiry', className: 'bg-blue-50 text-blue-700 border-blue-200' };
+    }
+    if (s === 'qualified') {
+      return { label: 'Qualified', className: 'bg-purple-50 text-purple-700 border-purple-200' };
+    }
+    if (s === 'quoted') {
+      return { label: 'Quoted', className: 'bg-yellow-50 text-yellow-800 border-yellow-200' };
+    }
+    if (s === 'negotiation') {
+      return { label: 'Negotiation', className: 'bg-orange-50 text-orange-800 border-orange-200' };
+    }
+    if (s === 'won') {
+      return { label: 'Won', className: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+    }
+    if (s === 'lost') {
+      return { label: 'Lost', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+    }
+    return { label: stage, className: 'bg-slate-50 text-slate-700 border-slate-200' };
+  };
+
+  const handleUpdateDealStage = async (inq: InquiryItem, details: ExtractedDetails, targetStage: string) => {
+    setOpenActionMenuId(null);
+    setSubMenuInqId(null);
+
+    let linked = getLinkedDeal(inq, details.companyName);
+
+    if (!linked || !linked.id) {
+      try {
+        await inquiriesApi.updateStatus(inq.id, 'confirmed', {
+          ...details,
+          companyName: details.companyName,
+          customerPhone: details.customerPhone,
+          salespersonName: activeSalespersonName,
+          deliveryLocation: details.deliveryLocation,
+          paymentTerms: details.paymentTerms,
+          lineItems: details.lineItems,
+          totalAmount: details.totalAmount,
+        });
+        const refetched = await dealsApi.getAll({ salesperson_phone: effectivePhone }).catch(() => null);
+        const list = Array.isArray(refetched?.data) ? refetched.data : (Array.isArray(refetched?.data?.data) ? refetched.data.data : []);
+        linked = list.find((d: any) => d.inquiry_id === inq.id || (d.customer_name && d.customer_name.toLowerCase().trim() === details.companyName?.toLowerCase().trim()));
+      } catch (err) {
+        console.warn('Could not auto-sync deal:', err);
+      }
+    }
+
+    if (!linked || !linked.id) {
+      toast.error('No linked deal found for this inquiry.');
+      return;
+    }
+
+    if (targetStage === 'lost') {
+      setLostModal({ dealId: linked.id, inqId: inq.id, reason: '' });
+      return;
+    }
+
+    try {
+      const toastId = toast.loading(`Updating deal to ${targetStage.toUpperCase()}...`);
+      await dealsApi.updateStage(linked.id, targetStage);
+      toast.dismiss(toastId);
+      toast.success(`Deal status updated to ${targetStage.charAt(0).toUpperCase() + targetStage.slice(1)}!`);
+
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      fetchMonthlyInquiries();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to update deal status.');
+    }
+  };
+
+  const handleConfirmLost = async () => {
+    if (!lostModal || !lostModal.dealId || !lostModal.reason) return;
+    try {
+      const toastId = toast.loading('Marking deal as Lost...');
+      await dealsApi.updateStage(lostModal.dealId, 'lost', lostModal.reason);
+      toast.dismiss(toastId);
+      toast.success('Deal marked as Lost.');
+      setLostModal(null);
+
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      fetchMonthlyInquiries();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to mark deal as lost.');
+    }
+  };
 
   const getSalespersonName = (inq?: InquiryItem | null, details?: ExtractedDetails | null) => {
     if (details?.salespersonName && details.salespersonName !== 'Sales Representative' && details.salespersonName !== 'Unknown') {
@@ -1816,24 +1957,25 @@ export default function InquiriesPage() {
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-3 py-3.5 text-center w-[5%]">#</th>
-              <th className="px-6 py-3.5 text-left w-[32%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[16%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[16%]">Source Channel</th>
-              <th className="px-4 py-3.5 text-center w-[18%]">Status</th>
+              <th className="px-3 py-3.5 text-center w-[4%]">#</th>
+              <th className="px-6 py-3.5 text-left w-[28%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[13%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[13%]">Source Channel</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Status</th>
+              <th className="px-4 py-3.5 text-center w-[15%]">Deal Status</th>
               <th className="px-4 py-3.5 text-center w-[13%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   Loading monthly inquiries...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   No product inquiries found for this period.
                 </td>
               </tr>
@@ -1885,10 +2027,14 @@ export default function InquiriesPage() {
                 const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
                 const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
 
+                const linkedDeal = getLinkedDeal(inq, details.companyName);
+                const dealStageInfo = linkedDeal?.stage ? getDealStageDisplay(linkedDeal.stage) : null;
+
                 return (
                   <tr
                     key={inq.id || idx}
-                    className="group hover:bg-slate-50/75 transition-colors">
+                    onClick={() => handleOpenDrawer(inq)}
+                    className="group hover:bg-slate-50/75 transition-colors cursor-pointer">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                     <td className="px-6 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
@@ -1924,14 +2070,24 @@ export default function InquiriesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      {dealStageInfo ? (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full border ${dealStageInfo.className}`}>
+                          {dealStageInfo.label}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-normal italic">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenActionMenuId(prev => (prev === inq.id ? null : inq.id));
+                            setSubMenuInqId(null);
                           }}
-                          className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all inline-flex items-center justify-center"
+                          className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all inline-flex items-center justify-center cursor-pointer"
                           title="Actions">
                           <MoreVertical size={16} />
                         </button>
@@ -1943,46 +2099,105 @@ export default function InquiriesPage() {
                               idx >= paginatedInquiries.length - 2 && paginatedInquiries.length >= 3
                                 ? 'bottom-full mb-1'
                                 : 'top-full mt-1'
-                            } w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActionMenuId(null);
-                                handleOpenDrawer(inq);
-                              }}
-                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
-                              <Edit3 size={14} className="text-slate-500 shrink-0" />
-                              <span>Edit</span>
-                            </button>
+                            } w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
+                            {/* 1. Update Status Button & Sub-Menu */}
+                            <div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSubMenuInqId(prev => (prev === inq.id ? null : inq.id));
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center justify-between transition-colors cursor-pointer">
+                                <div className="flex items-center gap-2.5">
+                                  <RefreshCw size={14} className="text-blue-600 shrink-0" />
+                                  <span>Update Status</span>
+                                </div>
+                                <ChevronRight
+                                  size={14}
+                                  className={`text-slate-400 transition-transform ${
+                                    subMenuInqId === inq.id ? 'rotate-90 text-blue-600' : ''
+                                  }`}
+                                />
+                              </button>
 
+                              {subMenuInqId === inq.id && (
+                                <div className="bg-slate-50 border-y border-slate-200 py-1 px-1 space-y-0.5 animate-in fade-in duration-100">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUpdateDealStage(inq, details, 'won');
+                                    }}
+                                    className="w-full px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>Won</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUpdateDealStage(inq, details, 'lost');
+                                    }}
+                                    className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                    <span>Lost</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUpdateDealStage(inq, details, 'qualified');
+                                    }}
+                                    className="w-full px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                    <span>Qualified</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUpdateDealStage(inq, details, 'negotiation');
+                                    }}
+                                    className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                    <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                    <span>Negotiation</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 2. View PDF */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenActionMenuId(null);
+                                setSubMenuInqId(null);
                                 setPdfModalInquiry(inq);
                                 setPdfModalDetails(details);
                                 setShowPdfModal(true);
                               }}
-                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
+                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer">
                               <Eye size={14} className="text-slate-500 shrink-0" />
                               <span>View PDF</span>
                             </button>
 
+                            {/* 3. Share Quotation */}
                             {(isConfirmed || isQuoted) && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenActionMenuId(null);
+                                  setSubMenuInqId(null);
                                   setShareInquiry(inq);
                                   setShareDetails(details);
                                   setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
                                   setShowQuotationModal(true);
                                 }}
-                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
-                                <Send size={14} className="text-slate-500 shrink-0" />
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer">
+                                <Send size={14} className="text-blue-600 shrink-0" />
                                 <span>Share Quotation</span>
                               </button>
                             )}
@@ -3019,6 +3234,53 @@ export default function InquiriesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Loss Reason Gate Modal */}
+      {lostModal && (
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              Mark Deal as Lost
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">Please select a loss reason (required):</p>
+            <div className="space-y-2 mb-5">
+              {LOST_REASONS.map(reason => (
+                <label 
+                  key={reason} 
+                  className="flex items-center gap-2.5 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors text-xs font-medium text-slate-700">
+                  <input
+                    type="radio"
+                    name="inquiry_loss_reason"
+                    value={reason}
+                    checked={lostModal.reason === reason}
+                    onChange={() => setLostModal(prev => prev ? { ...prev, reason } : null)}
+                    className="text-rose-600 focus:ring-rose-500"
+                  />
+                  <span>{reason}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setLostModal(null)}
+                className="flex-1 px-3.5 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!lostModal.reason}
+                onClick={handleConfirmLost}
+                className="flex-1 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+                Confirm Lost
+              </button>
+            </div>
           </div>
         </div>
       )}
