@@ -676,10 +676,10 @@ export default function ComplaintsPage() {
                           <Calendar size={12} className="text-slate-400 shrink-0" />
                           {comp.reported_at
                             ? new Date(comp.reported_at).toLocaleDateString('en-IN', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                              })
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
                             : '-'}
                         </div>
                       </td>
@@ -726,11 +726,10 @@ export default function ComplaintsPage() {
                 key={pageNum}
                 type="button"
                 onClick={() => setCurrentPage(pageNum)}
-                className={`w-7 h-7 rounded-xl text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${
-                  currentPage === pageNum
+                className={`w-7 h-7 rounded-xl text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${currentPage === pageNum
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-white hover:bg-slate-50 text-slate-700 border border-transparent hover:border-slate-200'
-                }`}>
+                  }`}>
                 {pageNum}
               </button>
             ))}
@@ -760,12 +759,12 @@ export default function ComplaintsPage() {
                     <Calendar size={12} />
                     {selectedComplaint.reported_at
                       ? new Date(selectedComplaint.reported_at).toLocaleString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
                       : 'Recent'}
                   </span>
                   {canViewSalesperson && (
@@ -795,15 +794,26 @@ export default function ComplaintsPage() {
               </div>
             </div>
 
-            {/* Badges & Overview Block (Complaint Type & Optional Affected Product) */}
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center gap-2 shrink-0">
-              <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 border border-blue-200/60">
-                Complaint Type: <strong className="font-bold">{selectedComplaint.complaint_type || 'Quality Defect'}</strong>
-              </span>
+            {/* Separate White Section Cards for Complaint Type & Affected Product */}
+            <div className={`grid gap-3 shrink-0 ${hasProduct(selectedComplaint) ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {/* Complaint Type Card */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                <p className="text-xs font-medium text-slate-400 mb-1">Complaint Type</p>
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                  <AlertTriangle size={15} className="text-blue-600 shrink-0" />
+                  {selectedComplaint.complaint_type || 'Quality Defect'}
+                </div>
+              </div>
+
+              {/* Affected Product Card (Shown ONLY if applicable) */}
               {hasProduct(selectedComplaint) && (
-                <span className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white border border-slate-200 text-slate-700 flex items-center gap-1 shadow-2xs">
-                  <Package size={12} className="text-slate-400" /> Product: <strong className="text-slate-900">{selectedComplaint.affected_product}</strong>
-                </span>
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <p className="text-xs font-medium text-slate-400 mb-1">Affected Product</p>
+                  <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                    <Package size={15} className="text-slate-400 shrink-0" />
+                    {selectedComplaint.affected_product}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -819,7 +829,7 @@ export default function ComplaintsPage() {
             <div className="p-3.5 bg-blue-50/40 border border-blue-100 rounded-xl space-y-2.5 shrink-0">
               <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <CheckCircle2 size={14} className="text-blue-600" />
-                Corrective Action &amp; Resolution Notes
+                Resolution Notes
               </p>
 
               {selectedComplaint.status === 'resolved' ? (
@@ -1074,9 +1084,8 @@ export default function ComplaintsPage() {
                       setFormDescription(e.target.value);
                       if (formErrors.description) setFormErrors(prev => ({ ...prev, description: false }));
                     }}
-                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
-                      formErrors.description ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${formErrors.description ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                      }`}
                   />
                   {formErrors.description && (
                     <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter complaint description.</p>
