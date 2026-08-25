@@ -894,11 +894,11 @@ export default function OrdersPage() {
                   return (
                     <tr
                       key={ord.id || idx}
-                      className="hover:bg-slate-50/80 transition-colors">
+                      className="group hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                       <td className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm">
-                          <span className="truncate hover:text-blue-600 transition-colors cursor-pointer inline-block">
+                          <span className="truncate group-hover:text-blue-600 transition-colors inline-block">
                             {ord.customer_name || 'Customer'}
                           </span>
                         </div>

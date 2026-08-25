@@ -1888,11 +1888,11 @@ export default function InquiriesPage() {
                 return (
                   <tr
                     key={inq.id || idx}
-                    className="hover:bg-slate-50/75 transition-colors">
+                    className="group hover:bg-slate-50/75 transition-colors">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                     <td className="px-6 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
-                        <span className="hover:text-blue-600 transition-colors cursor-pointer inline-block">
+                        <span className="group-hover:text-blue-600 transition-colors inline-block">
                           {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
                         </span>
                       </div>
