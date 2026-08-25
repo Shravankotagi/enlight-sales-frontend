@@ -506,29 +506,37 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   const totalAmount = unitPrice > 0 ? Math.round(quantityTons * unitPrice) : 0;
 
-  // 7. Delivery Location (Capture full delivery address as stated in text or aiJson)
-  let fromJson = aiJson.delivery_location || aiJson.deliveryLocation || '';
-  if (fromJson && typeof fromJson === 'string') {
-    fromJson = fromJson.replace(/^[•\-\*:\s]+|[•\-\*:\s]+$/g, '').trim();
-  }
+  // Helper to sanitize delivery address and strip any appended field labels or pipe delimiters
+  const cleanDeliveryLocation = (str?: string): string => {
+    if (!str || typeof str !== 'string') return '';
+    let clean = str.replace(/^[•\-\*:\s|]+|[•\-\*:\s|]+$/g, '').trim();
+    if (clean.includes('|')) {
+      clean = clean.split('|')[0].trim();
+    }
+    clean = clean.replace(/\s*(?:payment\s*terms?|payment|terms?|make|brand|preferred\s*make|notes?|remarks?|email|contact|phone)\s*[:=-].*$/i, '').trim();
+    return clean.replace(/^[•\-\*:\s|]+|[•\-\*:\s|]+$/g, '').trim();
+  };
+
+  // 7. Delivery Location (Capture full delivery address without payment terms leakage)
+  let fromJson = cleanDeliveryLocation(aiJson.delivery_location || aiJson.deliveryLocation || '');
 
   let fromText = '';
   if (textRaw && typeof textRaw === 'string') {
-    // 1. Line-by-line match for bullet or key-value format (handles WhatsApp bot & email formats)
+    // 1. Line-by-line match for bullet or key-value format (stops strictly at pipe, newline, or next field)
     const lineMatch =
-      textRaw.match(/(?:^[•\-\*]?\s*(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^\n\r]+)/im) ||
-      textRaw.match(/(?:(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^\n\r]+)/i);
+      textRaw.match(/(?:^[•\-\*]?\s*(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/im) ||
+      textRaw.match(/(?:(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/i);
     if (lineMatch && lineMatch[1].trim().length > 2) {
-      fromText = lineMatch[1].replace(/^[•\-\*:\s]+|[•\-\*:\s]+$/g, '').trim();
+      fromText = cleanDeliveryLocation(lineMatch[1]);
     }
 
     // 2. Multiline block fallback
     if (!fromText) {
       const blockMatch =
-        textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to)\s*[:=-]?\s*([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s*(?:payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|email|contact|phone|before|by|on\s+\d|gst\b)|\n{2,}|$)/i) ||
-        textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s+before|\s+by|\s+on|\s+within|$)/i);
+        textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to)\s*[:=-]?\s*([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s*(?:\||;|\n{2,}|payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|email|contact|phone|before|by|on\s+\d|gst\b)|$)/i) ||
+        textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s+before|\s+by|\s+on|\s+within|\||$)/i);
       if (blockMatch && blockMatch[1].trim().length > 2) {
-        fromText = blockMatch[1].replace(/^[•\-\*:\s]+|[•\-\*:\s]+$/g, '').trim();
+        fromText = cleanDeliveryLocation(blockMatch[1]);
       }
     }
   }
@@ -539,6 +547,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   } else if (!deliveryLocation) {
     deliveryLocation = fromText;
   }
+  deliveryLocation = cleanDeliveryLocation(deliveryLocation);
 
   // 8. Delivery Date (Capture target date e.g. "before 25 August" -> "2026-08-25")
   let deliveryDate = aiJson.delivery_date || aiJson.deliveryDate || '';
@@ -1458,15 +1467,15 @@ export default function InquiriesPage() {
       }
 
       const reqDetails = [
-        formProductSKU.trim() ? `Material: ${formProductSKU.trim()}` : '',
+        formProductSKU.trim() ? `Material:\n${formProductSKU.trim()}` : '',
         formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
         formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : '',
         formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
         formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : '',
-      ].filter(Boolean).join(' | ');
+      ].filter(Boolean).join('\n');
 
       const rawText = poFileName
-        ? `[Inquiry Attachment: ${poFileName}] ${reqDetails || 'Inquiry'}`
+        ? `[Inquiry Attachment: ${poFileName}]\n${reqDetails || 'Inquiry'}`
         : reqDetails || formProductSKU.trim() || 'Inquiry';
 
       const createRes = await inquiriesApi.create({
