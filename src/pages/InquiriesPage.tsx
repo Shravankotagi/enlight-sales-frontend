@@ -1347,6 +1347,11 @@ export default function InquiriesPage() {
       setSelectedInquiry(updatedObj);
       setDrawerFileBase64(null);
 
+      // Optimistically update linked deal stage to 'qualified'
+      queryClient.setQueryData(['deals', effectivePhone], (old: any[] = []) =>
+        old.map(d => (d.inquiry_id === selectedInquiry.id || (d.customer_name && d.customer_name.toLowerCase().trim() === editDetails.companyName?.toLowerCase().trim())) ? { ...d, stage: 'qualified' } : d)
+      );
+
       // Invalidate all related caches so Pipeline cards and KRA metrics update immediately
       queryClient.invalidateQueries({ queryKey: ['kanban'] });
       queryClient.invalidateQueries({ queryKey: ['pipeline'] });
@@ -2142,16 +2147,6 @@ export default function InquiriesPage() {
                                     className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
                                     <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                                     <span>Lost</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUpdateDealStage(inq, details, 'qualified');
-                                    }}
-                                    className="w-full px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                                    <span>Qualified</span>
                                   </button>
                                   <button
                                     type="button"
@@ -3005,6 +3000,11 @@ export default function InquiriesPage() {
                     if (selectedInquiry && selectedInquiry.id === shareInquiry.id) {
                       setSelectedInquiry(prev => prev ? { ...prev, status: 'quoted' } : null);
                     }
+
+                    // Optimistically update linked deal stage to 'quoted'
+                    queryClient.setQueryData(['deals', effectivePhone], (old: any[] = []) =>
+                      old.map(d => (d.inquiry_id === shareInquiry.id || (d.customer_name && d.customer_name.toLowerCase().trim() === shareDetails?.companyName?.toLowerCase().trim())) ? { ...d, stage: 'quoted' } : d)
+                    );
 
                     // 2. Invalidate React Query caches immediately so all views update live
                     queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
