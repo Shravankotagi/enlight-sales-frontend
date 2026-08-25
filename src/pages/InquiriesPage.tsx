@@ -16,6 +16,7 @@ import {
   calculateLineItems,
   calculateSubtotal,
   calculateQuotationBreakdown,
+  calculateTotalTonnageMt,
   normalizeUnit,
 } from '../utils/pricingEngine';
 
@@ -2671,10 +2672,8 @@ export default function InquiriesPage() {
                     const subtotal = activeLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
                     const qBreakdown = calculateQuotationBreakdown(subtotal);
 
-                    const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => normalizeUnit(i.unit) || 'MT')));
-                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
-                    const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
+                    const totalTonnage = calculateTotalTonnageMt(activeLineItems);
+                    const formattedItemsInTotal = totalTonnage.formattedText;
 
                     return (
                       <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">

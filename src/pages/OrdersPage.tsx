@@ -29,7 +29,11 @@ import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
 import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
-import { calculateQuotationBreakdown, normalizeUnit } from '../utils/pricingEngine';
+import {
+  calculateQuotationBreakdown,
+  calculateTotalTonnageMt,
+  normalizeUnit,
+} from '../utils/pricingEngine';
 
 interface DealItem {
   id?: string;
@@ -1591,10 +1595,8 @@ export default function OrdersPage() {
                   const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
                   const qBreakdown = calculateQuotationBreakdown(subtotal);
 
-                  const totalQty = formLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                  const distinctUnits = Array.from(new Set(formLineItems.map(i => normalizeUnit(i.unit) || 'MT')));
-                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
-                  const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
+                  const totalTonnage = calculateTotalTonnageMt(formLineItems);
+                  const formattedItemsInTotal = totalTonnage.formattedText;
 
                   return (
                     <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">

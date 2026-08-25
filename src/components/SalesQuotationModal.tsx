@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { X, Printer, Copy, Check } from 'lucide-react';
-import { calculateQuotationBreakdown, formatIndianCurrency, normalizeUnit } from '../utils/pricingEngine';
+import {
+  calculateQuotationBreakdown,
+  calculateTotalTonnageMt,
+  formatIndianCurrency,
+} from '../utils/pricingEngine';
 
 interface DealItem {
   id?: string;
@@ -25,6 +29,8 @@ interface QuotationDeal {
   payment_terms?: string;
   created_at?: string;
   deal_items?: DealItem[];
+  items?: DealItem[];
+  line_items?: DealItem[];
   deal_number?: string;
 }
 
@@ -38,12 +44,15 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
 
   if (!deal) return null;
 
-  const items = deal.deal_items && deal.deal_items.length > 0
+  const items: DealItem[] = (deal.deal_items && deal.deal_items.length > 0)
     ? deal.deal_items
+    : (deal.items && deal.items.length > 0)
+    ? deal.items
+    : (deal.line_items && deal.line_items.length > 0)
+    ? deal.line_items
     : [
         {
-          sku_text: 'Industrial Metal Supply Order Requirement',
-          dimensions: '',
+          sku_text: 'Mild Steel / HR Coils IS 2062',
           quantity: 1,
           unit: 'MT',
           rate: Number(deal.total_amount || 0),
@@ -59,9 +68,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
   }, 0) || Number(deal.total_amount || 0);
 
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
-  const totalQuantity = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-  const distinctUnits = Array.from(new Set(items.map(i => normalizeUnit(i.unit) || 'MT')));
-  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
+  const totalTonnage = calculateTotalTonnageMt(items);
 
   const dealRefId = deal.id ? `#${deal.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-DEAL';
   const poNumber = deal.po_number || `PO-${new Date().getFullYear()}-AUTO`;
@@ -239,7 +246,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
             
             {/* Bottom Left: Items in Total */}
             <div className="text-xs font-semibold text-slate-700 pt-1">
-              <span>Items in Total {formatIndianCurrency(totalQuantity, true)} {primaryUnit}</span>
+              <span>Items in Total {totalTonnage.formattedText}</span>
               
               <div className="text-[11px] text-slate-500 mt-4 space-y-1">
                 <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>

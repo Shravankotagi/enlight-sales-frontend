@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { X, Download, Check, Copy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { customersApi, inquiriesApi } from '../lib/api';
-import { calculateQuotationBreakdown, formatIndianCurrency, normalizeUnit } from '../utils/pricingEngine';
+import {
+  calculateQuotationBreakdown,
+  calculateTotalTonnageMt,
+  formatIndianCurrency,
+} from '../utils/pricingEngine';
 
 interface InquiryItem {
   id: string;
@@ -103,10 +107,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   // totalAmount = base pre-GST value; calculate GST breakdown
   const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || details.totalAmount || 0;
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
-
-  const totalQuantity = lineItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-  const distinctUnits = Array.from(new Set(lineItems.map(i => normalizeUnit(i.unit) || 'MT')));
-  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
+  const totalTonnage = calculateTotalTonnageMt(lineItems);
 
   const piNumber = (() => {
     const inq = inquiry as any;
@@ -462,7 +463,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
               <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
                 <div>
-                  <span>Items in Total <strong className="font-bold">{formatIndianCurrency(totalQuantity, true)} {primaryUnit}</strong></span>
+                  <span>Items in Total <strong className="font-bold">{totalTonnage.formattedText}</strong></span>
                 </div>
                 {details.paymentTerms && (
                   <div>
