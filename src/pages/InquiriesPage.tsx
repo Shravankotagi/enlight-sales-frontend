@@ -949,23 +949,23 @@ export default function InquiriesPage() {
   const getDealStageDisplay = (stage?: string) => {
     if (!stage) return null;
     const s = stage.toLowerCase().trim();
-    if (s === 'new_inquiry' || s === 'new' || s === 'new inquiry') {
-      return { label: 'New Inquiry', className: 'bg-blue-50 text-blue-700 border-blue-200' };
+    if (s === 'new_inquiry' || s === 'new' || s === 'new inquiry' || s === 'review') {
+      return { label: 'New Inquiry', className: 'bg-amber-100 text-amber-800 border-amber-200' };
     }
-    if (s === 'qualified') {
-      return { label: 'Qualified', className: 'bg-purple-50 text-purple-700 border-purple-200' };
+    if (s === 'qualified' || s === 'saved' || s === 'confirmed') {
+      return { label: 'Qualified', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
     }
-    if (s === 'quoted') {
-      return { label: 'Quoted', className: 'bg-yellow-50 text-yellow-800 border-yellow-200' };
+    if (s === 'quoted' || s === 'quotation_sent') {
+      return { label: 'Quoted', className: 'bg-blue-100 text-blue-800 border-blue-200' };
     }
     if (s === 'negotiation') {
-      return { label: 'Negotiation', className: 'bg-orange-50 text-orange-800 border-orange-200' };
+      return { label: 'Negotiation', className: 'bg-orange-100 text-orange-800 border-orange-200' };
     }
     if (s === 'won') {
-      return { label: 'Won', className: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+      return { label: 'Won', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
     }
     if (s === 'lost') {
-      return { label: 'Lost', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+      return { label: 'Lost', className: 'bg-rose-100 text-rose-800 border-rose-200' };
     }
     return { label: stage, className: 'bg-slate-50 text-slate-700 border-slate-200' };
   };

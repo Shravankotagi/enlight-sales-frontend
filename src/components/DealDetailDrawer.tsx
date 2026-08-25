@@ -21,11 +21,11 @@ interface DealDetailDrawerProps {
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  new_inquiry: 'bg-blue-100 text-blue-700',
-  qualified: 'bg-purple-100 text-purple-700',
-  quoted: 'bg-yellow-100 text-yellow-700',
-  negotiation: 'bg-orange-100 text-orange-700',
-  won: 'bg-green-100 text-green-700',
+  new_inquiry: 'bg-amber-100 text-amber-800',
+  qualified: 'bg-emerald-100 text-emerald-800',
+  quoted: 'bg-blue-100 text-blue-800',
+  negotiation: 'bg-orange-100 text-orange-800',
+  won: 'bg-green-100 text-green-800',
   lost: 'bg-red-100 text-red-700',
 };
 
@@ -428,7 +428,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
               {deal.stage === 'new_inquiry' && (
                 <button
                   onClick={() => handleStageChange('qualified')}
-                  className="px-3 py-1.5 text-xs font-medium border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors"
                 >
                   → Qualified
                 </button>
@@ -436,7 +436,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
               {deal.stage === 'qualified' && (
                 <button
                   onClick={() => handleStageChange('quoted')}
-                  className="px-3 py-1.5 text-xs font-medium border border-yellow-300 text-yellow-700 rounded-lg hover:bg-yellow-50 transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
                 >
                   → Quoted
                 </button>

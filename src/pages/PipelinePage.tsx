@@ -8,9 +8,9 @@ import DateFilterControl, { type DateFilterRange } from '../components/DateFilte
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
 const STAGES = [
-  { key: 'new_inquiry', label: 'New Deals', color: 'bg-blue-50 border-blue-200' },
-  { key: 'qualified', label: 'Qualified', color: 'bg-purple-50 border-purple-200' },
-  { key: 'quoted', label: 'Quoted', color: 'bg-yellow-50 border-yellow-200' },
+  { key: 'new_inquiry', label: 'New Deals', color: 'bg-amber-50 border-amber-200' },
+  { key: 'qualified', label: 'Qualified', color: 'bg-emerald-50 border-emerald-200' },
+  { key: 'quoted', label: 'Quoted', color: 'bg-blue-50 border-blue-200' },
   { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
 ];
 
