@@ -694,6 +694,7 @@ export default function InquiriesPage() {
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [showEditCompanyDropdown, setShowEditCompanyDropdown] = useState(false);
   const [drawerError, setDrawerError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
   const [pdfModalDetails, setPdfModalDetails] = useState<ExtractedDetails | null>(null);
@@ -991,13 +992,11 @@ export default function InquiriesPage() {
     setShowEditDrawer(true);
     setShowEditCompanyDropdown(false);
 
-    const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
-    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
-
     const ai = (inq.ai_extraction_json as any) || {};
     const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
     const resolvedSp = getSalespersonName(inq);
 
+    let activeItems: any[] = [];
     if (lineItemsSrc.length > 0) {
       // Has structured line items in ai_extraction_json — use directly for ALL inquiries (review, confirmed, etc.)
       const frozenLineItems = lineItemsSrc.map((item: any) => ({
@@ -1009,6 +1008,7 @@ export default function InquiriesPage() {
         rate: Number(item.rate) || 0,
         amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
       }));
+      activeItems = frozenLineItems;
       const frozenTotal = ai.total_amount || ai.totalAmount ||
         (frozenLineItems.length > 0
           ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
@@ -1039,14 +1039,21 @@ export default function InquiriesPage() {
     } else {
       // True fallback: no structured line items in ai_extraction_json, parse raw text
       const parsed = parseInquiryText(inq.raw_text || '', inq);
+      activeItems = parsed.lineItems || [];
       setEditDetails({
         ...parsed,
         salespersonName: resolvedSp,
       });
     }
 
+    // A deal/inquiry is ONLY in Saved/Confirmed state if all line items have valid Rate > 0 and Quantity > 0
+    const hasValidRates = activeItems.length > 0 && activeItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
+    const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
+    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
+
     setSaveSuccess(isConfirmedState);
     setIsQuotationSent(isQuotedState);
+    setFieldErrors({});
     setDrawerError(null);
   };
 
@@ -1081,61 +1088,66 @@ export default function InquiriesPage() {
     if (!selectedInquiry || !editDetails) return;
     if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
 
-    // Strict validation for all compulsory fields (marked with red asterisks)
+    const errors: { [key: string]: string } = {};
+
+    // 1. Company Name validation
     if (!editDetails.companyName || !editDetails.companyName.trim()) {
-      const msg = 'Please enter Company Name.';
-      setDrawerError(msg);
-      toast.error(msg);
-      return;
+      errors['companyName'] = 'Company Name is required.';
     }
 
+    // 2. Line Items validation (Rate > 0, Quantity > 0, Description required)
     const currentItems = editDetails.lineItems && editDetails.lineItems.length > 0
       ? editDetails.lineItems
       : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
 
     if (currentItems.length === 0) {
-      const msg = 'Please add at least one line item.';
-      setDrawerError(msg);
-      toast.error(msg);
-      return;
+      errors['lineItems'] = 'Please add at least one line item.';
     }
 
     for (let i = 0; i < currentItems.length; i++) {
       const item = currentItems[i];
       if (!item.sku_text || !item.sku_text.trim()) {
-        const msg = `Line Item #${i + 1}: Description & Specifications is required.`;
-        setDrawerError(msg);
-        toast.error(msg);
-        return;
+        errors[`sku_${i}`] = 'Description is required.';
       }
-      if (!item.quantity || Number(item.quantity) <= 0) {
-        const msg = `Line Item #${i + 1}: Quantity must be greater than 0.`;
-        setDrawerError(msg);
-        toast.error(msg);
-        return;
+      if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
+        errors[`qty_${i}`] = 'Quantity must be > 0.';
       }
-      if (!item.rate || Number(item.rate) <= 0) {
-        const msg = `Line Item #${i + 1}: Rate (₹) is required and must be greater than 0.`;
-        setDrawerError(msg);
-        toast.error(msg);
-        return;
+      if (item.rate === null || item.rate === undefined || Number(item.rate) <= 0 || isNaN(Number(item.rate))) {
+        errors[`rate_${i}`] = 'Rate is required (must be > 0).';
       }
     }
 
+    // 3. Delivery Address validation
     if (!editDetails.deliveryLocation || !editDetails.deliveryLocation.trim()) {
-      const msg = 'Please enter Delivery Address / Location.';
-      setDrawerError(msg);
-      toast.error(msg);
-      return;
+      errors['deliveryLocation'] = 'Delivery Address is required.';
     }
 
+    // 4. Payment Terms validation
     if (!editDetails.paymentTerms || !editDetails.paymentTerms.trim()) {
-      const msg = 'Please enter Payment Terms.';
-      setDrawerError(msg);
-      toast.error(msg);
+      errors['paymentTerms'] = 'Payment Terms is required.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const rateErrMsg = Object.keys(errors).some(k => k.startsWith('rate_'))
+        ? 'Rate (₹) is mandatory and must be greater than 0 for all line items.'
+        : null;
+      const firstMsg = rateErrMsg || errors['companyName'] || Object.values(errors)[0] || 'Please complete all required fields.';
+      setDrawerError(firstMsg);
+      toast.error(firstMsg);
+      setSaveSuccess(false);
+
+      // Scroll to first invalid field
+      setTimeout(() => {
+        const firstErrEl = document.querySelector('.field-error-border');
+        if (firstErrEl) {
+          firstErrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
       return;
     }
 
+    setFieldErrors({});
     setDrawerError(null);
     try {
       setSubmitting(true);
@@ -1609,9 +1621,10 @@ export default function InquiriesPage() {
         text.toLowerCase().includes(s);
 
       const statusStr = (i?.status || 'review').toLowerCase();
-      const isReview = ['review', 'needs_review', 'pending', 'new', 'draft'].includes(statusStr);
-      const isSaved = ['processed', 'confirmed', 'won', 'auto_created', 'order_created', 'quotation_ready'].includes(statusStr);
-      const isQuoted = statusStr === 'quoted' || statusStr === 'quotation_sent';
+      const hasRates = (parsed.lineItems || []).length > 0 && (parsed.lineItems || []).every((li: any) => Number(li.rate) > 0 && Number(li.quantity) > 0);
+      const isQuoted = (statusStr === 'quoted' || statusStr === 'quotation_sent') && hasRates;
+      const isSaved = ['processed', 'confirmed', 'won', 'auto_created', 'order_created', 'quotation_ready'].includes(statusStr) && hasRates;
+      const isReview = !isSaved && !isQuoted;
 
       const matchesStatus =
         filterStatus === 'all' ||
@@ -1867,8 +1880,9 @@ export default function InquiriesPage() {
                   };
                 })();
                 const st = (inq.status || '').toLowerCase();
-                const isQuoted = st === 'quoted' || st === 'quotation_sent';
-                const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po';
+                const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
+                const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
+                const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
                 const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
 
                 return (
@@ -2103,9 +2117,16 @@ export default function InquiriesPage() {
                             setShowEditCompanyDropdown(true);
                             setSaveSuccess(false);
                             setDrawerError(null);
+                            if (fieldErrors['companyName']) {
+                              setFieldErrors(prev => { const n = { ...prev }; delete n['companyName']; return n; });
+                            }
                           }}
                           onFocus={() => setShowEditCompanyDropdown(true)}
-                          className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          className={`w-full pl-9 pr-8 py-2 bg-white rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                            fieldErrors['companyName']
+                              ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                              : 'border border-slate-300 focus:ring-blue-500'
+                          }`}
                         />
                         <button
                           type="button"
@@ -2198,10 +2219,20 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
                                   setDrawerError(null);
+                                  if (fieldErrors[`sku_${idx}`]) {
+                                    setFieldErrors(prev => { const n = { ...prev }; delete n[`sku_${idx}`]; return n; });
+                                  }
                                 }}
-                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                                className={`w-full px-2 py-1 bg-white rounded font-bold text-xs outline-none focus:ring-2 text-slate-900 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                                  fieldErrors[`sku_${idx}`]
+                                    ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                    : 'border border-slate-300 focus:ring-blue-500'
+                                }`}
                                 placeholder="Product Name / Description"
                               />
+                              {fieldErrors[`sku_${idx}`] && (
+                                <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`sku_${idx}`]}</span>
+                              )}
                               <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
                                 <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
                                 <input
@@ -2253,9 +2284,16 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                   setDrawerError(null);
+                                  if (fieldErrors[`qty_${idx}`]) {
+                                    setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
+                                  }
                                 }}
                                 placeholder="0"
-                                className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                                className={`flex-1 min-w-[65px] px-2 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
+                                  fieldErrors[`qty_${idx}`]
+                                    ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                    : 'border border-slate-300 focus:ring-blue-500'
+                                }`}
                               />
                               <select
                                 value={normalizeUnit(item.unit) || 'MT'}
@@ -2274,6 +2312,9 @@ export default function InquiriesPage() {
                                 <option value="Sheets">Sheets</option>
                               </select>
                             </div>
+                            {fieldErrors[`qty_${idx}`] && (
+                              <span className="text-[10px] text-red-600 font-bold block text-center mt-0.5">{fieldErrors[`qty_${idx}`]}</span>
+                            )}
                           </td>
                           <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
                             <input
@@ -2291,10 +2332,20 @@ export default function InquiriesPage() {
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
                                 setSaveSuccess(false);
                                 setDrawerError(null);
+                                if (fieldErrors[`rate_${idx}`]) {
+                                  setFieldErrors(prev => { const n = { ...prev }; delete n[`rate_${idx}`]; return n; });
+                                }
                               }}
                               placeholder="0"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                              className={`w-full px-2 py-1.5 bg-white rounded font-bold text-xs font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900 transition-all ${
+                                fieldErrors[`rate_${idx}`]
+                                  ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                  : 'border border-slate-300 focus:ring-blue-500'
+                              }`}
                             />
+                            {fieldErrors[`rate_${idx}`] && (
+                              <span className="text-[10px] text-red-600 font-bold block mt-0.5">{fieldErrors[`rate_${idx}`]}</span>
+                            )}
                           </td>
                           <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
                             <input
@@ -2417,10 +2468,20 @@ export default function InquiriesPage() {
                           setEditDetails({ ...editDetails, deliveryLocation: e.target.value });
                           setSaveSuccess(false);
                           setDrawerError(null);
+                          if (fieldErrors['deliveryLocation']) {
+                            setFieldErrors(prev => { const n = { ...prev }; delete n['deliveryLocation']; return n; });
+                          }
                         }}
                         placeholder="e.g. Chakan Industrial Area, Pune"
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                        className={`w-full px-3 py-2 bg-white rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                          fieldErrors['deliveryLocation']
+                            ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                            : 'border border-slate-300 focus:ring-blue-500'
+                        }`}
                       />
+                      {fieldErrors['deliveryLocation'] && (
+                        <span className="text-[11px] text-red-600 font-bold block mt-1">{fieldErrors['deliveryLocation']}</span>
+                      )}
                     </div>
 
                     <div>
@@ -2434,10 +2495,20 @@ export default function InquiriesPage() {
                           setEditDetails({ ...editDetails, paymentTerms: e.target.value });
                           setSaveSuccess(false);
                           setDrawerError(null);
+                          if (fieldErrors['paymentTerms']) {
+                            setFieldErrors(prev => { const n = { ...prev }; delete n['paymentTerms']; return n; });
+                          }
                         }}
                         placeholder="e.g. 30 Days Credit, 100% Advance"
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                        className={`w-full px-3 py-2 bg-white rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                          fieldErrors['paymentTerms']
+                            ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                            : 'border border-slate-300 focus:ring-blue-500'
+                        }`}
                       />
+                      {fieldErrors['paymentTerms'] && (
+                        <span className="text-[11px] text-red-600 font-bold block mt-1">{fieldErrors['paymentTerms']}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2771,7 +2842,7 @@ export default function InquiriesPage() {
                   {isExtractingPo ? (
                     <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
                       <RefreshCw size={14} className="animate-spin text-blue-600" />
-                      Gemini AI Analyzing &amp; Extracting Document...
+                      Extracting Document...
                     </div>
                   ) : poFileName ? (
                     <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
