@@ -895,17 +895,29 @@ export default function OrdersPage() {
             className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto"
             onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900">
-                Share PO
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Send className="text-blue-600" size={22} />
+                Share Quotation
               </h2>
               <button
                 onClick={() => {
                   setShowSendModal(false);
                   setResendNotice('');
                 }}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
                 <X size={20} />
               </button>
+            </div>
+
+            {/* Small Relevant Info Message */}
+            <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
+              <FileText size={18} className="text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-blue-950">Official Commercial Quotation</p>
+                <p className="text-blue-800 text-[11px] mt-0.5 leading-relaxed">
+                  The complete 2-page PDF quotation for <strong>{shareOrder.customer_name || 'Customer'}</strong> with itemized rates, taxes, bank details, and commercial terms will be generated and dispatched directly to the customer.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -919,7 +931,7 @@ export default function OrdersPage() {
                   placeholder="e.g. shravankotagi314@gmail.com"
                   value={sendEmail}
                   onChange={e => setSendEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
                 />
               </div>
 
@@ -945,7 +957,7 @@ export default function OrdersPage() {
                   setShowSendModal(false);
                   setResendNotice('');
                 }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
                 Cancel
               </button>
 
@@ -1030,9 +1042,9 @@ export default function OrdersPage() {
                     setSendingEmail(false);
                   }
                 }}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
                 {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Share PO Email'}</span>
+                <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}</span>
               </button>
             </div>
           </div>
