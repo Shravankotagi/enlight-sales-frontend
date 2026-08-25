@@ -2780,19 +2780,36 @@ export default function InquiriesPage() {
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
                     setResendNotice(msg);
+                    toast.success(msg);
                     setIsQuotationSent(true);
+
+                    // 1. Optimistic live update of local state immediately
+                    setInquiries(prev => prev.map(i => i.id === shareInquiry.id ? { ...i, status: 'quoted', inquiry_type: 'quotation_sent' } : i));
+                    if (selectedInquiry && selectedInquiry.id === shareInquiry.id) {
+                      setSelectedInquiry(prev => prev ? { ...prev, status: 'quoted' } : null);
+                    }
+
+                    // 2. Invalidate React Query caches immediately so all views update live
+                    queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+                    queryClient.invalidateQueries({ queryKey: ['deals'] });
+                    queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+                    queryClient.invalidateQueries({ queryKey: ['kanban'] });
+                    queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+                    fetchMonthlyInquiries();
+
                     if (res?.data?.email_sent !== false) {
                       setTimeout(() => {
                         setShowQuotationModal(false);
                         setShareInquiry(null);
                         setShareDetails(null);
                         setResendNotice('');
-                        fetchMonthlyInquiries();
-                      }, 2500);
+                      }, 1200);
                     }
                   } catch (err: any) {
                     console.error('Error sending quotation:', err);
-                    setResendNotice(err?.response?.data?.message || 'Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.');
+                    const errMsg = err?.response?.data?.message || 'Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.';
+                    setResendNotice(errMsg);
+                    toast.error(errMsg);
                   } finally {
                     setSendingQuotation(false);
                   }
