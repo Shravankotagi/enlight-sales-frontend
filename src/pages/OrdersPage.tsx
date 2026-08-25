@@ -895,9 +895,8 @@ export default function OrdersPage() {
             className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto"
             onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Send className="text-purple-600" size={22} />
-                Share Quotation
+              <h2 className="text-lg font-bold text-slate-900">
+                Share PO
               </h2>
               <button
                 onClick={() => {
@@ -908,59 +907,6 @@ export default function OrdersPage() {
                 <X size={20} />
               </button>
             </div>
-
-            {(() => {
-              const activeLineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
-                ? shareOrder.deal_items.map((i: any) => {
-                    const rawSku = i.sku_text || 'Steel Material';
-                    const rawDims = i.dimensions || '';
-                    const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
-                    return {
-                      sku_text: materialDescription,
-                      dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
-                      quantity: Number(i.quantity) || 0,
-                      unit: normalizeUnit(i.unit) || 'MT',
-                      rate: Number(i.rate) || 0,
-                      amount: Number(i.amount) || 0,
-                    };
-                  })
-                : [
-                    {
-                      sku_text: 'Steel Material',
-                      dimensions: '',
-                      quantity: 0,
-                      unit: 'MT',
-                      rate: 0,
-                      amount: Number(shareOrder.total_amount) || 0,
-                    },
-                  ];
-
-              const subtotal = activeLineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0) || Number(shareOrder.total_amount) || 0;
-              const qBreakdown = calculateQuotationBreakdown(subtotal);
-              const summaryItemsText = activeLineItems
-                .filter((i: any) => i.quantity > 0 || i.sku_text !== 'Steel Material')
-                .map((i: any) => `${i.sku_text || 'Item'} (${i.quantity} ${i.unit || 'MT'})`)
-                .join(' · ');
-
-              return (
-                <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-2">
-                  <div className="font-bold text-purple-900 flex items-center justify-between">
-                    <span>Commercial Proposal Summary</span>
-                    <span className="font-extrabold text-emerald-800">Total: {qBreakdown.formattedGrandTotal}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-600 flex justify-between font-mono">
-                    <span>Sub Total: {qBreakdown.formattedSubtotal}</span>
-                    <span>CGST: {qBreakdown.formattedCGST} | SGST: {qBreakdown.formattedSGST}</span>
-                  </div>
-                  <p className="text-slate-700 font-mono text-[11px]">
-                    {shareOrder.customer_name || 'Customer'}{summaryItemsText ? ` · ${summaryItemsText}` : ''}
-                  </p>
-                  <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
-                    <span><strong>Official PDF Quotation:</strong> The formatted PDF document and original client PO document will be attached to this email.</span>
-                  </div>
-                </div>
-              );
-            })()}
 
             <div className="space-y-3">
               <div>
@@ -1086,7 +1032,7 @@ export default function OrdersPage() {
                 }}
                 className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
                 {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}</span>
+                <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Share PO Email'}</span>
               </button>
             </div>
           </div>
