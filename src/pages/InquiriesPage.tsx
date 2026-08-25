@@ -16,6 +16,7 @@ import {
   calculateLineItems,
   calculateSubtotal,
   calculateQuotationBreakdown,
+  normalizeUnit,
 } from '../utils/pricingEngine';
 
 interface InquiryItem {
@@ -567,7 +568,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     dimensions: item.dimensions || '',
     hsn_code: item.hsn_code || (item as any).hsn || '',
     quantity: item.quantity,
-    unit: item.unit || 'MT',
+    unit: normalizeUnit(item.unit) || 'MT',
     rate: item.rate,
     amount: item.amount,
   }));
@@ -814,7 +815,7 @@ export default function InquiriesPage() {
     return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
   };
 
-  const { data: rawInquiries = [], isLoading: loading, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
+  const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
     queryKey: ['inquiries-list', effectivePhone, dateRange],
     queryFn: async () => {
       const params: any = {};
@@ -1636,6 +1637,18 @@ export default function InquiriesPage() {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            type="button"
+            disabled={isFetching}
+            onClick={async () => {
+              await fetchMonthlyInquiries();
+              toast.success('Inquiries list refreshed');
+            }}
+            title="Refresh Inquiries"
+            className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+            <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+          </button>
+
+          <button
             onClick={() => navigate('/orders')}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
             <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
@@ -1740,12 +1753,12 @@ export default function InquiriesPage() {
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-3 py-3.5 text-center w-[4%]">#</th>
-              <th className="px-5 py-3.5 text-left w-[28%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[24%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
+              <th className="px-3 py-3.5 text-center w-[5%]">#</th>
+              <th className="px-6 py-3.5 text-left w-[32%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Source Channel</th>
               <th className="px-4 py-3.5 text-center w-[18%]">Status</th>
-              <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
+              <th className="px-4 py-3.5 text-center w-[13%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -1795,7 +1808,7 @@ export default function InquiriesPage() {
                         rate: Number(item.rate) || 0,
                         amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
                       })),
-                      totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity) * Number(i.rate))), 0),
+                      totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0),
                     };
                   }
                   return {
@@ -1813,12 +1826,12 @@ export default function InquiriesPage() {
                     key={inq.id || idx}
                     className="hover:bg-slate-50/75 transition-colors">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                    <td className="px-5 py-3.5 text-left">
-                      <div className="font-bold text-slate-900 text-sm">
-                        <span className="truncate">{details.companyName || <span className="text-slate-300 font-normal italic">—</span>}</span>
+                    <td className="px-6 py-3.5 text-left">
+                      <div className="font-bold text-slate-900 text-sm truncate">
+                        {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
                       </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        <span className="font-mono">{inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}</span>
+                      <div className="text-xs text-slate-500 mt-0.5 font-mono">
+                        {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
@@ -1831,7 +1844,7 @@ export default function InquiriesPage() {
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {isQuoted ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
                           Quotation Sent 
                         </span>
                       ) : isConfirmed ? (
@@ -2195,7 +2208,7 @@ export default function InquiriesPage() {
                                 className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                               />
                               <select
-                                value={item.unit || 'MT'}
+                                value={normalizeUnit(item.unit) || 'MT'}
                                 onChange={(e) => {
                                   const updated = [...(editDetails.lineItems || [])];
                                   updated[idx] = { ...updated[idx], unit: e.target.value };
@@ -2206,7 +2219,7 @@ export default function InquiriesPage() {
                                 className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
-                                <option value="Pieces">Pcs</option>
+                                <option value="Pcs">Pcs</option>
                                 <option value="KG">KG</option>
                                 <option value="Sheets">Sheets</option>
                               </select>
@@ -2305,8 +2318,8 @@ export default function InquiriesPage() {
                     const qBreakdown = calculateQuotationBreakdown(subtotal);
 
                     const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => i.unit || 'MT')));
-                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
+                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => normalizeUnit(i.unit) || 'MT')));
+                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
                     const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
 
                     return (
@@ -2439,7 +2452,7 @@ export default function InquiriesPage() {
                   className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
                     ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
                       ? 'bg-emerald-600 hover:bg-emerald-700'
-                      : 'bg-purple-600 hover:bg-purple-700'
+                      : 'bg-blue-600 hover:bg-blue-700'
                   }`}>
                   {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
                     <>
@@ -2447,7 +2460,7 @@ export default function InquiriesPage() {
                     </>
                   ) : (
                     <>
-                      <Send size={15} /> Send Quotation 
+                      <Send size={15} /> Share Quotation 
                     </>
                   )}
                 </button>
@@ -2561,48 +2574,32 @@ export default function InquiriesPage() {
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Send className="text-purple-600" size={22} />
-                Send Quotation
+                <Send className="text-blue-600" size={22} />
+                Share Quotation
               </h2>
               <button
+                type="button"
                 onClick={() => {
                   setShowQuotationModal(false);
                   setShareInquiry(null);
                   setShareDetails(null);
                   setResendNotice('');
                 }}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
                 <X size={20} />
               </button>
             </div>
 
-            {(() => {
-              const activeLineItems = shareDetails.lineItems && shareDetails.lineItems.length > 0
-                ? shareDetails.lineItems
-                : [{ sku_text: shareDetails.productType || '', quantity: shareDetails.quantityTons, unit: 'MT', rate: shareDetails.unitPrice, amount: shareDetails.totalAmount }];
-              const subtotal = activeLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || shareDetails.totalAmount || 0;
-              const qBreakdown = calculateQuotationBreakdown(subtotal);
-              const summaryItemsText = activeLineItems.map(i => `${i.sku_text || 'Item'} (${i.quantity} ${i.unit || 'MT'})`).join(' · ');
-
-              return (
-                <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-2">
-                  <div className="font-bold text-purple-900 flex items-center justify-between">
-                    <span>Commercial Proposal Summary</span>
-                    <span className="font-extrabold text-emerald-800">Total: {qBreakdown.formattedGrandTotal}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-600 flex justify-between font-mono">
-                    <span>Sub Total: {qBreakdown.formattedSubtotal}</span>
-                    <span>CGST: {qBreakdown.formattedCGST} | SGST: {qBreakdown.formattedSGST}</span>
-                  </div>
-                  <p className="text-slate-700 font-mono text-[11px]">
-                    {shareDetails.companyName} · {summaryItemsText || `${shareDetails.productType} (${shareDetails.quantityTons} MT)`}
-                  </p>
-                  <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
-                     <span><strong>Official PDF Quotation:</strong> The formatted PDF document will be generated and attached to this email.</span>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Small Relevant Info Message */}
+            <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
+              <FileText size={18} className="text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-blue-950">Official Commercial Quotation</p>
+                <p className="text-blue-800 text-[11px] mt-0.5 leading-relaxed">
+                  The complete 2-page PDF quotation for <strong>{shareDetails.companyName || 'Customer'}</strong> with itemized rates, taxes, bank details, and commercial terms will be generated and dispatched directly to the customer.
+                </p>
+              </div>
+            </div>
 
             <div className="space-y-3">
               <div>
@@ -2615,7 +2612,7 @@ export default function InquiriesPage() {
                   placeholder="e.g. shravankotagi314@gmail.com"
                   value={quotationEmail}
                   onChange={e => setQuotationEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
                 />
               </div>
 
@@ -2643,7 +2640,7 @@ export default function InquiriesPage() {
                   setShareDetails(null);
                   setResendNotice('');
                 }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
                 Cancel
               </button>
 
@@ -2679,7 +2676,7 @@ export default function InquiriesPage() {
                     setSendingQuotation(false);
                   }
                 }}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2">
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
                 {sendingQuotation ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
                 {sendingQuotation ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}
               </button>

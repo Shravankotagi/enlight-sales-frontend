@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag,
   Plus,
+  Minus,
   Search,
   CheckCircle,
   PackageCheck,
@@ -12,29 +13,28 @@ import {
   Eye,
   UploadCloud,
   FileText,
-  Phone,
-  Calendar,
-  MapPin,
-  CreditCard,
   ExternalLink,
   ImageIcon,
-  User,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Send,
+  MoreVertical,
+  RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ordersApi, inquiriesApi, dealsApi, customersApi, employeesApi } from '../lib/api';
+import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
-import { calculateQuotationBreakdown } from '../utils/pricingEngine';
+import { calculateQuotationBreakdown, normalizeUnit } from '../utils/pricingEngine';
 
 interface DealItem {
   id?: string;
   sku_text?: string;
   dimensions?: string;
+  hsn_code?: string;
   quantity?: number;
   unit?: string;
   rate?: number;
@@ -46,6 +46,9 @@ interface Order {
   customer_name: string;
   customer_phone?: string;
   salesperson_phone?: string;
+  salesperson_name?: string;
+  assigned_salesperson_name?: string;
+  salesperson?: string;
   po_number?: string;
   po_date?: string;
   total_amount?: number;
@@ -56,6 +59,16 @@ interface Order {
   won_at?: string;
   media_urls?: string[];
   deal_items?: DealItem[];
+}
+
+interface LineItemDetail {
+  sku_text: string;
+  dimensions?: string;
+  hsn_code?: string;
+  quantity: number;
+  unit?: string;
+  rate: number;
+  amount: number;
 }
 
 export function formatDeliveryLocation(raw?: string): string {
@@ -186,38 +199,7 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs } = useAuth();
-
-  const { data: rawEmployees = [] } = useQuery<{ id: string; name: string; phone: string }[]>({
-    queryKey: ['employees-list-all'],
-    queryFn: async () => {
-      const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-    },
-    staleTime: 60000,
-  });
-
-  const getSalespersonName = (order?: Order | null) => {
-    if (!order) return viewingAs?.name || employee?.name || 'Vedant Goel';
-    if ((order as any).salesperson_name) return (order as any).salesperson_name;
-    if ((order as any).assigned_salesperson_name) return (order as any).assigned_salesperson_name;
-    if ((order as any).salesperson) return (order as any).salesperson;
-
-    const phone = (order.salesperson_phone || '').replace(/\D/g, '');
-    if (phone) {
-      const p10 = phone.slice(-10);
-      const found = rawEmployees.find(e => {
-        const ePhone = (e.phone || '').replace(/\D/g, '');
-        return ePhone.endsWith(p10) || p10.endsWith(ePhone.slice(-10));
-      });
-      if (found?.name) return found.name;
-    }
-
-    if (viewingAs?.name) return viewingAs.name;
-    if (employee?.name) return employee.name;
-    return 'Vedant Goel';
-  };
+  const { effectivePhone } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'this_month',
@@ -282,13 +264,29 @@ export default function OrdersPage() {
     setCurrentPage(1);
   }, [searchTerm, dateRange]);
 
-  // Selected Order for Details Drawer & PO Image Viewer
-  const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<Order | null>(null);
+  // PO Image Viewer State
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+
+  // Send / Share Modal
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [shareOrder, setShareOrder] = useState<Order | null>(null);
+  const [sendEmail, setSendEmail] = useState('shravankotagi314@gmail.com');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [resendNotice, setResendNotice] = useState('');
+
+  useEffect(() => {
+    const handleOutsideClick = () => setOpenActionMenuId(null);
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
-    const isAnyModalOpen = showModal || !!selectedDrawerOrder || !!poImageViewerUrl;
+    const isAnyModalOpen =
+      showModal ||
+      showSendModal ||
+      !!poImageViewerUrl;
     const body = document.body;
     const docEl = document.documentElement;
     const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
@@ -313,7 +311,11 @@ export default function OrdersPage() {
         mainLayoutContainer.style.overflow = 'auto';
       }
     }
-  }, [showModal, selectedDrawerOrder, poImageViewerUrl]);
+  }, [
+    showModal,
+    showSendModal,
+    poImageViewerUrl,
+  ]);
 
   // AI OCR Scanning state
   const [isParsingDoc, setIsParsingDoc] = useState(false);
@@ -324,18 +326,20 @@ export default function OrdersPage() {
   const [formCustomerPhone, setFormCustomerPhone] = useState('');
   const [formPoNumber, setFormPoNumber] = useState('');
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
-  const [formProductSKU, setFormProductSKU] = useState('');
-  const [formQuantity, setFormQuantity] = useState('');
-  const [formRate, setFormRate] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
-  const [formExtractedItems, setFormExtractedItems] = useState<DealItem[]>([]);
+  const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
+    {
+      sku_text: '',
+      dimensions: '',
+      hsn_code: '7208',
+      quantity: 0,
+      unit: 'MT',
+      rate: 0,
+      amount: 0,
+    },
+  ]);
   const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
-
-  // Commercial breakdown state
-  const [formBasicAmount, setFormBasicAmount] = useState<number>(0);
-  const [formGstAmount, setFormGstAmount] = useState<number>(0);
-  const [formGrandTotal, setFormGrandTotal] = useState<number>(0);
 
   const isPdf = (url?: string) => {
     if (!url) return false;
@@ -393,50 +397,17 @@ export default function OrdersPage() {
             setFormPaymentTerms(extraction.payment_terms);
           }
 
-          if (extraction.basic_amount || extraction.po_basic_value) {
-            setFormBasicAmount(Number(extraction.basic_amount || extraction.po_basic_value) || 0);
-          }
-          if (extraction.gst_amount || extraction.tax_amount) {
-            setFormGstAmount(Number(extraction.gst_amount || extraction.tax_amount) || 0);
-          }
-          if (extraction.total_amount || extraction.grand_total) {
-            setFormGrandTotal(Number(extraction.total_amount || extraction.grand_total) || 0);
-          }
-
           if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
-            const mappedItems: DealItem[] = extraction.line_items.map((i: any) => ({
+            const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => ({
               sku_text: i.sku_text || i.description || 'Material',
               dimensions: i.dimensions || '',
+              hsn_code: i.hsn_code || i.hsn || '7208',
               quantity: Number(i.quantity) || 0,
-              unit: i.unit || 'MT',
+              unit: normalizeUnit(i.unit) || 'MT',
               rate: Number(i.rate) || 0,
               amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
             }));
-            setFormExtractedItems(mappedItems);
-
-            const totalQty = mappedItems.reduce((s, i) => s + (i.quantity || 0), 0);
-            const totalAmt = mappedItems.reduce((s, i) => s + (i.amount || 0), 0);
-            const avgRate = totalQty > 0 ? Math.round(totalAmt / totalQty) : (mappedItems[0]?.rate || 0);
-
-            if (mappedItems.length === 1) {
-              const item = mappedItems[0];
-              const skuText = item.sku_text || 'Material';
-              const dimStr = item.dimensions && !skuText.includes(item.dimensions) ? ` (${item.dimensions})` : '';
-              setFormProductSKU(`1. ${skuText}${dimStr} - ${item.quantity} ${item.unit || 'MT'}`);
-            } else {
-              setFormProductSKU(
-                mappedItems
-                  .map((i, idx) => {
-                    const skuText = i.sku_text || 'Material';
-                    const dimStr = i.dimensions && !skuText.includes(i.dimensions) ? ` (${i.dimensions})` : '';
-                    return `${idx + 1}. ${skuText}${dimStr} - ${i.quantity} ${i.unit || 'MT'}`;
-                  })
-                  .join('\n')
-              );
-            }
-
-            setFormQuantity(totalQty > 0 ? String(totalQty) : '');
-            setFormRate(avgRate > 0 ? String(avgRate) : '');
+            setFormLineItems(mappedItems);
           }
 
           toast.success('PO Document parsed! Fields auto-filled.');
@@ -450,27 +421,6 @@ export default function OrdersPage() {
     };
     reader.readAsDataURL(file);
   };
-
-  const basicValue =
-    formBasicAmount > 0
-      ? formBasicAmount
-      : formExtractedItems.length > 0
-      ? formExtractedItems.reduce((s, i) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0)
-      : Math.round((Number(formQuantity) || 0) * (Number(formRate) || 0));
-
-  const gstValue =
-    formGstAmount > 0
-      ? formGstAmount
-      : basicValue > 0
-      ? Math.round(basicValue * 0.18)
-      : 0;
-
-  const totalDealValue =
-    formGrandTotal > 0
-      ? formGrandTotal
-      : basicValue > 0
-      ? basicValue + gstValue
-      : 0;
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -486,60 +436,33 @@ export default function OrdersPage() {
       toast.error('Please select PO Date');
       return;
     }
-    if (!formProductSKU.trim()) {
-      toast.error('Please enter Product Description / SKU');
-      return;
-    }
-    const qty = Number(formQuantity) || 0;
-    if (qty <= 0) {
-      toast.error('Please enter valid Quantity');
-      return;
-    }
-    const rate = Number(formRate) || 0;
-    if (rate <= 0) {
-      toast.error('Please enter valid Rate per MT');
-      return;
-    }
     if (!formDeliveryLocation.trim()) {
       toast.error('Please enter Delivery Location');
       return;
     }
+    if (formLineItems.length === 0) {
+      toast.error('Please add at least one line item');
+      return;
+    }
 
-    const computedAmt = qty > 0 && rate > 0 ? qty * rate : 0;
-
-    let lineItemsToSend = formExtractedItems;
-    if (lineItemsToSend.length === 0 && formProductSKU.trim()) {
-      try {
-        const textExtractRes = await inquiriesApi.parseText({
-          text: `${formProductSKU} Quantity: ${formQuantity} MT Rate: ${formRate} Delivery: ${formDeliveryLocation} Payment: ${formPaymentTerms || '30 days'}`,
-        });
-        const extractedData = textExtractRes?.data?.data || textExtractRes?.data;
-        if (Array.isArray(extractedData?.line_items) && extractedData.line_items.length > 0) {
-          lineItemsToSend = extractedData.line_items.map((i: any) => ({
-            sku_text: i.sku_text || i.sku || i.product_name || i.description || formProductSKU,
-            dimensions: i.dimensions || '',
-            quantity: Number(i.quantity) || qty || 0,
-            unit: i.unit || 'MT',
-            rate: Number(i.rate) || rate || 0,
-            amount: Number(i.amount) || Math.round((Number(i.quantity) || qty || 0) * (Number(i.rate) || rate || 0)),
-          }));
-        }
-      } catch (e) {
-        console.warn('Fallback manual single line item for order creation');
+    for (let i = 0; i < formLineItems.length; i++) {
+      const item = formLineItems[i];
+      if (!item.sku_text.trim()) {
+        toast.error(`Line Item #${i + 1}: Description & Specifications is required.`);
+        return;
+      }
+      if (item.quantity <= 0) {
+        toast.error(`Line Item #${i + 1}: Quantity must be greater than 0.`);
+        return;
+      }
+      if (item.rate <= 0) {
+        toast.error(`Line Item #${i + 1}: Rate must be greater than 0.`);
+        return;
       }
     }
 
-    if (lineItemsToSend.length === 0 && formProductSKU.trim()) {
-      lineItemsToSend = [{
-        sku_text: formProductSKU.trim(),
-        quantity: qty,
-        unit: 'MT',
-        rate: rate,
-        amount: computedAmt,
-      }];
-    }
-
-    const finalOrderValue = totalDealValue > 0 ? totalDealValue : (basicValue > 0 ? basicValue : computedAmt);
+    const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const qBreakdown = calculateQuotationBreakdown(subtotal);
 
     try {
       setSubmitting(true);
@@ -548,10 +471,18 @@ export default function OrdersPage() {
         customer_phone: formCustomerPhone.trim() || undefined,
         po_number: formPoNumber.trim(),
         po_date: formPoDate,
-        total_amount: finalOrderValue,
+        total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim() || undefined,
-        line_items: lineItemsToSend,
+        line_items: formLineItems.map(i => ({
+          sku_text: i.sku_text.trim(),
+          dimensions: i.dimensions ? i.dimensions.trim() : undefined,
+          hsn_code: i.hsn_code ? i.hsn_code.trim() : undefined,
+          quantity: Number(i.quantity) || 0,
+          unit: i.unit || 'MT',
+          rate: Number(i.rate) || 0,
+          amount: Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0)),
+        })),
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
 
@@ -562,15 +493,19 @@ export default function OrdersPage() {
       setFormCustomerPhone('');
       setFormPoNumber('');
       setFormPoDate(new Date().toISOString().split('T')[0]);
-      setFormProductSKU('');
-      setFormQuantity('');
-      setFormRate('');
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
-      setFormExtractedItems([]);
-      setFormBasicAmount(0);
-      setFormGstAmount(0);
-      setFormGrandTotal(0);
+      setFormLineItems([
+        {
+          sku_text: '',
+          dimensions: '',
+          hsn_code: '7208',
+          quantity: 0,
+          unit: 'MT',
+          rate: 0,
+          amount: 0,
+        },
+      ]);
       setPoFileName('');
       setFormUploadedBase64(null);
 
@@ -581,6 +516,26 @@ export default function OrdersPage() {
       toast.error(err?.response?.data?.message || 'Failed to create order. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleOpenSendModal = async (ord: Order) => {
+    setShareOrder(ord);
+    setSendEmail((ord as any).customer_email || 'shravankotagi314@gmail.com');
+    setResendNotice('');
+    setShowSendModal(true);
+
+    try {
+      const res = await dealsApi.getOne(ord.id);
+      const fullDeal = res?.data?.data || res?.data;
+      if (fullDeal) {
+        setShareOrder(fullDeal);
+        if (fullDeal.customer_email) {
+          setSendEmail(fullDeal.customer_email);
+        }
+      }
+    } catch (e) {
+      console.warn('Non-blocking full deal load notice:', e);
     }
   };
 
@@ -763,7 +718,7 @@ export default function OrdersPage() {
                 <th className="px-4 py-3 text-center w-[12%]">Products &amp; Items</th>
                 <th className="px-4 py-3 text-center w-[14%]">Order Tonnage (MT)</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
-                <th className="px-4 py-3 text-center w-[12%]">Purchase Order</th>
+                <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -822,15 +777,50 @@ export default function OrdersPage() {
                           {formatDeliveryLocation(ord.delivery_location)}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDrawerOrder(ord)}
-                          className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 inline-flex items-center gap-1 shadow-2xs"
-                          title="View Order Details">
-                          <Eye size={13} className="text-slate-600" />
-                          <span>View PO</span>
-                        </button>
+                      <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
+                        <div className="relative inline-block text-left">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionMenuId(prev => (prev === ord.id ? null : ord.id));
+                            }}
+                            className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all inline-flex items-center justify-center cursor-pointer"
+                            title="Actions">
+                            <MoreVertical size={16} />
+                          </button>
+
+                          {openActionMenuId === ord.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className={`absolute right-0 ${
+                                idx >= paginatedOrders.length - 2 && paginatedOrders.length >= 3
+                                  ? 'bottom-full mb-1'
+                                  : 'top-full mt-1'
+                              } w-36 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 text-left animate-in fade-in-50 duration-100`}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionMenuId(null);
+                                  handleViewPoDocument(ord);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
+                                <Eye size={14} className="text-slate-500 shrink-0" />
+                                <span>View PO</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionMenuId(null);
+                                  handleOpenSendModal(ord);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
+                                <Send size={14} className="text-slate-500 shrink-0" />
+                                <span>Send</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -894,213 +884,210 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {selectedDrawerOrder && (
+      {showSendModal && shareOrder && (
         <div
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
-          onClick={() => setSelectedDrawerOrder(null)}>
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => {
+            setShowSendModal(false);
+            setResendNotice('');
+          }}>
           <div
-            className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-6 my-auto"
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto"
             onClick={e => e.stopPropagation()}>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-200">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-extrabold text-slate-900">
-                    {selectedDrawerOrder.customer_name || 'Customer Order'}
-                  </h2>
-                  
-                </div>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
-                  {selectedDrawerOrder.customer_phone && (
-                    <span className="flex items-center gap-1">
-                      <Phone size={13} className="text-slate-400" /> {selectedDrawerOrder.customer_phone}
-                    </span>
-                  )}
-                  
-                  <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    PO Ref: {selectedDrawerOrder.po_number || 'PO-2026-AUTO'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 self-end sm:self-center">
-                {selectedDrawerOrder.media_urls && selectedDrawerOrder.media_urls.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => handleViewPoDocument(selectedDrawerOrder)}
-                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-300 shadow-2xs">
-                    <Eye size={14} className="text-slate-600" /> View Original PO
-                  </button>
-                )}
-                <button
-                  onClick={() => setSelectedDrawerOrder(null)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
-                  <X size={20} />
-                </button>
-              </div>
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Send className="text-purple-600" size={22} />
+                Share Quotation
+              </h2>
+              <button
+                onClick={() => {
+                  setShowSendModal(false);
+                  setResendNotice('');
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <X size={20} />
+              </button>
             </div>
+
+            {(() => {
+              const activeLineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
+                ? shareOrder.deal_items.map((i: any) => {
+                    const rawSku = i.sku_text || 'Steel Material';
+                    const rawDims = i.dimensions || '';
+                    const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
+                    return {
+                      sku_text: materialDescription,
+                      dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
+                      quantity: Number(i.quantity) || 0,
+                      unit: normalizeUnit(i.unit) || 'MT',
+                      rate: Number(i.rate) || 0,
+                      amount: Number(i.amount) || 0,
+                    };
+                  })
+                : [
+                    {
+                      sku_text: 'Steel Material',
+                      dimensions: '',
+                      quantity: 0,
+                      unit: 'MT',
+                      rate: 0,
+                      amount: Number(shareOrder.total_amount) || 0,
+                    },
+                  ];
+
+              const subtotal = activeLineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0) || Number(shareOrder.total_amount) || 0;
+              const qBreakdown = calculateQuotationBreakdown(subtotal);
+              const summaryItemsText = activeLineItems
+                .filter((i: any) => i.quantity > 0 || i.sku_text !== 'Steel Material')
+                .map((i: any) => `${i.sku_text || 'Item'} (${i.quantity} ${i.unit || 'MT'})`)
+                .join(' · ');
+
+              return (
+                <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-2">
+                  <div className="font-bold text-purple-900 flex items-center justify-between">
+                    <span>Commercial Proposal Summary</span>
+                    <span className="font-extrabold text-emerald-800">Total: {qBreakdown.formattedGrandTotal}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 flex justify-between font-mono">
+                    <span>Sub Total: {qBreakdown.formattedSubtotal}</span>
+                    <span>CGST: {qBreakdown.formattedCGST} | SGST: {qBreakdown.formattedSGST}</span>
+                  </div>
+                  <p className="text-slate-700 font-mono text-[11px]">
+                    {shareOrder.customer_name || 'Customer'}{summaryItemsText ? ` · ${summaryItemsText}` : ''}
+                  </p>
+                  <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
+                    <span><strong>Official PDF Quotation:</strong> The formatted PDF document and original client PO document will be attached to this email.</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="space-y-3">
-              
-
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider text-[11px]">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Sr.</th>
-                      <th className="px-4 py-3 text-left">Material Description &amp; SKU</th>
-                      <th className="px-4 py-3 text-left">Dimensions / Specs</th>
-                      <th className="px-4 py-3 text-left">Quantity</th>
-                      <th className="px-4 py-3 text-left">Unit Rate (₹/MT)</th>
-                      <th className="px-4 py-3 text-left">Line Amount (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {selectedDrawerOrder.deal_items && selectedDrawerOrder.deal_items.length > 0 ? (
-                      selectedDrawerOrder.deal_items.map((item, iIdx) => {
-                        const rawSku = item.sku_text || 'Steel Material';
-                        const rawDims = item.dimensions || '';
-                        const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
-                        const rateNum = Number(item.rate || 0);
-                        const qtyNum = Number(item.quantity || 0);
-                        const amtNum = Number(item.amount) || (rateNum > 0 && qtyNum > 0 ? Math.round(rateNum * qtyNum) : 0);
-
-                        return (
-                          <tr key={iIdx} className="hover:bg-slate-50">
-                            <td className="px-4 py-3.5 font-medium text-slate-900 text-left font-mono">{iIdx + 1}</td>
-                            <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
-                            <td className="px-4 py-3.5 text-slate-900 font-mono text-left">{dimensions}</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
-                              {qtyNum > 0 ? `${qtyNum.toLocaleString('en-IN')} ${item.unit || 'MT'}` : '—'}
-                            </td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
-                              {rateNum > 0 ? `₹${rateNum.toLocaleString('en-IN')}` : '—'}
-                            </td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
-                              ₹{amtNum.toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      (() => {
-                        const { materialDescription, dimensions } = extractCleanProductAndSpecs('Steel Material Requirements', '');
-                        return (
-                          <tr>
-                            <td className="px-4 py-3.5 font-medium text-slate-900 text-left font-mono">1</td>
-                            <td className="px-4 py-3.5 font-bold text-slate-900 text-left">{materialDescription}</td>
-                            <td className="px-4 py-3.5 text-slate-900 font-mono text-left">{dimensions}</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">—</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">—</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-900 font-mono">
-                              ₹{Number(selectedDrawerOrder.total_amount || 0).toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                        );
-                      })()
-                    )}
-                  </tbody>
-                </table>
-
-                {/* Standard Quotation Pricing Breakdown Layout (Matching Reference img2) */}
-                {(() => {
-                  const activeLineItems = selectedDrawerOrder.deal_items && selectedDrawerOrder.deal_items.length > 0
-                    ? selectedDrawerOrder.deal_items
-                    : [{ sku_text: 'Steel Material', quantity: 0, unit: 'MT', rate: 0, amount: Number(selectedDrawerOrder.total_amount || 0) }];
-
-                  const subtotal = activeLineItems.reduce((sum, item) => {
-                    const r = Number(item.rate || 0);
-                    const q = Number(item.quantity || 0);
-                    const a = Number(item.amount) || (r > 0 && q > 0 ? Math.round(r * q) : 0);
-                    return sum + a;
-                  }, 0) || Number(selectedDrawerOrder.total_amount || 0);
-
-                  const qBreakdown = calculateQuotationBreakdown(subtotal);
-
-                  const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                  const distinctUnits = Array.from(new Set(activeLineItems.map(i => i.unit || 'MT')));
-                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : 'units';
-                  const formattedItemsInTotal = totalQty > 0
-                    ? `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`
-                    : '—';
-
-                  return (
-                    <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                      <div className="text-xs font-semibold text-slate-700 pt-1">
-                        Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
-                      </div>
-
-                      <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">Sub Total</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">CGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">SGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">Rounding</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
-                        </div>
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
-                          <span className="font-bold">Total</span>
-                          <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Customer Email Address <span className="text-red-500 font-bold">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. shravankotagi314@gmail.com"
+                  value={sendEmail}
+                  onChange={e => setSendEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
+                />
               </div>
+
+              {resendNotice && (
+                <div className={`p-3 rounded-xl text-xs font-bold border ${
+                  resendNotice.toLowerCase().includes('dispatched') ||
+                  resendNotice.toLowerCase().includes('sent') ||
+                  resendNotice.toLowerCase().includes('generated') ||
+                  resendNotice.toLowerCase().includes('recorded') ||
+                  resendNotice.toLowerCase().includes('success')
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                    : 'bg-rose-50 text-rose-900 border-rose-200'
+                }`}>
+                  {resendNotice}
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="flex items-start gap-2">
-                <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Delivery Location</span>
-                  <span className="font-semibold text-slate-800">{selectedDrawerOrder.delivery_location || '-'}</span>
-                </div>
-              </div>
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSendModal(false);
+                  setResendNotice('');
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
+                Cancel
+              </button>
 
-              <div className="flex items-start gap-2">
-                <CreditCard size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Payment Terms</span>
-                  <span className="font-semibold text-slate-800">{selectedDrawerOrder.payment_terms || '-'}</span>
-                </div>
-              </div>
+              <button
+                type="button"
+                disabled={sendingEmail || !sendEmail.trim()}
+                onClick={async () => {
+                  if (!shareOrder) return;
+                  const targetEmail = sendEmail.trim();
+                  if (!targetEmail) {
+                    toast.error('Please enter a valid recipient email address');
+                    return;
+                  }
+                  try {
+                    setSendingEmail(true);
+                    setResendNotice('');
 
-              <div className="flex items-start gap-2">
-                <Calendar size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Order Won Date</span>
-                  <span className="font-mono font-bold text-slate-800">
-                    {selectedDrawerOrder.won_at ? new Date(selectedDrawerOrder.won_at).toLocaleString('en-IN') : (selectedDrawerOrder.created_at ? new Date(selectedDrawerOrder.created_at).toLocaleString('en-IN') : '-')}
-                  </span>
-                </div>
-              </div>
+                    const lineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
+                      ? shareOrder.deal_items.map((i: any) => {
+                          const rawSku = i.sku_text || 'Steel Material';
+                          const rawDims = i.dimensions || '';
+                          const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
+                          return {
+                            sku_text: materialDescription,
+                            dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
+                            hsn_code: i.hsn_code || '7208',
+                            quantity: Number(i.quantity) || 0,
+                            unit: normalizeUnit(i.unit) || 'MT',
+                            rate: Number(i.rate) || 0,
+                            amount: Number(i.amount) || 0,
+                          };
+                        })
+                      : [
+                          {
+                            sku_text: 'Steel Material',
+                            dimensions: '',
+                            hsn_code: '7208',
+                            quantity: 0,
+                            unit: 'MT',
+                            rate: 0,
+                            amount: Number(shareOrder.total_amount) || 0,
+                          },
+                        ];
 
-              <div className="flex items-start gap-2">
-                <User size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Salesperson</span>
-                  <span className="font-bold text-slate-800 capitalize">
-                    {getSalespersonName(selectedDrawerOrder)}
-                  </span>
-                </div>
-              </div>
-            </div>
+                    const subtotal = lineItems.reduce((s: number, i: any) => s + (i.amount || 0), 0) || Number(shareOrder.total_amount) || 0;
 
-            <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              
+                    const payload = {
+                      customer_email: targetEmail,
+                      customer_name: shareOrder.customer_name || 'Customer',
+                      details: {
+                        companyName: shareOrder.customer_name || 'Customer',
+                        customerName: shareOrder.customer_name || 'Customer',
+                        customerPhone: shareOrder.customer_phone || '',
+                        salespersonName: (shareOrder as any).salesperson_name || 'Sales Representative',
+                        poNumber: shareOrder.po_number || 'PO-2026-AUTO',
+                        poDate: shareOrder.po_date || new Date().toISOString().split('T')[0],
+                        deliveryLocation: shareOrder.delivery_location || '',
+                        paymentTerms: shareOrder.payment_terms || '30 Days Credit',
+                        lineItems,
+                        totalAmount: subtotal,
+                        isOrder: true,
+                        media_urls: shareOrder.media_urls || undefined,
+                      },
+                    };
 
-              <div className="flex flex-wrap items-center gap-2">
-                
-              </div>
+                    const res = await inquiriesApi.sendQuotation(shareOrder.id, payload);
+                    const msg = res?.data?.message || res?.data?.data?.message || `PO Quotation dispatched to ${targetEmail}!`;
+                    setResendNotice(msg);
+                    toast.success(msg);
+                    if (res?.data?.email_sent !== false) {
+                      setTimeout(() => {
+                        setShowSendModal(false);
+                        setResendNotice('');
+                      }, 2500);
+                    }
+                  } catch (err: any) {
+                    console.error('Error sending PO document:', err);
+                    const errMsg = err?.response?.data?.message || 'Failed to dispatch PO document via email';
+                    setResendNotice(errMsg);
+                    toast.error(errMsg);
+                  } finally {
+                    setSendingEmail(false);
+                  }
+                }}
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
+                {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1180,7 +1167,7 @@ export default function OrdersPage() {
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingBag className="text-blue-600" size={20} />
@@ -1193,7 +1180,7 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            {/* Upload PO Document Section matching Img 4 */}
+            {/* Upload PO Document Section */}
             <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2.5">
               <div className="flex items-center justify-between text-xs text-blue-900 font-bold">
                 <span className="flex items-center gap-1.5">
@@ -1321,107 +1308,248 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Product Description / SKU <span className="text-red-500 font-bold">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="e.g. TMT Bar 12mm - 30 MT @ ₹58,000/MT&#10;HR Coil 2.5mm - 10 MT @ ₹62,000/MT"
-                  value={formProductSKU}
-                  onChange={e => setFormProductSKU(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y max-h-40 overflow-y-auto leading-relaxed placeholder:text-slate-400"
-                />
+              {/* Structured Line Items Table matching Img 2 */}
+              <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
+                <table className="w-full text-left text-xs text-slate-800 border-collapse">
+                  <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
+                    <tr>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                        Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
+                        Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
+                        Rate (₹) <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
+                      <th className="px-2 py-3 text-center w-[4%]"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {formLineItems.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-blue-50/30">
+                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td className="px-4 py-3.5 border-r border-slate-200">
+                          <div className="space-y-1">
+                            <input
+                              type="text"
+                              value={item.sku_text || ''}
+                              onChange={(e) => {
+                                const updated = [...formLineItems];
+                                updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                setFormLineItems(updated);
+                              }}
+                              className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                              placeholder="Product Name / Description"
+                            />
+                            <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                              <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
+                              <input
+                                type="text"
+                                value={item.dimensions || ''}
+                                onChange={(e) => {
+                                  const updated = [...formLineItems];
+                                  updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                  setFormLineItems(updated);
+                                }}
+                                className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                                placeholder="e.g. 8X6000X1500"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                          <input
+                            type="text"
+                            value={item.hsn_code || ''}
+                            onChange={(e) => {
+                              const updated = [...formLineItems];
+                              updated[idx] = { ...updated[idx], hsn_code: e.target.value };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="e.g. 7208"
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          />
+                        </td>
+                        <td className="px-3 py-3.5 border-r border-slate-200">
+                          <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.quantity === 0 ? '' : item.quantity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rawQ = val === '' ? 0 : parseFloat(val);
+                                const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
+                                const updated = [...formLineItems];
+                                const amt = Math.max(0, Math.round(safeQ * (updated[idx]?.rate || 0)));
+                                updated[idx] = { ...updated[idx], quantity: safeQ, amount: amt };
+                                setFormLineItems(updated);
+                              }}
+                              placeholder="0"
+                              className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                            />
+                            <select
+                              value={normalizeUnit(item.unit) || 'MT'}
+                              onChange={(e) => {
+                                const updated = [...formLineItems];
+                                updated[idx] = { ...updated[idx], unit: e.target.value };
+                                setFormLineItems(updated);
+                              }}
+                              className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              <option value="MT">MT</option>
+                              <option value="Nos">Nos</option>
+                              <option value="Pcs">Pcs</option>
+                              <option value="KG">KG</option>
+                              <option value="Sheets">Sheets</option>
+                            </select>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.rate === 0 ? '' : item.rate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const rawR = val === '' ? 0 : parseFloat(val);
+                              const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
+                              const updated = [...formLineItems];
+                              const amt = Math.max(0, Math.round((updated[idx]?.quantity || 0) * safeR));
+                              updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="0"
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                          />
+                        </td>
+                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.amount === 0 ? '' : item.amount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const rawA = val === '' ? 0 : parseFloat(val);
+                              const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                              const updated = [...formLineItems];
+                              updated[idx] = { ...updated[idx], amount: safeA };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="0"
+                            className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          />
+                        </td>
+                        <td className="px-2 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {formLineItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = formLineItems.filter((_, i) => i !== idx);
+                                  setFormLineItems(updated);
+                                }}
+                                className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                                title="Remove line item">
+                                <Minus size={15} />
+                              </button>
+                            )}
+                            {idx === formLineItems.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [
+                                    ...formLineItems,
+                                    { sku_text: '', dimensions: '', hsn_code: '7208', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                  ];
+                                  setFormLineItems(updated);
+                                }}
+                                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
+                                title="Add line item">
+                                <Plus size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Standard Quotation Pricing Breakdown Layout */}
+                {(() => {
+                  const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                  const qBreakdown = calculateQuotationBreakdown(subtotal);
+
+                  const totalQty = formLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                  const distinctUnits = Array.from(new Set(formLineItems.map(i => normalizeUnit(i.unit) || 'MT')));
+                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
+                  const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
+
+                  return (
+                    <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
+                      <div className="text-xs font-semibold text-slate-700 pt-1">
+                        Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      </div>
+
+                      <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Sub Total</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">CGST (9%)</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">SGST (9%)</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Rounding</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                          <span className="font-bold">Total</span>
+                          <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Quantity (MT) <span className="text-red-500 font-bold">*</span>
+                    Delivery Location <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     required
-                    min="0"
-                    step="any"
-                    placeholder="e.g. 30"
-                    value={formQuantity}
-                    onChange={e => {
-                      const val = Number(e.target.value);
-                      setFormQuantity(val < 0 ? '0' : e.target.value);
-                      setFormBasicAmount(0);
-                      setFormGstAmount(0);
-                      setFormGrandTotal(0);
-                    }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                    placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
+                    value={formDeliveryLocation}
+                    onChange={e => setFormDeliveryLocation(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Rate per MT (₹) <span className="text-red-500 font-bold">*</span>
+                    Payment Terms <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
-                    type="number"
-                    required
-                    min="0"
-                    step="any"
-                    placeholder="e.g. 58000"
-                    value={formRate}
-                    onChange={e => {
-                      const val = Number(e.target.value);
-                      setFormRate(val < 0 ? '0' : e.target.value);
-                      setFormBasicAmount(0);
-                      setFormGstAmount(0);
-                      setFormGrandTotal(0);
-                    }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                    type="text"
+                    placeholder="e.g. 30 Days Credit, 100% Advance"
+                    value={formPaymentTerms}
+                    onChange={e => setFormPaymentTerms(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
                   />
                 </div>
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Delivery Location <span className="text-red-500 font-bold">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={2}
-                  placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
-                  value={formDeliveryLocation}
-                  onChange={e => setFormDeliveryLocation(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y max-h-32 overflow-y-auto leading-relaxed placeholder:text-slate-400 font-medium"
-                />
-              </div>
-
-              {basicValue > 0 && (
-                <div className="p-3.5 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 rounded-xl border border-blue-200 space-y-2">
-                  <div className="flex justify-between items-center text-xs text-slate-600">
-                    <span className="font-semibold">PO Basic Value:</span>
-                    <span className="font-mono font-bold text-slate-800">
-                      ₹{basicValue.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-slate-600">
-                    <span className="font-semibold">GST Value (18% / SGST+CGST):</span>
-                    <span className="font-mono font-bold text-amber-700">
-                      +₹{gstValue.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="pt-2 border-t border-blue-200/80 flex justify-between items-center">
-                    <div>
-                      <p className="text-xs font-bold text-blue-900">Total Deal Value (Incl. GST):</p>
-                      <p className="text-[10px] text-slate-500">
-                        Official PO amount for Sales Achievement &amp; Payment Tracking
-                      </p>
-                    </div>
-                    <p className="text-lg font-bold text-blue-900 font-mono">
-                      ₹{totalDealValue.toLocaleString('en-IN')}
-                    </p>
-                  </div>
-                </div>
-              )}
 
               <div className="pt-2 flex justify-end gap-2">
                 <button
