@@ -1892,7 +1892,9 @@ export default function InquiriesPage() {
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                     <td className="px-6 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
-                        {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
+                        <span className="hover:text-blue-600 transition-colors cursor-pointer inline-block">
+                          {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
+                        </span>
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5 font-mono">
                         {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}

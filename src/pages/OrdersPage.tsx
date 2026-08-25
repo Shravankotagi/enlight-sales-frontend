@@ -898,7 +898,9 @@ export default function OrdersPage() {
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                       <td className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm">
-                          <span className="truncate">{ord.customer_name || 'Customer'}</span>
+                          <span className="truncate hover:text-blue-600 transition-colors cursor-pointer inline-block">
+                            {ord.customer_name || 'Customer'}
+                          </span>
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5">
                           <span className="font-mono">
