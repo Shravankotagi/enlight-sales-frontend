@@ -2033,7 +2033,31 @@ export default function InquiriesPage() {
                 const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
 
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
-                const dealStageInfo = linkedDeal?.stage ? getDealStageDisplay(linkedDeal.stage) : null;
+                const dealStageInfo = (() => {
+                  const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
+                  // 1. If linked deal has an explicit terminal/advanced stage, always respect it
+                  if (dealStage === 'won' || dealStage === 'lost' || dealStage === 'negotiation') {
+                    return getDealStageDisplay(dealStage);
+                  }
+                  // 2. If deal has qualified or quoted, respect it
+                  if (dealStage === 'qualified' || dealStage === 'quoted') {
+                    return getDealStageDisplay(dealStage);
+                  }
+                  // 3. Otherwise align strictly with inquiry status mapping
+                  if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
+                    return getDealStageDisplay('quoted');
+                  }
+                  if (isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed' || inq.inquiry_type === 'purchase_order') {
+                    return getDealStageDisplay('qualified');
+                  }
+                  if (st === 'review' || st === 'needs_review' || st === 'pending' || !st) {
+                    return getDealStageDisplay('new_inquiry');
+                  }
+                  if (dealStage) {
+                    return getDealStageDisplay(dealStage);
+                  }
+                  return getDealStageDisplay('new_inquiry');
+                })();
 
                 return (
                   <tr
