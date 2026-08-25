@@ -798,7 +798,7 @@ export default function ComplaintsPage() {
             {/* Badges & Overview Block (Complaint Type & Optional Affected Product) */}
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center gap-2 shrink-0">
               <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 border border-blue-200/60">
-                {selectedComplaint.complaint_type || 'General Issue'}
+                Complaint Type: <strong className="font-bold">{selectedComplaint.complaint_type || 'Quality Defect'}</strong>
               </span>
               {hasProduct(selectedComplaint) && (
                 <span className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white border border-slate-200 text-slate-700 flex items-center gap-1 shadow-2xs">
@@ -979,12 +979,6 @@ export default function ComplaintsPage() {
 
               {/* Action Buttons with Pill-Shaped "Save" Button */}
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
-                <button
-                  type="button"
-                  onClick={() => setEditingComplaint(null)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
-                  Cancel
-                </button>
                 <button
                   type="submit"
                   disabled={editSaving}
