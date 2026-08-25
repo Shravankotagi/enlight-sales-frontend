@@ -20,7 +20,7 @@ import {
 import { complaintsApi, employeesApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
 interface Complaint {
   id: string;
@@ -69,9 +69,9 @@ export default function ComplaintsPage() {
   const [editSaving, setEditSaving] = useState(false);
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
 
   // Create Form state

@@ -25,8 +25,6 @@ import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
-  getFirstDayOfMonth,
-  getLastDayOfMonth,
   formatLocalDate,
   getDaysAgo,
 } from '../utils/dateUtils';
@@ -71,14 +69,14 @@ export default function VisitsPage() {
   const pageSize = 15;
 
   // Date Filter Presets (Matching Inquiry tab pattern)
-  const [dayPreset, setDayPreset] = useState<string>('this_month');
+  const [dayPreset, setDayPreset] = useState<string>('30_days');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
   const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
 
   const handleDayPresetChange = (preset: string) => {
@@ -95,9 +93,6 @@ export default function VisitsPage() {
       setShowCustomDate(false);
     } else if (preset === '90_days') {
       setDateRange({ from: getDaysAgo(90), to: formatLocalDate() });
-      setShowCustomDate(false);
-    } else if (preset === 'this_month') {
-      setDateRange({ from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
       setShowCustomDate(false);
     } else if (preset === 'custom') {
       setShowCustomDate(true);
@@ -523,13 +518,13 @@ export default function VisitsPage() {
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterOutcome('all');
-    setDayPreset('this_month');
+    setDayPreset('30_days');
     setShowCustomDate(false);
     setCustomFrom('');
     setCustomTo('');
     setDateRange({
-      from: getFirstDayOfMonth(),
-      to: getLastDayOfMonth(),
+      from: getDaysAgo(30),
+      to: formatLocalDate(),
     });
   };
 
@@ -627,19 +622,18 @@ export default function VisitsPage() {
             )}
           </div>
 
-          {/* 2. Date Preset Dropdown with 'This Month' default */}
+          {/* 2. Date Preset Dropdown with 'Last 30 Days' default */}
           <div className="relative inline-flex items-center w-full sm:w-auto">
             <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
             <select
               value={dayPreset}
               onChange={e => handleDayPresetChange(e.target.value)}
               className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="this_month">This Month</option>
-              <option value="today">Today</option>
-              <option value="7_days">Last 7 Days</option>
-              <option value="30_days">Last 30 Days</option>
-              <option value="90_days">Last 90 Days</option>
-              <option value="custom">Custom Range</option>
+              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
+              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
+              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
+              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
+              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
             </select>
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
@@ -650,16 +644,16 @@ export default function VisitsPage() {
               value={filterOutcome}
               onChange={e => setFilterOutcome(e.target.value)}
               className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all">All Outcomes ({visits.length})</option>
-              <option value="positive">Positive ({positiveVisits})</option>
-              <option value="neutral">Neutral ({neutralVisits})</option>
-              <option value="negative">Negative ({negativeVisits})</option>
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Outcomes ({visits.length})</option>
+              <option value="positive" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Positive ({positiveVisits})</option>
+              <option value="neutral" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Neutral ({neutralVisits})</option>
+              <option value="negative" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Negative ({negativeVisits})</option>
             </select>
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
 
           {/* 4. Clear Filter Button */}
-          {(searchTerm || filterOutcome !== 'all' || dayPreset !== 'this_month') && (
+          {(searchTerm || filterOutcome !== 'all' || dayPreset !== '30_days') && (
             <button
               type="button"
               onClick={handleClearFilters}

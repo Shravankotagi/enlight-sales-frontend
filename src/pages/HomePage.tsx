@@ -11,7 +11,7 @@ import {
   CheckCircle2, ArrowRight, ChevronRight, Truck
 } from 'lucide-react';
 
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
 const COLOR_MAP: Record<string, { border: string; bg: string; icon: string }> = {
   red: { border: 'border-red-200', bg: 'bg-red-50', icon: 'text-red-500' },
@@ -41,9 +41,9 @@ export default function HomePage() {
   const { employee, effectivePhone, isAdmin, viewingAs } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
 
   const [activeBarHover, setActiveBarHover] = useState<number | null>(new Date().getMonth());
