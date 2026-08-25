@@ -22,6 +22,7 @@ import {
   MoreVertical,
   RefreshCw,
   Calendar,
+  Layers,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
@@ -623,6 +624,15 @@ export default function OrdersPage() {
 
   const safeOrders: Order[] = Array.isArray(rawOrders) ? rawOrders : [];
 
+  const getOrderTonnage = (ord: Order): number => {
+    return (ord?.deal_items || []).reduce((iSum: number, i: any) => {
+      const q = Number(i?.quantity || 0);
+      const u = (i?.unit || 'MT').toUpperCase().trim();
+      const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
+      return iSum + inMt;
+    }, 0);
+  };
+
   const filtered = safeOrders
     .filter((o: Order) => {
       if (dateRange.from && dateRange.to) {
@@ -640,12 +650,13 @@ export default function OrdersPage() {
         }
       }
 
-      if (filterStatus === 'with_doc') {
-        const hasMedia = Array.isArray(o?.media_urls) && o.media_urls.length > 0;
-        if (!hasMedia) return false;
-      } else if (filterStatus === 'no_doc') {
-        const hasMedia = Array.isArray(o?.media_urls) && o.media_urls.length > 0;
-        if (hasMedia) return false;
+      const ordTonnage = getOrderTonnage(o);
+      if (filterStatus === 'under_500') {
+        if (ordTonnage >= 500) return false;
+      } else if (filterStatus === '500_to_1000') {
+        if (ordTonnage < 500 || ordTonnage > 1000) return false;
+      } else if (filterStatus === 'above_1000') {
+        if (ordTonnage <= 1000) return false;
       }
 
       const itemsStr = (o?.deal_items || []).map((i: any) => i?.sku_text || '').join(' ');
@@ -662,19 +673,19 @@ export default function OrdersPage() {
       return timeB - timeA;
     });
 
-  const withDocCount = safeOrders.filter((o: Order) => Array.isArray(o?.media_urls) && o.media_urls.length > 0).length;
-  const withoutDocCount = safeOrders.length - withDocCount;
+  const under500Count = safeOrders.filter((o: Order) => getOrderTonnage(o) < 500).length;
+  const mid500To1000Count = safeOrders.filter((o: Order) => {
+    const t = getOrderTonnage(o);
+    return t >= 500 && t <= 1000;
+  }).length;
+  const above1000Count = safeOrders.filter((o: Order) => getOrderTonnage(o) > 1000).length;
 
   const totalOrders = filtered.length;
-  const totalTonnage = filtered.reduce((sum: number, o: Order) => {
-    const itemsQty = (o?.deal_items || []).reduce((iSum: number, i: any) => {
-      const q = Number(i?.quantity || 0);
-      const u = (i?.unit || 'MT').toUpperCase().trim();
-      const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
-      return iSum + inMt;
-    }, 0);
-    return sum + itemsQty;
+  const totalItems = filtered.reduce((sum: number, o: Order) => {
+    const count = (o?.deal_items && o.deal_items.length > 0) ? o.deal_items.length : 1;
+    return sum + count;
   }, 0);
+  const totalTonnage = filtered.reduce((sum: number, o: Order) => sum + getOrderTonnage(o), 0);
 
   const handleViewPoDocument = async (ord: Order) => {
     let mediaUrl = ord.media_urls?.[0];
@@ -715,7 +726,6 @@ export default function OrdersPage() {
             <ShoppingBag className="text-blue-600" size={28} />
             Orders &amp; Delivery Management
           </h1>
-          
         </div>
 
         <div className="flex items-center gap-2">
@@ -728,6 +738,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      {/* KPI Cards: Total Orders, Total Items, Total Tonnage */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
@@ -739,11 +750,22 @@ export default function OrdersPage() {
           </div>
         </div>
 
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Total Items</p>
+            <p className="text-2xl font-bold text-emerald-600 mt-1">{totalItems}</p>
+          </div>
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+            <Layers size={22} />
+          </div>
+        </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-500 font-medium">Total Tonnage (MT)</p>
-            <p className="text-2xl font-bold text-indigo-600 mt-1">{totalTonnage.toLocaleString('en-IN')} MT</p>
+            <p className="text-2xl font-bold text-indigo-600 mt-1">
+              {totalTonnage.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
+            </p>
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
             <Truck size={22} />
@@ -761,7 +783,7 @@ export default function OrdersPage() {
               placeholder="Search customer, PO number, location, product..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-2xs"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-2xs text-slate-800"
             />
             {searchTerm && (
               <button
@@ -774,31 +796,32 @@ export default function OrdersPage() {
             )}
           </div>
 
-          {/* 2. Days Filter Dropdown (Bold text, no This Month, This Year, This Quarter) */}
+          {/* 2. Days Filter Dropdown (Clean, non-heavy styling) */}
           <div className="relative inline-flex items-center w-full sm:w-auto">
             <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
             <select
               value={dayPreset}
               onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="today" className="font-bold">Today</option>
-              <option value="7_days" className="font-bold">Last 7 Days</option>
-              <option value="30_days" className="font-bold">Last 30 Days</option>
-              <option value="90_days" className="font-bold">Last 90 Days</option>
-              <option value="custom" className="font-bold">Custom Range</option>
+              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
             </select>
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* 3. Status Filter Dropdown */}
+          {/* 3. Tonnage Filter Dropdown (<500, 500-1000, >1000) */}
           <div className="relative inline-flex items-center w-full sm:w-auto">
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-bold">All Orders ({safeOrders.length})</option>
-              <option value="with_doc" className="font-bold">With PO Attachment ({withDocCount})</option>
-              <option value="no_doc" className="font-bold">Without Attachment ({withoutDocCount})</option>
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all">All Orders ({safeOrders.length})</option>
+              <option value="under_500">&lt; 500 MT ({under500Count})</option>
+              <option value="500_to_1000">500 – 1000 MT ({mid500To1000Count})</option>
+              <option value="above_1000">&gt; 1000 MT ({above1000Count})</option>
             </select>
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
@@ -807,7 +830,7 @@ export default function OrdersPage() {
           <button
             type="button"
             onClick={handleClearAllFilters}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-medium transition-colors shadow-2xs cursor-pointer">
             Clear Filter
           </button>
         </div>
@@ -815,19 +838,19 @@ export default function OrdersPage() {
         {/* Custom Range Picker Inputs */}
         {showCustomDate && (
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
-            <span className="text-slate-500 font-semibold">From:</span>
+            <span className="text-slate-500 font-medium">From:</span>
             <input
               type="date"
               value={customFrom}
               onChange={e => handleCustomFromChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono font-bold text-xs cursor-pointer"
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
             />
-            <span className="text-slate-500 font-semibold">To:</span>
+            <span className="text-slate-500 font-medium">To:</span>
             <input
               type="date"
               value={customTo}
               onChange={e => handleCustomToChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono font-bold text-xs cursor-pointer"
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
             />
           </div>
         )}
