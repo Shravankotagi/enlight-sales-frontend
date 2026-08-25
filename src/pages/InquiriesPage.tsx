@@ -3262,46 +3262,41 @@ export default function InquiriesPage() {
         </div>
       )}
 
-      {/* Loss Reason Gate Modal */}
+      {/* Loss Modal - Exact Match to img2 */}
       {lostModal && (
         <div 
           onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-              Mark Deal as Lost
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">Please select a loss reason (required):</p>
-            <div className="space-y-2 mb-5">
+          <div className="bg-white rounded-xl p-6 w-[360px] max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Mark as Lost</h3>
+            <p className="text-sm text-slate-500 mb-4">Please select a reason (required)</p>
+            <div className="space-y-2.5 mb-5">
               {LOST_REASONS.map(reason => (
-                <label 
-                  key={reason} 
-                  className="flex items-center gap-2.5 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors text-xs font-medium text-slate-700">
+                <label key={reason} className="flex items-center gap-2.5 cursor-pointer text-sm text-slate-700 select-none">
                   <input
                     type="radio"
                     name="inquiry_loss_reason"
                     value={reason}
                     checked={lostModal.reason === reason}
                     onChange={() => setLostModal(prev => prev ? { ...prev, reason } : null)}
-                    className="text-rose-600 focus:ring-rose-500"
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
                   />
                   <span>{reason}</span>
                 </label>
               ))}
             </div>
-            <div className="flex gap-2.5">
+            <div className="flex gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={() => setLostModal(null)}
-                className="flex-1 px-3.5 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer">
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer">
                 Cancel
               </button>
               <button
                 type="button"
                 disabled={!lostModal.reason}
                 onClick={handleConfirmLost}
-                className="flex-1 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+                className="flex-1 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                 Confirm Lost
               </button>
             </div>
