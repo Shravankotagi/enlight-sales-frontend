@@ -19,6 +19,7 @@ import {
   calculateTotalTonnageMt,
   normalizeUnit,
 } from '../utils/pricingEngine';
+import { detectHsnCode } from '../utils/hsnDetector';
 
 interface InquiryItem {
   id: string;
@@ -595,15 +596,18 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
   const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
-  let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => ({
-    sku_text: item.sku_text || item.description || '',
-    dimensions: item.dimensions || '',
-    hsn_code: item.hsn_code || (item as any).hsn || '',
-    quantity: item.quantity,
-    unit: normalizeUnit(item.unit) || 'MT',
-    rate: item.rate,
-    amount: item.amount,
-  }));
+  let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => {
+    const skuText = item.sku_text || item.description || '';
+    return {
+      sku_text: skuText,
+      dimensions: item.dimensions || '',
+      hsn_code: item.hsn_code || (item as any).hsn || detectHsnCode(skuText) || '',
+      quantity: item.quantity,
+      unit: normalizeUnit(item.unit) || 'MT',
+      rate: item.rate,
+      amount: item.amount,
+    };
+  });
 
   // Fallback: If line items is empty or contains 1 long unstructured blob, parse multi-items directly from text
   if (
@@ -612,15 +616,19 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   ) {
     const multiItems = extractMultiItemsFromText(textRaw);
     if (multiItems.length > 0) {
-      rawLineItems = multiItems;
+      rawLineItems = multiItems.map(m => ({
+        ...m,
+        hsn_code: m.hsn_code || detectHsnCode(m.sku_text) || '',
+      }));
     }
   }
 
   if (rawLineItems.length === 0 && (productType || quantityTons > 0)) {
+    const defaultSku = productType || 'Hot Rolled';
     rawLineItems.push({
-      sku_text: productType || 'Hot Rolled',
+      sku_text: defaultSku,
       dimensions: [thickness, width, length].filter(Boolean).join(' x ') || '',
-      hsn_code: '',
+      hsn_code: detectHsnCode(defaultSku) || '',
       quantity: quantityTons || 0,
       unit: 'MT',
       rate: unitPrice || 0,
@@ -1147,15 +1155,18 @@ export default function InquiriesPage() {
     let activeItems: any[] = [];
     if (lineItemsSrc.length > 0) {
       // Has structured line items in ai_extraction_json — use directly for ALL inquiries (review, confirmed, etc.)
-      const frozenLineItems = lineItemsSrc.map((item: any) => ({
-        sku_text: item.sku_text || item.description || '',
-        dimensions: item.dimensions || '',
-        hsn_code: item.hsn_code || item.hsn || '',
-        quantity: Number(item.quantity) || 0,
-        unit: item.unit || 'MT',
-        rate: Number(item.rate) || 0,
-        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
-      }));
+      const frozenLineItems = lineItemsSrc.map((item: any) => {
+        const skuText = item.sku_text || item.description || '';
+        return {
+          sku_text: skuText,
+          dimensions: item.dimensions || '',
+          hsn_code: item.hsn_code || item.hsn || detectHsnCode(skuText) || '',
+          quantity: Number(item.quantity) || 0,
+          unit: item.unit || 'MT',
+          rate: Number(item.rate) || 0,
+          amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+        };
+      });
       activeItems = frozenLineItems;
       const frozenTotal = ai.total_amount || ai.totalAmount ||
         (frozenLineItems.length > 0
@@ -1199,10 +1210,9 @@ export default function InquiriesPage() {
     const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
     const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
 
-    setSaveSuccess(isConfirmedState);
-    setIsQuotationSent(isQuotedState);
-    setFieldErrors({});
+    setSaveSuccess(isConfirmedState || isQuotedState);
     setDrawerError(null);
+    setFieldErrors({});
   };
 
   const handleCloseDrawer = () => {
@@ -1243,10 +1253,10 @@ export default function InquiriesPage() {
       errors['companyName'] = 'Company Name is required.';
     }
 
-    // 2. Line Items validation (Rate > 0, Quantity > 0, Description required)
+    // 2. Line Items validation (Rate > 0, Quantity > 0, Description required, HSN/SAC required)
     const currentItems = editDetails.lineItems && editDetails.lineItems.length > 0
       ? editDetails.lineItems
-      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
 
     if (currentItems.length === 0) {
       errors['lineItems'] = 'Please add at least one line item.';
@@ -1256,6 +1266,9 @@ export default function InquiriesPage() {
       const item = currentItems[i];
       if (!item.sku_text || !item.sku_text.trim()) {
         errors[`sku_${i}`] = 'Description is required.';
+      }
+      if (!item.hsn_code || !item.hsn_code.trim()) {
+        errors[`hsn_${i}`] = 'HSN/SAC is required.';
       }
       if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
         errors[`qty_${i}`] = 'Quantity must be > 0.';
@@ -1550,15 +1563,18 @@ export default function InquiriesPage() {
 
       if (extractedJson && Array.isArray(extractedJson.line_items) && extractedJson.line_items.length > 0) {
         // Normalize line_items to match Review & Edit popup expectations
-        const lineItems = extractedJson.line_items.map((li: any) => ({
-          sku_text: li.sku_text || li.description || li.material || li.sku || 'Material',
-          dimensions: li.dimensions || '',
-          hsn_code: li.hsn_code || li.hsn || '',
-          quantity: Number(li.quantity) || 0,
-          unit: li.unit || 'MT',
-          rate: Number(li.rate) || 0,
-          amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
-        }));
+        const lineItems = extractedJson.line_items.map((li: any) => {
+          const skuText = li.sku_text || li.description || li.material || li.sku || 'Material';
+          return {
+            sku_text: skuText,
+            dimensions: li.dimensions || '',
+            hsn_code: li.hsn_code || li.hsn || detectHsnCode(skuText) || '',
+            quantity: Number(li.quantity) || 0,
+            unit: li.unit || 'MT',
+            rate: Number(li.rate) || 0,
+            amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
+          };
+        });
         const totalAmount = extractedJson.total_amount || lineItems.reduce((s: number, i: any) => s + i.amount, 0);
         aiExtractionJson = {
           ...extractedJson,
@@ -2461,7 +2477,9 @@ export default function InquiriesPage() {
                         <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                          HSN/SAC <span className="text-red-500 font-bold">*</span>
+                        </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
                           Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                         </th>
@@ -2475,7 +2493,7 @@ export default function InquiriesPage() {
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -2485,13 +2503,26 @@ export default function InquiriesPage() {
                                 type="text"
                                 value={item.sku_text || ''}
                                 onChange={(e) => {
+                                  const newSku = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                  const currentHsn = updated[idx]?.hsn_code || '';
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '');
+                                  const newAutoHsn = detectHsnCode(newSku);
+
+                                  let finalHsn = currentHsn;
+                                  if (!currentHsn || currentHsn === prevAutoHsn) {
+                                    finalHsn = newAutoHsn;
+                                  }
+
+                                  updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
                                   setDrawerError(null);
                                   if (fieldErrors[`sku_${idx}`]) {
                                     setFieldErrors(prev => { const n = { ...prev }; delete n[`sku_${idx}`]; return n; });
+                                  }
+                                  if (finalHsn && fieldErrors[`hsn_${idx}`]) {
+                                    setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
                                   }
                                 }}
                                 className={`w-full px-2 py-1 bg-white rounded font-bold text-xs outline-none focus:ring-2 text-slate-900 placeholder:text-slate-400 placeholder:font-normal transition-all ${
@@ -2524,7 +2555,9 @@ export default function InquiriesPage() {
                           </td>
                           <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                             <input
+                              id={`edit-item-hsn-${idx}`}
                               type="text"
+                              required
                               value={item.hsn_code || ''}
                               onChange={(e) => {
                                 const updated = [...(editDetails.lineItems || [])];
@@ -2532,10 +2565,20 @@ export default function InquiriesPage() {
                                 setEditDetails({ ...editDetails, lineItems: updated });
                                 setSaveSuccess(false);
                                 setDrawerError(null);
+                                if (fieldErrors[`hsn_${idx}`]) {
+                                  setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
+                                }
                               }}
                               placeholder="e.g. 72083730"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              className={`w-full px-2 py-1.5 bg-white rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                                fieldErrors[`hsn_${idx}`]
+                                  ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                  : 'border border-slate-300 focus:ring-blue-500'
+                              }`}
                             />
+                            {fieldErrors[`hsn_${idx}`] && (
+                              <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`hsn_${idx}`]}</span>
+                            )}
                           </td>
                           <td className="px-3 py-3.5 border-r border-slate-200">
                             <div className="flex items-center gap-1.5 w-full min-w-[135px]">

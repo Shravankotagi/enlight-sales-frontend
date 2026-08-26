@@ -34,6 +34,7 @@ import {
   calculateTotalTonnageMt,
   normalizeUnit,
 } from '../utils/pricingEngine';
+import { detectHsnCode } from '../utils/hsnDetector';
 
 interface DealItem {
   id?: string;
@@ -471,15 +472,18 @@ export default function OrdersPage() {
           }
 
           if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
-            const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => ({
-              sku_text: i.sku_text || i.description || 'Material',
-              dimensions: i.dimensions || '',
-              hsn_code: i.hsn_code || i.hsn || '',
-              quantity: Number(i.quantity) || 0,
-              unit: normalizeUnit(i.unit) || 'MT',
-              rate: Number(i.rate) || 0,
-              amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
-            }));
+            const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
+              const skuText = i.sku_text || i.description || 'Material';
+              return {
+                sku_text: skuText,
+                dimensions: i.dimensions || '',
+                hsn_code: i.hsn_code || i.hsn || detectHsnCode(skuText) || '',
+                quantity: Number(i.quantity) || 0,
+                unit: normalizeUnit(i.unit) || 'MT',
+                rate: Number(i.rate) || 0,
+                amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
+              };
+            });
             setFormLineItems(mappedItems);
           }
 
@@ -540,6 +544,14 @@ export default function OrdersPage() {
       }
       if (!item.dimensions?.trim()) {
         const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+      if (!item.hsn_code || !item.hsn_code.trim()) {
+        const el = document.getElementById(`form-item-hsn-${i}`) as HTMLInputElement;
         if (el) {
           el.focus();
           el.reportValidity();
@@ -1505,7 +1517,9 @@ export default function OrdersPage() {
                       <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                        HSN/SAC <span className="text-red-500 font-bold">*</span>
+                      </th>
                       <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
                         Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                       </th>
@@ -1528,8 +1542,18 @@ export default function OrdersPage() {
                               required
                               value={item.sku_text || ''}
                               onChange={(e) => {
+                                const newSku = e.target.value;
                                 const updated = [...formLineItems];
-                                updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                const currentHsn = updated[idx]?.hsn_code || '';
+                                const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '');
+                                const newAutoHsn = detectHsnCode(newSku);
+
+                                let finalHsn = currentHsn;
+                                if (!currentHsn || currentHsn === prevAutoHsn) {
+                                  finalHsn = newAutoHsn;
+                                }
+
+                                updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
                                 setFormLineItems(updated);
                               }}
                               className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
@@ -1555,14 +1579,16 @@ export default function OrdersPage() {
                         </td>
                         <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                           <input
+                            id={`form-item-hsn-${idx}`}
                             type="text"
+                            required
                             value={item.hsn_code || ''}
                             onChange={(e) => {
                               const updated = [...formLineItems];
                               updated[idx] = { ...updated[idx], hsn_code: e.target.value };
                               setFormLineItems(updated);
                             }}
-                            placeholder="e.g. 7208"
+                            placeholder="e.g. 72083730"
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
