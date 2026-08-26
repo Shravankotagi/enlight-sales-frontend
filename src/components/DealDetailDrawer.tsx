@@ -209,7 +209,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                   <InfoRow label="Delivery Date" value={deal.delivery_date
                     ? new Date(deal.delivery_date).toLocaleDateString('en-IN') : null} />
                   <InfoRow label="Payment Terms" value={deal.payment_terms} />
-                  <InfoRow label="PO Date" value={deal.po_date
+                  <InfoRow label="Quotation Date" value={deal.po_date
                     ? new Date(deal.po_date).toLocaleDateString('en-IN') : null} />
                 </div>
               </div>
