@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsApi } from '../lib/api';
 import { useEffect, useState } from 'react';
-import { AlertCircle, IndianRupee, Trash2 } from 'lucide-react';
+import { AlertCircle, IndianRupee, Trash2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 import DealDetailDrawer from '../components/DealDetailDrawer';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
@@ -143,6 +144,7 @@ function DealCard({ deal, onStageChange, onSelect, onDelete }: {
 
 export default function PipelinePage() {
   const queryClient = useQueryClient();
+  const { effectivePhone } = useAuth();
   const [lostModal, setLostModal] = useState<{ dealId: string; reason: string } | null>(null);
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
@@ -159,15 +161,27 @@ export default function PipelinePage() {
     document.title = 'Pipeline - Enlight Sales OS';
   }, []);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['kanban', dateRange],
-    queryFn: () => dealsApi.getKanban({ from: fromDate, to: toDate }).then(r => r.data?.data ?? r.data),
+  const { data, isLoading, isFetching, error, refetch: fetchKanban } = useQuery({
+    queryKey: ['kanban', effectivePhone, dateRange],
+    queryFn: () => {
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (fromDate) params.from = fromDate;
+      if (toDate) params.to = toDate;
+      return dealsApi.getKanban(params).then(r => r.data?.data ?? r.data);
+    },
     refetchInterval: 15000,
   });
 
-  const { data: pipelineData } = useQuery({
-    queryKey: ['pipeline', dateRange],
-    queryFn: () => dealsApi.getPipeline({ from: fromDate, to: toDate }).then(r => r.data?.data ?? r.data),
+  const { data: pipelineData, refetch: fetchPipeline } = useQuery({
+    queryKey: ['pipeline', effectivePhone, dateRange],
+    queryFn: () => {
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (fromDate) params.from = fromDate;
+      if (toDate) params.to = toDate;
+      return dealsApi.getPipeline(params).then(r => r.data?.data ?? r.data);
+    },
     refetchInterval: 15000,
   });
 
@@ -244,9 +258,8 @@ export default function PipelinePage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Sales Pipeline</h1>
-          
         </div>
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           {pipelineData && (
             <div className="flex gap-4 border-r pr-4 border-gray-200">
               {pipelineData.map((s: any) => {
@@ -262,7 +275,19 @@ export default function PipelinePage() {
           )}
 
           {/* Unified Date Range Filter */}
-          <DateFilterControl onChange={setDateRange} initialPreset="30_days" />
+          <DateFilterControl onChange={setDateRange} value={dateRange} initialPreset="30_days" />
+
+          {/* Refresh Button */}
+          <button
+            type="button"
+            onClick={() => {
+              fetchKanban();
+              fetchPipeline();
+            }}
+            title="Refresh Pipeline"
+            className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer">
+            <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+          </button>
         </div>
       </div>
 
