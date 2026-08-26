@@ -60,6 +60,41 @@ interface SearchResult {
   typeBg: string;
 }
 
+// ── Number & Curve Formatting Helpers ────────────────────────────────────────
+function formatTonnage(val: number, compact = false): string {
+  if (!val || isNaN(val)) return '0';
+  if (compact) {
+    if (val >= 1_000_000) return (val / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (val >= 1_000) return (val / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return Math.round(val).toString();
+  }
+  return Number(val.toFixed(1)).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: val % 1 === 0 ? 0 : 1,
+  });
+}
+
+function getSmoothSvgPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+
+  let path = `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? 0 : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    path += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return path;
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const { employee, effectivePhone, isAdmin, isSalesManager, setViewingAs } = useAuth();
@@ -464,6 +499,35 @@ export default function HomePage() {
     monthlyStats[currentMonthIdx] || { month: 'Aug', tonnage: totalDeliveredTonnage },
   );
 
+  const { chartPoints, linePath, areaPath, yTicks } = useMemo(() => {
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 15;
+    const padBottom = 25;
+    const plotW = 500 - padLeft - padRight;
+    const plotH = 200 - padTop - padBottom;
+
+    const points = monthlyStats.map((item, idx) => {
+      const x = padLeft + (idx / Math.max(1, monthlyStats.length - 1)) * plotW;
+      const normalizedVal = maxTonnageForChart > 0 ? item.tonnage / maxTonnageForChart : 0;
+      const y = padTop + plotH - normalizedVal * plotH;
+      return { ...item, x, y, idx };
+    });
+
+    const lPath = getSmoothSvgPath(points);
+    const aPath = points.length > 0
+      ? `${lPath} L ${points[points.length - 1].x.toFixed(1)},${(padTop + plotH).toFixed(1)} L ${points[0].x.toFixed(1)},${(padTop + plotH).toFixed(1)} Z`
+      : '';
+
+    const ticks = [1, 0.66, 0.33, 0].map(pct => ({
+      pct,
+      val: Math.round(maxTonnageForChart * pct),
+      y: padTop + plotH - pct * plotH,
+    }));
+
+    return { chartPoints: points, linePath: lPath, areaPath: aPath, yTicks: ticks };
+  }, [monthlyStats, maxTonnageForChart]);
+
   // Top Customer Accounts by Delivered Tonnage
   const topCustomerAccounts = useMemo(() => {
     const map: Record<string, { name: string; tonnage: number; ordersCount: number }> = {};
@@ -743,7 +807,7 @@ export default function HomePage() {
           <div className="relative z-10">
             <div className="flex items-baseline gap-1.5">
               <p className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-none">
-                {totalDeliveredTonnage}
+                {formatTonnage(totalDeliveredTonnage)}
               </p>
               <span className="text-xs sm:text-sm font-bold text-blue-100">MT</span>
             </div>
@@ -931,7 +995,7 @@ export default function HomePage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 text-xs font-mono">
-                        {rep.deliveredTonnage} MT
+                        {formatTonnage(rep.deliveredTonnage)} MT
                       </span>
                     </td>
                     <td className="px-4 py-3.5 font-semibold text-slate-800">{rep.ordersCount} Orders</td>
@@ -960,11 +1024,11 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Monthly Tonnage Trend & Top Accounts Grid ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ── Monthly Tonnage Trend & Top Accounts Grid (50-50 Split) ───── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* Left: Monthly Tonnage Bar Chart */}
-        <div className="lg:col-span-2 bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
+        {/* Left: Monthly Tonnage Smooth Area Chart (50%) */}
+        <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-slate-900">
@@ -979,35 +1043,129 @@ export default function HomePage() {
             </span>
           </div>
 
-          <div className="h-64 w-full flex items-end justify-between gap-1.5 sm:gap-3 pt-6 pb-2 px-2 border-b border-slate-100 relative">
-            {monthlyStats.map((item, idx) => {
-              const heightPct = item.tonnage > 0 ? Math.max(15, Math.round((item.tonnage / maxTonnageForChart) * 100)) : 6;
-              const isHovered = activeBarHover === idx;
-              return (
-                <div
-                  key={item.month}
-                  onMouseEnter={() => setActiveBarHover(idx)}
-                  onMouseLeave={() => setActiveBarHover(null)}
-                  className="flex-1 flex flex-col items-center gap-1 group cursor-pointer h-full justify-end relative">
-                  {isHovered && (
-                    <div className="absolute -top-10 bg-slate-900 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg shadow-xl z-20 whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 border border-slate-700">
-                      {item.month}: {item.tonnage} MT ({item.ordersCount} Orders)
-                    </div>
-                  )}
-                  <div
-                    className="w-full max-w-[32px] rounded-t-lg bg-blue-100/70 group-hover:bg-blue-200 transition-all flex flex-col justify-end overflow-hidden"
-                    style={{ height: `${heightPct}%` }}>
-                    <div
-                      className={`w-full rounded-t-lg transition-all duration-300 ${isHovered ? 'bg-gradient-to-t from-blue-700 to-indigo-700' : 'bg-gradient-to-t from-blue-600 to-blue-500'}`}
-                      style={{ height: '100%' }}
+          <div className="relative w-full h-64 flex flex-col justify-end pt-2">
+            {/* Tooltip for active hover */}
+            {activeBarHover !== null && chartPoints[activeBarHover] && (
+              <div
+                className="absolute pointer-events-none bg-slate-900 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg shadow-xl z-20 whitespace-nowrap -translate-x-1/2 -translate-y-full border border-slate-700 transition-all animate-in fade-in zoom-in-95 duration-100"
+                style={{
+                  left: `${(chartPoints[activeBarHover].x / 500) * 100}%`,
+                  top: `${(chartPoints[activeBarHover].y / 200) * 100}%`,
+                  marginTop: '-10px',
+                }}>
+                <span className="text-blue-300">{chartPoints[activeBarHover].month} 2026:</span>{' '}
+                {formatTonnage(chartPoints[activeBarHover].tonnage)} MT{' '}
+                <span className="text-slate-400">({chartPoints[activeBarHover].ordersCount} orders)</span>
+              </div>
+            )}
+
+            <svg viewBox="0 0 500 200" className="w-full h-full overflow-visible">
+              <defs>
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.28" />
+                  <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Horizontal Gridlines & Y-axis scale labels */}
+              {yTicks.map((tick, i) => (
+                <g key={i}>
+                  <line
+                    x1={45}
+                    y1={tick.y}
+                    x2={485}
+                    y2={tick.y}
+                    stroke="#f1f5f9"
+                    strokeDasharray="4 4"
+                    strokeWidth="1.2"
+                  />
+                  <text
+                    x={37}
+                    y={tick.y + 3.5}
+                    textAnchor="end"
+                    className="text-[10px] font-semibold fill-slate-400 font-mono">
+                    {formatTonnage(tick.val, true)}
+                  </text>
+                </g>
+              ))}
+
+              {/* Area fill under curve */}
+              {areaPath && (
+                <path
+                  d={areaPath}
+                  fill="url(#areaGradient)"
+                />
+              )}
+
+              {/* Smooth line curve */}
+              {linePath && (
+                <path
+                  d={linePath}
+                  fill="none"
+                  stroke="#2563eb"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Vertical indicator line for hovered point */}
+              {activeBarHover !== null && chartPoints[activeBarHover] && (
+                <line
+                  x1={chartPoints[activeBarHover].x}
+                  y1={15}
+                  x2={chartPoints[activeBarHover].x}
+                  y2={175}
+                  stroke="#93c5fd"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 3"
+                />
+              )}
+
+              {/* Interactive Points + Month labels */}
+              {chartPoints.map((pt, idx) => {
+                const isHovered = activeBarHover === idx;
+                return (
+                  <g key={pt.month} className="cursor-pointer">
+                    {/* Transparent hover hit area */}
+                    <rect
+                      x={pt.x - 18}
+                      y={0}
+                      width={36}
+                      height={200}
+                      fill="transparent"
+                      onMouseEnter={() => setActiveBarHover(idx)}
+                      onMouseLeave={() => setActiveBarHover(null)}
                     />
-                  </div>
-                  <span className={`text-xs font-bold mt-2 transition-colors ${isHovered ? 'text-blue-600' : 'text-slate-400'}`}>
-                    {item.month}
-                  </span>
-                </div>
-              );
-            })}
+
+                    {/* Point circle */}
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isHovered ? 5.5 : pt.tonnage > 0 ? 3.5 : 2}
+                      className={`transition-all duration-150 pointer-events-none ${
+                        isHovered
+                          ? 'fill-blue-600 stroke-white stroke-2 shadow-md'
+                          : pt.tonnage > 0
+                          ? 'fill-blue-600 stroke-blue-100 stroke-1'
+                          : 'fill-slate-300'
+                      }`}
+                    />
+
+                    {/* X-axis Month Label */}
+                    <text
+                      x={pt.x}
+                      y={192}
+                      textAnchor="middle"
+                      className={`text-[10px] font-bold transition-colors pointer-events-none ${
+                        isHovered ? 'fill-blue-600' : 'fill-slate-400'
+                      }`}>
+                      {pt.month}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
@@ -1015,12 +1173,12 @@ export default function HomePage() {
               <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> Monthly Confirmed Deliveries (MT)
             </span>
             <span className="font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
-              Peak Month: {peakMonth.month} ({peakMonth.tonnage} MT)
+              Peak Month: {peakMonth.month} ({formatTonnage(peakMonth.tonnage)} MT)
             </span>
           </div>
         </div>
 
-        {/* Right: Top Customer Accounts */}
+        {/* Right: Top Customer Accounts (50%) */}
         <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -1054,7 +1212,7 @@ export default function HomePage() {
                         </span>
                         <span className="truncate">{cust.name}</span>
                       </span>
-                      <span className="font-mono font-bold text-blue-700 shrink-0">{cust.tonnage} MT</span>
+                      <span className="font-mono font-bold text-blue-700 shrink-0">{formatTonnage(cust.tonnage)} MT</span>
                     </div>
                     <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
                       <div
