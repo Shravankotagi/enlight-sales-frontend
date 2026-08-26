@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,30 +21,21 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
-  ArrowUpRight,
   ArrowRight,
   Sparkles,
-  Plus,
   RefreshCw,
   Trophy,
   Building2,
-  User,
   Calendar,
+  Search,
+  X,
 } from 'lucide-react';
 
 interface CarouselItem {
   id: string;
   category: string;
-  categoryColor: string;
-  cardBg: string;
-  iconBg: string;
-  btnBg: string;
   title: string;
-  subtitle: string;
-  actionText: string;
   link: string;
   icon: React.ElementType;
 }
@@ -58,18 +49,66 @@ interface DateRange {
   year?: number;
 }
 
+interface SearchResult {
+  id: string;
+  type: 'Customer' | 'Order' | 'Quote';
+  label: string;
+  sublabel: string;
+  link: string;
+  Icon: React.ElementType;
+  iconBg: string;
+  typeBg: string;
+}
+
+// ── Number & Curve Formatting Helpers ────────────────────────────────────────
+function formatTonnage(val: number, compact = false): string {
+  if (!val || isNaN(val)) return '0';
+  if (compact) {
+    if (val >= 1_000_000) return (val / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (val >= 1_000) return (val / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return Math.round(val).toString();
+  }
+  return Number(val.toFixed(1)).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: val % 1 === 0 ? 0 : 1,
+  });
+}
+
+function getSmoothSvgPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+
+  let path = `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? 0 : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    path += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return path;
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, effectivePhone, isAdmin, isSalesManager, viewingAs, setViewingAs, clearViewingAs } = useAuth();
+  const { employee, effectivePhone, isAdmin, isSalesManager, setViewingAs } = useAuth();
   const canManageTeam = isSalesManager || isAdmin;
-
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
   const [dayPreset, setDayPreset] = useState('this_month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [showCustomDate, setShowCustomDate] = useState(false);
+
+  // ── Global Search State ───────────────────────────────────────────────────
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const [dateRange, setDateRange] = useState<DateRange>({
     preset: 'this_month',
@@ -244,17 +283,157 @@ export default function HomePage() {
   const safeReviewQueue: any[] = Array.isArray(reviewQueueData) ? reviewQueueData : [];
   const safeCustomers: any[] = Array.isArray(churnData) ? churnData : [];
 
-  // Helper: Extract total tonnage (MT) from an order
+  // ── Global Quick-Search Results ───────────────────────────────────────────
+  const searchResults = useMemo((): SearchResult[] => {
+    const q = globalSearch.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const results: SearchResult[] = [];
+
+    // Orders — match customer_name or po_number
+    safeOrders.forEach(o => {
+      if (
+        (o.customer_name || '').toLowerCase().includes(q) ||
+        (o.po_number || '').toLowerCase().includes(q)
+      ) {
+        results.push({
+          id: `order-${o.id}`,
+          type: 'Order',
+          label: o.customer_name || 'Order',
+          sublabel: `Won Order · ${o.po_number || 'No PO#'}`,
+          link: '/orders',
+          Icon: ShoppingBag,
+          iconBg: 'bg-blue-100 text-blue-600',
+          typeBg: 'bg-blue-100 text-blue-700',
+        });
+      }
+    });
+
+    // Deals / Quotes — match customer_name or product_name
+    safeDeals.forEach(d => {
+      if (
+        (d.customer_name || '').toLowerCase().includes(q) ||
+        (d.product_name || '').toLowerCase().includes(q)
+      ) {
+        results.push({
+          id: `deal-${d.id}`,
+          type: 'Quote',
+          label: d.customer_name || 'Quote',
+          sublabel: `${d.stage || 'Pipeline'} · ${d.product_name || 'Steel'}`,
+          link: '/pipeline',
+          Icon: Package,
+          iconBg: 'bg-indigo-100 text-indigo-600',
+          typeBg: 'bg-indigo-100 text-indigo-700',
+        });
+      }
+    });
+
+    // Customers — from churn/reorder list
+    safeCustomers.forEach(c => {
+      const name = c.customer_name || c.name || '';
+      if (name.toLowerCase().includes(q)) {
+        results.push({
+          id: `customer-${c.id || name}`,
+          type: 'Customer',
+          label: name,
+          sublabel: c.days_since_last_order
+            ? `Last order ${c.days_since_last_order}d ago`
+            : 'Active customer',
+          link: '/customers',
+          Icon: Users,
+          iconBg: 'bg-emerald-100 text-emerald-600',
+          typeBg: 'bg-emerald-100 text-emerald-700',
+        });
+      }
+    });
+
+    // Deduplicate by label+type and cap at 8
+    const seen = new Set<string>();
+    return results.filter(r => {
+      const key = `${r.type}-${r.label}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 8);
+  }, [globalSearch, safeOrders, safeDeals, safeCustomers]);
+
+  // ── Steel sheet weight formula for NOS/PCS items ──────────────────────────
+  // Weight (kg) = L(m) × W(m) × T(mm) × 8 × count
+  // (8 ≈ 7.85 g/cm³ steel density, rationalised to this shorthand)
+  // Parses dimension strings like "8x6000x1500", "150x6mmx6m", "1250x2500x3mm"
+  const steelWeightKgFromDimensions = (dimsRaw: string, count: number): number => {
+    if (!dimsRaw || count <= 0) return 0;
+
+    // Split on common separators: x X * ×
+    const parts = dimsRaw.trim().split(/[xX*×\s]+/).map(s => s.trim()).filter(Boolean);
+    if (parts.length < 2) return 0;
+
+    // Parse each part to { value: number, unit: 'mm'|'m'|'cm'|'' }
+    const parsed: Array<{ value: number; unit: string }> = parts.map(p => {
+      const m = p.match(/^([\d.]+)\s*(mm|cm|m)?$/i);
+      if (!m) return null;
+      return { value: parseFloat(m[1]), unit: (m[2] || '').toLowerCase() };
+    }).filter(Boolean) as Array<{ value: number; unit: string }>;
+
+    if (parsed.length < 2) return 0;
+
+    // Convert all values to mm so we can identify thickness
+    const inMm = parsed.map(p => {
+      if (p.unit === 'm') return p.value * 1000;
+      if (p.unit === 'cm') return p.value * 10;
+      return p.value; // 'mm' or no unit → assume mm
+    });
+
+    // Thickness = smallest dimension (usually 2–20 mm for sheets)
+    const sorted = [...inMm].sort((a, b) => a - b);
+    const thicknessMm = sorted[0];
+    const otherMm = sorted.slice(1);        // remaining = length, width
+    const lengthMm = otherMm[otherMm.length - 1];
+    const widthMm = otherMm[otherMm.length - 2] ?? lengthMm;
+
+    const lengthM = lengthMm / 1000;
+    const widthM = widthMm / 1000;
+
+    // Weight (kg) = L(m) × W(m) × T(mm) × 8 × NOS
+    return lengthM * widthM * thicknessMm * 8 * count;
+  };
+
+  // Normalise a single deal_item quantity to Metric Tonnes (MT)
+  const normalizeItemToMT = (quantity: number, unit?: string, dimensions?: string): number => {
+    if (quantity <= 0) return 0;
+    const u = (unit || 'MT').trim().toUpperCase();
+
+    if (u === 'MT' || u === 'TON' || u === 'TONS' || u === 'TONNE' || u === 'TONNES') {
+      return quantity;                          // already in MT
+    }
+    if (u === 'KG' || u === 'KGS') {
+      return quantity / 1000;                   // kg → MT
+    }
+    if (u === 'G' || u === 'GMS' || u === 'GRAM' || u === 'GRAMS') {
+      return quantity / 1_000_000;              // g → MT
+    }
+    // NOS / PCS / SHT / SHEETS / PIECES — use steel sheet density formula
+    if (/^(nos|pcs|sht|sheets?|pieces?|units?|numbers?|no\.?)$/i.test(u)) {
+      if (!dimensions) return 0;
+      const kg = steelWeightKgFromDimensions(dimensions, quantity);
+      return kg / 1000;                         // kg → MT
+    }
+    // Unknown unit — assume MT
+    return quantity;
+  };
+
+  // Helper: Extract total tonnage (MT) from an order, respecting the unit on each line item.
+  // Returns 0 for orders with no quantity data (no ₹-to-MT estimation).
   const getOrderTonnage = (o: any): number => {
     if (Array.isArray(o.deal_items) && o.deal_items.length > 0) {
-      const sum = o.deal_items.reduce((acc: number, item: any) => acc + Number(item.quantity || 0), 0);
+      const sum = o.deal_items.reduce((acc: number, item: any) => {
+        const qty = Number(item.quantity || 0);
+        if (qty <= 0) return acc;
+        return acc + normalizeItemToMT(qty, item.unit, item.dimensions);
+      }, 0);
       if (sum > 0) return Math.round(sum * 10) / 10;
     }
     if (o.quantity && Number(o.quantity) > 0) {
       return Math.round(Number(o.quantity) * 10) / 10;
-    }
-    if (o.total_amount && Number(o.total_amount) > 0) {
-      return Math.round((Number(o.total_amount) / 55000) * 10) / 10;
     }
     return 0;
   };
@@ -315,10 +494,36 @@ export default function HomePage() {
   }, [safeOrders, currentMonthIdx]);
 
   const maxTonnageForChart = Math.max(...monthlyStats.map(s => s.tonnage), 10);
-  const peakMonth = monthlyStats.reduce(
-    (max, curr) => (curr.tonnage > max.tonnage ? curr : max),
-    monthlyStats[currentMonthIdx] || { month: 'Aug', tonnage: totalDeliveredTonnage },
-  );
+
+
+  const { chartPoints, linePath, areaPath, yTicks } = useMemo(() => {
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 15;
+    const padBottom = 25;
+    const plotW = 500 - padLeft - padRight;
+    const plotH = 200 - padTop - padBottom;
+
+    const points = monthlyStats.map((item, idx) => {
+      const x = padLeft + (idx / Math.max(1, monthlyStats.length - 1)) * plotW;
+      const normalizedVal = maxTonnageForChart > 0 ? item.tonnage / maxTonnageForChart : 0;
+      const y = padTop + plotH - normalizedVal * plotH;
+      return { ...item, x, y, idx };
+    });
+
+    const lPath = getSmoothSvgPath(points);
+    const aPath = points.length > 0
+      ? `${lPath} L ${points[points.length - 1].x.toFixed(1)},${(padTop + plotH).toFixed(1)} L ${points[0].x.toFixed(1)},${(padTop + plotH).toFixed(1)} Z`
+      : '';
+
+    const ticks = [1, 0.66, 0.33, 0].map(pct => ({
+      pct,
+      val: Math.round(maxTonnageForChart * pct),
+      y: padTop + plotH - pct * plotH,
+    }));
+
+    return { chartPoints: points, linePath: lPath, areaPath: aPath, yTicks: ticks };
+  }, [monthlyStats, maxTonnageForChart]);
 
   // Top Customer Accounts by Delivered Tonnage
   const topCustomerAccounts = useMemo(() => {
@@ -347,16 +552,8 @@ export default function HomePage() {
 
   const grandTotalTopTonnage = topCustomerAccounts.reduce((acc, c) => acc + c.tonnage, 0) || 1;
 
-  // Month-on-month growth %
-  const lastMonthIdx = currentMonthIdx === 0 ? 11 : currentMonthIdx - 1;
-  const currentMonthTonnage = monthlyStats[currentMonthIdx]?.tonnage || totalDeliveredTonnage;
-  const lastMonthTonnage = monthlyStats[lastMonthIdx]?.tonnage || 0;
-  const tonnageGrowthPct =
-    lastMonthTonnage > 0
-      ? Math.round(((currentMonthTonnage - lastMonthTonnage) / lastMonthTonnage) * 100)
-      : 18;
 
-  const avgOrderSize = totalWonOrdersCount > 0 ? (totalDeliveredTonnage / totalWonOrdersCount).toFixed(1) : '0';
+
 
   // Sales Rep Leaderboard (Manager / Admin only)
   const salesRepLeaderboard = useMemo(() => {
@@ -386,117 +583,73 @@ export default function HomePage() {
       .sort((a, b) => b.deliveredTonnage - a.deliveredTonnage);
   }, [canManageTeam, safeEmployees, safeOrders, safeVisits, safeComplaints]);
 
-  const todayStr = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   // ── Curated Action Carousel (3-colour palette: Blue, Emerald, Indigo) ──
   const curatedActionItems: CarouselItem[] = useMemo(() => {
     const items: CarouselItem[] = [];
 
-    // 1. Quote Follow-up — Blue
+    // 1. Quote Follow-up
     const quotedDeals = safeDeals.filter(d => d.stage === 'quoted' || d.stage === 'sent_to_party');
     if (quotedDeals.length > 0) {
-      const first = quotedDeals[0];
-      const firstTonnage = getOrderTonnage(first);
       items.push({
         id: 'action-quote-followup',
         category: 'Quote Follow-up',
-        categoryColor: 'bg-blue-200/80 text-blue-900 border border-blue-300/80',
-        cardBg: 'bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400',
-        iconBg: 'bg-blue-600 text-white shadow-xs',
-        btnBg: 'bg-blue-600 hover:bg-blue-700 text-white',
         title: quotedDeals.length === 1 ? '1 quote needs follow-up' : `${quotedDeals.length} quotes need follow-up`,
-        subtitle: `${first.customer_name || 'Client'} · ${firstTonnage > 0 ? `${firstTonnage} MT pending customer approval` : 'Quotation pending customer confirmation'}`,
-        actionText: 'View Pipeline →',
         link: '/pipeline',
         icon: Clock,
       });
     }
 
-    // 2. Reorder Window / Dormant Client — Blue
+    // 2. Reorder Window / Dormant Client
     const overdueCustomers = safeCustomers.filter(c => {
       if (!c.days_since_last_order) return false;
       const interval = Number(c.avg_order_interval_days) || 30;
       return c.days_since_last_order > interval || c.churn_risk === 'high' || c.churn_risk === 'medium';
     });
     if (overdueCustomers.length > 0) {
-      const first = overdueCustomers[0];
       items.push({
         id: 'action-reorder',
         category: 'Reorder Window',
-        categoryColor: 'bg-blue-200/80 text-blue-900 border border-blue-300/80',
-        cardBg: 'bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400',
-        iconBg: 'bg-blue-600 text-white shadow-xs',
-        btnBg: 'bg-blue-600 hover:bg-blue-700 text-white',
         title: overdueCustomers.length === 1 ? '1 customer overdue for reorder' : `${overdueCustomers.length} customers overdue for reorder`,
-        subtitle: `${first.customer_name} · ${first.days_since_last_order} days without order (exceeded ${first.avg_order_interval_days || 30}d cycle)`,
-        actionText: 'View Customers →',
         link: '/customers',
         icon: Package,
       });
     }
 
-    // 3. Pending Complaints — Indigo
+    // 3. Pending Complaints
     if (openComplaints.length > 0) {
-      const first = openComplaints[0];
       const countPending = openComplaints.length;
       items.push({
         id: 'action-complaints',
         category: 'Pending Complaints',
-        categoryColor: 'bg-indigo-200/80 text-indigo-900 border border-indigo-300/80',
-        cardBg: 'bg-indigo-50/80 border-2 border-indigo-200/90 hover:border-indigo-400',
-        iconBg: 'bg-indigo-600 text-white shadow-xs',
-        btnBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
         title: `${countPending} pending complaint${countPending > 1 ? 's' : ''} need resolution`,
-        subtitle: `${countPending} ticket(s) open · ${first.customer_name || 'Customer'}`,
-        actionText: 'View Complaints →',
         link: '/complaints',
         icon: AlertTriangle,
       });
     }
 
-    // 4. Follow-ups Due — Emerald
+    // 4. Follow-ups Due
     const visitsWithFollowup = safeVisits.filter(
       v => (v.follow_up_action || v.follow_up || v.followup || '').trim().length > 0,
     );
     if (visitsWithFollowup.length > 0) {
-      const first = visitsWithFollowup[0];
-      const fuText = first.follow_up_action || first.follow_up || first.followup;
       items.push({
         id: 'action-visit-followups',
         category: 'Follow-ups Due',
-        categoryColor: 'bg-emerald-200/80 text-emerald-900 border border-emerald-300/80',
-        cardBg: 'bg-emerald-50/80 border-2 border-emerald-200/90 hover:border-emerald-400',
-        iconBg: 'bg-emerald-600 text-white shadow-xs',
-        btnBg: 'bg-emerald-600 hover:bg-emerald-700 text-white',
         title: visitsWithFollowup.length === 1 ? '1 visit follow-up due' : `${visitsWithFollowup.length} visit follow-ups due`,
-        subtitle: `${first.customer_name}: ${fuText}`,
-        actionText: 'View Visits →',
         link: '/visits',
         icon: MapPin,
       });
     }
 
-    // 5. AI Extractions — Indigo
+    // 5. AI Extractions
     if (safeReviewQueue.length > 0) {
-      const first = safeReviewQueue[0];
-      const clientName = first.sender_name || first.customer_name || first.company_name || 'Customer';
       items.push({
         id: 'action-ai-review',
         category: 'AI Extractions',
-        categoryColor: 'bg-indigo-200/80 text-indigo-900 border border-indigo-300/80',
-        cardBg: 'bg-indigo-50/80 border-2 border-indigo-200/90 hover:border-indigo-400',
-        iconBg: 'bg-indigo-600 text-white shadow-xs',
-        btnBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
         title: safeReviewQueue.length === 1 ? '1 AI extraction awaiting review' : `${safeReviewQueue.length} AI extractions awaiting review`,
-        subtitle: `${clientName} · WhatsApp PO auto-parsed and ready to convert to quotation`,
-        actionText: 'Review AI POs →',
         link: '/inquiries',
         icon: Sparkles,
       });
@@ -505,59 +658,70 @@ export default function HomePage() {
     return items;
   }, [safeDeals, safeCustomers, openComplaints, safeVisits, safeReviewQueue]);
 
-  // Horizontal Scroll Handlers
-  const handleScrollLeft = () => {
-    if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ left: -360, behavior: 'smooth' });
-  };
-  const handleScrollRight = () => {
-    if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ left: 360, behavior: 'smooth' });
-  };
-
   return (
     <div className="space-y-6 font-sans">
 
-      {/* ── Top Header Bar ──────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-sm shadow-blue-600/25 shrink-0">
-            {employee?.name?.charAt(0) || 'E'}
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}! 👋
-              </h1>
-              {isAdmin && !viewingAs ? (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200 flex items-center gap-1">
-                  <Users size={12} className="text-blue-700" /> All Sales Teams (Admin)
-                </span>
-              ) : isSalesManager && !viewingAs ? (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200 flex items-center gap-1">
-                  <Users size={12} className="text-blue-700" /> Sales Manager Team View
-                </span>
-              ) : viewingAs ? (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-900 font-bold border border-indigo-200 flex items-center gap-1">
-                  <User size={12} className="text-indigo-700" /> Viewing: {viewingAs.name}
-                  <button onClick={clearViewingAs} className="ml-1 hover:text-indigo-600 font-bold">×</button>
-                </span>
-              ) : (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
-                  Enlight Metals Sales
-                </span>
-              )}
+      {/* ── Greeting ────────────────────────────────────────────────── */}
+      <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+        {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}
+      </h1>
+
+      {/* ── Nav Bar ─────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
+
+        {/* Left: Global Quick-Search */}
+        <div className="relative flex-1 max-w-sm">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={globalSearch}
+            onChange={e => setGlobalSearch(e.target.value)}
+            onFocus={() => setShowSearchResults(true)}
+            onBlur={() => setTimeout(() => setShowSearchResults(false), 150)}
+            placeholder="Search customers, orders, quotes..."
+            className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all placeholder:text-slate-400 font-medium"
+          />
+          {globalSearch && (
+            <button
+              type="button"
+              onClick={() => { setGlobalSearch(''); setShowSearchResults(false); }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+              title="Clear search">
+              <X size={13} />
+            </button>
+          )}
+          {/* Search results dropdown */}
+          {showSearchResults && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
+              {searchResults.map(result => (
+                <button
+                  key={result.id}
+                  type="button"
+                  onMouseDown={() => { navigate(result.link); setGlobalSearch(''); setShowSearchResults(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors border-b border-slate-100 last:border-0">
+                  <div className={`p-1.5 rounded-lg shrink-0 ${result.iconBg}`}>
+                    <result.Icon size={13} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-800 truncate">{result.label}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{result.sublabel}</p>
+                  </div>
+                  <span className={`ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${result.typeBg}`}>
+                    {result.type}
+                  </span>
+                </button>
+              ))}
             </div>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-medium">
-              <Clock size={13} className="text-slate-400" />
-              {todayStr}
-            </p>
-          </div>
+          )}
         </div>
 
-        {/* Header Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Right: Refresh · Date filter · Custom date inputs (inline) · Clear Filter */}
+        <div className="flex items-center gap-2 shrink-0">
+
+          {/* Refresh */}
           <button
             onClick={handleRefreshAll}
-            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
             title="Refresh Dashboard">
             <RefreshCw
               size={17}
@@ -565,86 +729,82 @@ export default function HomePage() {
             />
           </button>
 
-          <button
-            onClick={() => navigate('/orders')}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
-            <Plus size={15} />
-            Log Won Order
-          </button>
-        </div>
-      </div>
-
-      {/* ── Inline Filter Bar (Visits-tab style) ─────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="relative inline-flex items-center">
-          <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-          <select
-            value={dayPreset}
-            onChange={e => handleDayPresetChange(e.target.value)}
-            className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-            <option value="today">Today</option>
-            <option value="7_days">Last 7 Days</option>
-            <option value="30_days">Last 30 Days</option>
-            <option value="90_days">Last 90 Days</option>
-            <option value="this_month">This Month</option>
-            <option value="custom">Custom Range</option>
-          </select>
-          <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-        </div>
-
-        {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
-            <span className="text-slate-500 font-semibold">From:</span>
-            <input
-              type="date"
-              value={customFrom}
-              max={customTo || undefined}
-              onChange={e => {
-                const val = e.target.value;
-                setCustomFrom(val);
-                let effectiveTo = customTo;
-                if (val && customTo && val > customTo) {
-                  effectiveTo = val;
-                  setCustomTo(val);
-                }
-                if (val && effectiveTo) setDateRange({ preset: 'custom', from: val, to: effectiveTo });
-              }}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
-            />
-            <span className="text-slate-500 font-semibold">To:</span>
-            <input
-              type="date"
-              value={customTo}
-              min={customFrom || undefined}
-              onChange={e => {
-                const val = e.target.value;
-                let effectiveVal = val;
-                if (val && customFrom && val < customFrom) {
-                  effectiveVal = customFrom;
-                }
-                setCustomTo(effectiveVal);
-                if (customFrom && effectiveVal) setDateRange({ preset: 'custom', from: customFrom, to: effectiveVal });
-              }}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
-            />
+          {/* Date Filter dropdown */}
+          <div className="relative inline-flex items-center">
+            <Calendar size={13} className="absolute left-2.5 text-blue-600 pointer-events-none" />
+            <select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              className="pl-7 pr-7 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="this_month">This Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
           </div>
-        )}
 
-        {dayPreset !== 'this_month' && (
-          <button
-            type="button"
-            onClick={handleClearFilter}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
-            Clear Filter
-          </button>
-        )}
+          {/* Custom date inputs — inline in the same row when Custom Range is active */}
+          {showCustomDate && (
+            <>
+              <span className="text-slate-400 text-xs font-semibold shrink-0">From:</span>
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={e => {
+                  const val = e.target.value;
+                  setCustomFrom(val);
+                  let effectiveTo = customTo;
+                  if (val && customTo && val > customTo) {
+                    effectiveTo = val;
+                    setCustomTo(val);
+                  }
+                  if (val && effectiveTo) setDateRange({ preset: 'custom', from: val, to: effectiveTo });
+                }}
+                className="px-2 py-1.5 bg-white border border-slate-300 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+              />
+              <span className="text-slate-400 text-xs font-semibold shrink-0">To:</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={e => {
+                  const val = e.target.value;
+                  let effectiveVal = val;
+                  if (val && customFrom && val < customFrom) {
+                    effectiveVal = customFrom;
+                  }
+                  setCustomTo(effectiveVal);
+                  if (customFrom && effectiveVal) setDateRange({ preset: 'custom', from: customFrom, to: effectiveVal });
+                }}
+                className="px-2 py-1.5 bg-white border border-slate-300 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+              />
+            </>
+          )}
+
+          {/* Clear Filter */}
+          {dayPreset !== 'this_month' && (
+            <button
+              type="button"
+              onClick={handleClearFilter}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+              Clear Filter
+            </button>
+          )}
+        </div>
       </div>
+
 
       {/* ── 5 Stat Cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
 
         {/* Card 1: Delivered Tonnage — Blue Hero */}
-        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white rounded-xl p-4 sm:p-5 shadow-sm shadow-blue-600/25 flex flex-col justify-between min-h-[145px] relative overflow-hidden group hover:shadow-md transition-all">
+        <div
+          onClick={() => navigate('/orders')}
+          className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white rounded-xl p-4 sm:p-5 shadow-sm shadow-blue-600/25 flex flex-col justify-between min-h-[145px] relative overflow-hidden group hover:shadow-md transition-all cursor-pointer">
           <div className="flex items-center justify-between relative z-10">
             <p className="text-[11px] font-bold text-blue-100 uppercase tracking-wider">
               {canManageTeam ? 'Team Tonnage' : 'Delivered Tonnage'}
@@ -657,107 +817,78 @@ export default function HomePage() {
           <div className="relative z-10">
             <div className="flex items-baseline gap-1.5">
               <p className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-none">
-                {totalDeliveredTonnage}
+                {formatTonnage(totalDeliveredTonnage)}
               </p>
               <span className="text-xs sm:text-sm font-bold text-blue-100">MT</span>
-            </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="inline-flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-md border border-white/20">
-                <ArrowUpRight size={11} /> +{tonnageGrowthPct}% vs last month
-              </span>
             </div>
           </div>
           <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
         </div>
 
         {/* Card 2: Won Orders — Blue Soft */}
-        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-blue-900/70 uppercase tracking-wider">Won Orders</p>
-            <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs shrink-0">
-              <ShoppingBag size={18} />
-            </div>
+        <div
+          onClick={() => navigate('/orders')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
+            <ShoppingBag size={18} />
           </div>
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-blue-950 tracking-tight leading-none">
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                 {totalWonOrdersCount}
               </p>
-              <span className="text-xs font-bold text-blue-700">Orders</span>
-            </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="px-2 py-0.5 rounded-md bg-white text-blue-900 border border-blue-200 text-[11px] font-bold shadow-2xs">
-                Avg: <strong className="text-blue-950 font-black">{avgOrderSize} MT</strong> / order
-              </span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Won Orders</span>
             </div>
           </div>
         </div>
 
-        {/* Card 3: Customer Visits — Emerald */}
-        <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-emerald-900/70 uppercase tracking-wider">Customer Visits</p>
-            <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs shrink-0">
-              <MapPin size={18} />
-            </div>
+        {/* Card 3: Customer Visits — Blue Soft */}
+        <div
+          onClick={() => navigate('/visits')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
+            <MapPin size={18} />
           </div>
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-emerald-950 tracking-tight leading-none">
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                 {totalVisitsCount}
               </p>
-              <span className="text-xs font-bold text-emerald-700">Visits</span>
-            </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="px-2 py-0.5 rounded-md bg-white text-emerald-900 border border-emerald-200 text-[11px] font-bold shadow-2xs">
-                Field visits logged
-              </span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Customer Visits</span>
             </div>
           </div>
         </div>
 
-        {/* Card 4: New Customers — Indigo */}
-        <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">New Customers</p>
-            <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
-              <Users size={18} />
-            </div>
+        {/* Card 4: New Customers — Blue Soft */}
+        <div
+          onClick={() => navigate('/customers')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
+            <Users size={18} />
           </div>
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight leading-none">
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                 {newCustomersCount}
               </p>
-              <span className="text-xs font-bold text-indigo-700">Customers</span>
-            </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="px-2 py-0.5 rounded-md bg-white text-indigo-900 border border-indigo-200 text-[11px] font-bold shadow-2xs">
-                New accounts onboarded
-              </span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">New Customers</span>
             </div>
           </div>
         </div>
 
-        {/* Card 5: Complaints — Indigo, "Pending" language */}
-        <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">Complaints</p>
-            <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
-              <AlertTriangle size={18} />
-            </div>
+        {/* Card 5: Complaints — Blue Soft */}
+        <div
+          onClick={() => navigate('/complaints')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1 cursor-pointer">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
+            <AlertTriangle size={18} />
           </div>
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight leading-none">
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                 {openComplaints.length}
               </p>
-              <span className="text-xs font-bold text-indigo-700">Pending</span>
-            </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="px-2 py-0.5 rounded-md bg-white text-indigo-900 border border-indigo-200 text-[11px] font-bold shadow-2xs">
-                {openComplaints.length === 0 ? 'All resolved' : `${openComplaints.length} open for resolution`}
-              </span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Complaints</span>
             </div>
           </div>
         </div>
@@ -773,34 +904,9 @@ export default function HomePage() {
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                Your Action Feed &amp; Opportunities
+                Your Action Feed
               </h2>
-              <p className="text-xs text-slate-500">
-                Prioritized quote follow-ups, overdue reorders, pending complaints, and field actions
-              </p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-bold hidden sm:inline mr-1">
-              {curatedActionItems.length} Action{curatedActionItems.length === 1 ? '' : 's'} Due
-            </span>
-            {curatedActionItems.length > 1 && (
-              <>
-                <button
-                  onClick={handleScrollLeft}
-                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
-                  title="Scroll Left">
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  onClick={handleScrollRight}
-                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
-                  title="Scroll Right">
-                  <ChevronRight size={16} />
-                </button>
-              </>
-            )}
           </div>
         </div>
 
@@ -813,7 +919,6 @@ export default function HomePage() {
           </div>
         ) : (
           <div
-            ref={scrollContainerRef}
             className="flex items-stretch gap-4 overflow-x-auto pb-2 pt-1 scroll-smooth snap-x snap-mandatory scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
             {curatedActionItems.map(item => {
               const IconComp = item.icon;
@@ -821,38 +926,21 @@ export default function HomePage() {
                 <div
                   key={item.id}
                   onClick={() => navigate(item.link)}
-                  className={`snap-start shrink-0 w-[310px] sm:w-[350px] md:w-[360px] p-5 ${item.cardBg} rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group`}>
-                  <div className="space-y-2.5">
-                    {/* Category badge only (no HIGH/priority badge) */}
-                    <div className="flex items-center">
-                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${item.categoryColor}`}>
-                        {item.category}
-                      </span>
+                  className="snap-start shrink-0 w-[300px] sm:w-[340px] md:w-[360px] p-4 sm:p-5 bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400 rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-center gap-2 cursor-pointer group">
+                  {/* Top Left: Icon + Category */}
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-xs shrink-0">
+                      <IconComp size={14} />
                     </div>
-
-                    <div className="flex items-start gap-3 pt-1">
-                      <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${item.iconBg}`}>
-                        <IconComp size={17} />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-snug">
-                          {item.title}
-                        </h3>
-                        <p className="text-xs text-slate-600 font-medium mt-1 leading-relaxed line-clamp-2">
-                          {item.subtitle}
-                        </p>
-                      </div>
-                    </div>
+                    <span className="text-xs sm:text-sm font-bold text-slate-600 tracking-wide whitespace-nowrap">
+                      {item.category}
+                    </span>
                   </div>
 
-                  {/* Bottom bar: action button only (no "Quick Action" label) */}
-                  <div className="pt-3.5 mt-3 border-t border-slate-200/70 flex items-center justify-end">
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 ${item.btnBg} rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 group-hover:translate-x-0.5 cursor-pointer`}>
-                      <span>{item.actionText}</span>
-                    </button>
-                  </div>
+                  {/* Below: Action Card Title - 1 line single row */}
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-snug whitespace-nowrap">
+                    {item.title}
+                  </h3>
                 </div>
               );
             })}
@@ -908,7 +996,7 @@ export default function HomePage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 text-xs font-mono">
-                        {rep.deliveredTonnage} MT
+                        {formatTonnage(rep.deliveredTonnage)} MT
                       </span>
                     </td>
                     <td className="px-4 py-3.5 font-semibold text-slate-800">{rep.ordersCount} Orders</td>
@@ -937,11 +1025,11 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Monthly Tonnage Trend & Top Accounts Grid ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ── Monthly Tonnage Trend & Top Accounts Grid (50-50 Split) ───── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* Left: Monthly Tonnage Bar Chart */}
-        <div className="lg:col-span-2 bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
+        {/* Left: Monthly Tonnage Smooth Area Chart (50%) */}
+        <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-slate-900">
@@ -951,53 +1039,139 @@ export default function HomePage() {
                 Delivered volume output grouped by calendar month for 2026
               </p>
             </div>
-            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
-              2026 Volume Overview
-            </span>
           </div>
 
-          <div className="h-64 w-full flex items-end justify-between gap-1.5 sm:gap-3 pt-6 pb-2 px-2 border-b border-slate-100 relative">
-            {monthlyStats.map((item, idx) => {
-              const heightPct = item.tonnage > 0 ? Math.max(15, Math.round((item.tonnage / maxTonnageForChart) * 100)) : 6;
-              const isHovered = activeBarHover === idx;
-              return (
-                <div
-                  key={item.month}
-                  onMouseEnter={() => setActiveBarHover(idx)}
-                  onMouseLeave={() => setActiveBarHover(null)}
-                  className="flex-1 flex flex-col items-center gap-1 group cursor-pointer h-full justify-end relative">
-                  {isHovered && (
-                    <div className="absolute -top-10 bg-slate-900 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg shadow-xl z-20 whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 border border-slate-700">
-                      {item.month}: {item.tonnage} MT ({item.ordersCount} Orders)
-                    </div>
-                  )}
-                  <div
-                    className="w-full max-w-[32px] rounded-t-lg bg-blue-100/70 group-hover:bg-blue-200 transition-all flex flex-col justify-end overflow-hidden"
-                    style={{ height: `${heightPct}%` }}>
-                    <div
-                      className={`w-full rounded-t-lg transition-all duration-300 ${isHovered ? 'bg-gradient-to-t from-blue-700 to-indigo-700' : 'bg-gradient-to-t from-blue-600 to-blue-500'}`}
-                      style={{ height: '100%' }}
+          <div className="relative w-full h-64 flex flex-col justify-end pt-2">
+            {/* Tooltip for active hover */}
+            {activeBarHover !== null && chartPoints[activeBarHover] && (
+              <div
+                className="absolute pointer-events-none bg-slate-900 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg shadow-xl z-20 whitespace-nowrap -translate-x-1/2 -translate-y-full border border-slate-700 transition-all animate-in fade-in zoom-in-95 duration-100"
+                style={{
+                  left: `${(chartPoints[activeBarHover].x / 500) * 100}%`,
+                  top: `${(chartPoints[activeBarHover].y / 200) * 100}%`,
+                  marginTop: '-10px',
+                }}>
+                <span className="text-blue-300">{chartPoints[activeBarHover].month} 2026:</span>{' '}
+                {formatTonnage(chartPoints[activeBarHover].tonnage)} MT{' '}
+                <span className="text-slate-400">({chartPoints[activeBarHover].ordersCount} orders)</span>
+              </div>
+            )}
+
+            <svg viewBox="0 0 500 200" className="w-full h-full overflow-visible">
+              <defs>
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.28" />
+                  <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Horizontal Gridlines & Y-axis scale labels */}
+              {yTicks.map((tick, i) => (
+                <g key={i}>
+                  <line
+                    x1={45}
+                    y1={tick.y}
+                    x2={485}
+                    y2={tick.y}
+                    stroke="#f1f5f9"
+                    strokeDasharray="4 4"
+                    strokeWidth="1.2"
+                  />
+                  <text
+                    x={37}
+                    y={tick.y + 3.5}
+                    textAnchor="end"
+                    className="text-[10px] font-semibold fill-slate-400 font-mono">
+                    {formatTonnage(tick.val, true)}
+                  </text>
+                </g>
+              ))}
+
+              {/* Area fill under curve */}
+              {areaPath && (
+                <path
+                  d={areaPath}
+                  fill="url(#areaGradient)"
+                />
+              )}
+
+              {/* Smooth line curve */}
+              {linePath && (
+                <path
+                  d={linePath}
+                  fill="none"
+                  stroke="#2563eb"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Vertical indicator line for hovered point */}
+              {activeBarHover !== null && chartPoints[activeBarHover] && (
+                <line
+                  x1={chartPoints[activeBarHover].x}
+                  y1={15}
+                  x2={chartPoints[activeBarHover].x}
+                  y2={175}
+                  stroke="#93c5fd"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 3"
+                />
+              )}
+
+              {/* Interactive Points + Month labels */}
+              {chartPoints.map((pt, idx) => {
+                const isHovered = activeBarHover === idx;
+                return (
+                  <g key={pt.month} className="cursor-pointer">
+                    {/* Transparent hover hit area */}
+                    <rect
+                      x={pt.x - 18}
+                      y={0}
+                      width={36}
+                      height={200}
+                      fill="transparent"
+                      onMouseEnter={() => setActiveBarHover(idx)}
+                      onMouseLeave={() => setActiveBarHover(null)}
                     />
-                  </div>
-                  <span className={`text-xs font-bold mt-2 transition-colors ${isHovered ? 'text-blue-600' : 'text-slate-400'}`}>
-                    {item.month}
-                  </span>
-                </div>
-              );
-            })}
+
+                    {/* Point circle */}
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isHovered ? 5.5 : pt.tonnage > 0 ? 3.5 : 2}
+                      className={`transition-all duration-150 pointer-events-none ${isHovered
+                        ? 'fill-blue-600 stroke-white stroke-2 shadow-md'
+                        : pt.tonnage > 0
+                          ? 'fill-blue-600 stroke-blue-100 stroke-1'
+                          : 'fill-slate-300'
+                        }`}
+                    />
+
+                    {/* X-axis Month Label */}
+                    <text
+                      x={pt.x}
+                      y={192}
+                      textAnchor="middle"
+                      className={`text-[10px] font-bold transition-colors pointer-events-none ${isHovered ? 'fill-blue-600' : 'fill-slate-400'
+                        }`}>
+                      {pt.month}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
             <span className="flex items-center gap-2 font-bold text-slate-700">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> Monthly Confirmed Deliveries (MT)
             </span>
-            <span className="font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
-              Peak Month: {peakMonth.month} ({peakMonth.tonnage} MT)
-            </span>
           </div>
         </div>
 
-        {/* Right: Top Customer Accounts */}
+        {/* Right: Top Customer Accounts (50%) */}
         <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -1031,7 +1205,7 @@ export default function HomePage() {
                         </span>
                         <span className="truncate">{cust.name}</span>
                       </span>
-                      <span className="font-mono font-bold text-blue-700 shrink-0">{cust.tonnage} MT</span>
+                      <span className="font-mono font-bold text-blue-700 shrink-0">{formatTonnage(cust.tonnage)} MT</span>
                     </div>
                     <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
                       <div
@@ -1045,10 +1219,6 @@ export default function HomePage() {
             )}
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Volume Share</span>
-            <span className="font-bold text-slate-700">Top Buying Accounts</span>
-          </div>
         </div>
 
       </div>
