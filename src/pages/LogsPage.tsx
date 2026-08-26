@@ -294,7 +294,7 @@ export default function LogsPage() {
         : rawBotLoading;
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full animate-fade-in pb-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -392,9 +392,9 @@ export default function LogsPage() {
 
       {/* ─── TAB 1: ACTIVITY LOGS STREAM ─── */}
       {mainTab === 'activity' && (
-        <div className="space-y-4">
+        <div className="space-y-4 w-full">
           {/* Controls Bar: Search & Module Filters */}
-          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs w-full">
             {/* Search Input */}
             <div className="relative flex-1 max-w-md">
               <Search
@@ -452,12 +452,12 @@ export default function LogsPage() {
 
           {/* Activity Logs List */}
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-64 bg-white rounded-xl border border-slate-200">
+            <div className="flex flex-col items-center justify-center h-64 bg-white rounded-xl border border-slate-200 w-full">
               <Loader2 className="animate-spin text-indigo-600 mb-2" size={32} />
               <p className="text-sm text-slate-500 font-medium">Loading activity logs...</p>
             </div>
           ) : !activityLogsData || activityLogsData.length === 0 ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-2xs">
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-2xs w-full">
               <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
                 <History size={24} />
               </div>
@@ -479,7 +479,7 @@ export default function LogsPage() {
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden divide-y divide-slate-100">
+            <div className="w-full bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden divide-y divide-slate-100">
               {activityLogsData.map((log: any, idx: number) => {
                 const relativeTime = formatRelativeTime(log.timestamp || log.created_at);
                 const { date, time } = formatDateTime(log.timestamp || log.created_at);
@@ -533,23 +533,23 @@ export default function LogsPage() {
 
       {/* ─── TAB 2: BOT REVIEW QUEUE ─── */}
       {mainTab === 'review' && (
-        <div className="space-y-4">
+        <div className="space-y-4 w-full">
           {reviewLoading ? (
-            <div className="flex items-center justify-center h-64 bg-white rounded-xl border border-slate-200">
+            <div className="flex items-center justify-center h-64 bg-white rounded-xl border border-slate-200 w-full">
               <Loader2 className="animate-spin text-indigo-600" size={32} />
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-2xs">
-              <div className="overflow-x-auto">
+            <div className="w-full bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-2xs">
+              <div className="overflow-x-auto w-full">
                 <table className="w-full text-left text-sm text-slate-700">
                   <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <tr>
-                      <th className="px-4 py-3.5">Status</th>
-                      <th className="px-4 py-3.5">Sender / Customer</th>
-                      <th className="px-4 py-3.5">Raw Message</th>
-                      <th className="px-4 py-3.5">Channel</th>
-                      <th className="px-4 py-3.5">AI Confidence</th>
-                      <th className="px-4 py-3.5 text-right">Date &amp; Time</th>
+                      <th className="px-5 py-3.5 w-32 whitespace-nowrap">Status</th>
+                      <th className="px-5 py-3.5 w-56 whitespace-nowrap">Sender / Customer</th>
+                      <th className="px-5 py-3.5 min-w-[280px]">Raw Message</th>
+                      <th className="px-5 py-3.5 w-44 whitespace-nowrap">Channel</th>
+                      <th className="px-5 py-3.5 w-36 whitespace-nowrap">AI Confidence</th>
+                      <th className="px-5 py-3.5 w-44 text-right whitespace-nowrap">Date &amp; Time</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
@@ -561,10 +561,10 @@ export default function LogsPage() {
 
                       return (
                         <tr key={log.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-4 py-3.5 whitespace-nowrap">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             {getStatusBadge(log.status || 'review')}
                           </td>
-                          <td className="px-4 py-3.5 min-w-[180px]">
+                          <td className="px-5 py-3.5">
                             <p className="text-sm font-bold text-slate-900">
                               {log.sender_name || 'Unknown Customer'}
                             </p>
@@ -572,21 +572,21 @@ export default function LogsPage() {
                               {log.sender_phone || '-'}
                             </p>
                           </td>
-                          <td className="px-4 py-3.5 max-w-md">
+                          <td className="px-5 py-3.5">
                             <p
-                              className="text-xs text-slate-700 leading-relaxed font-sans bg-slate-50 p-2 rounded-lg border border-slate-200 line-clamp-2"
+                              className="text-xs text-slate-700 leading-relaxed font-sans bg-slate-50 p-2.5 rounded-lg border border-slate-200 break-words"
                               title={log.raw_text}
                             >
                               {log.raw_text || '-'}
                             </p>
                           </td>
-                          <td className="px-4 py-3.5 whitespace-nowrap">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             {getChannelBadge(log.source_channel)}
                           </td>
-                          <td className="px-4 py-3.5 whitespace-nowrap">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             {conf !== null ? (
                               <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold ${
                                   conf >= 85
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -599,7 +599,7 @@ export default function LogsPage() {
                               <span className="text-xs text-slate-400 font-mono">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                          <td className="px-5 py-3.5 text-right whitespace-nowrap">
                             <p className="text-xs font-semibold text-slate-800">{date}</p>
                             <p className="text-[11px] text-slate-400 font-mono">{time}</p>
                           </td>
@@ -623,23 +623,23 @@ export default function LogsPage() {
 
       {/* ─── TAB 3: RAW BOT CAPTURES ─── */}
       {mainTab === 'bot_raw' && (
-        <div className="space-y-4">
+        <div className="space-y-4 w-full">
           {rawBotLoading ? (
-            <div className="flex items-center justify-center h-64 bg-white rounded-xl border border-slate-200">
+            <div className="flex items-center justify-center h-64 bg-white rounded-xl border border-slate-200 w-full">
               <Loader2 className="animate-spin text-indigo-600" size={32} />
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-2xs">
-              <div className="overflow-x-auto">
+            <div className="w-full bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-2xs">
+              <div className="overflow-x-auto w-full">
                 <table className="w-full text-left text-sm text-slate-700">
                   <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <tr>
-                      <th className="px-4 py-3.5">Status</th>
-                      <th className="px-4 py-3.5">Sender / Customer</th>
-                      <th className="px-4 py-3.5">Raw Message Text</th>
-                      <th className="px-4 py-3.5">Channel</th>
-                      <th className="px-4 py-3.5">AI Confidence</th>
-                      <th className="px-4 py-3.5 text-right">Date &amp; Time</th>
+                      <th className="px-5 py-3.5 w-32 whitespace-nowrap">Status</th>
+                      <th className="px-5 py-3.5 w-56 whitespace-nowrap">Sender / Customer</th>
+                      <th className="px-5 py-3.5 min-w-[280px]">Raw Message Text</th>
+                      <th className="px-5 py-3.5 w-44 whitespace-nowrap">Channel</th>
+                      <th className="px-5 py-3.5 w-36 whitespace-nowrap">AI Confidence</th>
+                      <th className="px-5 py-3.5 w-44 text-right whitespace-nowrap">Date &amp; Time</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
@@ -651,10 +651,10 @@ export default function LogsPage() {
 
                       return (
                         <tr key={log.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-4 py-3.5 whitespace-nowrap">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             {getStatusBadge(log.status || 'review')}
                           </td>
-                          <td className="px-4 py-3.5 min-w-[180px]">
+                          <td className="px-5 py-3.5">
                             <p className="text-sm font-bold text-slate-900">
                               {log.sender_name || 'Unknown'}
                             </p>
@@ -662,21 +662,21 @@ export default function LogsPage() {
                               {log.sender_phone || '-'}
                             </p>
                           </td>
-                          <td className="px-4 py-3.5 max-w-md">
+                          <td className="px-5 py-3.5">
                             <p
-                              className="text-xs text-slate-700 leading-relaxed font-sans bg-slate-50 p-2 rounded-lg border border-slate-200 line-clamp-2"
+                              className="text-xs text-slate-700 leading-relaxed font-sans bg-slate-50 p-2.5 rounded-lg border border-slate-200 break-words"
                               title={log.raw_text}
                             >
                               {log.raw_text || '-'}
                             </p>
                           </td>
-                          <td className="px-4 py-3.5 whitespace-nowrap">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             {getChannelBadge(log.source_channel)}
                           </td>
-                          <td className="px-4 py-3.5 whitespace-nowrap">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             {conf !== null ? (
                               <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold ${
                                   conf >= 85
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -689,7 +689,7 @@ export default function LogsPage() {
                               <span className="text-xs text-slate-400 font-mono">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                          <td className="px-5 py-3.5 text-right whitespace-nowrap">
                             <p className="text-xs font-semibold text-slate-800">{date}</p>
                             <p className="text-[11px] text-slate-400 font-mono">{time}</p>
                           </td>
