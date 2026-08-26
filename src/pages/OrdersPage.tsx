@@ -832,7 +832,7 @@ export default function OrdersPage() {
             <p className="text-xs text-slate-500 font-medium">Total Orders</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{totalOrders}</p>
           </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+          <div className="p-3 bg-slate-100 text-slate-900 rounded-lg">
             <ShoppingBag size={22} />
           </div>
         </div>
