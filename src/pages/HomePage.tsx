@@ -244,17 +244,84 @@ export default function HomePage() {
   const safeReviewQueue: any[] = Array.isArray(reviewQueueData) ? reviewQueueData : [];
   const safeCustomers: any[] = Array.isArray(churnData) ? churnData : [];
 
-  // Helper: Extract total tonnage (MT) from an order
+  // ── Steel sheet weight formula for NOS/PCS items ──────────────────────────
+  // Weight (kg) = L(m) × W(m) × T(mm) × 8 × count
+  // (8 ≈ 7.85 g/cm³ steel density, rationalised to this shorthand)
+  // Parses dimension strings like "8x6000x1500", "150x6mmx6m", "1250x2500x3mm"
+  const steelWeightKgFromDimensions = (dimsRaw: string, count: number): number => {
+    if (!dimsRaw || count <= 0) return 0;
+
+    // Split on common separators: x X * ×
+    const parts = dimsRaw.trim().split(/[xX*×\s]+/).map(s => s.trim()).filter(Boolean);
+    if (parts.length < 2) return 0;
+
+    // Parse each part to { value: number, unit: 'mm'|'m'|'cm'|'' }
+    const parsed: Array<{ value: number; unit: string }> = parts.map(p => {
+      const m = p.match(/^([\d.]+)\s*(mm|cm|m)?$/i);
+      if (!m) return null;
+      return { value: parseFloat(m[1]), unit: (m[2] || '').toLowerCase() };
+    }).filter(Boolean) as Array<{ value: number; unit: string }>;
+
+    if (parsed.length < 2) return 0;
+
+    // Convert all values to mm so we can identify thickness
+    const inMm = parsed.map(p => {
+      if (p.unit === 'm')  return p.value * 1000;
+      if (p.unit === 'cm') return p.value * 10;
+      return p.value; // 'mm' or no unit → assume mm
+    });
+
+    // Thickness = smallest dimension (usually 2–20 mm for sheets)
+    const sorted = [...inMm].sort((a, b) => a - b);
+    const thicknessMm = sorted[0];
+    const otherMm     = sorted.slice(1);        // remaining = length, width
+    const lengthMm    = otherMm[otherMm.length - 1];
+    const widthMm     = otherMm[otherMm.length - 2] ?? lengthMm;
+
+    const lengthM = lengthMm / 1000;
+    const widthM  = widthMm  / 1000;
+
+    // Weight (kg) = L(m) × W(m) × T(mm) × 8 × NOS
+    return lengthM * widthM * thicknessMm * 8 * count;
+  };
+
+  // Normalise a single deal_item quantity to Metric Tonnes (MT)
+  const normalizeItemToMT = (quantity: number, unit?: string, dimensions?: string): number => {
+    if (quantity <= 0) return 0;
+    const u = (unit || 'MT').trim().toUpperCase();
+
+    if (u === 'MT' || u === 'TON' || u === 'TONS' || u === 'TONNE' || u === 'TONNES') {
+      return quantity;                          // already in MT
+    }
+    if (u === 'KG' || u === 'KGS') {
+      return quantity / 1000;                   // kg → MT
+    }
+    if (u === 'G' || u === 'GMS' || u === 'GRAM' || u === 'GRAMS') {
+      return quantity / 1_000_000;              // g → MT
+    }
+    // NOS / PCS / SHT / SHEETS / PIECES — use steel sheet density formula
+    if (/^(nos|pcs|sht|sheets?|pieces?|units?|numbers?|no\.?)$/i.test(u)) {
+      if (!dimensions) return 0;
+      const kg = steelWeightKgFromDimensions(dimensions, quantity);
+      return kg / 1000;                         // kg → MT
+    }
+    // Unknown unit — assume MT
+    return quantity;
+  };
+
+  // Helper: Extract total tonnage (MT) from an order, respecting the unit on each line item.
+  // Returns 0 for orders with no quantity data (no ₹-to-MT estimation).
   const getOrderTonnage = (o: any): number => {
     if (Array.isArray(o.deal_items) && o.deal_items.length > 0) {
-      const sum = o.deal_items.reduce((acc: number, item: any) => acc + Number(item.quantity || 0), 0);
+      const sum = o.deal_items.reduce((acc: number, item: any) => {
+        const qty = Number(item.quantity || 0);
+        if (qty <= 0) return acc;
+        return acc + normalizeItemToMT(qty, item.unit, item.dimensions);
+      }, 0);
       if (sum > 0) return Math.round(sum * 10) / 10;
     }
     if (o.quantity && Number(o.quantity) > 0) {
       return Math.round(Number(o.quantity) * 10) / 10;
-    }
-    if (o.total_amount && Number(o.total_amount) > 0) {
-      return Math.round((Number(o.total_amount) / 55000) * 10) / 10;
     }
     return 0;
   };
