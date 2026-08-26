@@ -437,6 +437,7 @@ export default function AdminSelectionPage() {
                     <FileSpreadsheet size={16} />
                     Import Clients
                   </button>
+                  
                   <button
                     onClick={handleOpenAddModal}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"

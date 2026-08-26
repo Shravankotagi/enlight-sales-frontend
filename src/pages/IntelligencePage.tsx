@@ -73,7 +73,7 @@ export default function IntelligencePage() {
           <Brain size={24} className="text-indigo-500" />
           Intelligence Center
         </h1>
-        <p className="text-gray-500 text-sm">AI-powered insights from your sales data</p>
+        
       </div>
 
       {/* Tabs */}
