@@ -2,9 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import {
-  X, FileText,
+  X,
   Package, IndianRupee, Clock,
-  AlertCircle, Printer, Trash2
+  AlertCircle, Trash2
 } from 'lucide-react';
 import SalesQuotationModal from './SalesQuotationModal';
 import {
@@ -26,7 +26,7 @@ const STAGE_COLORS: Record<string, string> = {
   quoted: 'bg-blue-100 text-blue-800',
   negotiation: 'bg-orange-100 text-orange-800',
   won: 'bg-green-100 text-green-800',
-  lost: 'bg-red-100 text-red-700',
+  lost: 'bg-rose-100 text-rose-800',
 };
 
 const LOST_REASONS = [
@@ -47,8 +47,8 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 
 export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerProps) {
   const queryClient = useQueryClient();
-  const [lostReason, setLostReason] = useState('');
   const [showLostModal, setShowLostModal] = useState(false);
+  const [lostReason, setLostReason] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: dealData, isLoading } = useQuery({
@@ -72,30 +72,29 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
     mutationFn: ({ stage, reason }: { stage: string; reason?: string }) =>
       dealsApi.updateStage(dealId!, stage, reason),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['kanban'] });
-      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['deal', dealId] });
-      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
       toast.success('Deal stage updated');
       setShowLostModal(false);
-      onClose();
+      setLostReason('');
     },
-    onError: () => toast.error('Failed to update stage'),
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'Failed to update stage');
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => dealsApi.delete(dealId!),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['kanban'] });
-      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
-      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      toast.success('Deal and all associated records deleted successfully');
+      toast.success('Deal deleted successfully');
       setShowDeleteConfirm(false);
       onClose();
     },
     onError: (err: any) => {
+      setShowDeleteConfirm(false);
       toast.error(err?.response?.data?.message || 'Failed to delete deal');
     },
   });
@@ -108,12 +107,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
     }
   };
 
-
   const [showQuotationModal, setShowQuotationModal] = useState(false);
-
-  const handlePrint = () => {
-    setShowQuotationModal(true);
-  };
 
   if (!dealId) return null;
 
@@ -209,7 +203,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                   <InfoRow label="Delivery Date" value={deal.delivery_date
                     ? new Date(deal.delivery_date).toLocaleDateString('en-IN') : null} />
                   <InfoRow label="Payment Terms" value={deal.payment_terms} />
-                  <InfoRow label="Quotation Date" value={deal.po_date
+                  <InfoRow label="Date" value={deal.po_date
                     ? new Date(deal.po_date).toLocaleDateString('en-IN') : null} />
                 </div>
               </div>
@@ -224,7 +218,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 border-b">
                         <tr>
-                          {['SKU', 'Grade', 'Qty', 'Unit', 'Rate', 'Amount'].map(h => (
+                          {['SKU', 'Qty', 'Unit', 'Rate', 'Amount'].map(h => (
                             <th key={h} className="text-left text-xs font-semibold text-gray-500 px-3 py-2">
                               {h}
                             </th>
@@ -240,7 +234,6 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                               <td className="px-3 py-2 text-gray-800 text-xs font-medium max-w-[100px] truncate">
                                 {item.sku_text}
                               </td>
-                              <td className="px-3 py-2 text-gray-600 text-xs">{item.grade || '-'}</td>
                               <td className="px-3 py-2 text-gray-800 text-xs font-semibold">{item.quantity}</td>
                               <td className="px-3 py-2 text-gray-600 text-xs">{item.unit}</td>
                               <td className="px-3 py-2 text-gray-800 text-xs">
@@ -255,7 +248,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                       </tbody>
                       <tfoot className="bg-gray-50 border-t">
                         <tr>
-                          <td colSpan={5} className="px-3 py-2 text-xs font-semibold text-gray-700 text-right">
+                          <td colSpan={4} className="px-3 py-2 text-xs font-semibold text-gray-700 text-right">
                             Total
                           </td>
                           <td className="px-3 py-2 text-sm font-bold text-gray-900">
@@ -341,18 +334,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
               {/* Quote Builder — Print Only */}
               {deal.deal_items && deal.deal_items.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl">
-                    <span className="flex items-center gap-2 text-sm font-medium text-indigo-700">
-                      <FileText size={16} /> Quoted Prices
-                    </span>
-                    <button
-                      onClick={handlePrint}
-                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      <Printer size={14} /> Print Quote
-                    </button>
-                  </div>
-
+                  
                   {/* Print-only letterhead */}
                   <div className="hidden print:block p-6">
                     <h1 className="text-2xl font-bold text-gray-900">Enlight Metals Private Limited</h1>

@@ -1988,24 +1988,23 @@ export default function InquiriesPage() {
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <th className="px-3 py-3.5 text-center w-[4%]">#</th>
-              <th className="px-6 py-3.5 text-left w-[25%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[16%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[13%]">Source Channel</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Inquiry Status</th>
-              <th className="px-4 py-3.5 text-center w-[15%]">Deal Status</th>
-              <th className="px-4 py-3.5 text-center w-[13%]">Actions</th>
+              <th className="px-6 py-3.5 text-left w-[28%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[20%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Source Channel</th>
+              <th className="px-4 py-3.5 text-center w-[18%]">Deal Status</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   Loading monthly inquiries...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   No product inquiries found for this period.
                 </td>
               </tr>
@@ -2127,21 +2126,6 @@ export default function InquiriesPage() {
                       {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
                         ? 'Dashboard'
                         : 'WhatsApp'}
-                    </td>
-                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      {isQuoted ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                          Quotation Sent 
-                        </span>
-                      ) : isConfirmed ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                          Saved 
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                          Review
-                        </span>
-                      )}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {dealStageInfo ? (
