@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Layers,
   User,
+  ChevronDown,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -57,6 +58,27 @@ export default function LogsPage() {
           module: moduleFilter === 'All' ? undefined : moduleFilter,
           search: searchQuery.trim() || undefined,
           limit: 300,
+        })
+        .then((r) => {
+          const raw = r?.data;
+          return Array.isArray(raw)
+            ? raw
+            : raw?.data && Array.isArray(raw.data)
+              ? raw.data
+              : [];
+        }),
+  });
+
+  // Fetch count query for all modules across current date filter
+  const { data: allModuleCountsData } = useQuery({
+    queryKey: ['activity-logs-counts', effectivePhone, dateRange],
+    queryFn: () =>
+      activityLogsApi
+        .getAll({
+          salesperson_phone: effectivePhone || undefined,
+          from: fromDate,
+          to: toDate,
+          limit: 500,
         })
         .then((r) => {
           const raw = r?.data;
@@ -137,7 +159,7 @@ export default function LogsPage() {
     }
   };
 
-  // Counts for Module pills
+  // Accurate module counts for the dropdown
   const moduleCounts = useMemo(() => {
     const counts: Record<string, number> = {
       All: 0,
@@ -146,94 +168,94 @@ export default function LogsPage() {
       Visits: 0,
       Complaints: 0,
     };
-    if (activityLogsData && Array.isArray(activityLogsData)) {
-      counts.All = activityLogsData.length;
-      for (const log of activityLogsData) {
+    const list = allModuleCountsData || activityLogsData || [];
+    if (Array.isArray(list)) {
+      counts.All = list.length;
+      for (const log of list) {
         if (log.module && counts[log.module] !== undefined) {
           counts[log.module]++;
         }
       }
     }
     return counts;
-  }, [activityLogsData]);
+  }, [allModuleCountsData, activityLogsData]);
 
   return (
     <div className="space-y-6 w-full animate-fade-in pb-12">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
-            <History className="text-indigo-600" size={28} />
-            Activity Logs
-          </h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <DateFilterControl onChange={setDateRange} initialPreset="30_days" />
-
-          <button
-            onClick={() => refetch()}
-            className="p-2.5 bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors shadow-2xs"
-            title="Refresh Logs"
-          >
-            <RefreshCw size={18} className={isLoading ? 'animate-spin text-indigo-600' : ''} />
-          </button>
-        </div>
+      {/* Header Title */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+          <History className="text-indigo-600" size={28} />
+          Activity Logs
+        </h1>
       </div>
 
-      {/* Controls Bar: Search & Module Filters */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs w-full">
-        {/* Search Input */}
-        <div className="relative flex-1 max-w-md">
-          <Search
-            size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            type="text"
-            placeholder="Search by customer, salesperson, or keyword..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-medium"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
+      {/* Unified Filter & Search Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs w-full">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
+          {/* 1. Search Input */}
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+            <input
+              type="text"
+              placeholder="Search customer, salesperson, or keyword..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500 font-medium placeholder:text-slate-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                title="Clear Search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
 
-        {/* Module Filter Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-          {(['All', 'Inquiries', 'Orders', 'Visits', 'Complaints'] as ModuleFilter[]).map(
-            (mod) => {
-              const isActive = moduleFilter === mod;
-              return (
-                <button
-                  key={mod}
-                  onClick={() => setModuleFilter(mod)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    isActive
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {mod}
-                  {moduleCounts[mod] !== undefined && moduleCounts[mod] > 0 && (
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                        isActive ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      {moduleCounts[mod]}
-                    </span>
-                  )}
-                </button>
-              );
-            },
+          {/* 2. Module Dropdown Filter */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Layers size={14} className="absolute left-3 text-indigo-600 pointer-events-none" />
+            <select
+              value={moduleFilter}
+              onChange={(e) => setModuleFilter(e.target.value as ModuleFilter)}
+              className="w-full sm:w-auto pl-8.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer appearance-none transition-all"
+            >
+              <option value="All">All Modules ({moduleCounts.All})</option>
+              <option value="Inquiries">Inquiries ({moduleCounts.Inquiries})</option>
+              <option value="Orders">Orders ({moduleCounts.Orders})</option>
+              <option value="Visits">Visits ({moduleCounts.Visits})</option>
+              <option value="Complaints">Complaints ({moduleCounts.Complaints})</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 3. Date Filter Control */}
+          <DateFilterControl onChange={setDateRange} initialPreset="30_days" />
+
+          {/* 4. Refresh Button */}
+          <button
+            onClick={() => refetch()}
+            className="px-2.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer flex items-center justify-center"
+            title="Refresh Logs"
+          >
+            <RefreshCw size={15} className={isLoading ? 'animate-spin text-indigo-600' : ''} />
+          </button>
+
+          {/* 5. Clear Filter Button (when active) */}
+          {(searchQuery || moduleFilter !== 'All') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setModuleFilter('All');
+              }}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+            >
+              Clear Filter
+            </button>
           )}
         </div>
       </div>
