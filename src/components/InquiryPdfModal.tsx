@@ -278,7 +278,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               PI
             </div>
             <div>
-              <h3 className="font-bold text-white text-sm leading-tight">Proforma Invoice Preview</h3>
+              <h3 className="font-bold text-white text-sm leading-tight">Invoice Preview</h3>
               <p className="text-xs text-slate-400">PI Number: {piNumber} • {details.companyName || 'Quotation'}</p>
             </div>
           </div>
@@ -349,12 +349,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               </div>
 
               {/* Right: Proforma Invoice & PI Number */}
-              <div className="text-right">
-                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Proforma Invoice</h1>
-                <p className="text-slate-700 text-[13px] font-semibold mt-1.5">
-                  PI Number# <span className="text-slate-900">{piNumber}</span>
-                </p>
-              </div>
+              
             </div>
 
             {/* Addresses & Supply Section: Bill To, Ship To, Place of Supply (Left) & Order Date, Salesperson (Right) */}
