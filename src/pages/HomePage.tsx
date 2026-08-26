@@ -494,10 +494,7 @@ export default function HomePage() {
   }, [safeOrders, currentMonthIdx]);
 
   const maxTonnageForChart = Math.max(...monthlyStats.map(s => s.tonnage), 10);
-  const peakMonth = monthlyStats.reduce(
-    (max, curr) => (curr.tonnage > max.tonnage ? curr : max),
-    monthlyStats[currentMonthIdx] || { month: 'Aug', tonnage: totalDeliveredTonnage },
-  );
+
 
   const { chartPoints, linePath, areaPath, yTicks } = useMemo(() => {
     const padLeft = 45;
@@ -587,7 +584,7 @@ export default function HomePage() {
   }, [canManageTeam, safeEmployees, safeOrders, safeVisits, safeComplaints]);
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   // ── Curated Action Carousel (3-colour palette: Blue, Emerald, Indigo) ──
   const curatedActionItems: CarouselItem[] = useMemo(() => {
@@ -894,18 +891,9 @@ export default function HomePage() {
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                Your Action Feed &amp; Opportunities
+                Your Action Feed
               </h2>
-              <p className="text-xs text-slate-500">
-                Prioritized quote follow-ups, overdue reorders, pending complaints, and field actions
-              </p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-bold">
-              {curatedActionItems.length} Action{curatedActionItems.length === 1 ? '' : 's'} Due
-            </span>
           </div>
         </div>
 
@@ -1038,9 +1026,6 @@ export default function HomePage() {
                 Delivered volume output grouped by calendar month for 2026
               </p>
             </div>
-            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
-              2026 Volume Overview
-            </span>
           </div>
 
           <div className="relative w-full h-64 flex flex-col justify-end pt-2">
@@ -1143,13 +1128,12 @@ export default function HomePage() {
                       cx={pt.x}
                       cy={pt.y}
                       r={isHovered ? 5.5 : pt.tonnage > 0 ? 3.5 : 2}
-                      className={`transition-all duration-150 pointer-events-none ${
-                        isHovered
-                          ? 'fill-blue-600 stroke-white stroke-2 shadow-md'
-                          : pt.tonnage > 0
+                      className={`transition-all duration-150 pointer-events-none ${isHovered
+                        ? 'fill-blue-600 stroke-white stroke-2 shadow-md'
+                        : pt.tonnage > 0
                           ? 'fill-blue-600 stroke-blue-100 stroke-1'
                           : 'fill-slate-300'
-                      }`}
+                        }`}
                     />
 
                     {/* X-axis Month Label */}
@@ -1157,9 +1141,8 @@ export default function HomePage() {
                       x={pt.x}
                       y={192}
                       textAnchor="middle"
-                      className={`text-[10px] font-bold transition-colors pointer-events-none ${
-                        isHovered ? 'fill-blue-600' : 'fill-slate-400'
-                      }`}>
+                      className={`text-[10px] font-bold transition-colors pointer-events-none ${isHovered ? 'fill-blue-600' : 'fill-slate-400'
+                        }`}>
                       {pt.month}
                     </text>
                   </g>
@@ -1171,9 +1154,6 @@ export default function HomePage() {
           <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
             <span className="flex items-center gap-2 font-bold text-slate-700">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> Monthly Confirmed Deliveries (MT)
-            </span>
-            <span className="font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
-              Peak Month: {peakMonth.month} ({formatTonnage(peakMonth.tonnage)} MT)
             </span>
           </div>
         </div>
@@ -1226,10 +1206,6 @@ export default function HomePage() {
             )}
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Volume Share</span>
-            <span className="font-bold text-slate-700">Top Buying Accounts</span>
-          </div>
         </div>
 
       </div>
