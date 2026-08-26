@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,8 +21,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   ArrowRight,
   Sparkles,
@@ -37,13 +35,7 @@ import {
 interface CarouselItem {
   id: string;
   category: string;
-  categoryColor: string;
-  cardBg: string;
-  iconBg: string;
-  btnBg: string;
   title: string;
-  subtitle: string;
-  actionText: string;
   link: string;
   icon: React.ElementType;
 }
@@ -72,8 +64,6 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { employee, effectivePhone, isAdmin, isSalesManager, setViewingAs } = useAuth();
   const canManageTeam = isSalesManager || isAdmin;
-
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
   const [dayPreset, setDayPreset] = useState('this_month');
@@ -539,104 +529,66 @@ export default function HomePage() {
   const curatedActionItems: CarouselItem[] = useMemo(() => {
     const items: CarouselItem[] = [];
 
-    // 1. Quote Follow-up — Blue
+    // 1. Quote Follow-up
     const quotedDeals = safeDeals.filter(d => d.stage === 'quoted' || d.stage === 'sent_to_party');
     if (quotedDeals.length > 0) {
-      const first = quotedDeals[0];
-      const firstTonnage = getOrderTonnage(first);
       items.push({
         id: 'action-quote-followup',
         category: 'Quote Follow-up',
-        categoryColor: 'bg-blue-200/80 text-blue-900 border border-blue-300/80',
-        cardBg: 'bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400',
-        iconBg: 'bg-blue-600 text-white shadow-xs',
-        btnBg: 'bg-blue-600 hover:bg-blue-700 text-white',
         title: quotedDeals.length === 1 ? '1 quote needs follow-up' : `${quotedDeals.length} quotes need follow-up`,
-        subtitle: `${first.customer_name || 'Client'} · ${firstTonnage > 0 ? `${firstTonnage} MT pending customer approval` : 'Quotation pending customer confirmation'}`,
-        actionText: 'View Pipeline →',
         link: '/pipeline',
         icon: Clock,
       });
     }
 
-    // 2. Reorder Window / Dormant Client — Blue
+    // 2. Reorder Window / Dormant Client
     const overdueCustomers = safeCustomers.filter(c => {
       if (!c.days_since_last_order) return false;
       const interval = Number(c.avg_order_interval_days) || 30;
       return c.days_since_last_order > interval || c.churn_risk === 'high' || c.churn_risk === 'medium';
     });
     if (overdueCustomers.length > 0) {
-      const first = overdueCustomers[0];
       items.push({
         id: 'action-reorder',
         category: 'Reorder Window',
-        categoryColor: 'bg-blue-200/80 text-blue-900 border border-blue-300/80',
-        cardBg: 'bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400',
-        iconBg: 'bg-blue-600 text-white shadow-xs',
-        btnBg: 'bg-blue-600 hover:bg-blue-700 text-white',
         title: overdueCustomers.length === 1 ? '1 customer overdue for reorder' : `${overdueCustomers.length} customers overdue for reorder`,
-        subtitle: `${first.customer_name} · ${first.days_since_last_order} days without order (exceeded ${first.avg_order_interval_days || 30}d cycle)`,
-        actionText: 'View Customers →',
         link: '/customers',
         icon: Package,
       });
     }
 
-    // 3. Pending Complaints — Indigo
+    // 3. Pending Complaints
     if (openComplaints.length > 0) {
-      const first = openComplaints[0];
       const countPending = openComplaints.length;
       items.push({
         id: 'action-complaints',
         category: 'Pending Complaints',
-        categoryColor: 'bg-indigo-200/80 text-indigo-900 border border-indigo-300/80',
-        cardBg: 'bg-indigo-50/80 border-2 border-indigo-200/90 hover:border-indigo-400',
-        iconBg: 'bg-indigo-600 text-white shadow-xs',
-        btnBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
         title: `${countPending} pending complaint${countPending > 1 ? 's' : ''} need resolution`,
-        subtitle: `${countPending} ticket(s) open · ${first.customer_name || 'Customer'}`,
-        actionText: 'View Complaints →',
         link: '/complaints',
         icon: AlertTriangle,
       });
     }
 
-    // 4. Follow-ups Due — Emerald
+    // 4. Follow-ups Due
     const visitsWithFollowup = safeVisits.filter(
       v => (v.follow_up_action || v.follow_up || v.followup || '').trim().length > 0,
     );
     if (visitsWithFollowup.length > 0) {
-      const first = visitsWithFollowup[0];
-      const fuText = first.follow_up_action || first.follow_up || first.followup;
       items.push({
         id: 'action-visit-followups',
         category: 'Follow-ups Due',
-        categoryColor: 'bg-emerald-200/80 text-emerald-900 border border-emerald-300/80',
-        cardBg: 'bg-emerald-50/80 border-2 border-emerald-200/90 hover:border-emerald-400',
-        iconBg: 'bg-emerald-600 text-white shadow-xs',
-        btnBg: 'bg-emerald-600 hover:bg-emerald-700 text-white',
         title: visitsWithFollowup.length === 1 ? '1 visit follow-up due' : `${visitsWithFollowup.length} visit follow-ups due`,
-        subtitle: `${first.customer_name}: ${fuText}`,
-        actionText: 'View Visits →',
         link: '/visits',
         icon: MapPin,
       });
     }
 
-    // 5. AI Extractions — Indigo
+    // 5. AI Extractions
     if (safeReviewQueue.length > 0) {
-      const first = safeReviewQueue[0];
-      const clientName = first.sender_name || first.customer_name || first.company_name || 'Customer';
       items.push({
         id: 'action-ai-review',
         category: 'AI Extractions',
-        categoryColor: 'bg-indigo-200/80 text-indigo-900 border border-indigo-300/80',
-        cardBg: 'bg-indigo-50/80 border-2 border-indigo-200/90 hover:border-indigo-400',
-        iconBg: 'bg-indigo-600 text-white shadow-xs',
-        btnBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
         title: safeReviewQueue.length === 1 ? '1 AI extraction awaiting review' : `${safeReviewQueue.length} AI extractions awaiting review`,
-        subtitle: `${clientName} · WhatsApp PO auto-parsed and ready to convert to quotation`,
-        actionText: 'Review AI POs →',
         link: '/inquiries',
         icon: Sparkles,
       });
@@ -644,14 +596,6 @@ export default function HomePage() {
 
     return items;
   }, [safeDeals, safeCustomers, openComplaints, safeVisits, safeReviewQueue]);
-
-  // Horizontal Scroll Handlers
-  const handleScrollLeft = () => {
-    if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ left: -360, behavior: 'smooth' });
-  };
-  const handleScrollRight = () => {
-    if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ left: 360, behavior: 'smooth' });
-  };
 
   return (
     <div className="space-y-6 font-sans">
@@ -784,7 +728,9 @@ export default function HomePage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
 
         {/* Card 1: Delivered Tonnage — Blue Hero */}
-        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white rounded-xl p-4 sm:p-5 shadow-sm shadow-blue-600/25 flex flex-col justify-between min-h-[145px] relative overflow-hidden group hover:shadow-md transition-all">
+        <div
+          onClick={() => navigate('/orders')}
+          className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white rounded-xl p-4 sm:p-5 shadow-sm shadow-blue-600/25 flex flex-col justify-between min-h-[145px] relative overflow-hidden group hover:shadow-md transition-all cursor-pointer">
           <div className="flex items-center justify-between relative z-10">
             <p className="text-[11px] font-bold text-blue-100 uppercase tracking-wider">
               {canManageTeam ? 'Team Tonnage' : 'Delivered Tonnage'}
@@ -806,7 +752,9 @@ export default function HomePage() {
         </div>
 
         {/* Card 2: Won Orders — Blue Soft */}
-        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
+        <div
+          onClick={() => navigate('/orders')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
           <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
             <ShoppingBag size={18} />
           </div>
@@ -821,7 +769,9 @@ export default function HomePage() {
         </div>
 
         {/* Card 3: Customer Visits — Blue Soft */}
-        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
+        <div
+          onClick={() => navigate('/visits')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
           <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
             <MapPin size={18} />
           </div>
@@ -836,7 +786,9 @@ export default function HomePage() {
         </div>
 
         {/* Card 4: New Customers — Blue Soft */}
-        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
+        <div
+          onClick={() => navigate('/customers')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
           <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
             <Users size={18} />
           </div>
@@ -851,7 +803,9 @@ export default function HomePage() {
         </div>
 
         {/* Card 5: Complaints — Blue Soft */}
-        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1">
+        <div
+          onClick={() => navigate('/complaints')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1 cursor-pointer">
           <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
             <AlertTriangle size={18} />
           </div>
@@ -885,25 +839,9 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-bold hidden sm:inline mr-1">
+            <span className="text-xs text-slate-500 font-bold">
               {curatedActionItems.length} Action{curatedActionItems.length === 1 ? '' : 's'} Due
             </span>
-            {curatedActionItems.length > 1 && (
-              <>
-                <button
-                  onClick={handleScrollLeft}
-                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
-                  title="Scroll Left">
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  onClick={handleScrollRight}
-                  className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
-                  title="Scroll Right">
-                  <ChevronRight size={16} />
-                </button>
-              </>
-            )}
           </div>
         </div>
 
@@ -916,7 +854,6 @@ export default function HomePage() {
           </div>
         ) : (
           <div
-            ref={scrollContainerRef}
             className="flex items-stretch gap-4 overflow-x-auto pb-2 pt-1 scroll-smooth snap-x snap-mandatory scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
             {curatedActionItems.map(item => {
               const IconComp = item.icon;
@@ -924,38 +861,21 @@ export default function HomePage() {
                 <div
                   key={item.id}
                   onClick={() => navigate(item.link)}
-                  className={`snap-start shrink-0 w-[310px] sm:w-[350px] md:w-[360px] p-5 ${item.cardBg} rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group`}>
-                  <div className="space-y-2.5">
-                    {/* Category badge only (no HIGH/priority badge) */}
-                    <div className="flex items-center">
-                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${item.categoryColor}`}>
-                        {item.category}
-                      </span>
+                  className="snap-start shrink-0 w-[280px] sm:w-[320px] md:w-[350px] p-5 bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400 rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-center gap-2.5 cursor-pointer group">
+                  {/* Top Left: Icon in blue badge + Beside: Category text in increased size */}
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-xs shrink-0">
+                      <IconComp size={18} />
                     </div>
-
-                    <div className="flex items-start gap-3 pt-1">
-                      <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${item.iconBg}`}>
-                        <IconComp size={17} />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-snug">
-                          {item.title}
-                        </h3>
-                        <p className="text-xs text-slate-600 font-medium mt-1 leading-relaxed line-clamp-2">
-                          {item.subtitle}
-                        </p>
-                      </div>
-                    </div>
+                    <span className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-tight">
+                      {item.category}
+                    </span>
                   </div>
 
-                  {/* Bottom bar: action button only (no "Quick Action" label) */}
-                  <div className="pt-3.5 mt-3 border-t border-slate-200/70 flex items-center justify-end">
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 ${item.btnBg} rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 group-hover:translate-x-0.5 cursor-pointer`}>
-                      <span>{item.actionText}</span>
-                    </button>
-                  </div>
+                  {/* Below: Action Card Title with increased font */}
+                  <h3 className="text-sm sm:text-base font-semibold text-slate-700 leading-snug">
+                    {item.title}
+                  </h3>
                 </div>
               );
             })}

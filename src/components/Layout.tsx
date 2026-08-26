@@ -3,7 +3,6 @@ import {
   Home,
   LayoutDashboard,
   Users,
-  TrendingUp,
   FileText,
   BarChart3,
   Menu,
@@ -20,7 +19,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
-  { path: '/home', label: 'Home', icon: Home },
+  { path: '/home', label: 'Dashboard', icon: Home },
   { path: '/assistant', label: 'AI Assistant', icon: Sparkles },
   { path: '/pipeline', label: 'Pipeline', icon: LayoutDashboard },
   { path: '/inquiries', label: 'Inquiries', icon: FileText },
@@ -29,7 +28,6 @@ const navItems = [
   { path: '/visits', label: 'Visits', icon: MapPin },
   { path: '/complaints', label: 'Complaints', icon: AlertTriangle },
   { path: '/intelligence', label: 'Intelligence', icon: Brain },
-  { path: '/kra', label: 'Dashboard', icon: TrendingUp },
   { path: '/logs', label: 'Logs', icon: History },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
 ];
