@@ -135,4 +135,15 @@ export const kbApi = {
   deleteDocument: (id: string) => API.delete(`/chat/kb/documents/${id}`),
 };
 
+export const activityLogsApi = {
+  getAll: (params?: {
+    from?: string;
+    to?: string;
+    module?: string;
+    search?: string;
+    salesperson_phone?: string;
+    limit?: number;
+  }) => API.get('/activity-logs', { params }),
+};
+
 export default API;
