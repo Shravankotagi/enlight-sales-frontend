@@ -620,7 +620,7 @@ export default function HomePage() {
             {/* Refresh */}
             <button
               onClick={handleRefreshAll}
-              className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+              className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
               title="Refresh Dashboard">
               <RefreshCw
                 size={17}
@@ -645,6 +645,16 @@ export default function HomePage() {
               <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
             </div>
 
+            {/* Clear Filter — unified button, matches Visits tab style */}
+            {dayPreset !== 'this_month' && (
+              <button
+                type="button"
+                onClick={handleClearFilter}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+                Clear Filter
+              </button>
+            )}
+
             {/* Log Won Order */}
             <button
               onClick={() => navigate('/orders')}
@@ -656,8 +666,8 @@ export default function HomePage() {
 
           {/* Custom date pickers — expand inline below the button row when active */}
           {showCustomDate && (
-            <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
-              <span className="text-slate-500 font-semibold">From:</span>
+            <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150 w-full">
+              <span className="text-slate-500 font-semibold shrink-0">From:</span>
               <input
                 type="date"
                 value={customFrom}
@@ -665,9 +675,9 @@ export default function HomePage() {
                   setCustomFrom(e.target.value);
                   if (e.target.value && customTo) setDateRange({ preset: 'custom', from: e.target.value, to: customTo });
                 }}
-                className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+                className="flex-1 min-w-0 px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
               />
-              <span className="text-slate-500 font-semibold">To:</span>
+              <span className="text-slate-500 font-semibold shrink-0">To:</span>
               <input
                 type="date"
                 value={customTo}
@@ -675,25 +685,9 @@ export default function HomePage() {
                   setCustomTo(e.target.value);
                   if (customFrom && e.target.value) setDateRange({ preset: 'custom', from: customFrom, to: e.target.value });
                 }}
-                className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+                className="flex-1 min-w-0 px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
               />
-              <button
-                type="button"
-                onClick={handleClearFilter}
-                className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer">
-                Clear
-              </button>
             </div>
-          )}
-
-          {/* Non-custom active filter — quick clear link */}
-          {dayPreset !== 'this_month' && dayPreset !== 'custom' && (
-            <button
-              type="button"
-              onClick={handleClearFilter}
-              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 underline underline-offset-2 cursor-pointer transition-colors">
-              Clear filter
-            </button>
           )}
         </div>
       </div>
