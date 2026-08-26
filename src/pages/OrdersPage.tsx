@@ -65,6 +65,7 @@ interface Order {
   won_at?: string;
   media_urls?: string[];
   deal_items?: DealItem[];
+  raw_text?: string;
 }
 
 interface LineItemDetail {
@@ -75,6 +76,55 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+}
+
+export function formatOrderSourceText(ord?: Order | null): string {
+  if (!ord) return 'No source document or text available for this order.';
+
+  // If raw_text is present, meaningful and not just a document placeholder, return it
+  if (
+    ord.raw_text &&
+    typeof ord.raw_text === 'string' &&
+    ord.raw_text.trim() &&
+    !ord.raw_text.trim().startsWith('[Inquiry Attachment:') &&
+    !ord.raw_text.trim().startsWith('[PO Document:')
+  ) {
+    return ord.raw_text.trim();
+  }
+
+  const lines: string[] = [];
+  if (ord.customer_name) lines.push(`Company: ${ord.customer_name}`);
+  if (ord.customer_phone) lines.push(`Phone: ${ord.customer_phone}`);
+  if (ord.po_number) lines.push(`PO Number: ${ord.po_number}`);
+  if (ord.po_date) lines.push(`PO Date: ${ord.po_date}`);
+  if (ord.delivery_location) lines.push(`Delivery Location: ${ord.delivery_location}`);
+  if (ord.payment_terms) lines.push(`Payment Terms: ${ord.payment_terms}`);
+
+  const items = ord.deal_items || [];
+  if (Array.isArray(items) && items.length > 0) {
+    lines.push('\nLine Items:');
+    items.forEach((item: any, idx: number) => {
+      const name = item.sku_text || item.description || item.name || item.sku || 'Product';
+      const spec = item.dimensions || item.spec || item.specification || '';
+      const qty = item.quantity ?? item.qty ?? 0;
+      const unit = item.unit || 'MT';
+      const rate = Number(item.rate ?? item.unit_price ?? item.quoted_price ?? item.price_per_mt ?? 0);
+      const hsn = item.hsn_code || item.hsn || detectHsnCode(name) || '';
+
+      let itemStr = `${idx + 1}. ${name}`;
+      if (spec) itemStr += ` | Spec: ${spec}`;
+      itemStr += ` | Qty: ${qty} ${unit}`;
+      if (rate > 0) itemStr += ` | Rate: ₹${rate.toLocaleString('en-IN')}/${unit}`;
+      if (hsn) itemStr += ` | (Auto HSN: ${hsn})`;
+      lines.push(itemStr);
+    });
+  }
+
+  if (lines.length === 0) {
+    return 'No source document or text available for this order.';
+  }
+
+  return lines.join('\n');
 }
 
 export function formatDeliveryLocation(raw?: string): string {
@@ -338,8 +388,9 @@ export default function OrdersPage() {
     setCurrentPage(1);
   }, [searchTerm, dateRange]);
 
-  // PO Image Viewer State
+  // PO Image / Text Viewer State
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
+  const [selectedPoOrder, setSelectedPoOrder] = useState<Order | null>(null);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
 
   // Send / Share Modal
@@ -765,28 +816,35 @@ export default function OrdersPage() {
   const totalTonnage = filtered.reduce((sum: number, o: Order) => sum + getOrderTonnage(o), 0);
 
   const handleViewPoDocument = async (ord: Order) => {
+    setSelectedPoOrder(ord);
+
+    // 1. Direct local media check (data URI or http URL)
     let mediaUrl = ord.media_urls?.[0];
     if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
       setPoImageViewerUrl(mediaUrl);
       return;
     }
 
-    const toastId = toast.loading('Loading original PO document...');
+    // 2. Fetch full deal details from database to see if document is stored in deal or linked inquiry
     try {
       const res = await dealsApi.getOne(ord.id);
       const fullDeal = res?.data?.data || res?.data;
-      if (fullDeal && Array.isArray(fullDeal.media_urls) && fullDeal.media_urls.length > 0) {
-        mediaUrl = fullDeal.media_urls[0];
-        setPoImageViewerUrl(mediaUrl || null);
-        toast.dismiss(toastId);
-      } else {
-        toast.dismiss(toastId);
-        toast.error('No original PO document image/PDF attached to this record.');
+      if (fullDeal) {
+        setSelectedPoOrder(prev => ({ ...(prev || ord), ...fullDeal }));
+        if (Array.isArray(fullDeal.media_urls) && fullDeal.media_urls.length > 0) {
+          const dbMedia = fullDeal.media_urls[0];
+          if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
+            setPoImageViewerUrl(dbMedia);
+            return;
+          }
+        }
       }
     } catch (e) {
-      toast.dismiss(toastId);
-      toast.error('Could not load PO document.');
+      console.warn('Could not load deal document attachment from API:', e);
     }
+
+    // 3. If no document attachment, open the structured text viewer without error toast
+    setPoImageViewerUrl(`extracted_preview://${ord.id}`);
   };
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
@@ -1292,53 +1350,80 @@ export default function OrdersPage() {
 
       {poImageViewerUrl && (
         <div
-          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setPoImageViewerUrl(null)}>
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => {
+            setPoImageViewerUrl(null);
+            setSelectedPoOrder(null);
+          }}>
           <div
-            className="relative max-w-5xl w-full max-h-[92vh] bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-2xl overflow-hidden flex flex-col items-center justify-center"
+            className={`relative w-full max-h-[90vh] bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col ${
+              poImageViewerUrl.startsWith('extracted_preview://') ? 'max-w-3xl' : 'max-w-5xl'
+            }`}
             onClick={e => e.stopPropagation()}>
-            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-800 mb-4 px-1">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                <FileText size={16} className="text-blue-400" />
-                Original Purchase Order (PO) Document / WhatsApp Image
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+              <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <FileText size={18} className="text-blue-600" />
+                {poImageViewerUrl.startsWith('extracted_preview://')
+                  ? 'Original Customer Inquiry Message'
+                  : 'Original Purchase Order (PO) Document / WhatsApp Image'}
               </span>
               <button
-                onClick={() => setPoImageViewerUrl(null)}
-                className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 flex items-center gap-1 text-xs font-bold transition-colors">
+                onClick={() => {
+                  setPoImageViewerUrl(null);
+                  setSelectedPoOrder(null);
+                }}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer">
                 <X size={18} /> Close
               </button>
             </div>
 
-            {isPdf(poImageViewerUrl) ? (
+            {poImageViewerUrl.startsWith('extracted_preview://') ? (
+              <div className="w-full space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                  <span>Source Inquiry Text</span>
+                  {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
+                    <span className="font-mono">
+                      Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
+                  {formatOrderSourceText(selectedPoOrder)}
+                </div>
+              </div>
+            ) : isPdf(poImageViewerUrl) ? (
               <iframe
                 src={poImageViewerUrl}
                 title="Purchase Order PDF Document"
-                className="w-full h-[75vh] rounded-2xl bg-white shadow-2xl border border-slate-800"
+                className="w-full h-[72vh] rounded-xl bg-white shadow-inner border border-slate-200"
               />
             ) : (
-              <img
-                src={poImageViewerUrl}
-                alt="Original Purchase Order Document"
-                className="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-2xl bg-slate-950 border border-slate-800"
-                onError={e => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const fallbackDiv = document.getElementById('po-image-fallback-card');
-                  if (fallbackDiv) fallbackDiv.style.display = 'flex';
-                }}
-              />
+              <div className="w-full h-[72vh] flex items-center justify-center bg-slate-50 rounded-xl p-2 overflow-auto border border-slate-200">
+                <img
+                  src={poImageViewerUrl}
+                  alt="Original Purchase Order Document"
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-md bg-white border border-slate-200"
+                  onError={e => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const fallbackDiv = document.getElementById('po-image-fallback-card');
+                    if (fallbackDiv) fallbackDiv.style.display = 'flex';
+                  }}
+                />
+              </div>
             )}
 
             <div
               id="po-image-fallback-card"
               style={{ display: 'none' }}
-              className="flex-col items-center justify-center p-8 text-center bg-slate-900/90 rounded-2xl border border-slate-800 space-y-4 max-w-md my-8">
-              <div className="p-4 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
+              className="flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-4 max-w-md my-8 mx-auto">
+              <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
                 <ImageIcon size={40} />
               </div>
               <div>
-                <h3 className="text-white font-bold text-sm">Purchase Order Document Attachment</h3>
-                <p className="text-slate-400 text-xs mt-1">
+                <h3 className="text-slate-900 font-bold text-sm">Purchase Order Document Attachment</h3>
+                <p className="text-slate-500 text-xs mt-1">
                   Attached Document Processed Live via Gemini Vision
                 </p>
                 <p className="text-slate-500 text-[11px] mt-2 leading-relaxed">
