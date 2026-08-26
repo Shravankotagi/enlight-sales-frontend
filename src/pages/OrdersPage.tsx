@@ -488,41 +488,89 @@ export default function OrdersPage() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. Client-side inline field validation before API call
     if (!formCustomerName.trim()) {
-      toast.error('Please enter Company Name');
+      const el = document.getElementById('form-company-name') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
     if (!formPoNumber.trim()) {
-      toast.error('Please enter PO Number');
+      const el = document.getElementById('form-po-number') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
     if (!formPoDate) {
-      toast.error('Please select PO Date');
+      const el = document.getElementById('form-po-date') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
-    if (!formDeliveryLocation.trim()) {
-      toast.error('Please enter Delivery Location');
-      return;
-    }
+
     if (formLineItems.length === 0) {
-      toast.error('Please add at least one line item');
       return;
     }
 
     for (let i = 0; i < formLineItems.length; i++) {
       const item = formLineItems[i];
       if (!item.sku_text.trim()) {
-        toast.error(`Line Item #${i + 1}: Description & Specifications is required.`);
+        const el = document.getElementById(`form-item-sku-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
         return;
       }
-      if (item.quantity <= 0) {
-        toast.error(`Line Item #${i + 1}: Quantity must be greater than 0.`);
+      if (!item.dimensions?.trim()) {
+        const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
         return;
       }
-      if (item.rate <= 0) {
-        toast.error(`Line Item #${i + 1}: Rate must be greater than 0.`);
+      if (!item.quantity || Number(item.quantity) <= 0) {
+        const el = document.getElementById(`form-item-qty-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
         return;
       }
+      if (!item.rate || Number(item.rate) <= 0) {
+        const el = document.getElementById(`form-item-rate-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+    }
+
+    if (!formDeliveryLocation.trim()) {
+      const el = document.getElementById('form-delivery-location') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
+      return;
+    }
+
+    if (!formPaymentTerms.trim()) {
+      const el = document.getElementById('form-payment-terms') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
+      return;
     }
 
     const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
@@ -1350,6 +1398,7 @@ export default function OrdersPage() {
                   <div className="relative flex items-center">
                     <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
                     <input
+                      id="form-company-name"
                       type="text"
                       required
                       placeholder="Type or select company name..."
@@ -1407,6 +1456,7 @@ export default function OrdersPage() {
                     PO Number <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
+                    id="form-po-number"
                     type="text"
                     required
                     placeholder="e.g. PO-2026-0042"
@@ -1421,6 +1471,7 @@ export default function OrdersPage() {
                     PO Date <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
+                    id="form-po-date"
                     type="date"
                     required
                     value={formPoDate}
@@ -1457,7 +1508,9 @@ export default function OrdersPage() {
                         <td className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input
+                              id={`form-item-sku-${idx}`}
                               type="text"
+                              required
                               value={item.sku_text || ''}
                               onChange={(e) => {
                                 const updated = [...formLineItems];
@@ -1470,7 +1523,9 @@ export default function OrdersPage() {
                             <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
                               <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
                               <input
+                                id={`form-item-spec-${idx}`}
                                 type="text"
+                                required
                                 value={item.dimensions || ''}
                                 onChange={(e) => {
                                   const updated = [...formLineItems];
@@ -1499,8 +1554,11 @@ export default function OrdersPage() {
                         <td className="px-3 py-3.5 border-r border-slate-200">
                           <div className="flex items-center gap-1.5 w-full min-w-[135px]">
                             <input
+                              id={`form-item-qty-${idx}`}
                               type="number"
-                              min="0"
+                              required
+                              min="0.001"
+                              step="any"
                               value={item.quantity === 0 ? '' : item.quantity}
                               onChange={(e) => {
                                 const val = e.target.value;
@@ -1532,8 +1590,11 @@ export default function OrdersPage() {
                         </td>
                         <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
                           <input
+                            id={`form-item-rate-${idx}`}
                             type="number"
-                            min="0"
+                            required
+                            min="0.01"
+                            step="any"
                             value={item.rate === 0 ? '' : item.rate}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -1648,6 +1709,7 @@ export default function OrdersPage() {
                     Delivery Location <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
+                    id="form-delivery-location"
                     type="text"
                     required
                     placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
@@ -1662,7 +1724,9 @@ export default function OrdersPage() {
                     Payment Terms <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
+                    id="form-payment-terms"
                     type="text"
+                    required
                     placeholder="e.g. 30 Days Credit, 100% Advance"
                     value={formPaymentTerms}
                     onChange={e => setFormPaymentTerms(e.target.value)}
