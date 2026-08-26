@@ -389,15 +389,39 @@ export default function ComplaintsPage() {
     }
   };
 
+  // Render Status Badge (no checkmark/clock icons)
+  const renderStatusBadge = (status: string) => {
+    const s = (status || '').toLowerCase();
+    if (s === 'resolved') {
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center justify-center">
+          Resolved
+        </span>
+      );
+    }
+    if (s === 'reopened') {
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800 inline-flex items-center justify-center">
+          Reopened
+        </span>
+      );
+    }
+    return (
+      <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 inline-flex items-center justify-center">
+        Pending
+      </span>
+    );
+  };
+
   // Reopen inside Details Modal
   const handleReopenInModal = async () => {
     if (!selectedComplaint) return;
     try {
       setModalActionLoading(true);
       await complaintsApi.update(selectedComplaint.id, {
-        status: 'reported',
+        status: 'reopened',
       });
-      setSelectedComplaint(prev => (prev ? { ...prev, status: 'reported' } : null));
+      setSelectedComplaint(prev => (prev ? { ...prev, status: 'reopened' } : null));
       toast.success('Complaint reopened!');
       fetchComplaints();
     } catch (err) {
@@ -430,14 +454,18 @@ export default function ComplaintsPage() {
       (c.resolution_notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       repName.toLowerCase().includes(searchTerm.toLowerCase());
 
+    const cStatus = (c.status || 'reported').toLowerCase();
     const matchesStatus =
-      filterStatus === 'all' || (c.status || '').toLowerCase() === filterStatus.toLowerCase();
+      filterStatus === 'all' ||
+      (filterStatus === 'reported' && (cStatus === 'reported' || (cStatus !== 'resolved' && cStatus !== 'reopened'))) ||
+      cStatus === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 
   const totalCount = complaints.length;
   const resolvedCount = complaints.filter(c => c.status === 'resolved').length;
-  const pendingCount = totalCount - resolvedCount;
+  const reopenedCount = complaints.filter(c => c.status === 'reopened').length;
+  const pendingCount = complaints.filter(c => c.status !== 'resolved' && c.status !== 'reopened').length;
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -482,9 +510,9 @@ export default function ComplaintsPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={fetchComplaints}
-            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
             title="Refresh">
-            <RefreshCw size={18} className={loading ? 'animate-spin text-blue-600' : ''} />
+            <RefreshCw size={15} className={loading ? 'animate-spin text-blue-600' : ''} />
           </button>
           <button
             onClick={handleOpenAddModal}
@@ -495,8 +523,8 @@ export default function ComplaintsPage() {
         </div>
       </div>
 
-      {/* Stats Cards (3 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Stats Cards (4 Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-500 font-medium">Total Complaints</p>
@@ -509,21 +537,31 @@ export default function ComplaintsPage() {
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Resolved</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{resolvedCount}</p>
+            <p className="text-xs text-slate-500 font-medium">Pending</p>
+            <p className="text-2xl font-bold text-amber-600 mt-1">{pendingCount}</p>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
-            <CheckCircle2 size={22} />
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
+            <Clock size={22} />
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Pending (Open)</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{pendingCount}</p>
+            <p className="text-xs text-slate-500 font-medium">Reopened</p>
+            <p className="text-2xl font-bold text-rose-600 mt-1">{reopenedCount}</p>
           </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
-            <Clock size={22} />
+          <div className="p-3 bg-rose-50 text-rose-600 rounded-lg">
+            <RefreshCw size={22} />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-500 font-medium">Resolved</p>
+            <p className="text-2xl font-bold text-emerald-600 mt-1">{resolvedCount}</p>
+          </div>
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+            <CheckCircle2 size={22} />
           </div>
         </div>
       </div>
@@ -575,8 +613,9 @@ export default function ComplaintsPage() {
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
               className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all">All Statuses ({complaints.length})</option>
+              <option value="all">All Statuses ({totalCount})</option>
               <option value="reported">Pending ({pendingCount})</option>
+              <option value="reopened">Reopened ({reopenedCount})</option>
               <option value="resolved">Resolved ({resolvedCount})</option>
             </select>
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
@@ -622,7 +661,7 @@ export default function ComplaintsPage() {
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 text-left min-w-[220px]">Customer</th>
-                <th className="px-4 py-3.5 text-left min-w-[160px]">Date</th>
+                <th className="px-4 py-3.5 text-left min-w-[160px]">Date &amp; Time</th>
                 <th className="px-4 py-3.5 text-center min-w-[140px]">Status</th>
               </tr>
             </thead>
@@ -645,7 +684,6 @@ export default function ComplaintsPage() {
               ) : (
                 paginatedComplaints.map((comp, idx) => {
                   const globalIdx = startIndex + idx + 1;
-                  const isResolved = comp.status === 'resolved';
                   const salespersonName = getSalespersonDisplayName(comp);
 
                   return (
@@ -670,15 +708,17 @@ export default function ComplaintsPage() {
                         )}
                       </td>
 
-                      {/* 2. Date */}
+                      {/* 2. Date & Time */}
                       <td className="px-4 py-3.5 text-xs">
                         <div className="font-semibold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
                           <Calendar size={12} className="text-slate-400 shrink-0" />
                           {comp.reported_at
-                            ? new Date(comp.reported_at).toLocaleDateString('en-IN', {
+                            ? new Date(comp.reported_at).toLocaleString('en-IN', {
                               day: 'numeric',
                               month: 'short',
                               year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
                             })
                             : '-'}
                         </div>
@@ -686,15 +726,7 @@ export default function ComplaintsPage() {
 
                       {/* 3. Status */}
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        {isResolved ? (
-                          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
-                            <CheckCircle2 size={12} className="text-emerald-600" /> Resolved
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 inline-flex items-center gap-1">
-                            <Clock size={12} className="text-amber-600" /> Pending
-                          </span>
-                        )}
+                        {renderStatusBadge(comp.status)}
                       </td>
                     </tr>
                   );
@@ -727,8 +759,8 @@ export default function ComplaintsPage() {
                 type="button"
                 onClick={() => setCurrentPage(pageNum)}
                 className={`w-7 h-7 rounded-xl text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${currentPage === pageNum
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-transparent hover:border-slate-200'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border border-transparent hover:border-slate-200'
                   }`}>
                 {pageNum}
               </button>
@@ -754,36 +786,16 @@ export default function ComplaintsPage() {
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">{selectedComplaint.customer_name}</h2>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
-                  <span className="inline-flex items-center gap-1">
-                    <Calendar size={12} />
-                    {selectedComplaint.reported_at
-                      ? new Date(selectedComplaint.reported_at).toLocaleString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                      : 'Recent'}
-                  </span>
-                  {canViewSalesperson && (
-                    <span>• Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedComplaint)}</strong></span>
-                  )}
-                </div>
+                {canViewSalesperson && (
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedComplaint)}</strong>
+                  </p>
+                )}
               </div>
 
               {/* Status Badge beside single Close Button */}
               <div className="flex items-center gap-3 shrink-0">
-                {selectedComplaint.status === 'resolved' ? (
-                  <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
-                    <CheckCircle2 size={12} className="text-emerald-600" /> Resolved
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 inline-flex items-center gap-1">
-                    <Clock size={12} className="text-amber-600" /> Pending
-                  </span>
-                )}
+                {renderStatusBadge(selectedComplaint.status)}
 
                 <button
                   onClick={() => setSelectedComplaint(null)}
@@ -810,7 +822,7 @@ export default function ComplaintsPage() {
                 <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
                   <p className="text-xs font-medium text-slate-400 mb-1">Affected Product</p>
                   <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                    <Package size={15} className="text-slate-400 shrink-0" />
+                    <Package size={15} className="text-blue-600 shrink-0" />
                     {selectedComplaint.affected_product}
                   </div>
                 </div>
@@ -927,16 +939,19 @@ export default function ComplaintsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Complaint Type <span className="text-rose-500">*</span></label>
-                    <select
-                      value={editType}
-                      onChange={e => setEditType(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
-                      <option value="Quality Defect">Quality Defect</option>
-                      <option value="Physical Damage">Physical Damage</option>
-                      <option value="Billing Mismatch">Billing Mismatch</option>
-                      <option value="Delivery Delay">Delivery Delay</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <div className="relative flex items-center">
+                      <select
+                        value={editType}
+                        onChange={e => setEditType(e.target.value)}
+                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                        <option value="Quality Defect">Quality Defect</option>
+                        <option value="Physical Damage">Physical Damage</option>
+                        <option value="Billing Mismatch">Billing Mismatch</option>
+                        <option value="Delivery Delay">Delivery Delay</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
                   </div>
 
                   <div>
@@ -965,13 +980,17 @@ export default function ComplaintsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Status <span className="text-rose-500">*</span></label>
-                    <select
-                      value={editStatus}
-                      onChange={e => setEditStatus(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
-                      <option value="reported">Pending (Open)</option>
-                      <option value="resolved">Resolved (Closed)</option>
-                    </select>
+                    <div className="relative flex items-center">
+                      <select
+                        value={editStatus}
+                        onChange={e => setEditStatus(e.target.value)}
+                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                        <option value="reported">Pending (Open)</option>
+                        <option value="reopened">Reopened</option>
+                        <option value="resolved">Resolved (Closed)</option>
+                      </select>
+                      <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
                   </div>
 
                   <div>
@@ -1045,19 +1064,22 @@ export default function ComplaintsPage() {
                     <label className="block font-semibold text-slate-700 mb-1">
                       Complaint Type <span className="text-rose-500">*</span>
                     </label>
-                    <select
-                      value={formType}
-                      onChange={e => {
-                        setFormType(e.target.value);
-                        if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
-                      }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer">
-                      <option value="Quality Defect">Quality Defect</option>
-                      <option value="Physical Damage">Physical Damage</option>
-                      <option value="Billing Mismatch">Billing Mismatch</option>
-                      <option value="Delivery Delay">Delivery Delay</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <div className="relative flex items-center">
+                      <select
+                        value={formType}
+                        onChange={e => {
+                          setFormType(e.target.value);
+                          if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
+                        }}
+                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                        <option value="Quality Defect">Quality Defect</option>
+                        <option value="Physical Damage">Physical Damage</option>
+                        <option value="Billing Mismatch">Billing Mismatch</option>
+                        <option value="Delivery Delay">Delivery Delay</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
                   </div>
 
                   <div>
@@ -1097,16 +1119,19 @@ export default function ComplaintsPage() {
                     <label className="block font-semibold text-slate-700 mb-1">
                       Initial Status <span className="text-rose-500">*</span>
                     </label>
-                    <select
-                      value={formStatus}
-                      onChange={e => {
-                        setFormStatus(e.target.value);
-                        if (formErrors.status) setFormErrors(prev => ({ ...prev, status: false }));
-                      }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer">
-                      <option value="reported">Pending (Open)</option>
-                      <option value="resolved">Resolved (Closed)</option>
-                    </select>
+                    <div className="relative flex items-center">
+                      <select
+                        value={formStatus}
+                        onChange={e => {
+                          setFormStatus(e.target.value);
+                          if (formErrors.status) setFormErrors(prev => ({ ...prev, status: false }));
+                        }}
+                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                        <option value="reported">Pending (Open)</option>
+                        <option value="resolved">Resolved (Closed)</option>
+                      </select>
+                      <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
                   </div>
 
                   {formStatus === 'resolved' && (
