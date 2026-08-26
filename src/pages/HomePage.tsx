@@ -807,72 +807,60 @@ export default function HomePage() {
 
         {/* Card 2: Won Orders — Blue Soft */}
         <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-blue-900/70 uppercase tracking-wider">Won Orders</p>
-            <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs shrink-0">
-              <ShoppingBag size={18} />
-            </div>
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
+            <ShoppingBag size={18} />
           </div>
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-blue-950 tracking-tight leading-none">
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                 {totalWonOrdersCount}
               </p>
-              <span className="text-xs font-bold text-blue-700">Orders</span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Won Orders</span>
             </div>
           </div>
         </div>
 
-        {/* Card 3: Customer Visits — Emerald */}
-        <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-emerald-900/70 uppercase tracking-wider">Customer Visits</p>
-            <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs shrink-0">
-              <MapPin size={18} />
-            </div>
+        {/* Card 3: Customer Visits — Blue Soft */}
+        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
+            <MapPin size={18} />
           </div>
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-emerald-950 tracking-tight leading-none">
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                 {totalVisitsCount}
               </p>
-              <span className="text-xs font-bold text-emerald-700">Visits</span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Customer Visits</span>
             </div>
           </div>
         </div>
 
-        {/* Card 4: New Customers — Indigo */}
-        <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">New Customers</p>
-            <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
-              <Users size={18} />
-            </div>
+        {/* Card 4: New Customers — Blue Soft */}
+        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px]">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
+            <Users size={18} />
           </div>
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight leading-none">
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                 {newCustomersCount}
               </p>
-              <span className="text-xs font-bold text-indigo-700">Customers</span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">New Customers</span>
             </div>
           </div>
         </div>
 
-        {/* Card 5: Complaints — Indigo, "Pending" language */}
-        <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider">Complaints</p>
-            <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
-              <AlertTriangle size={18} />
-            </div>
+        {/* Card 5: Complaints — Blue Soft */}
+        <div className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
+            <AlertTriangle size={18} />
           </div>
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight leading-none">
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                 {openComplaints.length}
               </p>
-              <span className="text-xs font-bold text-indigo-700">Pending</span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Complaints</span>
             </div>
           </div>
         </div>
