@@ -30,6 +30,8 @@ import {
   Trophy,
   Building2,
   Calendar,
+  Search,
+  X,
 } from 'lucide-react';
 
 interface CarouselItem {
@@ -55,6 +57,17 @@ interface DateRange {
   year?: number;
 }
 
+interface SearchResult {
+  id: string;
+  type: 'Customer' | 'Order' | 'Quote';
+  label: string;
+  sublabel: string;
+  link: string;
+  Icon: React.ElementType;
+  iconBg: string;
+  typeBg: string;
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const { employee, effectivePhone, isAdmin, isSalesManager, setViewingAs } = useAuth();
@@ -67,6 +80,10 @@ export default function HomePage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [showCustomDate, setShowCustomDate] = useState(false);
+
+  // ── Global Search State ───────────────────────────────────────────────────
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const [dateRange, setDateRange] = useState<DateRange>({
     preset: 'this_month',
@@ -240,6 +257,79 @@ export default function HomePage() {
   const safeEmployees: any[] = Array.isArray(employeesData) ? employeesData : [];
   const safeReviewQueue: any[] = Array.isArray(reviewQueueData) ? reviewQueueData : [];
   const safeCustomers: any[] = Array.isArray(churnData) ? churnData : [];
+
+  // ── Global Quick-Search Results ───────────────────────────────────────────
+  const searchResults = useMemo((): SearchResult[] => {
+    const q = globalSearch.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const results: SearchResult[] = [];
+
+    // Orders — match customer_name or po_number
+    safeOrders.forEach(o => {
+      if (
+        (o.customer_name || '').toLowerCase().includes(q) ||
+        (o.po_number || '').toLowerCase().includes(q)
+      ) {
+        results.push({
+          id: `order-${o.id}`,
+          type: 'Order',
+          label: o.customer_name || 'Order',
+          sublabel: `Won Order · ${o.po_number || 'No PO#'}`,
+          link: '/orders',
+          Icon: ShoppingBag,
+          iconBg: 'bg-blue-100 text-blue-600',
+          typeBg: 'bg-blue-100 text-blue-700',
+        });
+      }
+    });
+
+    // Deals / Quotes — match customer_name or product_name
+    safeDeals.forEach(d => {
+      if (
+        (d.customer_name || '').toLowerCase().includes(q) ||
+        (d.product_name || '').toLowerCase().includes(q)
+      ) {
+        results.push({
+          id: `deal-${d.id}`,
+          type: 'Quote',
+          label: d.customer_name || 'Quote',
+          sublabel: `${d.stage || 'Pipeline'} · ${d.product_name || 'Steel'}`,
+          link: '/pipeline',
+          Icon: Package,
+          iconBg: 'bg-indigo-100 text-indigo-600',
+          typeBg: 'bg-indigo-100 text-indigo-700',
+        });
+      }
+    });
+
+    // Customers — from churn/reorder list
+    safeCustomers.forEach(c => {
+      const name = c.customer_name || c.name || '';
+      if (name.toLowerCase().includes(q)) {
+        results.push({
+          id: `customer-${c.id || name}`,
+          type: 'Customer',
+          label: name,
+          sublabel: c.days_since_last_order
+            ? `Last order ${c.days_since_last_order}d ago`
+            : 'Active customer',
+          link: '/customers',
+          Icon: Users,
+          iconBg: 'bg-emerald-100 text-emerald-600',
+          typeBg: 'bg-emerald-100 text-emerald-700',
+        });
+      }
+    });
+
+    // Deduplicate by label+type and cap at 8
+    const seen = new Set<string>();
+    return results.filter(r => {
+      const key = `${r.type}-${r.label}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 8);
+  }, [globalSearch, safeOrders, safeDeals, safeCustomers]);
 
   // ── Steel sheet weight formula for NOS/PCS items ──────────────────────────
   // Weight (kg) = L(m) × W(m) × T(mm) × 8 × count
@@ -566,63 +656,95 @@ export default function HomePage() {
   return (
     <div className="space-y-6 font-sans">
 
-      {/* ── Top Header Bar ──────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+      {/* ── Greeting ────────────────────────────────────────────────── */}
+      <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+        {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}
+      </h1>
 
-        {/* Greeting only */}
-        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-          {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}
-        </h1>
+      {/* ── Nav Bar ─────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
 
-        {/* Filter pill — Refresh · Date dropdown · Clear Filter */}
-        <div className="flex flex-col items-end gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
-
-          {/* Controls row */}
-          <div className="flex flex-wrap items-center gap-2">
-
-            {/* Refresh */}
+        {/* Left: Global Quick-Search */}
+        <div className="relative flex-1 max-w-sm">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={globalSearch}
+            onChange={e => setGlobalSearch(e.target.value)}
+            onFocus={() => setShowSearchResults(true)}
+            onBlur={() => setTimeout(() => setShowSearchResults(false), 150)}
+            placeholder="Search customers, orders, quotes..."
+            className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all placeholder:text-slate-400 font-medium"
+          />
+          {globalSearch && (
             <button
-              onClick={handleRefreshAll}
-              className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
-              title="Refresh Dashboard">
-              <RefreshCw
-                size={17}
-                className={dashLoading || actionLoading || ordersLoading ? 'animate-spin text-blue-600' : ''}
-              />
+              type="button"
+              onClick={() => { setGlobalSearch(''); setShowSearchResults(false); }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+              title="Clear search">
+              <X size={13} />
             </button>
-
-            {/* Date Filter */}
-            <div className="relative inline-flex items-center">
-              <Calendar size={13} className="absolute left-2.5 text-blue-600 pointer-events-none" />
-              <select
-                value={dayPreset}
-                onChange={e => handleDayPresetChange(e.target.value)}
-                className="pl-7 pr-7 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="today">Today</option>
-                <option value="7_days">Last 7 Days</option>
-                <option value="30_days">Last 30 Days</option>
-                <option value="90_days">Last 90 Days</option>
-                <option value="this_month">This Month</option>
-                <option value="custom">Custom Range</option>
-              </select>
-              <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
+          )}
+          {/* Search results dropdown */}
+          {showSearchResults && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
+              {searchResults.map(result => (
+                <button
+                  key={result.id}
+                  type="button"
+                  onMouseDown={() => { navigate(result.link); setGlobalSearch(''); setShowSearchResults(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors border-b border-slate-100 last:border-0">
+                  <div className={`p-1.5 rounded-lg shrink-0 ${result.iconBg}`}>
+                    <result.Icon size={13} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-800 truncate">{result.label}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{result.sublabel}</p>
+                  </div>
+                  <span className={`ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${result.typeBg}`}>
+                    {result.type}
+                  </span>
+                </button>
+              ))}
             </div>
+          )}
+        </div>
 
-            {/* Clear Filter — shown whenever filter is not at default */}
-            {dayPreset !== 'this_month' && (
-              <button
-                type="button"
-                onClick={handleClearFilter}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
-                Clear Filter
-              </button>
-            )}
+        {/* Right: Refresh · Date filter · Custom date inputs (inline) · Clear Filter */}
+        <div className="flex items-center gap-2 shrink-0">
+
+          {/* Refresh */}
+          <button
+            onClick={handleRefreshAll}
+            className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            title="Refresh Dashboard">
+            <RefreshCw
+              size={17}
+              className={dashLoading || actionLoading || ordersLoading ? 'animate-spin text-blue-600' : ''}
+            />
+          </button>
+
+          {/* Date Filter dropdown */}
+          <div className="relative inline-flex items-center">
+            <Calendar size={13} className="absolute left-2.5 text-blue-600 pointer-events-none" />
+            <select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              className="pl-7 pr-7 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="this_month">This Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* Custom date pickers — expand inline below when active */}
+          {/* Custom date inputs — inline in the same row when Custom Range is active */}
           {showCustomDate && (
-            <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150 w-full">
-              <span className="text-slate-500 font-semibold shrink-0">From:</span>
+            <>
+              <span className="text-slate-400 text-xs font-semibold shrink-0">From:</span>
               <input
                 type="date"
                 value={customFrom}
@@ -630,9 +752,9 @@ export default function HomePage() {
                   setCustomFrom(e.target.value);
                   if (e.target.value && customTo) setDateRange({ preset: 'custom', from: e.target.value, to: customTo });
                 }}
-                className="flex-1 min-w-0 px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+                className="px-2 py-1.5 bg-white border border-slate-300 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
               />
-              <span className="text-slate-500 font-semibold shrink-0">To:</span>
+              <span className="text-slate-400 text-xs font-semibold shrink-0">To:</span>
               <input
                 type="date"
                 value={customTo}
@@ -640,12 +762,23 @@ export default function HomePage() {
                   setCustomTo(e.target.value);
                   if (customFrom && e.target.value) setDateRange({ preset: 'custom', from: customFrom, to: e.target.value });
                 }}
-                className="flex-1 min-w-0 px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+                className="px-2 py-1.5 bg-white border border-slate-300 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
               />
-            </div>
+            </>
+          )}
+
+          {/* Clear Filter */}
+          {dayPreset !== 'this_month' && (
+            <button
+              type="button"
+              onClick={handleClearFilter}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+              Clear Filter
+            </button>
           )}
         </div>
       </div>
+
 
       {/* ── 5 Stat Cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
