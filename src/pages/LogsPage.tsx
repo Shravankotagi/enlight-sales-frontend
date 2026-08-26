@@ -25,6 +25,7 @@ export default function LogsPage() {
   const { effectivePhone } = useAuth();
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [resetKey, setResetKey] = useState(0);
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: '30_days',
     from: getDaysAgo(30),
@@ -89,6 +90,17 @@ export default function LogsPage() {
               : [];
         }),
   });
+
+  const handleClearAllFilters = () => {
+    setSearchQuery('');
+    setModuleFilter('All');
+    setDateRange({
+      preset: '30_days',
+      from: getDaysAgo(30),
+      to: formatLocalDate(),
+    });
+    setResetKey((prev) => prev + 1);
+  };
 
   const getModuleBadge = (mod: string) => {
     switch (mod) {
@@ -190,15 +202,15 @@ export default function LogsPage() {
         </h1>
       </div>
 
-      {/* Unified Filter & Search Bar */}
+      {/* Filter & Search Bar - Compact Single Row Matching Inquiries */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs w-full">
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
-          {/* 1. Search Input */}
-          <div className="relative flex-1 min-w-[240px] max-w-md">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* 1. Compact Search Bar (w-full sm:w-64) */}
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
             <input
               type="text"
-              placeholder="Search customer, salesperson, or keyword..."
+              placeholder="Search Customer, Rep, Action..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500 font-medium placeholder:text-slate-400"
@@ -223,7 +235,7 @@ export default function LogsPage() {
               onChange={(e) => setModuleFilter(e.target.value as ModuleFilter)}
               className="w-full sm:w-auto pl-8.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer appearance-none transition-all"
             >
-              <option value="All">All Modules ({moduleCounts.All})</option>
+              <option value="All">All ({moduleCounts.All})</option>
               <option value="Inquiries">Inquiries ({moduleCounts.Inquiries})</option>
               <option value="Orders">Orders ({moduleCounts.Orders})</option>
               <option value="Visits">Visits ({moduleCounts.Visits})</option>
@@ -233,9 +245,25 @@ export default function LogsPage() {
           </div>
 
           {/* 3. Date Filter Control */}
-          <DateFilterControl onChange={setDateRange} initialPreset="30_days" />
+          <DateFilterControl
+            onChange={setDateRange}
+            initialPreset="30_days"
+            value={dateRange}
+            resetKey={resetKey}
+          />
 
-          {/* 4. Refresh Button */}
+          {/* 4. Clear Filter Button */}
+          <button
+            type="button"
+            onClick={handleClearAllFilters}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+          >
+            Clear Filter
+          </button>
+        </div>
+
+        {/* Right Side: Refresh Button at the very right in the same line */}
+        <div className="flex items-center gap-2 ml-auto">
           <button
             onClick={() => refetch()}
             className="px-2.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer flex items-center justify-center"
@@ -243,20 +271,6 @@ export default function LogsPage() {
           >
             <RefreshCw size={15} className={isLoading ? 'animate-spin text-indigo-600' : ''} />
           </button>
-
-          {/* 5. Clear Filter Button (when active) */}
-          {(searchQuery || moduleFilter !== 'All') && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setModuleFilter('All');
-              }}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
-            >
-              Clear Filter
-            </button>
-          )}
         </div>
       </div>
 
@@ -278,11 +292,8 @@ export default function LogsPage() {
           </p>
           {(searchQuery || moduleFilter !== 'All') && (
             <button
-              onClick={() => {
-                setSearchQuery('');
-                setModuleFilter('All');
-              }}
-              className="mt-4 px-3.5 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+              onClick={handleClearAllFilters}
+              className="mt-4 px-3.5 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
             >
               Clear search &amp; filters
             </button>
