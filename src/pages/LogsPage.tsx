@@ -302,9 +302,7 @@ export default function LogsPage() {
             <History className="text-indigo-600" size={28} />
             Activity Logs
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            Minimal, searchable activity trail across Inquiries, Orders, Visits, and Complaints.
-          </p>
+          
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
