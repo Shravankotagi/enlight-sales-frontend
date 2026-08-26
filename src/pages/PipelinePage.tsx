@@ -1,23 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsApi } from '../lib/api';
 import { useEffect, useState, useMemo } from 'react';
-import { AlertCircle, IndianRupee, Trash2, RefreshCw, Search, X, ChevronDown } from 'lucide-react';
+import { AlertCircle, IndianRupee, Trash2, RefreshCw, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import DealDetailDrawer from '../components/DealDetailDrawer';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
-const ALL_STAGES = [
+const DEFAULT_STAGES = [
   { key: 'new_inquiry', label: 'New Deals', color: 'bg-amber-50 border-amber-200' },
   { key: 'qualified', label: 'Qualified', color: 'bg-emerald-50 border-emerald-200' },
   { key: 'quoted', label: 'Quoted', color: 'bg-blue-50 border-blue-200' },
   { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
-  { key: 'won', label: 'Won', color: 'bg-emerald-50 border-emerald-200' },
-  { key: 'lost', label: 'Lost', color: 'bg-rose-50 border-rose-200' },
 ];
-
-const DEFAULT_STAGES = ALL_STAGES.slice(0, 4);
 
 const LOST_REASONS = [
   'Price', 'Credit terms', 'Delivery timeline',
@@ -153,7 +149,6 @@ export default function PipelinePage() {
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: '30_days',
     from: getDaysAgo(30),
@@ -221,7 +216,6 @@ export default function PipelinePage() {
 
   const handleClearAllFilters = () => {
     setSearchTerm('');
-    setFilterStatus('all');
     setDateRange({
       preset: '30_days',
       from: getDaysAgo(30),
@@ -255,7 +249,6 @@ export default function PipelinePage() {
 
   const stageCounts = useMemo(() => {
     const counts = {
-      all: filteredDeals.length,
       new_inquiry: 0,
       qualified: 0,
       quoted: 0,
@@ -276,7 +269,7 @@ export default function PipelinePage() {
   }, [filteredDeals]);
 
   const board = useMemo(() => {
-    const stages = ['new_inquiry', 'qualified', 'quoted', 'negotiation', 'won', 'lost'];
+    const stages = ['new_inquiry', 'qualified', 'quoted', 'negotiation'];
     return stages.reduce((acc, st) => {
       acc[st] = filteredDeals.filter((d: any) => {
         const dealStage = (d.stage || 'new_inquiry').toLowerCase().trim();
@@ -288,14 +281,6 @@ export default function PipelinePage() {
       return acc;
     }, {} as Record<string, any[]>);
   }, [filteredDeals]);
-
-  const visibleStages = useMemo(() => {
-    if (filterStatus === 'all') {
-      return DEFAULT_STAGES;
-    }
-    const match = ALL_STAGES.find(s => s.key === filterStatus);
-    return match ? [match] : DEFAULT_STAGES;
-  }, [filterStatus]);
 
   if (isLoading) return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -359,7 +344,7 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      {/* Filter & Search Bar - Matching Inquiries tab */}
+      {/* Filter & Search Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs mb-6">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           {/* 1. Search Bar with Clear (X) Icon */}
@@ -386,25 +371,7 @@ export default function PipelinePage() {
           {/* 2. Unified Date Range Filter */}
           <DateFilterControl onChange={setDateRange} value={dateRange} initialPreset="30_days" />
 
-          {/* 3. Status Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-            >
-              <option value="all">All ({stageCounts.all})</option>
-              <option value="new_inquiry">New Inquiry ({stageCounts.new_inquiry})</option>
-              <option value="qualified">Qualified ({stageCounts.qualified})</option>
-              <option value="quoted">Quoted ({stageCounts.quoted})</option>
-              <option value="negotiation">Negotiation ({stageCounts.negotiation})</option>
-              <option value="won">Won ({stageCounts.won})</option>
-              <option value="lost">Lost ({stageCounts.lost})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* 4. Clear Filter Button */}
+          {/* 3. Clear Filter Button */}
           <button
             type="button"
             onClick={handleClearAllFilters}
@@ -413,7 +380,7 @@ export default function PipelinePage() {
           </button>
         </div>
 
-        {/* 5. Refresh Button */}
+        {/* 4. Refresh Button */}
         <button
           type="button"
           onClick={() => {
@@ -427,8 +394,8 @@ export default function PipelinePage() {
       </div>
 
       {/* Kanban Board */}
-      <div className={`grid gap-4 ${visibleStages.length === 1 ? 'grid-cols-1 max-w-xl mx-auto' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'}`}>
-        {visibleStages.map(({ key, label, color }) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {DEFAULT_STAGES.map(({ key, label, color }) => (
           <div key={key} className={`rounded-xl border-2 ${color} p-3`}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
