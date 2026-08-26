@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { X, Download, Check, Copy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { customersApi, inquiriesApi } from '../lib/api';
-import { calculateQuotationBreakdown, formatIndianCurrency, normalizeUnit } from '../utils/pricingEngine';
+import {
+  calculateQuotationBreakdown,
+  calculateTotalTonnageMt,
+  formatIndianCurrency,
+} from '../utils/pricingEngine';
 
 interface InquiryItem {
   id: string;
@@ -103,10 +107,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   // totalAmount = base pre-GST value; calculate GST breakdown
   const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || details.totalAmount || 0;
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
-
-  const totalQuantity = lineItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-  const distinctUnits = Array.from(new Set(lineItems.map(i => normalizeUnit(i.unit) || 'MT')));
-  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
+  const totalTonnage = calculateTotalTonnageMt(lineItems);
 
   const piNumber = (() => {
     const inq = inquiry as any;
@@ -277,7 +278,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               PI
             </div>
             <div>
-              <h3 className="font-bold text-white text-sm leading-tight">Proforma Invoice Preview</h3>
+              <h3 className="font-bold text-white text-sm leading-tight">Invoice Preview</h3>
               <p className="text-xs text-slate-400">PI Number: {piNumber} • {details.companyName || 'Quotation'}</p>
             </div>
           </div>
@@ -348,12 +349,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               </div>
 
               {/* Right: Proforma Invoice & PI Number */}
-              <div className="text-right">
-                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Proforma Invoice</h1>
-                <p className="text-slate-700 text-[13px] font-semibold mt-1.5">
-                  PI Number# <span className="text-slate-900">{piNumber}</span>
-                </p>
-              </div>
+              
             </div>
 
             {/* Addresses & Supply Section: Bill To, Ship To, Place of Supply (Left) & Order Date, Salesperson (Right) */}
@@ -462,7 +458,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
               <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
                 <div>
-                  <span>Items in Total <strong className="font-bold">{formatIndianCurrency(totalQuantity, true)} {primaryUnit}</strong></span>
+                  <span>Items in Total <strong className="font-bold">{totalTonnage.formattedText}</strong></span>
                 </div>
                 {details.paymentTerms && (
                   <div>

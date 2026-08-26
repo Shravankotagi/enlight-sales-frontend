@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, Edit3, MoreVertical, AlertCircle, Loader2
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, AlertCircle, Loader2
 } from 'lucide-react';
-import { inquiriesApi, customersApi, employeesApi } from '../lib/api';
+import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -16,8 +16,10 @@ import {
   calculateLineItems,
   calculateSubtotal,
   calculateQuotationBreakdown,
+  calculateTotalTonnageMt,
   normalizeUnit,
 } from '../utils/pricingEngine';
+import { detectHsnCode } from '../utils/hsnDetector';
 
 interface InquiryItem {
   id: string;
@@ -506,17 +508,48 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   const totalAmount = unitPrice > 0 ? Math.round(quantityTons * unitPrice) : 0;
 
-  // 7. Delivery Location (Capture full delivery address as stated in text or aiJson)
-  let deliveryLocation = aiJson.delivery_location || aiJson.deliveryLocation || '';
-  if (!deliveryLocation) {
-    const locMatch =
-      textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to|location)\s*[:=-]?\s*([A-Za-z0-9\s,./#&-]+?)(?:\s*(?:payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|before|by|on\s+\d|gst\b)|\n{2,}|$)/i) ||
-      textRaw.match(/(?:delivered\s+(?:to\s+our\s+site\s+in|to\s+site\s+in|to|at)|delivery\s+(?:to|at)|site\s+in|location:?)\s+([A-Za-z0-9\s,./#&-]+?)(?:\s*[:\n]|\s*MS\s|\s*SS\s|\s*TMT\s|\s*HR\s|\s*CR\s|\s+for|\s+before|$)/i) ||
-      textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&-]+?)(?:\s+before|\s+by|\s+on|\s+within|$)/i);
-    if (locMatch && locMatch[1].trim().length > 2) {
-      deliveryLocation = locMatch[1].replace(/^[:\s]+|[:\s]+$/g, '').trim();
+  // Helper to sanitize delivery address and strip any appended field labels or pipe delimiters
+  const cleanDeliveryLocation = (str?: string): string => {
+    if (!str || typeof str !== 'string') return '';
+    let clean = str.replace(/^[•\-\*:\s|]+|[•\-\*:\s|]+$/g, '').trim();
+    if (clean.includes('|')) {
+      clean = clean.split('|')[0].trim();
+    }
+    clean = clean.replace(/\s*(?:payment\s*terms?|payment|terms?|make|brand|preferred\s*make|notes?|remarks?|email|contact|phone)\s*[:=-].*$/i, '').trim();
+    return clean.replace(/^[•\-\*:\s|]+|[•\-\*:\s|]+$/g, '').trim();
+  };
+
+  // 7. Delivery Location (Capture full delivery address without payment terms leakage)
+  let fromJson = cleanDeliveryLocation(aiJson.delivery_location || aiJson.deliveryLocation || '');
+
+  let fromText = '';
+  if (textRaw && typeof textRaw === 'string') {
+    // 1. Line-by-line match for bullet or key-value format (stops strictly at pipe, newline, or next field)
+    const lineMatch =
+      textRaw.match(/(?:^[•\-\*]?\s*(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/im) ||
+      textRaw.match(/(?:(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/i);
+    if (lineMatch && lineMatch[1].trim().length > 2) {
+      fromText = cleanDeliveryLocation(lineMatch[1]);
+    }
+
+    // 2. Multiline block fallback
+    if (!fromText) {
+      const blockMatch =
+        textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to)\s*[:=-]?\s*([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s*(?:\||;|\n{2,}|payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|email|contact|phone|before|by|on\s+\d|gst\b)|$)/i) ||
+        textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s+before|\s+by|\s+on|\s+within|\||$)/i);
+      if (blockMatch && blockMatch[1].trim().length > 2) {
+        fromText = cleanDeliveryLocation(blockMatch[1]);
+      }
     }
   }
+
+  let deliveryLocation = fromJson;
+  if (fromText && fromText.length > fromJson.length) {
+    deliveryLocation = fromText;
+  } else if (!deliveryLocation) {
+    deliveryLocation = fromText;
+  }
+  deliveryLocation = cleanDeliveryLocation(deliveryLocation);
 
   // 8. Delivery Date (Capture target date e.g. "before 25 August" -> "2026-08-25")
   let deliveryDate = aiJson.delivery_date || aiJson.deliveryDate || '';
@@ -563,15 +596,18 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
   const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
-  let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => ({
-    sku_text: item.sku_text || item.description || '',
-    dimensions: item.dimensions || '',
-    hsn_code: item.hsn_code || (item as any).hsn || '',
-    quantity: item.quantity,
-    unit: normalizeUnit(item.unit) || 'MT',
-    rate: item.rate,
-    amount: item.amount,
-  }));
+  let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => {
+    const skuText = item.sku_text || item.description || '';
+    return {
+      sku_text: skuText,
+      dimensions: item.dimensions || '',
+      hsn_code: item.hsn_code || (item as any).hsn || detectHsnCode(skuText) || '',
+      quantity: item.quantity,
+      unit: normalizeUnit(item.unit) || 'MT',
+      rate: item.rate,
+      amount: item.amount,
+    };
+  });
 
   // Fallback: If line items is empty or contains 1 long unstructured blob, parse multi-items directly from text
   if (
@@ -580,15 +616,19 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   ) {
     const multiItems = extractMultiItemsFromText(textRaw);
     if (multiItems.length > 0) {
-      rawLineItems = multiItems;
+      rawLineItems = multiItems.map(m => ({
+        ...m,
+        hsn_code: m.hsn_code || detectHsnCode(m.sku_text) || '',
+      }));
     }
   }
 
   if (rawLineItems.length === 0 && (productType || quantityTons > 0)) {
+    const defaultSku = productType || 'Hot Rolled';
     rawLineItems.push({
-      sku_text: productType || 'Hot Rolled',
+      sku_text: defaultSku,
       dimensions: [thickness, width, length].filter(Boolean).join(' x ') || '',
-      hsn_code: '',
+      hsn_code: detectHsnCode(defaultSku) || '',
       quantity: quantityTons || 0,
       unit: 'MT',
       rate: unitPrice || 0,
@@ -642,6 +682,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { effectivePhone, employee, viewingAs } = useAuth();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -662,6 +703,7 @@ export default function InquiriesPage() {
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [showEditCompanyDropdown, setShowEditCompanyDropdown] = useState(false);
   const [drawerError, setDrawerError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
   const [pdfModalDetails, setPdfModalDetails] = useState<ExtractedDetails | null>(null);
@@ -692,15 +734,30 @@ export default function InquiriesPage() {
   });
 
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [subMenuInqId, setSubMenuInqId] = useState<string | null>(null);
+  const [lostModal, setLostModal] = useState<{ dealId: string; inqId: string; reason: string } | null>(null);
+
+  const LOST_REASONS = [
+    'Price',
+    'Credit terms',
+    'Delivery timeline',
+    'Material unavailable',
+    'Spec mismatch',
+    'Competitor relationship',
+    'Customer silent',
+    'Cancelled by customer',
+  ];
 
   useEffect(() => {
     setCurrentPage(1);
     setOpenActionMenuId(null);
+    setSubMenuInqId(null);
   }, [searchTerm, filterStatus, dateRange]);
 
   useEffect(() => {
     const handleOutsideClick = () => {
       setOpenActionMenuId(null);
+      setSubMenuInqId(null);
     };
     document.addEventListener('click', handleOutsideClick);
     return () => document.removeEventListener('click', handleOutsideClick);
@@ -708,7 +765,7 @@ export default function InquiriesPage() {
 
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
-    const isAnyModalOpen = showModal || showEditDrawer || showPdfModal || showQuotationModal || !!imageViewerUrl;
+    const isAnyModalOpen = showModal || showEditDrawer || showPdfModal || showQuotationModal || !!imageViewerUrl || !!lostModal;
     const body = document.body;
     const docEl = document.documentElement;
     const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
@@ -870,6 +927,168 @@ export default function InquiriesPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: rawDeals = [] } = useQuery<any[]>({
+    queryKey: ['deals', effectivePhone],
+    queryFn: async () => {
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      const res = await dealsApi.getAll(params).catch(() => null);
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
+      return list;
+    },
+    refetchInterval: 15000,
+  });
+
+  const getLinkedDeal = (inq: InquiryItem, companyName?: string) => {
+    if (!rawDeals || rawDeals.length === 0) return null;
+    const directMatch = rawDeals.find((d: any) => d.inquiry_id && d.inquiry_id === inq.id);
+    if (directMatch) return directMatch;
+
+    const cName = (companyName || inq.customer_name || inq.sender_name || '').toLowerCase().trim();
+    if (cName && !isProductOrGenericName(cName)) {
+      const matchingDeals = rawDeals.filter((d: any) => (d.customer_name || '').toLowerCase().trim() === cName);
+      if (matchingDeals.length > 0) {
+        const openDeal = matchingDeals.find((d: any) => !['won', 'lost'].includes((d.stage || '').toLowerCase()));
+        return openDeal || matchingDeals[0];
+      }
+    }
+    return null;
+  };
+
+  const getDealStageDisplay = (stage?: string) => {
+    if (!stage) return null;
+    const s = stage.toLowerCase().trim();
+    if (s === 'new_inquiry' || s === 'new' || s === 'new inquiry' || s === 'review') {
+      return { label: 'New Inquiry', className: 'bg-amber-100 text-amber-800 border-amber-200' };
+    }
+    if (s === 'qualified' || s === 'saved' || s === 'confirmed') {
+      return { label: 'Qualified', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
+    }
+    if (s === 'quoted' || s === 'quotation_sent') {
+      return { label: 'Quoted', className: 'bg-blue-100 text-blue-800 border-blue-200' };
+    }
+    if (s === 'negotiation') {
+      return { label: 'Negotiation', className: 'bg-orange-100 text-orange-800 border-orange-200' };
+    }
+    if (s === 'won') {
+      return { label: 'Won', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
+    }
+    if (s === 'lost') {
+      return { label: 'Lost', className: 'bg-rose-100 text-rose-800 border-rose-200' };
+    }
+    return { label: stage, className: 'bg-slate-50 text-slate-700 border-slate-200' };
+  };
+
+  const getInquiryDealStageKey = (inq: InquiryItem, companyName?: string): string => {
+    const linkedDeal = getLinkedDeal(inq, companyName);
+    const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
+    if (dealStage === 'won' || dealStage === 'lost' || dealStage === 'negotiation') {
+      return dealStage;
+    }
+    if (dealStage === 'qualified' || dealStage === 'quoted') {
+      return dealStage;
+    }
+    const details = parseInquiryText(inq.raw_text || '', inq);
+    const st = (inq.status || '').toLowerCase();
+    const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
+    const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
+    const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
+
+    if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
+      return 'quoted';
+    }
+    if (isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed' || inq.inquiry_type === 'purchase_order') {
+      return 'qualified';
+    }
+    if (st === 'review' || st === 'needs_review' || st === 'pending' || !st) {
+      return 'new_inquiry';
+    }
+    if (dealStage) {
+      return dealStage;
+    }
+    return 'new_inquiry';
+  };
+
+  const handleUpdateDealStage = async (inq: InquiryItem, details: ExtractedDetails, targetStage: string) => {
+    setOpenActionMenuId(null);
+    setSubMenuInqId(null);
+
+    let linked = getLinkedDeal(inq, details.companyName);
+
+    if (!linked || !linked.id) {
+      try {
+        await inquiriesApi.updateStatus(inq.id, 'confirmed', {
+          ...details,
+          companyName: details.companyName,
+          customerPhone: details.customerPhone,
+          salespersonName: activeSalespersonName,
+          deliveryLocation: details.deliveryLocation,
+          paymentTerms: details.paymentTerms,
+          lineItems: details.lineItems,
+          totalAmount: details.totalAmount,
+        });
+        const refetched = await dealsApi.getAll({ salesperson_phone: effectivePhone }).catch(() => null);
+        const list = Array.isArray(refetched?.data) ? refetched.data : (Array.isArray(refetched?.data?.data) ? refetched.data.data : []);
+        linked = list.find((d: any) => d.inquiry_id === inq.id || (d.customer_name && d.customer_name.toLowerCase().trim() === details.companyName?.toLowerCase().trim()));
+      } catch (err) {
+        console.warn('Could not auto-sync deal:', err);
+      }
+    }
+
+    if (!linked || !linked.id) {
+      toast.error('No linked deal found for this inquiry.');
+      return;
+    }
+
+    const currentDealStage = (linked.stage || '').toLowerCase().trim();
+    if ((currentDealStage === 'new_inquiry' || currentDealStage === 'review' || !linked.stage) && (targetStage === 'won' || targetStage === 'lost')) {
+      toast.error(`Cannot mark deal as ${targetStage.toUpperCase()} from New Inquiry stage. The deal must first be Qualified or Quoted.`);
+      return;
+    }
+
+    if (targetStage === 'lost') {
+      setLostModal({ dealId: linked.id, inqId: inq.id, reason: '' });
+      return;
+    }
+
+    try {
+      const toastId = toast.loading(`Updating deal to ${targetStage.toUpperCase()}...`);
+      await dealsApi.updateStage(linked.id, targetStage);
+      toast.dismiss(toastId);
+      toast.success(`Deal status updated to ${targetStage.charAt(0).toUpperCase() + targetStage.slice(1)}!`);
+
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      fetchMonthlyInquiries();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to update deal status.');
+    }
+  };
+
+  const handleConfirmLost = async () => {
+    if (!lostModal || !lostModal.dealId || !lostModal.reason) return;
+    try {
+      const toastId = toast.loading('Marking deal as Lost...');
+      await dealsApi.updateStage(lostModal.dealId, 'lost', lostModal.reason);
+      toast.dismiss(toastId);
+      toast.success('Deal marked as Lost.');
+      setLostModal(null);
+
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      fetchMonthlyInquiries();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to mark deal as lost.');
+    }
+  };
+
   const getSalespersonName = (inq?: InquiryItem | null, details?: ExtractedDetails | null) => {
     if (details?.salespersonName && details.salespersonName !== 'Sales Representative' && details.salespersonName !== 'Unknown') {
       return details.salespersonName;
@@ -959,24 +1178,26 @@ export default function InquiriesPage() {
     setShowEditDrawer(true);
     setShowEditCompanyDropdown(false);
 
-    const isConfirmedState = ['confirmed', 'processed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
-    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase());
-
     const ai = (inq.ai_extraction_json as any) || {};
     const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
     const resolvedSp = getSalespersonName(inq);
 
+    let activeItems: any[] = [];
     if (lineItemsSrc.length > 0) {
       // Has structured line items in ai_extraction_json — use directly for ALL inquiries (review, confirmed, etc.)
-      const frozenLineItems = lineItemsSrc.map((item: any) => ({
-        sku_text: item.sku_text || item.description || '',
-        dimensions: item.dimensions || '',
-        hsn_code: item.hsn_code || item.hsn || '',
-        quantity: Number(item.quantity) || 0,
-        unit: item.unit || 'MT',
-        rate: Number(item.rate) || 0,
-        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
-      }));
+      const frozenLineItems = lineItemsSrc.map((item: any) => {
+        const skuText = item.sku_text || item.description || '';
+        return {
+          sku_text: skuText,
+          dimensions: item.dimensions || '',
+          hsn_code: item.hsn_code || item.hsn || detectHsnCode(skuText) || '',
+          quantity: Number(item.quantity) || 0,
+          unit: item.unit || 'MT',
+          rate: Number(item.rate) || 0,
+          amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+        };
+      });
+      activeItems = frozenLineItems;
       const frozenTotal = ai.total_amount || ai.totalAmount ||
         (frozenLineItems.length > 0
           ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
@@ -998,22 +1219,30 @@ export default function InquiriesPage() {
         unitPrice: frozenLineItems[0]?.rate || ai.unitPrice || 0,
         totalAmount: frozenTotal,
         paymentTerms: ai.payment_terms || ai.paymentTerms || parsed.paymentTerms || '',
-        deliveryLocation: ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || '',
+        deliveryLocation: (parsed.deliveryLocation && parsed.deliveryLocation.length > (ai.delivery_location || ai.deliveryLocation || '').length)
+          ? parsed.deliveryLocation
+          : (ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || ''),
         deliveryDate: ai.delivery_date || ai.deliveryDate || '',
         lineItems: frozenLineItems,
       });
     } else {
       // True fallback: no structured line items in ai_extraction_json, parse raw text
       const parsed = parseInquiryText(inq.raw_text || '', inq);
+      activeItems = parsed.lineItems || [];
       setEditDetails({
         ...parsed,
         salespersonName: resolvedSp,
       });
     }
 
-    setSaveSuccess(isConfirmedState);
-    setIsQuotationSent(isQuotedState);
+    // A deal/inquiry is ONLY in Saved/Confirmed state if all line items have valid Rate > 0 and Quantity > 0
+    const hasValidRates = activeItems.length > 0 && activeItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
+    const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
+    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
+
+    setSaveSuccess(isConfirmedState || isQuotedState);
     setDrawerError(null);
+    setFieldErrors({});
   };
 
   const handleCloseDrawer = () => {
@@ -1047,61 +1276,69 @@ export default function InquiriesPage() {
     if (!selectedInquiry || !editDetails) return;
     if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
 
-    // Strict validation for all compulsory fields (marked with red asterisks)
+    const errors: { [key: string]: string } = {};
+
+    // 1. Company Name validation
     if (!editDetails.companyName || !editDetails.companyName.trim()) {
-      const msg = 'Please enter Company Name.';
-      setDrawerError(msg);
-      toast.error(msg);
-      return;
+      errors['companyName'] = 'Company Name is required.';
     }
 
+    // 2. Line Items validation (Rate > 0, Quantity > 0, Description required, HSN/SAC required)
     const currentItems = editDetails.lineItems && editDetails.lineItems.length > 0
       ? editDetails.lineItems
-      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
 
     if (currentItems.length === 0) {
-      const msg = 'Please add at least one line item.';
-      setDrawerError(msg);
-      toast.error(msg);
-      return;
+      errors['lineItems'] = 'Please add at least one line item.';
     }
 
     for (let i = 0; i < currentItems.length; i++) {
       const item = currentItems[i];
       if (!item.sku_text || !item.sku_text.trim()) {
-        const msg = `Line Item #${i + 1}: Description & Specifications is required.`;
-        setDrawerError(msg);
-        toast.error(msg);
-        return;
+        errors[`sku_${i}`] = 'Description is required.';
       }
-      if (!item.quantity || Number(item.quantity) <= 0) {
-        const msg = `Line Item #${i + 1}: Quantity must be greater than 0.`;
-        setDrawerError(msg);
-        toast.error(msg);
-        return;
+      if (!item.hsn_code || !item.hsn_code.trim()) {
+        errors[`hsn_${i}`] = 'HSN/SAC is required.';
       }
-      if (!item.rate || Number(item.rate) <= 0) {
-        const msg = `Line Item #${i + 1}: Rate (₹) is required and must be greater than 0.`;
-        setDrawerError(msg);
-        toast.error(msg);
-        return;
+      if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
+        errors[`qty_${i}`] = 'Quantity must be > 0.';
+      }
+      if (item.rate === null || item.rate === undefined || Number(item.rate) <= 0 || isNaN(Number(item.rate))) {
+        errors[`rate_${i}`] = 'Rate is required (must be > 0).';
       }
     }
 
+    // 3. Delivery Address validation
     if (!editDetails.deliveryLocation || !editDetails.deliveryLocation.trim()) {
-      const msg = 'Please enter Delivery Address / Location.';
-      setDrawerError(msg);
-      toast.error(msg);
-      return;
+      errors['deliveryLocation'] = 'Delivery Address is required.';
     }
 
+    // 4. Payment Terms validation
     if (!editDetails.paymentTerms || !editDetails.paymentTerms.trim()) {
-      const msg = 'Please enter Payment Terms.';
-      setDrawerError(msg);
-      toast.error(msg);
+      errors['paymentTerms'] = 'Payment Terms is required.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const rateErrMsg = Object.keys(errors).some(k => k.startsWith('rate_'))
+        ? 'Rate (₹) is mandatory and must be greater than 0 for all line items.'
+        : null;
+      const firstMsg = rateErrMsg || errors['companyName'] || Object.values(errors)[0] || 'Please complete all required fields.';
+      setDrawerError(firstMsg);
+      toast.error(firstMsg);
+      setSaveSuccess(false);
+
+      // Scroll to first invalid field
+      setTimeout(() => {
+        const firstErrEl = document.querySelector('.field-error-border');
+        if (firstErrEl) {
+          firstErrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
       return;
     }
 
+    setFieldErrors({});
     setDrawerError(null);
     try {
       setSubmitting(true);
@@ -1159,6 +1396,19 @@ export default function InquiriesPage() {
       setSaveSuccess(true);
       setSelectedInquiry(updatedObj);
       setDrawerFileBase64(null);
+
+      // Optimistically update linked deal stage to 'qualified'
+      queryClient.setQueryData(['deals', effectivePhone], (old: any[] = []) =>
+        old.map(d => (d.inquiry_id === selectedInquiry.id || (d.customer_name && d.customer_name.toLowerCase().trim() === editDetails.companyName?.toLowerCase().trim())) ? { ...d, stage: 'qualified' } : d)
+      );
+
+      // Invalidate all related caches so Pipeline cards and KRA metrics update immediately
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
 
       // Update in-memory inquiries list so item stays in list immediately
       setInquiries(prev => (Array.isArray(prev) ? prev.map(item => item.id === selectedInquiry.id ? updatedObj : item) : []));
@@ -1343,15 +1593,18 @@ export default function InquiriesPage() {
 
       if (extractedJson && Array.isArray(extractedJson.line_items) && extractedJson.line_items.length > 0) {
         // Normalize line_items to match Review & Edit popup expectations
-        const lineItems = extractedJson.line_items.map((li: any) => ({
-          sku_text: li.sku_text || li.description || li.material || li.sku || 'Material',
-          dimensions: li.dimensions || '',
-          hsn_code: li.hsn_code || li.hsn || '',
-          quantity: Number(li.quantity) || 0,
-          unit: li.unit || 'MT',
-          rate: Number(li.rate) || 0,
-          amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
-        }));
+        const lineItems = extractedJson.line_items.map((li: any) => {
+          const skuText = li.sku_text || li.description || li.material || li.sku || 'Material';
+          return {
+            sku_text: skuText,
+            dimensions: li.dimensions || '',
+            hsn_code: li.hsn_code || li.hsn || detectHsnCode(skuText) || '',
+            quantity: Number(li.quantity) || 0,
+            unit: li.unit || 'MT',
+            rate: Number(li.rate) || 0,
+            amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
+          };
+        });
         const totalAmount = extractedJson.total_amount || lineItems.reduce((s: number, i: any) => s + i.amount, 0);
         aiExtractionJson = {
           ...extractedJson,
@@ -1425,15 +1678,15 @@ export default function InquiriesPage() {
       }
 
       const reqDetails = [
-        formProductSKU.trim() ? `Material: ${formProductSKU.trim()}` : '',
+        formProductSKU.trim() ? `Material:\n${formProductSKU.trim()}` : '',
         formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
         formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : '',
         formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
         formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : '',
-      ].filter(Boolean).join(' | ');
+      ].filter(Boolean).join('\n');
 
       const rawText = poFileName
-        ? `[Inquiry Attachment: ${poFileName}] ${reqDetails || 'Inquiry'}`
+        ? `[Inquiry Attachment: ${poFileName}]\n${reqDetails || 'Inquiry'}`
         : reqDetails || formProductSKU.trim() || 'Inquiry';
 
       const createRes = await inquiriesApi.create({
@@ -1482,6 +1735,14 @@ export default function InquiriesPage() {
       // Prepend local inquiry so it appears immediately with full ai_extraction_json
       setInquiries(prev => [newInquiry, ...(Array.isArray(prev) ? prev : [])]);
 
+      // Invalidate all related caches so Pipeline and Kanban reflect the new inquiry immediately
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+
       setTimeout(() => fetchMonthlyInquiries(), 2000);
     } catch (err: any) {
       console.error('Error logging inquiry:', err);
@@ -1496,20 +1757,25 @@ export default function InquiriesPage() {
   const rawList = Array.isArray(inquiries) && inquiries.length > 0 ? inquiries : (Array.isArray(rawInquiries) ? rawInquiries : []);
   const productInquiries = rawList.filter(isProductInquiry);
   const activeInquiryList = productInquiries;
-  const reviewCount = activeInquiryList.filter(i => {
-    const st = (i?.status || 'review').toLowerCase();
-    return ['review', 'needs_review', 'pending', 'new', 'draft'].includes(st);
-  }).length;
-
-  const savedCount = activeInquiryList.filter(i => {
-    const st = (i?.status || '').toLowerCase();
-    return ['processed', 'confirmed', 'won', 'auto_created', 'order_created', 'quotation_ready'].includes(st);
-  }).length;
-
-  const quotedCount = activeInquiryList.filter(i => {
-    const st = (i?.status || '').toLowerCase();
-    return st === 'quoted' || st === 'quotation_sent';
-  }).length;
+  const stageCounts = useMemo(() => {
+    const counts = {
+      all: activeInquiryList.length,
+      new_inquiry: 0,
+      qualified: 0,
+      quoted: 0,
+      negotiation: 0,
+      won: 0,
+      lost: 0,
+    };
+    activeInquiryList.forEach(inq => {
+      const parsed = parseInquiryText(inq.raw_text || '', inq);
+      const stageKey = getInquiryDealStageKey(inq, parsed.companyName);
+      if (counts[stageKey as keyof typeof counts] !== undefined) {
+        counts[stageKey as keyof typeof counts]++;
+      }
+    });
+    return counts;
+  }, [activeInquiryList, rawDeals]);
 
   const filtered = activeInquiryList.filter(i => {
     try {
@@ -1558,16 +1824,8 @@ export default function InquiriesPage() {
         phone.includes(s) ||
         text.toLowerCase().includes(s);
 
-      const statusStr = (i?.status || 'review').toLowerCase();
-      const isReview = ['review', 'needs_review', 'pending', 'new', 'draft'].includes(statusStr);
-      const isSaved = ['processed', 'confirmed', 'won', 'auto_created', 'order_created', 'quotation_ready'].includes(statusStr);
-      const isQuoted = statusStr === 'quoted' || statusStr === 'quotation_sent';
-
-      const matchesStatus =
-        filterStatus === 'all' ||
-        (filterStatus === 'review' && isReview) ||
-        (filterStatus === 'saved' && isSaved) ||
-        (filterStatus === 'quoted' && isQuoted);
+      const dealStage = getInquiryDealStageKey(i, parsed.companyName);
+      const matchesStatus = filterStatus === 'all' || dealStage === filterStatus;
 
       return matchesSearch && matchesStatus;
     } catch {
@@ -1710,10 +1968,13 @@ export default function InquiriesPage() {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
             >
-              <option value="all">All ({activeInquiryList.length})</option>
-              <option value="review">Review ({reviewCount})</option>
-              <option value="saved">Saved ({savedCount})</option>
-              <option value="quoted">Quotation Sent ({quotedCount})</option>
+              <option value="all">All ({stageCounts.all})</option>
+              <option value="new_inquiry">New Inquiry ({stageCounts.new_inquiry})</option>
+              <option value="qualified">Qualified ({stageCounts.qualified})</option>
+              <option value="quoted">Quoted ({stageCounts.quoted})</option>
+              <option value="negotiation">Negotiation ({stageCounts.negotiation})</option>
+              <option value="won">Won ({stageCounts.won})</option>
+              <option value="lost">Lost ({stageCounts.lost})</option>
             </select>
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
@@ -1734,6 +1995,7 @@ export default function InquiriesPage() {
             <input
               type="date"
               value={customFrom}
+              max={customTo || undefined}
               onChange={e => handleCustomFromChange(e.target.value)}
               className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
             />
@@ -1741,6 +2003,7 @@ export default function InquiriesPage() {
             <input
               type="date"
               value={customTo}
+              min={customFrom || undefined}
               onChange={e => handleCustomToChange(e.target.value)}
               className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
             />
@@ -1753,12 +2016,12 @@ export default function InquiriesPage() {
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-3 py-3.5 text-center w-[5%]">#</th>
-              <th className="px-6 py-3.5 text-left w-[32%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[16%]">Items Summary</th>
+              <th className="px-3 py-3.5 text-center w-[4%]">#</th>
+              <th className="px-6 py-3.5 text-left w-[28%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[20%]">Items Summary</th>
               <th className="px-4 py-3.5 text-center w-[16%]">Source Channel</th>
-              <th className="px-4 py-3.5 text-center w-[18%]">Status</th>
-              <th className="px-4 py-3.5 text-center w-[13%]">Actions</th>
+              <th className="px-4 py-3.5 text-center w-[18%]">Deal Status</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -1817,25 +2080,51 @@ export default function InquiriesPage() {
                   };
                 })();
                 const st = (inq.status || '').toLowerCase();
-                const isQuoted = st === 'quoted' || st === 'quotation_sent';
-                const isConfirmed = st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po';
+                const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
+                const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
+                const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
+                const rowLineItems = (details.lineItems && details.lineItems.length > 0)
+                  ? details.lineItems
+                  : [{
+                      sku_text: details.productType || '',
+                      dimensions: [details.thickness, details.width, details.length].filter(Boolean).join(' x '),
+                      quantity: details.quantityTons || 0,
+                      unit: 'MT',
+                    }];
+                const rowTonnage = calculateTotalTonnageMt(rowLineItems);
+                const tonnageFormatted = rowTonnage.totalMt > 0
+                  ? `(${rowTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
+                  : '';
                 const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
+                const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
+                const dealStageInfo = getDealStageDisplay(dealStageKey);
+
+                const currentStageLabel = dealStageInfo?.label || 'New Inquiry';
+                const isNewInquiryStage = currentStageLabel === 'New Inquiry';
+                const isClosedStage = currentStageLabel === 'Won' || currentStageLabel === 'Lost';
+                const canMarkWonOrLost = !isNewInquiryStage && !isClosedStage;
 
                 return (
                   <tr
                     key={inq.id || idx}
-                    className="hover:bg-slate-50/75 transition-colors">
+                    onClick={() => handleOpenDrawer(inq)}
+                    className="group hover:bg-slate-50/75 transition-colors cursor-pointer">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                     <td className="px-6 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
-                        {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
+                        <span className="group-hover:text-blue-600 transition-colors inline-block">
+                          {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
+                        </span>
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5 font-mono">
                         {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
+                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+                      {tonnageFormatted && (
+                        <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
                       {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
@@ -1843,18 +2132,12 @@ export default function InquiriesPage() {
                         : 'WhatsApp'}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      {isQuoted ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                          Quotation Sent 
-                        </span>
-                      ) : isConfirmed ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                          Saved 
+                      {dealStageInfo ? (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full border ${dealStageInfo.className}`}>
+                          {dealStageInfo.label}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                          Review
-                        </span>
+                        <span className="text-slate-400 font-normal italic">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
@@ -1864,8 +2147,9 @@ export default function InquiriesPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenActionMenuId(prev => (prev === inq.id ? null : inq.id));
+                            setSubMenuInqId(null);
                           }}
-                          className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all inline-flex items-center justify-center"
+                          className="p-1.5 rounded-lg border bg-white hover:bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300 shadow-2xs transition-all inline-flex items-center justify-center cursor-pointer"
                           title="Actions">
                           <MoreVertical size={16} />
                         </button>
@@ -1877,46 +2161,101 @@ export default function InquiriesPage() {
                               idx >= paginatedInquiries.length - 2 && paginatedInquiries.length >= 3
                                 ? 'bottom-full mb-1'
                                 : 'top-full mt-1'
-                            } w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActionMenuId(null);
-                                handleOpenDrawer(inq);
-                              }}
-                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
-                              <Edit3 size={14} className="text-slate-500 shrink-0" />
-                              <span>Edit</span>
-                            </button>
+                            } w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
+                            {/* 1. Update Status Button & Sub-Menu */}
+                            {!isClosedStage && (
+                              <div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSubMenuInqId(prev => (prev === inq.id ? null : inq.id));
+                                  }}
+                                  className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center justify-between transition-colors cursor-pointer">
+                                  <div className="flex items-center gap-2.5">
+                                    <RefreshCw size={14} className="text-blue-600 shrink-0" />
+                                    <span>Update Status</span>
+                                  </div>
+                                  <ChevronRight
+                                    size={14}
+                                    className={`text-slate-400 transition-transform ${
+                                      subMenuInqId === inq.id ? 'rotate-90 text-blue-600' : ''
+                                    }`}
+                                  />
+                                </button>
 
+                                {subMenuInqId === inq.id && (
+                                  <div className="bg-slate-50 border-y border-slate-200 py-1 px-1 space-y-0.5 animate-in fade-in duration-100">
+                                    {canMarkWonOrLost && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateDealStage(inq, details, 'won');
+                                        }}
+                                        className="w-full px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                        <span>Won</span>
+                                      </button>
+                                    )}
+                                    {canMarkWonOrLost && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateDealStage(inq, details, 'lost');
+                                        }}
+                                        className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                        <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                        <span>Lost</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateDealStage(inq, details, 'negotiation');
+                                      }}
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                      <span>Negotiation</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 2. View PDF */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenActionMenuId(null);
+                                setSubMenuInqId(null);
                                 setPdfModalInquiry(inq);
                                 setPdfModalDetails(details);
                                 setShowPdfModal(true);
                               }}
-                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
+                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer">
                               <Eye size={14} className="text-slate-500 shrink-0" />
                               <span>View PDF</span>
                             </button>
 
+                            {/* 3. Share Quotation */}
                             {(isConfirmed || isQuoted) && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenActionMenuId(null);
+                                  setSubMenuInqId(null);
                                   setShareInquiry(inq);
                                   setShareDetails(details);
                                   setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
                                   setShowQuotationModal(true);
                                 }}
-                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors">
-                                <Send size={14} className="text-slate-500 shrink-0" />
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer">
+                                <Send size={14} className="text-blue-600 shrink-0" />
                                 <span>Share Quotation</span>
                               </button>
                             )}
@@ -2053,9 +2392,16 @@ export default function InquiriesPage() {
                             setShowEditCompanyDropdown(true);
                             setSaveSuccess(false);
                             setDrawerError(null);
+                            if (fieldErrors['companyName']) {
+                              setFieldErrors(prev => { const n = { ...prev }; delete n['companyName']; return n; });
+                            }
                           }}
                           onFocus={() => setShowEditCompanyDropdown(true)}
-                          className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          className={`w-full pl-9 pr-8 py-2 bg-white rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                            fieldErrors['companyName']
+                              ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                              : 'border border-slate-300 focus:ring-blue-500'
+                          }`}
                         />
                         <button
                           type="button"
@@ -2119,7 +2465,9 @@ export default function InquiriesPage() {
                         <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                          HSN/SAC <span className="text-red-500 font-bold">*</span>
+                        </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
                           Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                         </th>
@@ -2133,7 +2481,7 @@ export default function InquiriesPage() {
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -2143,15 +2491,38 @@ export default function InquiriesPage() {
                                 type="text"
                                 value={item.sku_text || ''}
                                 onChange={(e) => {
+                                  const newSku = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                  const currentHsn = updated[idx]?.hsn_code || '';
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '');
+                                  const newAutoHsn = detectHsnCode(newSku);
+
+                                  let finalHsn = currentHsn;
+                                  if (!currentHsn || currentHsn === prevAutoHsn) {
+                                    finalHsn = newAutoHsn;
+                                  }
+
+                                  updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
                                   setDrawerError(null);
+                                  if (fieldErrors[`sku_${idx}`]) {
+                                    setFieldErrors(prev => { const n = { ...prev }; delete n[`sku_${idx}`]; return n; });
+                                  }
+                                  if (finalHsn && fieldErrors[`hsn_${idx}`]) {
+                                    setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
+                                  }
                                 }}
-                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                                className={`w-full px-2 py-1 bg-white rounded font-bold text-xs outline-none focus:ring-2 text-slate-900 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                                  fieldErrors[`sku_${idx}`]
+                                    ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                    : 'border border-slate-300 focus:ring-blue-500'
+                                }`}
                                 placeholder="Product Name / Description"
                               />
+                              {fieldErrors[`sku_${idx}`] && (
+                                <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`sku_${idx}`]}</span>
+                              )}
                               <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
                                 <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
                                 <input
@@ -2172,7 +2543,9 @@ export default function InquiriesPage() {
                           </td>
                           <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                             <input
+                              id={`edit-item-hsn-${idx}`}
                               type="text"
+                              required
                               value={item.hsn_code || ''}
                               onChange={(e) => {
                                 const updated = [...(editDetails.lineItems || [])];
@@ -2180,10 +2553,20 @@ export default function InquiriesPage() {
                                 setEditDetails({ ...editDetails, lineItems: updated });
                                 setSaveSuccess(false);
                                 setDrawerError(null);
+                                if (fieldErrors[`hsn_${idx}`]) {
+                                  setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
+                                }
                               }}
                               placeholder="e.g. 72083730"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              className={`w-full px-2 py-1.5 bg-white rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                                fieldErrors[`hsn_${idx}`]
+                                  ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                  : 'border border-slate-300 focus:ring-blue-500'
+                              }`}
                             />
+                            {fieldErrors[`hsn_${idx}`] && (
+                              <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`hsn_${idx}`]}</span>
+                            )}
                           </td>
                           <td className="px-3 py-3.5 border-r border-slate-200">
                             <div className="flex items-center gap-1.5 w-full min-w-[135px]">
@@ -2203,9 +2586,16 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                   setDrawerError(null);
+                                  if (fieldErrors[`qty_${idx}`]) {
+                                    setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
+                                  }
                                 }}
                                 placeholder="0"
-                                className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                                className={`flex-1 min-w-[65px] px-2 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
+                                  fieldErrors[`qty_${idx}`]
+                                    ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                    : 'border border-slate-300 focus:ring-blue-500'
+                                }`}
                               />
                               <select
                                 value={normalizeUnit(item.unit) || 'MT'}
@@ -2224,6 +2614,9 @@ export default function InquiriesPage() {
                                 <option value="Sheets">Sheets</option>
                               </select>
                             </div>
+                            {fieldErrors[`qty_${idx}`] && (
+                              <span className="text-[10px] text-red-600 font-bold block text-center mt-0.5">{fieldErrors[`qty_${idx}`]}</span>
+                            )}
                           </td>
                           <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
                             <input
@@ -2241,10 +2634,20 @@ export default function InquiriesPage() {
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
                                 setSaveSuccess(false);
                                 setDrawerError(null);
+                                if (fieldErrors[`rate_${idx}`]) {
+                                  setFieldErrors(prev => { const n = { ...prev }; delete n[`rate_${idx}`]; return n; });
+                                }
                               }}
                               placeholder="0"
-                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                              className={`w-full px-2 py-1.5 bg-white rounded font-bold text-xs font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900 transition-all ${
+                                fieldErrors[`rate_${idx}`]
+                                  ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                  : 'border border-slate-300 focus:ring-blue-500'
+                              }`}
                             />
+                            {fieldErrors[`rate_${idx}`] && (
+                              <span className="text-[10px] text-red-600 font-bold block mt-0.5">{fieldErrors[`rate_${idx}`]}</span>
+                            )}
                           </td>
                           <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
                             <input
@@ -2317,10 +2720,8 @@ export default function InquiriesPage() {
                     const subtotal = activeLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
                     const qBreakdown = calculateQuotationBreakdown(subtotal);
 
-                    const totalQty = activeLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                    const distinctUnits = Array.from(new Set(activeLineItems.map(i => normalizeUnit(i.unit) || 'MT')));
-                    const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
-                    const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
+                    const totalTonnage = calculateTotalTonnageMt(activeLineItems);
+                    const formattedItemsInTotal = totalTonnage.formattedText;
 
                     return (
                       <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
@@ -2367,10 +2768,20 @@ export default function InquiriesPage() {
                           setEditDetails({ ...editDetails, deliveryLocation: e.target.value });
                           setSaveSuccess(false);
                           setDrawerError(null);
+                          if (fieldErrors['deliveryLocation']) {
+                            setFieldErrors(prev => { const n = { ...prev }; delete n['deliveryLocation']; return n; });
+                          }
                         }}
                         placeholder="e.g. Chakan Industrial Area, Pune"
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                        className={`w-full px-3 py-2 bg-white rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                          fieldErrors['deliveryLocation']
+                            ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                            : 'border border-slate-300 focus:ring-blue-500'
+                        }`}
                       />
+                      {fieldErrors['deliveryLocation'] && (
+                        <span className="text-[11px] text-red-600 font-bold block mt-1">{fieldErrors['deliveryLocation']}</span>
+                      )}
                     </div>
 
                     <div>
@@ -2384,10 +2795,20 @@ export default function InquiriesPage() {
                           setEditDetails({ ...editDetails, paymentTerms: e.target.value });
                           setSaveSuccess(false);
                           setDrawerError(null);
+                          if (fieldErrors['paymentTerms']) {
+                            setFieldErrors(prev => { const n = { ...prev }; delete n['paymentTerms']; return n; });
+                          }
                         }}
                         placeholder="e.g. 30 Days Credit, 100% Advance"
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                        className={`w-full px-3 py-2 bg-white rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                          fieldErrors['paymentTerms']
+                            ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                            : 'border border-slate-300 focus:ring-blue-500'
+                        }`}
                       />
+                      {fieldErrors['paymentTerms'] && (
+                        <span className="text-[11px] text-red-600 font-bold block mt-1">{fieldErrors['paymentTerms']}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2659,19 +3080,41 @@ export default function InquiriesPage() {
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
                     setResendNotice(msg);
+                    toast.success(msg);
                     setIsQuotationSent(true);
+
+                    // 1. Optimistic live update of local state immediately
+                    setInquiries(prev => prev.map(i => i.id === shareInquiry.id ? { ...i, status: 'quoted', inquiry_type: 'quotation_sent' } : i));
+                    if (selectedInquiry && selectedInquiry.id === shareInquiry.id) {
+                      setSelectedInquiry(prev => prev ? { ...prev, status: 'quoted' } : null);
+                    }
+
+                    // Optimistically update linked deal stage to 'quoted'
+                    queryClient.setQueryData(['deals', effectivePhone], (old: any[] = []) =>
+                      old.map(d => (d.inquiry_id === shareInquiry.id || (d.customer_name && d.customer_name.toLowerCase().trim() === shareDetails?.companyName?.toLowerCase().trim())) ? { ...d, stage: 'quoted' } : d)
+                    );
+
+                    // 2. Invalidate React Query caches immediately so all views update live
+                    queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+                    queryClient.invalidateQueries({ queryKey: ['deals'] });
+                    queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+                    queryClient.invalidateQueries({ queryKey: ['kanban'] });
+                    queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+                    fetchMonthlyInquiries();
+
                     if (res?.data?.email_sent !== false) {
                       setTimeout(() => {
                         setShowQuotationModal(false);
                         setShareInquiry(null);
                         setShareDetails(null);
                         setResendNotice('');
-                        fetchMonthlyInquiries();
-                      }, 2500);
+                      }, 1200);
                     }
                   } catch (err: any) {
                     console.error('Error sending quotation:', err);
-                    setResendNotice(err?.response?.data?.message || 'Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.');
+                    const errMsg = err?.response?.data?.message || 'Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.';
+                    setResendNotice(errMsg);
+                    toast.error(errMsg);
                   } finally {
                     setSendingQuotation(false);
                   }
@@ -2721,7 +3164,7 @@ export default function InquiriesPage() {
                   {isExtractingPo ? (
                     <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
                       <RefreshCw size={14} className="animate-spin text-blue-600" />
-                      Gemini AI Analyzing &amp; Extracting Document...
+                      Extracting Document...
                     </div>
                   ) : poFileName ? (
                     <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
@@ -2879,6 +3322,48 @@ export default function InquiriesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Loss Modal - Exact Match to img2 */}
+      {lostModal && (
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-[360px] max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Mark as Lost</h3>
+            <p className="text-sm text-slate-500 mb-4">Please select a reason (required)</p>
+            <div className="space-y-2.5 mb-5">
+              {LOST_REASONS.map(reason => (
+                <label key={reason} className="flex items-center gap-2.5 cursor-pointer text-sm text-slate-700 select-none">
+                  <input
+                    type="radio"
+                    name="inquiry_loss_reason"
+                    value={reason}
+                    checked={lostModal.reason === reason}
+                    onChange={() => setLostModal(prev => prev ? { ...prev, reason } : null)}
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                  />
+                  <span>{reason}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setLostModal(null)}
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!lostModal.reason}
+                onClick={handleConfirmLost}
+                className="flex-1 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+                Confirm Lost
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -6,7 +6,6 @@ import {
   Minus,
   Search,
   CheckCircle,
-  PackageCheck,
   Truck,
   X,
   Building2,
@@ -22,13 +21,20 @@ import {
   Send,
   MoreVertical,
   RefreshCw,
+  Calendar,
+  Layers,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
-import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
-import { calculateQuotationBreakdown, normalizeUnit } from '../utils/pricingEngine';
+import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
+import {
+  calculateQuotationBreakdown,
+  calculateTotalTonnageMt,
+  normalizeUnit,
+} from '../utils/pricingEngine';
+import { detectHsnCode } from '../utils/hsnDetector';
 
 interface DealItem {
   id?: string;
@@ -59,6 +65,7 @@ interface Order {
   won_at?: string;
   media_urls?: string[];
   deal_items?: DealItem[];
+  raw_text?: string;
 }
 
 interface LineItemDetail {
@@ -69,6 +76,55 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+}
+
+export function formatOrderSourceText(ord?: Order | null): string {
+  if (!ord) return 'No source document or text available for this order.';
+
+  // If raw_text is present, meaningful and not just a document placeholder, return it
+  if (
+    ord.raw_text &&
+    typeof ord.raw_text === 'string' &&
+    ord.raw_text.trim() &&
+    !ord.raw_text.trim().startsWith('[Inquiry Attachment:') &&
+    !ord.raw_text.trim().startsWith('[PO Document:')
+  ) {
+    return ord.raw_text.trim();
+  }
+
+  const lines: string[] = [];
+  if (ord.customer_name) lines.push(`Company: ${ord.customer_name}`);
+  if (ord.customer_phone) lines.push(`Phone: ${ord.customer_phone}`);
+  if (ord.po_number) lines.push(`PO Number: ${ord.po_number}`);
+  if (ord.po_date) lines.push(`PO Date: ${ord.po_date}`);
+  if (ord.delivery_location) lines.push(`Delivery Location: ${ord.delivery_location}`);
+  if (ord.payment_terms) lines.push(`Payment Terms: ${ord.payment_terms}`);
+
+  const items = ord.deal_items || [];
+  if (Array.isArray(items) && items.length > 0) {
+    lines.push('\nLine Items:');
+    items.forEach((item: any, idx: number) => {
+      const name = item.sku_text || item.description || item.name || item.sku || 'Product';
+      const spec = item.dimensions || item.spec || item.specification || '';
+      const qty = item.quantity ?? item.qty ?? 0;
+      const unit = item.unit || 'MT';
+      const rate = Number(item.rate ?? item.unit_price ?? item.quoted_price ?? item.price_per_mt ?? 0);
+      const hsn = item.hsn_code || item.hsn || detectHsnCode(name) || '';
+
+      let itemStr = `${idx + 1}. ${name}`;
+      if (spec) itemStr += ` | Spec: ${spec}`;
+      itemStr += ` | Qty: ${qty} ${unit}`;
+      if (rate > 0) itemStr += ` | Rate: ₹${rate.toLocaleString('en-IN')}/${unit}`;
+      if (hsn) itemStr += ` | (Auto HSN: ${hsn})`;
+      lines.push(itemStr);
+    });
+  }
+
+  if (lines.length === 0) {
+    return 'No source document or text available for this order.';
+  }
+
+  return lines.join('\n');
 }
 
 export function formatDeliveryLocation(raw?: string): string {
@@ -201,13 +257,81 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
 
+  const [dayPreset, setDayPreset] = useState<'today' | '7_days' | '30_days' | '90_days' | 'custom'>('30_days');
+  const [showCustomDate, setShowCustomDate] = useState(false);
+  const [customFrom, setCustomFrom] = useState(getDaysAgo(7));
+  const [customTo, setCustomTo] = useState(formatLocalDate());
+  const [filterStatus, setFilterStatus] = useState('all');
+
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
 
-  const { data: rawOrders = [], isLoading: loading, refetch: fetchOrders } = useQuery<Order[]>({
+  const handleDayPresetChange = (preset: string) => {
+    const todayStr = formatLocalDate();
+    setDayPreset(preset as any);
+
+    if (preset === 'today') {
+      setShowCustomDate(false);
+      setDateRange({ preset: 'today', from: todayStr, to: todayStr });
+    } else if (preset === '7_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '7_days', from: getDaysAgo(7), to: todayStr });
+    } else if (preset === '30_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '30_days', from: getDaysAgo(30), to: todayStr });
+    } else if (preset === '90_days') {
+      setShowCustomDate(false);
+      setDateRange({ preset: '90_days', from: getDaysAgo(90), to: todayStr });
+    } else if (preset === 'custom') {
+      setShowCustomDate(true);
+      setDateRange({ preset: 'custom', from: customFrom, to: customTo });
+    }
+  };
+
+  const handleCustomFromChange = (val: string) => {
+    setCustomFrom(val);
+    let effectiveTo = customTo;
+    if (val && customTo && val > customTo) {
+      effectiveTo = val;
+      setCustomTo(val);
+    }
+    if (val && effectiveTo) {
+      setDateRange({ preset: 'custom', from: val, to: effectiveTo });
+    }
+  };
+
+  const handleCustomToChange = (val: string) => {
+    let effectiveVal = val;
+    if (val && customFrom && val < customFrom) {
+      effectiveVal = customFrom;
+    }
+    setCustomTo(effectiveVal);
+    if (customFrom && effectiveVal) {
+      setDateRange({ preset: 'custom', from: customFrom, to: effectiveVal });
+    }
+  };
+
+  const handleClearAllFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setDayPreset('30_days');
+    const todayStr = formatLocalDate();
+    const fromStr = getDaysAgo(30);
+    setDateRange({
+      preset: '30_days',
+      from: fromStr,
+      to: todayStr,
+    });
+    setShowCustomDate(false);
+    setCustomFrom(getDaysAgo(7));
+    setCustomTo(todayStr);
+    setCurrentPage(1);
+  };
+
+  const { data: rawOrders = [], isLoading: loading, isFetching, refetch: fetchOrders } = useQuery<Order[]>({
     queryKey: ['orders-list', effectivePhone, dateRange],
     queryFn: async () => {
       const params: any = {};
@@ -264,8 +388,9 @@ export default function OrdersPage() {
     setCurrentPage(1);
   }, [searchTerm, dateRange]);
 
-  // PO Image Viewer State
+  // PO Image / Text Viewer State
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
+  const [selectedPoOrder, setSelectedPoOrder] = useState<Order | null>(null);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
 
   // Send / Share Modal
@@ -320,6 +445,12 @@ export default function OrdersPage() {
   // AI OCR Scanning state
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [poFileName, setPoFileName] = useState('');
+  const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
+
+  const isPdf = (url?: string) => {
+    if (!url) return false;
+    return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
+  };
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -332,19 +463,13 @@ export default function OrdersPage() {
     {
       sku_text: '',
       dimensions: '',
-      hsn_code: '7208',
+      hsn_code: '',
       quantity: 0,
       unit: 'MT',
       rate: 0,
       amount: 0,
     },
   ]);
-  const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
-
-  const isPdf = (url?: string) => {
-    if (!url) return false;
-    return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
-  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -398,15 +523,18 @@ export default function OrdersPage() {
           }
 
           if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
-            const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => ({
-              sku_text: i.sku_text || i.description || 'Material',
-              dimensions: i.dimensions || '',
-              hsn_code: i.hsn_code || i.hsn || '7208',
-              quantity: Number(i.quantity) || 0,
-              unit: normalizeUnit(i.unit) || 'MT',
-              rate: Number(i.rate) || 0,
-              amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
-            }));
+            const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
+              const skuText = i.sku_text || i.description || 'Material';
+              return {
+                sku_text: skuText,
+                dimensions: i.dimensions || '',
+                hsn_code: i.hsn_code || i.hsn || detectHsnCode(skuText) || '',
+                quantity: Number(i.quantity) || 0,
+                unit: normalizeUnit(i.unit) || 'MT',
+                rate: Number(i.rate) || 0,
+                amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
+              };
+            });
             setFormLineItems(mappedItems);
           }
 
@@ -424,41 +552,97 @@ export default function OrdersPage() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. Client-side inline field validation before API call
     if (!formCustomerName.trim()) {
-      toast.error('Please enter Company Name');
+      const el = document.getElementById('form-company-name') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
     if (!formPoNumber.trim()) {
-      toast.error('Please enter PO Number');
+      const el = document.getElementById('form-po-number') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
     if (!formPoDate) {
-      toast.error('Please select PO Date');
+      const el = document.getElementById('form-po-date') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
-    if (!formDeliveryLocation.trim()) {
-      toast.error('Please enter Delivery Location');
-      return;
-    }
+
     if (formLineItems.length === 0) {
-      toast.error('Please add at least one line item');
       return;
     }
 
     for (let i = 0; i < formLineItems.length; i++) {
       const item = formLineItems[i];
       if (!item.sku_text.trim()) {
-        toast.error(`Line Item #${i + 1}: Description & Specifications is required.`);
+        const el = document.getElementById(`form-item-sku-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
         return;
       }
-      if (item.quantity <= 0) {
-        toast.error(`Line Item #${i + 1}: Quantity must be greater than 0.`);
+      if (!item.dimensions?.trim()) {
+        const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
         return;
       }
-      if (item.rate <= 0) {
-        toast.error(`Line Item #${i + 1}: Rate must be greater than 0.`);
+      if (!item.hsn_code || !item.hsn_code.trim()) {
+        const el = document.getElementById(`form-item-hsn-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
         return;
       }
+      if (!item.quantity || Number(item.quantity) <= 0) {
+        const el = document.getElementById(`form-item-qty-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+      if (!item.rate || Number(item.rate) <= 0) {
+        const el = document.getElementById(`form-item-rate-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+    }
+
+    if (!formDeliveryLocation.trim()) {
+      const el = document.getElementById('form-delivery-location') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
+      return;
+    }
+
+    if (!formPaymentTerms.trim()) {
+      const el = document.getElementById('form-payment-terms') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
+      return;
     }
 
     const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
@@ -499,7 +683,7 @@ export default function OrdersPage() {
         {
           sku_text: '',
           dimensions: '',
-          hsn_code: '7208',
+          hsn_code: '',
           quantity: 0,
           unit: 'MT',
           rate: 0,
@@ -510,7 +694,11 @@ export default function OrdersPage() {
       setFormUploadedBase64(null);
 
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      fetchOrders();
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      await fetchOrders();
     } catch (err: any) {
       console.error('Error creating order:', err);
       toast.error(err?.response?.data?.message || 'Failed to create order. Please try again.');
@@ -564,6 +752,15 @@ export default function OrdersPage() {
 
   const safeOrders: Order[] = Array.isArray(rawOrders) ? rawOrders : [];
 
+  const getOrderTonnage = (ord: Order): number => {
+    return (ord?.deal_items || []).reduce((iSum: number, i: any) => {
+      const q = Number(i?.quantity || 0);
+      const u = (i?.unit || 'MT').toUpperCase().trim();
+      const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
+      return iSum + inMt;
+    }, 0);
+  };
+
   const filtered = safeOrders
     .filter((o: Order) => {
       if (dateRange.from && dateRange.to) {
@@ -581,6 +778,15 @@ export default function OrdersPage() {
         }
       }
 
+      const ordTonnage = getOrderTonnage(o);
+      if (filterStatus === 'under_500') {
+        if (ordTonnage >= 500) return false;
+      } else if (filterStatus === '500_to_1000') {
+        if (ordTonnage < 500 || ordTonnage > 1000) return false;
+      } else if (filterStatus === 'above_1000') {
+        if (ordTonnage <= 1000) return false;
+      }
+
       const itemsStr = (o?.deal_items || []).map((i: any) => i?.sku_text || '').join(' ');
       return (
         (o?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -590,46 +796,55 @@ export default function OrdersPage() {
       );
     })
     .sort((a: Order, b: Order) => {
-      const timeA = new Date(a.created_at || a.won_at || 0).getTime();
-      const timeB = new Date(b.created_at || b.won_at || 0).getTime();
+      const timeA = new Date(a.won_at || a.created_at || 0).getTime();
+      const timeB = new Date(b.won_at || b.created_at || 0).getTime();
       return timeB - timeA;
     });
 
+  const under500Count = safeOrders.filter((o: Order) => getOrderTonnage(o) < 500).length;
+  const mid500To1000Count = safeOrders.filter((o: Order) => {
+    const t = getOrderTonnage(o);
+    return t >= 500 && t <= 1000;
+  }).length;
+  const above1000Count = safeOrders.filter((o: Order) => getOrderTonnage(o) > 1000).length;
+
   const totalOrders = filtered.length;
-  const totalRevenue = filtered.reduce((sum: number, o: Order) => sum + Number(o?.total_amount || 0), 0);
-  const totalTonnage = filtered.reduce((sum: number, o: Order) => {
-    const itemsQty = (o?.deal_items || []).reduce((iSum: number, i: any) => {
-      const q = Number(i?.quantity || 0);
-      const u = (i?.unit || 'MT').toUpperCase().trim();
-      const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
-      return iSum + inMt;
-    }, 0);
-    return sum + itemsQty;
+  const totalItems = filtered.reduce((sum: number, o: Order) => {
+    const count = (o?.deal_items && o.deal_items.length > 0) ? o.deal_items.length : 1;
+    return sum + count;
   }, 0);
+  const totalTonnage = filtered.reduce((sum: number, o: Order) => sum + getOrderTonnage(o), 0);
 
   const handleViewPoDocument = async (ord: Order) => {
+    setSelectedPoOrder(ord);
+
+    // 1. Direct local media check (data URI or http URL)
     let mediaUrl = ord.media_urls?.[0];
     if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
       setPoImageViewerUrl(mediaUrl);
       return;
     }
 
-    const toastId = toast.loading('Loading original PO document...');
+    // 2. Fetch full deal details from database to see if document is stored in deal or linked inquiry
     try {
       const res = await dealsApi.getOne(ord.id);
       const fullDeal = res?.data?.data || res?.data;
-      if (fullDeal && Array.isArray(fullDeal.media_urls) && fullDeal.media_urls.length > 0) {
-        mediaUrl = fullDeal.media_urls[0];
-        setPoImageViewerUrl(mediaUrl || null);
-        toast.dismiss(toastId);
-      } else {
-        toast.dismiss(toastId);
-        toast.error('No original PO document image/PDF attached to this record.');
+      if (fullDeal) {
+        setSelectedPoOrder(prev => ({ ...(prev || ord), ...fullDeal }));
+        if (Array.isArray(fullDeal.media_urls) && fullDeal.media_urls.length > 0) {
+          const dbMedia = fullDeal.media_urls[0];
+          if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
+            setPoImageViewerUrl(dbMedia);
+            return;
+          }
+        }
       }
     } catch (e) {
-      toast.dismiss(toastId);
-      toast.error('Could not load PO document.');
+      console.warn('Could not load deal document attachment from API:', e);
     }
+
+    // 3. If no document attachment, open the structured text viewer without error toast
+    setPoImageViewerUrl(`extracted_preview://${ord.id}`);
   };
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
@@ -644,46 +859,58 @@ export default function OrdersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <ShoppingBag className="text-blue-600" size={28} />
-            Completed &amp; Delivered Orders
+            Orders &amp; Delivery Management
           </h1>
-          
         </div>
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => {
+              fetchOrders();
+              queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+            }}
+            title="Refresh Orders"
+            className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+            <RefreshCw size={16} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+          </button>
+
+          <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-sm transition-colors">
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-sm transition-colors cursor-pointer">
             <Plus size={18} />
             Create New Order
           </button>
         </div>
       </div>
 
+      {/* KPI Cards: Total Orders, Total Items, Total Tonnage */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Orders Won</p>
+            <p className="text-xs text-slate-500 font-medium">Total Orders</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{totalOrders}</p>
           </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+          <div className="p-3 bg-slate-100 text-slate-900 rounded-lg">
             <ShoppingBag size={22} />
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Revenue Achieved</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">₹{totalRevenue.toLocaleString('en-IN')}</p>
+            <p className="text-xs text-slate-500 font-medium">Total Items</p>
+            <p className="text-2xl font-bold text-blue-600 mt-1">{totalItems}</p>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
-            <PackageCheck size={22} />
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+            <Layers size={22} />
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Volume (MT)</p>
-            <p className="text-2xl font-bold text-indigo-600 mt-1">{totalTonnage.toLocaleString('en-IN')} MT</p>
+            <p className="text-xs text-slate-500 font-medium">Total Tonnage (MT)</p>
+            <p className="text-2xl font-bold text-indigo-600 mt-1">
+              {totalTonnage.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
+            </p>
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
             <Truck size={22} />
@@ -693,18 +920,87 @@ export default function OrdersPage() {
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-72">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          {/* 1. Search Box with Clear ( X ) Icon */}
+          <div className="relative w-full sm:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search customer, PO number, location, product..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-2xs text-slate-800"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                title="Clear Search">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* 2. Days Filter Dropdown (Bold closed, normal dropdown options) */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+            <select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
+              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
+              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
+              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
+              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 3. Tonnage Filter Dropdown (<500, 500-1000, >1000) (Bold closed, normal dropdown options) */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Orders ({safeOrders.length})</option>
+              <option value="under_500" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&lt; 500 MT ({under500Count})</option>
+              <option value="500_to_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>500 – 1000 MT ({mid500To1000Count})</option>
+              <option value="above_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&gt; 1000 MT ({above1000Count})</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 4. Clear Filter Button */}
+          <button
+            type="button"
+            onClick={handleClearAllFilters}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+            Clear Filter
+          </button>
+        </div>
+
+        {/* Custom Range Picker Inputs */}
+        {showCustomDate && (
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <span className="text-slate-500 font-medium">From:</span>
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={e => handleCustomFromChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
+            />
+            <span className="text-slate-500 font-medium">To:</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={e => handleCustomToChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
             />
           </div>
-          <DateFilterControl onChange={setDateRange} />
-        </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -713,9 +1009,9 @@ export default function OrdersPage() {
             <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
-                <th className="px-5 py-3 text-left w-[26%]">Customer</th>
+                <th className="px-5 py-3 text-left w-[26%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
-                <th className="px-4 py-3 text-center w-[12%]">Products &amp; Items</th>
+                <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
                 <th className="px-4 py-3 text-center w-[14%]">Order Tonnage (MT)</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
@@ -733,30 +1029,30 @@ export default function OrdersPage() {
               ) : (
                 paginatedOrders.map((ord, idx) => {
                   const globalIdx = startIndex + idx + 1;
-                  const itemCount = (ord?.deal_items && ord.deal_items.length > 0) ? ord.deal_items.length : 1;
-
-                  const ordTonnage = (ord?.deal_items || []).reduce((iSum: number, i: any) => {
-                    const q = Number(i?.quantity || 0);
-                    const u = (i?.unit || 'MT').toUpperCase().trim();
-                    const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
-                    return iSum + inMt;
-                  }, 0);
+                  const ordLineItems = (ord?.deal_items && ord.deal_items.length > 0) ? ord.deal_items : [];
+                  const ordTonnage = calculateTotalTonnageMt(ordLineItems);
+                  const tonnageFormatted = ordTonnage.totalMt > 0
+                    ? `(${ordTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
+                    : '';
+                  const itemCount = ordLineItems.length > 0 ? ordLineItems.length : 1;
 
                   return (
                     <tr
                       key={ord.id || idx}
-                      className="hover:bg-slate-50/80 transition-colors">
+                      className="group hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                       <td className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm">
-                          <span className="truncate">{ord.customer_name || 'Customer'}</span>
+                          <span className="truncate group-hover:text-blue-600 transition-colors inline-block">
+                            {ord.customer_name || 'Customer'}
+                          </span>
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5">
                           <span className="font-mono">
-                            {ord.created_at
-                              ? new Date(ord.created_at).toLocaleString('en-IN')
-                              : (ord.won_at
-                                  ? new Date(ord.won_at).toLocaleString('en-IN')
+                            {ord.won_at
+                              ? new Date(ord.won_at).toLocaleString('en-IN')
+                              : (ord.created_at
+                                  ? new Date(ord.created_at).toLocaleString('en-IN')
                                   : (ord.po_date || '-'))}
                           </span>
                         </div>
@@ -766,16 +1062,17 @@ export default function OrdersPage() {
                           {ord.po_number || 'PO-2026-AUTO'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
+                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                         {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+                        {tonnageFormatted && (
+                          <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap font-mono text-xs">
-                        {ordTonnage > 0 ? `${ordTonnage.toLocaleString('en-IN')} MT` : '—'}
+                        {ordTonnage.totalMt > 0 ? `${ordTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT` : '—'}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
-                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200 text-slate-800 font-semibold text-xs">
-                          {formatDeliveryLocation(ord.delivery_location)}
-                        </span>
+                        {formatDeliveryLocation(ord.delivery_location)}
                       </td>
                       <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
                         <div className="relative inline-block text-left">
@@ -896,71 +1193,29 @@ export default function OrdersPage() {
             onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Send className="text-purple-600" size={22} />
-                Share Quotation
+                <Send className="text-blue-600" size={22} />
+                Share PO
               </h2>
               <button
                 onClick={() => {
                   setShowSendModal(false);
                   setResendNotice('');
                 }}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
                 <X size={20} />
               </button>
             </div>
 
-            {(() => {
-              const activeLineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
-                ? shareOrder.deal_items.map((i: any) => {
-                    const rawSku = i.sku_text || 'Steel Material';
-                    const rawDims = i.dimensions || '';
-                    const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
-                    return {
-                      sku_text: materialDescription,
-                      dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
-                      quantity: Number(i.quantity) || 0,
-                      unit: normalizeUnit(i.unit) || 'MT',
-                      rate: Number(i.rate) || 0,
-                      amount: Number(i.amount) || 0,
-                    };
-                  })
-                : [
-                    {
-                      sku_text: 'Steel Material',
-                      dimensions: '',
-                      quantity: 0,
-                      unit: 'MT',
-                      rate: 0,
-                      amount: Number(shareOrder.total_amount) || 0,
-                    },
-                  ];
-
-              const subtotal = activeLineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0) || Number(shareOrder.total_amount) || 0;
-              const qBreakdown = calculateQuotationBreakdown(subtotal);
-              const summaryItemsText = activeLineItems
-                .filter((i: any) => i.quantity > 0 || i.sku_text !== 'Steel Material')
-                .map((i: any) => `${i.sku_text || 'Item'} (${i.quantity} ${i.unit || 'MT'})`)
-                .join(' · ');
-
-              return (
-                <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-2">
-                  <div className="font-bold text-purple-900 flex items-center justify-between">
-                    <span>Commercial Proposal Summary</span>
-                    <span className="font-extrabold text-emerald-800">Total: {qBreakdown.formattedGrandTotal}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-600 flex justify-between font-mono">
-                    <span>Sub Total: {qBreakdown.formattedSubtotal}</span>
-                    <span>CGST: {qBreakdown.formattedCGST} | SGST: {qBreakdown.formattedSGST}</span>
-                  </div>
-                  <p className="text-slate-700 font-mono text-[11px]">
-                    {shareOrder.customer_name || 'Customer'}{summaryItemsText ? ` · ${summaryItemsText}` : ''}
-                  </p>
-                  <div className="pt-1.5 border-t border-purple-200/60 text-[11px] text-purple-800 font-semibold flex items-center gap-1">
-                    <span><strong>Official PDF Quotation:</strong> The formatted PDF document and original client PO document will be attached to this email.</span>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Small Relevant Info Message */}
+            <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
+              <FileText size={18} className="text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-blue-950">Official Commercial PO</p>
+                <p className="text-blue-800 text-[11px] mt-0.5 leading-relaxed">
+                  The complete orginal PO Document for <strong>{shareOrder.customer_name || 'Customer'}</strong> will be shared.
+                </p>
+              </div>
+            </div>
 
             <div className="space-y-3">
               <div>
@@ -973,7 +1228,7 @@ export default function OrdersPage() {
                   placeholder="e.g. shravankotagi314@gmail.com"
                   value={sendEmail}
                   onChange={e => setSendEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
                 />
               </div>
 
@@ -999,7 +1254,7 @@ export default function OrdersPage() {
                   setShowSendModal(false);
                   setResendNotice('');
                 }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
                 Cancel
               </button>
 
@@ -1084,7 +1339,7 @@ export default function OrdersPage() {
                     setSendingEmail(false);
                   }
                 }}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
                 {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
                 <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}</span>
               </button>
@@ -1095,53 +1350,80 @@ export default function OrdersPage() {
 
       {poImageViewerUrl && (
         <div
-          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setPoImageViewerUrl(null)}>
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => {
+            setPoImageViewerUrl(null);
+            setSelectedPoOrder(null);
+          }}>
           <div
-            className="relative max-w-5xl w-full max-h-[92vh] bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-2xl overflow-hidden flex flex-col items-center justify-center"
+            className={`relative w-full max-h-[90vh] bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col ${
+              poImageViewerUrl.startsWith('extracted_preview://') ? 'max-w-3xl' : 'max-w-5xl'
+            }`}
             onClick={e => e.stopPropagation()}>
-            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-800 mb-4 px-1">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                <FileText size={16} className="text-blue-400" />
-                Original Purchase Order (PO) Document / WhatsApp Image
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+              <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <FileText size={18} className="text-blue-600" />
+                {poImageViewerUrl.startsWith('extracted_preview://')
+                  ? 'Original Customer Inquiry Message'
+                  : 'Original Purchase Order (PO) Document / WhatsApp Image'}
               </span>
               <button
-                onClick={() => setPoImageViewerUrl(null)}
-                className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 flex items-center gap-1 text-xs font-bold transition-colors">
+                onClick={() => {
+                  setPoImageViewerUrl(null);
+                  setSelectedPoOrder(null);
+                }}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer">
                 <X size={18} /> Close
               </button>
             </div>
 
-            {isPdf(poImageViewerUrl) ? (
+            {poImageViewerUrl.startsWith('extracted_preview://') ? (
+              <div className="w-full space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                  <span>Source Inquiry Text</span>
+                  {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
+                    <span className="font-mono">
+                      Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
+                  {formatOrderSourceText(selectedPoOrder)}
+                </div>
+              </div>
+            ) : isPdf(poImageViewerUrl) ? (
               <iframe
                 src={poImageViewerUrl}
                 title="Purchase Order PDF Document"
-                className="w-full h-[75vh] rounded-2xl bg-white shadow-2xl border border-slate-800"
+                className="w-full h-[72vh] rounded-xl bg-white shadow-inner border border-slate-200"
               />
             ) : (
-              <img
-                src={poImageViewerUrl}
-                alt="Original Purchase Order Document"
-                className="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-2xl bg-slate-950 border border-slate-800"
-                onError={e => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const fallbackDiv = document.getElementById('po-image-fallback-card');
-                  if (fallbackDiv) fallbackDiv.style.display = 'flex';
-                }}
-              />
+              <div className="w-full h-[72vh] flex items-center justify-center bg-slate-50 rounded-xl p-2 overflow-auto border border-slate-200">
+                <img
+                  src={poImageViewerUrl}
+                  alt="Original Purchase Order Document"
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-md bg-white border border-slate-200"
+                  onError={e => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const fallbackDiv = document.getElementById('po-image-fallback-card');
+                    if (fallbackDiv) fallbackDiv.style.display = 'flex';
+                  }}
+                />
+              </div>
             )}
 
             <div
               id="po-image-fallback-card"
               style={{ display: 'none' }}
-              className="flex-col items-center justify-center p-8 text-center bg-slate-900/90 rounded-2xl border border-slate-800 space-y-4 max-w-md my-8">
-              <div className="p-4 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
+              className="flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-4 max-w-md my-8 mx-auto">
+              <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
                 <ImageIcon size={40} />
               </div>
               <div>
-                <h3 className="text-white font-bold text-sm">Purchase Order Document Attachment</h3>
-                <p className="text-slate-400 text-xs mt-1">
+                <h3 className="text-slate-900 font-bold text-sm">Purchase Order Document Attachment</h3>
+                <p className="text-slate-500 text-xs mt-1">
                   Attached Document Processed Live via Gemini Vision
                 </p>
                 <p className="text-slate-500 text-[11px] mt-2 leading-relaxed">
@@ -1228,6 +1510,7 @@ export default function OrdersPage() {
                   <div className="relative flex items-center">
                     <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
                     <input
+                      id="form-company-name"
                       type="text"
                       required
                       placeholder="Type or select company name..."
@@ -1285,6 +1568,7 @@ export default function OrdersPage() {
                     PO Number <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
+                    id="form-po-number"
                     type="text"
                     required
                     placeholder="e.g. PO-2026-0042"
@@ -1299,6 +1583,7 @@ export default function OrdersPage() {
                     PO Date <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
+                    id="form-po-date"
                     type="date"
                     required
                     value={formPoDate}
@@ -1317,7 +1602,9 @@ export default function OrdersPage() {
                       <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">HSN/SAC</th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                        HSN/SAC <span className="text-red-500 font-bold">*</span>
+                      </th>
                       <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
                         Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                       </th>
@@ -1335,11 +1622,23 @@ export default function OrdersPage() {
                         <td className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input
+                              id={`form-item-sku-${idx}`}
                               type="text"
+                              required
                               value={item.sku_text || ''}
                               onChange={(e) => {
+                                const newSku = e.target.value;
                                 const updated = [...formLineItems];
-                                updated[idx] = { ...updated[idx], sku_text: e.target.value };
+                                const currentHsn = updated[idx]?.hsn_code || '';
+                                const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '');
+                                const newAutoHsn = detectHsnCode(newSku);
+
+                                let finalHsn = currentHsn;
+                                if (!currentHsn || currentHsn === prevAutoHsn) {
+                                  finalHsn = newAutoHsn;
+                                }
+
+                                updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
                                 setFormLineItems(updated);
                               }}
                               className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
@@ -1348,7 +1647,9 @@ export default function OrdersPage() {
                             <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
                               <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
                               <input
+                                id={`form-item-spec-${idx}`}
                                 type="text"
+                                required
                                 value={item.dimensions || ''}
                                 onChange={(e) => {
                                   const updated = [...formLineItems];
@@ -1363,22 +1664,27 @@ export default function OrdersPage() {
                         </td>
                         <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                           <input
+                            id={`form-item-hsn-${idx}`}
                             type="text"
+                            required
                             value={item.hsn_code || ''}
                             onChange={(e) => {
                               const updated = [...formLineItems];
                               updated[idx] = { ...updated[idx], hsn_code: e.target.value };
                               setFormLineItems(updated);
                             }}
-                            placeholder="e.g. 7208"
+                            placeholder="e.g. 72083730"
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
                         <td className="px-3 py-3.5 border-r border-slate-200">
                           <div className="flex items-center gap-1.5 w-full min-w-[135px]">
                             <input
+                              id={`form-item-qty-${idx}`}
                               type="number"
-                              min="0"
+                              required
+                              min="0.001"
+                              step="any"
                               value={item.quantity === 0 ? '' : item.quantity}
                               onChange={(e) => {
                                 const val = e.target.value;
@@ -1410,8 +1716,11 @@ export default function OrdersPage() {
                         </td>
                         <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
                           <input
+                            id={`form-item-rate-${idx}`}
                             type="number"
-                            min="0"
+                            required
+                            min="0.01"
+                            step="any"
                             value={item.rate === 0 ? '' : item.rate}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -1463,7 +1772,7 @@ export default function OrdersPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '7208', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
                                   ];
                                   setFormLineItems(updated);
                                 }}
@@ -1484,10 +1793,8 @@ export default function OrdersPage() {
                   const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
                   const qBreakdown = calculateQuotationBreakdown(subtotal);
 
-                  const totalQty = formLineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                  const distinctUnits = Array.from(new Set(formLineItems.map(i => normalizeUnit(i.unit) || 'MT')));
-                  const primaryUnit = distinctUnits.length === 1 ? distinctUnits[0] : (distinctUnits.length === 0 ? 'MT' : 'units');
-                  const formattedItemsInTotal = `${totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryUnit}`;
+                  const totalTonnage = calculateTotalTonnageMt(formLineItems);
+                  const formattedItemsInTotal = totalTonnage.formattedText;
 
                   return (
                     <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
@@ -1528,6 +1835,7 @@ export default function OrdersPage() {
                     Delivery Location <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
+                    id="form-delivery-location"
                     type="text"
                     required
                     placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
@@ -1542,7 +1850,9 @@ export default function OrdersPage() {
                     Payment Terms <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
+                    id="form-payment-terms"
                     type="text"
+                    required
                     placeholder="e.g. 30 Days Credit, 100% Advance"
                     value={formPaymentTerms}
                     onChange={e => setFormPaymentTerms(e.target.value)}
@@ -1552,12 +1862,7 @@ export default function OrdersPage() {
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                  Cancel
-                </button>
+                
                 <button
                   type="submit"
                   disabled={submitting}

@@ -753,9 +753,16 @@ export default function HomePage() {
               <input
                 type="date"
                 value={customFrom}
+                max={customTo || undefined}
                 onChange={e => {
-                  setCustomFrom(e.target.value);
-                  if (e.target.value && customTo) setDateRange({ preset: 'custom', from: e.target.value, to: customTo });
+                  const val = e.target.value;
+                  setCustomFrom(val);
+                  let effectiveTo = customTo;
+                  if (val && customTo && val > customTo) {
+                    effectiveTo = val;
+                    setCustomTo(val);
+                  }
+                  if (val && effectiveTo) setDateRange({ preset: 'custom', from: val, to: effectiveTo });
                 }}
                 className="px-2 py-1.5 bg-white border border-slate-300 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
               />
@@ -763,9 +770,15 @@ export default function HomePage() {
               <input
                 type="date"
                 value={customTo}
+                min={customFrom || undefined}
                 onChange={e => {
-                  setCustomTo(e.target.value);
-                  if (customFrom && e.target.value) setDateRange({ preset: 'custom', from: customFrom, to: e.target.value });
+                  const val = e.target.value;
+                  let effectiveVal = val;
+                  if (val && customFrom && val < customFrom) {
+                    effectiveVal = customFrom;
+                  }
+                  setCustomTo(effectiveVal);
+                  if (customFrom && effectiveVal) setDateRange({ preset: 'custom', from: customFrom, to: effectiveVal });
                 }}
                 className="px-2 py-1.5 bg-white border border-slate-300 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
               />

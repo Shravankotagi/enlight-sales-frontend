@@ -4,7 +4,7 @@ import { kraApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, CheckCircle, AlertCircle, Clock, ExternalLink, X } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
 function KRACard({ number, label, data, onClick }: { 
   number: number; label: string; data: any; onClick?: () => void;
@@ -357,9 +357,9 @@ function KRASheetModal({ kraNumber, sheet, isLoading, onClose }: { kraNumber: nu
 export default function KRADashboard() {
   const { effectivePhone } = useAuth();
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
   const [activeKraModal, setActiveKraModal] = useState<number | null>(null);
 
@@ -428,9 +428,7 @@ export default function KRADashboard() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 text-sm">
-            Live metrics from WhatsApp Bot &amp; Web Dashboard (Click any card to view detailed achievement report)
-          </p>
+          
         </div>
 
         <DateFilterControl onChange={setDateRange} />

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
 import { TrendingUp, ShoppingBag, Package } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
 type Tab = 'monthly' | 'funnel' | 'sku';
 
@@ -13,9 +13,9 @@ export default function ReportsPage() {
   const [tab, setTab] = useState<Tab>('monthly');
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
 
   useEffect(() => {
@@ -80,9 +80,7 @@ export default function ReportsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports &amp; Analytics</h1>
-          <p className="text-gray-500 text-sm">
-            Comprehensive sales performance, funnel conversion, and product breakdown overview.
-          </p>
+          
         </div>
 
         <DateFilterControl onChange={setDateRange} />

@@ -3,7 +3,7 @@ import { reportsApi, inquiriesApi, dealsApi, employeesApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import SalesQuotationModal from '../components/SalesQuotationModal';
-import { getFirstDayOfMonth, getLastDayOfMonth } from '../utils/dateUtils';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
@@ -20,9 +20,9 @@ export default function AdminDashboard() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
 
   const months = [

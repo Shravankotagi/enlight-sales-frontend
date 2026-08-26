@@ -317,11 +317,9 @@ export default function CustomersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="text-blue-600" size={28} />
-            Customer Directory &amp; Account Health
+            Customers &amp; Account Health
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Monitor customer order frequencies, track account health, and manage client relationships.
-          </p>
+          
         </div>
 
         <div className="flex items-center gap-3">
