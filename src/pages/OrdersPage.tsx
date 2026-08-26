@@ -733,8 +733,8 @@ export default function OrdersPage() {
       );
     })
     .sort((a: Order, b: Order) => {
-      const timeA = new Date(a.created_at || a.won_at || 0).getTime();
-      const timeB = new Date(b.created_at || b.won_at || 0).getTime();
+      const timeA = new Date(a.won_at || a.created_at || 0).getTime();
+      const timeB = new Date(b.won_at || b.created_at || 0).getTime();
       return timeB - timeA;
     });
 
@@ -830,7 +830,7 @@ export default function OrdersPage() {
             <p className="text-xs text-slate-500 font-medium">Total Items</p>
             <p className="text-2xl font-bold text-blue-600 mt-1">{totalItems}</p>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
             <Layers size={22} />
           </div>
         </div>
@@ -979,10 +979,10 @@ export default function OrdersPage() {
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5">
                           <span className="font-mono">
-                            {ord.created_at
-                              ? new Date(ord.created_at).toLocaleString('en-IN')
-                              : (ord.won_at
-                                  ? new Date(ord.won_at).toLocaleString('en-IN')
+                            {ord.won_at
+                              ? new Date(ord.won_at).toLocaleString('en-IN')
+                              : (ord.created_at
+                                  ? new Date(ord.created_at).toLocaleString('en-IN')
                                   : (ord.po_date || '-'))}
                           </span>
                         </div>
