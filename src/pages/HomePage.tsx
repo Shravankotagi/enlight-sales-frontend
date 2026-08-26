@@ -26,11 +26,9 @@ import {
   ChevronDown,
   ArrowRight,
   Sparkles,
-  Plus,
   RefreshCw,
   Trophy,
   Building2,
-  User,
   Calendar,
 } from 'lucide-react';
 
@@ -59,7 +57,7 @@ interface DateRange {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, effectivePhone, isAdmin, isSalesManager, viewingAs, setViewingAs, clearViewingAs } = useAuth();
+  const { employee, effectivePhone, isAdmin, isSalesManager, setViewingAs } = useAuth();
   const canManageTeam = isSalesManager || isAdmin;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -444,12 +442,6 @@ export default function HomePage() {
       .sort((a, b) => b.deliveredTonnage - a.deliveredTonnage);
   }, [canManageTeam, safeEmployees, safeOrders, safeVisits, safeComplaints]);
 
-  const todayStr = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -575,46 +567,17 @@ export default function HomePage() {
     <div className="space-y-6 font-sans">
 
       {/* ── Top Header Bar ──────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-sm shadow-blue-600/25 shrink-0">
-            {employee?.name?.charAt(0) || 'E'}
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}! 👋
-              </h1>
-              {isAdmin && !viewingAs ? (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200 flex items-center gap-1">
-                  <Users size={12} className="text-blue-700" /> All Sales Teams (Admin)
-                </span>
-              ) : isSalesManager && !viewingAs ? (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200 flex items-center gap-1">
-                  <Users size={12} className="text-blue-700" /> Sales Manager Team View
-                </span>
-              ) : viewingAs ? (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-900 font-bold border border-indigo-200 flex items-center gap-1">
-                  <User size={12} className="text-indigo-700" /> Viewing: {viewingAs.name}
-                  <button onClick={clearViewingAs} className="ml-1 hover:text-indigo-600 font-bold">×</button>
-                </span>
-              ) : (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
-                  Enlight Metals Sales
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-medium">
-              <Clock size={13} className="text-slate-400" />
-              {todayStr}
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
 
-        {/* Header Action Buttons — Refresh · Filter · Log Won Order */}
-        <div className="flex flex-col items-end gap-2">
+        {/* Greeting only */}
+        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+          {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}
+        </h1>
 
-          {/* Top row: Refresh, Date Filter dropdown, Log Won Order */}
+        {/* Filter pill — Refresh · Date dropdown · Clear Filter */}
+        <div className="flex flex-col items-end gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+
+          {/* Controls row */}
           <div className="flex flex-wrap items-center gap-2">
 
             {/* Refresh */}
@@ -628,7 +591,7 @@ export default function HomePage() {
               />
             </button>
 
-            {/* Date Filter — same size/style as the other buttons */}
+            {/* Date Filter */}
             <div className="relative inline-flex items-center">
               <Calendar size={13} className="absolute left-2.5 text-blue-600 pointer-events-none" />
               <select
@@ -645,7 +608,7 @@ export default function HomePage() {
               <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
             </div>
 
-            {/* Clear Filter — unified button, matches Visits tab style */}
+            {/* Clear Filter — shown whenever filter is not at default */}
             {dayPreset !== 'this_month' && (
               <button
                 type="button"
@@ -654,17 +617,9 @@ export default function HomePage() {
                 Clear Filter
               </button>
             )}
-
-            {/* Log Won Order */}
-            <button
-              onClick={() => navigate('/orders')}
-              className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
-              <Plus size={15} />
-              Log Won Order
-            </button>
           </div>
 
-          {/* Custom date pickers — expand inline below the button row when active */}
+          {/* Custom date pickers — expand inline below when active */}
           {showCustomDate && (
             <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150 w-full">
               <span className="text-slate-500 font-semibold shrink-0">From:</span>
