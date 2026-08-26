@@ -1,197 +1,352 @@
 import { useQuery } from '@tanstack/react-query';
-import { inquiriesApi } from '../lib/api';
+import { activityLogsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, AlertCircle, CheckCircle, Clock, History, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import {
+  Loader2,
+  History,
+  RefreshCw,
+  Search,
+  X,
+  FileText,
+  ShoppingCart,
+  MapPin,
+  AlertTriangle,
+  Layers,
+  User,
+  ChevronDown,
+} from 'lucide-react';
+import { useState, useMemo } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
+type ModuleFilter = 'All' | 'Inquiries' | 'Orders' | 'Visits' | 'Complaints';
+
 export default function LogsPage() {
   const { effectivePhone } = useAuth();
-  const [tab, setTab] = useState<'review' | 'all'>('review');
+  const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [resetKey, setResetKey] = useState(0);
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: '30_days',
     from: getDaysAgo(30),
     to: formatLocalDate(),
   });
 
-  const fromDate = dateRange.from ? (dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`) : undefined;
-  const toDate = dateRange.to ? (dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`) : undefined;
+  const fromDate = dateRange.from
+    ? dateRange.from.includes('T')
+      ? dateRange.from
+      : `${dateRange.from}T00:00:00.000Z`
+    : undefined;
+  const toDate = dateRange.to
+    ? dateRange.to.includes('T')
+      ? dateRange.to
+      : `${dateRange.to}T23:59:59.999Z`
+    : undefined;
 
-  const { data: reviewData, isLoading: reviewLoading, refetch: refetchReview } = useQuery({
-    queryKey: ['logs-review', effectivePhone, dateRange],
+  // Fetch Activity Logs
+  const {
+    data: activityLogsData,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['activity-logs', effectivePhone, dateRange, moduleFilter, searchQuery],
     queryFn: () =>
-      inquiriesApi
-        .getReviewQueue({ salesperson_phone: effectivePhone, from: fromDate, to: toDate })
+      activityLogsApi
+        .getAll({
+          salesperson_phone: effectivePhone || undefined,
+          from: fromDate,
+          to: toDate,
+          module: moduleFilter === 'All' ? undefined : moduleFilter,
+          search: searchQuery.trim() || undefined,
+          limit: 300,
+        })
         .then((r) => {
           const raw = r?.data;
-          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+          return Array.isArray(raw)
+            ? raw
+            : raw?.data && Array.isArray(raw.data)
+              ? raw.data
+              : [];
         }),
   });
 
-  const { data: allData, isLoading: allLoading, refetch: refetchAll } = useQuery({
-    queryKey: ['logs-all', effectivePhone, dateRange],
+  // Fetch count query for all modules across current date filter
+  const { data: allModuleCountsData } = useQuery({
+    queryKey: ['activity-logs-counts', effectivePhone, dateRange],
     queryFn: () =>
-      inquiriesApi
-        .getAll({ salesperson_phone: effectivePhone, from: fromDate, to: toDate })
+      activityLogsApi
+        .getAll({
+          salesperson_phone: effectivePhone || undefined,
+          from: fromDate,
+          to: toDate,
+          limit: 500,
+        })
         .then((r) => {
           const raw = r?.data;
-          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+          return Array.isArray(raw)
+            ? raw
+            : raw?.data && Array.isArray(raw.data)
+              ? raw.data
+              : [];
         }),
   });
 
-  const { data: statsData } = useQuery({
-    queryKey: ['logs-stats', effectivePhone, dateRange],
-    queryFn: () =>
-      inquiriesApi
-        .getStats({ salesperson_phone: effectivePhone, from: fromDate, to: toDate })
-        .then((r) => r?.data?.data || r?.data || {}),
-  });
-
-  const isLoading = tab === 'review' ? reviewLoading : allLoading;
-  const logs = tab === 'review' ? reviewData : allData;
-
-  const handleRefresh = () => {
-    refetchReview();
-    refetchAll();
+  const handleClearAllFilters = () => {
+    setSearchQuery('');
+    setModuleFilter('All');
+    setDateRange({
+      preset: '30_days',
+      from: getDaysAgo(30),
+      to: formatLocalDate(),
+    });
+    setResetKey((prev) => prev + 1);
   };
 
-  const statusIcon = (status: string) => {
-    if (status === 'processed') 
-      return <CheckCircle size={14} className="text-green-500" />;
-    if (status === 'review') 
-      return <AlertCircle size={14} className="text-orange-500" />;
-    return <Clock size={14} className="text-blue-500" />;
+  const getModuleBadge = (mod: string) => {
+    switch (mod) {
+      case 'Inquiries':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+            <FileText size={12} className="text-blue-600" />
+            Inquiries
+          </span>
+        );
+      case 'Orders':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <ShoppingCart size={12} className="text-emerald-600" />
+            Orders
+          </span>
+        );
+      case 'Visits':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+            <MapPin size={12} className="text-purple-600" />
+            Visits
+          </span>
+        );
+      case 'Complaints':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+            <AlertTriangle size={12} className="text-rose-600" />
+            Complaints
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+            <Layers size={12} className="text-slate-500" />
+            {mod || 'General'}
+          </span>
+        );
+    }
   };
+
+  const formatRelativeTime = (timestampStr: string) => {
+    if (!timestampStr) return '';
+    try {
+      const diffSec = Math.floor((Date.now() - new Date(timestampStr).getTime()) / 1000);
+      if (diffSec < 60) return 'just now';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHrs = Math.floor(diffMin / 60);
+      if (diffHrs < 24) return `${diffHrs}h ago`;
+      const diffDays = Math.floor(diffHrs / 24);
+      return `${diffDays}d ago`;
+    } catch {
+      return '';
+    }
+  };
+
+  const formatDateTime = (timestampStr: string) => {
+    if (!timestampStr) return { date: '-', time: '' };
+    try {
+      const d = new Date(timestampStr);
+      return {
+        date: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      };
+    } catch {
+      return { date: timestampStr, time: '' };
+    }
+  };
+
+  // Accurate module counts for the dropdown
+  const moduleCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      All: 0,
+      Inquiries: 0,
+      Orders: 0,
+      Visits: 0,
+      Complaints: 0,
+    };
+    const list = allModuleCountsData || activityLogsData || [];
+    if (Array.isArray(list)) {
+      counts.All = list.length;
+      for (const log of list) {
+        if (log.module && counts[log.module] !== undefined) {
+          counts[log.module]++;
+        }
+      }
+    }
+    return counts;
+  }, [allModuleCountsData, activityLogsData]);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <History className="text-indigo-600" size={28} />
-            System &amp; Bot Capture Logs
-          </h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            View raw incoming WhatsApp bot logs, AI extraction review queue, and message history.
-          </p>
-        </div>
+    <div className="space-y-6 w-full animate-fade-in pb-12">
+      {/* Header Title */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+          <History className="text-indigo-600" size={28} />
+          Activity Logs
+        </h1>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {statsData && (
-            <div className="flex gap-2 sm:gap-3">
-              {[
-                { label: 'Total Logs', value: statsData.total || 0, color: 'text-gray-800' },
-                { label: 'Review Queue', value: statsData.review || 0, color: 'text-orange-600' },
-                { label: 'Processed', value: statsData.processed || 0, color: 'text-green-600' },
-              ].map(s => (
-                <div key={s.label} className="text-center bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
-                  <p className={`text-base font-bold ${s.color}`}>{s.value}</p>
-                  <p className="text-[10px] text-slate-500">{s.label}</p>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Filter & Search Bar - Compact Single Row Matching Inquiries */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs w-full">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* 1. Compact Search Bar (w-full sm:w-64) */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+            <input
+              type="text"
+              placeholder="Search Customer, Rep, Action..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500 font-medium placeholder:text-slate-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                title="Clear Search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
 
-          <DateFilterControl onChange={setDateRange} initialPreset="30_days" />
+          {/* 2. Module Dropdown Filter */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Layers size={14} className="absolute left-3 text-indigo-600 pointer-events-none" />
+            <select
+              value={moduleFilter}
+              onChange={(e) => setModuleFilter(e.target.value as ModuleFilter)}
+              className="w-full sm:w-auto pl-8.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer appearance-none transition-all"
+            >
+              <option value="All">All ({moduleCounts.All})</option>
+              <option value="Inquiries">Inquiries ({moduleCounts.Inquiries})</option>
+              <option value="Orders">Orders ({moduleCounts.Orders})</option>
+              <option value="Visits">Visits ({moduleCounts.Visits})</option>
+              <option value="Complaints">Complaints ({moduleCounts.Complaints})</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
 
+          {/* 3. Date Filter Control */}
+          <DateFilterControl
+            onChange={setDateRange}
+            initialPreset="30_days"
+            value={dateRange}
+            resetKey={resetKey}
+          />
+
+          {/* 4. Clear Filter Button */}
           <button
-            onClick={handleRefresh}
-            className="p-2 bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors shadow-2xs"
-            title="Refresh">
-            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+            type="button"
+            onClick={handleClearAllFilters}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+          >
+            Clear Filter
+          </button>
+        </div>
+
+        {/* Right Side: Refresh Button at the very right in the same line */}
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => refetch()}
+            className="px-2.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer flex items-center justify-center"
+            title="Refresh Logs"
+          >
+            <RefreshCw size={15} className={isLoading ? 'animate-spin text-indigo-600' : ''} />
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-fit border border-slate-200">
-        {[
-          { key: 'review', label: `Review Queue (${reviewData?.length || 0})` },
-          { key: 'all', label: 'All Bot Logs' },
-        ].map(t => (
-          <button key={t.key}
-            onClick={() => setTab(t.key as 'all' | 'review')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors
-              ${tab === t.key
-                ? 'bg-white text-slate-900 shadow-sm font-semibold'
-                : 'text-slate-500 hover:text-slate-800'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
+      {/* Activity Logs Stream List */}
       {isLoading ? (
-        <div className="flex items-center justify-center h-64 bg-white rounded-xl border border-slate-200">
-          <Loader2 className="animate-spin text-indigo-600" size={32} />
+        <div className="flex flex-col items-center justify-center h-64 bg-white rounded-xl border border-slate-200 w-full">
+          <Loader2 className="animate-spin text-indigo-600 mb-2" size={32} />
+          <p className="text-sm text-slate-500 font-medium">Loading activity logs...</p>
+        </div>
+      ) : !activityLogsData || activityLogsData.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-2xs w-full">
+          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+            <History size={24} />
+          </div>
+          <h3 className="text-base font-semibold text-slate-900">No activity logs found</h3>
+          <p className="text-sm text-slate-500 max-w-md mx-auto mt-1">
+            Activities logged across Inquiries, Orders, Visits, and Complaints will appear here
+            automatically.
+          </p>
+          {(searchQuery || moduleFilter !== 'All') && (
+            <button
+              onClick={handleClearAllFilters}
+              className="mt-4 px-3.5 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
+            >
+              Clear search &amp; filters
+            </button>
+          )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-          <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              <tr>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Sender / Phone</th>
-                <th className="px-4 py-3">Raw Message Text</th>
-                <th className="px-4 py-3">Channel</th>
-                <th className="px-4 py-3">AI Confidence</th>
-                <th className="px-4 py-3">Date &amp; Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {(logs || []).map((log: any, idx: number) => (
-                <tr key={log.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      {statusIcon(log.status)}
-                      <span className="text-xs capitalize font-medium text-slate-700">
-                        {log.status || 'review'}
+        <div className="w-full bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden divide-y divide-slate-100">
+          {activityLogsData.map((log: any, idx: number) => {
+            const relativeTime = formatRelativeTime(log.timestamp || log.created_at);
+            const { date, time } = formatDateTime(log.timestamp || log.created_at);
+
+            return (
+              <div
+                key={log.id || idx}
+                className="p-4 hover:bg-slate-50/90 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm"
+              >
+                {/* Left: Module Badge + Action Description + Customer */}
+                <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
+                  <div className="shrink-0 pt-0.5 sm:pt-0">{getModuleBadge(log.module)}</div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-slate-900 font-semibold leading-snug break-words">
+                      {log.description || 'Activity recorded'}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1 text-xs">
+                      {log.customer_name && (
+                        <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                          {log.customer_name}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 text-slate-500 font-medium">
+                        <User size={12} className="text-slate-400" />
+                        {log.salesperson_name || 'Sales Team'}
                       </span>
                     </div>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {log.sender_name || 'Unknown'}
-                    </p>
-                    <p className="text-xs text-slate-400 font-mono">{log.sender_phone || '-'}</p>
-                  </td>
-                  <td className="px-4 py-3.5 max-w-sm">
-                    <p className="text-xs text-slate-700 font-mono bg-slate-50 p-1.5 rounded border border-slate-200 truncate" title={log.raw_text}>
-                      {log.raw_text || '-'}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className="text-xs bg-slate-100 text-slate-700 font-medium px-2.5 py-0.5 rounded-full capitalize">
-                      {log.source_channel || 'whatsapp'}
+                  </div>
+                </div>
+
+                {/* Right: Date, Time & Relative Time */}
+                <div className="shrink-0 text-left sm:text-right text-xs text-slate-500 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                  <div className="flex items-center sm:flex-col sm:items-end gap-1.5 sm:gap-0">
+                    <span className="font-semibold text-slate-700">{date}</span>
+                    <span className="text-[11px] text-slate-500 font-mono">{time}</span>
+                  </div>
+                  {relativeTime && (
+                    <span className="text-[10px] text-indigo-600 bg-indigo-50 font-bold px-1.5 py-0.2 rounded border border-indigo-100 mt-1">
+                      {relativeTime}
                     </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    {log.overall_confidence != null ? (
-                      <span className={`text-xs font-bold
-                        ${log.overall_confidence >= 0.85 
-                          ? 'text-emerald-600' : 'text-amber-600'}`}>
-                        {Math.round((log.overall_confidence > 1 ? log.overall_confidence / 100 : log.overall_confidence) * 100)}%
-                      </span>
-                    ) : (
-                      <span className="text-xs font-bold text-emerald-600">
-                        92%
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
-                    {log.created_at ? new Date(log.created_at).toLocaleString('en-IN') : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {(!logs || logs.length === 0) && (
-            <div className="text-center py-12 text-slate-400">
-              No capture logs found
-            </div>
-          )}
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
