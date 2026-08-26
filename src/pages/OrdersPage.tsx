@@ -384,6 +384,12 @@ export default function OrdersPage() {
   // AI OCR Scanning state
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [poFileName, setPoFileName] = useState('');
+  const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
+
+  const isPdf = (url?: string) => {
+    if (!url) return false;
+    return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
+  };
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -396,19 +402,13 @@ export default function OrdersPage() {
     {
       sku_text: '',
       dimensions: '',
-      hsn_code: '7208',
+      hsn_code: '',
       quantity: 0,
       unit: 'MT',
       rate: 0,
       amount: 0,
     },
   ]);
-  const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
-
-  const isPdf = (url?: string) => {
-    if (!url) return false;
-    return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
-  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -465,7 +465,7 @@ export default function OrdersPage() {
             const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => ({
               sku_text: i.sku_text || i.description || 'Material',
               dimensions: i.dimensions || '',
-              hsn_code: i.hsn_code || i.hsn || '7208',
+              hsn_code: i.hsn_code || i.hsn || '',
               quantity: Number(i.quantity) || 0,
               unit: normalizeUnit(i.unit) || 'MT',
               rate: Number(i.rate) || 0,
@@ -611,7 +611,7 @@ export default function OrdersPage() {
         {
           sku_text: '',
           dimensions: '',
-          hsn_code: '7208',
+          hsn_code: '',
           quantity: 0,
           unit: 'MT',
           rate: 0,
@@ -1646,7 +1646,7 @@ export default function OrdersPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '7208', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
                                   ];
                                   setFormLineItems(updated);
                                 }}
