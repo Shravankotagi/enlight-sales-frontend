@@ -1950,6 +1950,7 @@ export default function InquiriesPage() {
             <input
               type="date"
               value={customFrom}
+              max={customTo || undefined}
               onChange={e => handleCustomFromChange(e.target.value)}
               className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
             />
@@ -1957,6 +1958,7 @@ export default function InquiriesPage() {
             <input
               type="date"
               value={customTo}
+              min={customFrom || undefined}
               onChange={e => handleCustomToChange(e.target.value)}
               className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
             />

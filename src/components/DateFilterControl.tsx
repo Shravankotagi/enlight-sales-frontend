@@ -87,20 +87,34 @@ export default function DateFilterControl({ onChange, initialPreset = '30_days',
 
   const handleCustomFromChange = (newFrom: string) => {
     setCustomFrom(newFrom);
-    if (newFrom && customTo) {
-      onChange({ preset: 'custom', from: newFrom, to: customTo });
+    let effectiveTo = customTo;
+    if (newFrom && customTo && newFrom > customTo) {
+      effectiveTo = newFrom;
+      setCustomTo(newFrom);
+    }
+    if (newFrom && effectiveTo) {
+      onChange({ preset: 'custom', from: newFrom, to: effectiveTo });
     }
   };
 
   const handleCustomToChange = (newTo: string) => {
-    setCustomTo(newTo);
-    if (customFrom && newTo) {
-      onChange({ preset: 'custom', from: customFrom, to: newTo });
+    let effectiveTo = newTo;
+    if (newTo && customFrom && newTo < customFrom) {
+      effectiveTo = customFrom;
+    }
+    setCustomTo(effectiveTo);
+    if (customFrom && effectiveTo) {
+      onChange({ preset: 'custom', from: customFrom, to: effectiveTo });
     }
   };
 
   const handleApplyCustom = () => {
-    onChange({ preset: 'custom', from: customFrom, to: customTo });
+    let effectiveTo = customTo;
+    if (customFrom && customTo && customTo < customFrom) {
+      effectiveTo = customFrom;
+      setCustomTo(customFrom);
+    }
+    onChange({ preset: 'custom', from: customFrom, to: effectiveTo });
   };
 
   return (
@@ -128,6 +142,7 @@ export default function DateFilterControl({ onChange, initialPreset = '30_days',
           <input
             type="date"
             value={customFrom}
+            max={customTo || undefined}
             onChange={e => handleCustomFromChange(e.target.value)}
             className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
           />
@@ -135,6 +150,7 @@ export default function DateFilterControl({ onChange, initialPreset = '30_days',
           <input
             type="date"
             value={customTo}
+            min={customFrom || undefined}
             onChange={e => handleCustomToChange(e.target.value)}
             className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
           />

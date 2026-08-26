@@ -242,15 +242,24 @@ export default function OrdersPage() {
 
   const handleCustomFromChange = (val: string) => {
     setCustomFrom(val);
-    if (val && customTo) {
-      setDateRange({ preset: 'custom', from: val, to: customTo });
+    let effectiveTo = customTo;
+    if (val && customTo && val > customTo) {
+      effectiveTo = val;
+      setCustomTo(val);
+    }
+    if (val && effectiveTo) {
+      setDateRange({ preset: 'custom', from: val, to: effectiveTo });
     }
   };
 
   const handleCustomToChange = (val: string) => {
-    setCustomTo(val);
-    if (customFrom && val) {
-      setDateRange({ preset: 'custom', from: customFrom, to: val });
+    let effectiveVal = val;
+    if (val && customFrom && val < customFrom) {
+      effectiveVal = customFrom;
+    }
+    setCustomTo(effectiveVal);
+    if (customFrom && effectiveVal) {
+      setDateRange({ preset: 'custom', from: customFrom, to: effectiveVal });
     }
   };
 
@@ -622,7 +631,11 @@ export default function OrdersPage() {
       setFormUploadedBase64(null);
 
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      fetchOrders();
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      await fetchOrders();
     } catch (err: any) {
       console.error('Error creating order:', err);
       toast.error(err?.response?.data?.message || 'Failed to create order. Please try again.');
@@ -815,7 +828,7 @@ export default function OrdersPage() {
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-500 font-medium">Total Items</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{totalItems}</p>
+            <p className="text-2xl font-bold text-blue-600 mt-1">{totalItems}</p>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
             <Layers size={22} />
@@ -904,6 +917,7 @@ export default function OrdersPage() {
             <input
               type="date"
               value={customFrom}
+              max={customTo || undefined}
               onChange={e => handleCustomFromChange(e.target.value)}
               className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
             />
@@ -911,6 +925,7 @@ export default function OrdersPage() {
             <input
               type="date"
               value={customTo}
+              min={customFrom || undefined}
               onChange={e => handleCustomToChange(e.target.value)}
               className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
             />

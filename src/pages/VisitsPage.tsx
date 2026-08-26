@@ -101,17 +101,26 @@ export default function VisitsPage() {
 
   const handleCustomFromChange = (val: string) => {
     setCustomFrom(val);
-    if (val && customTo) {
-      setDateRange({ from: val, to: customTo });
+    let effectiveTo = customTo;
+    if (val && customTo && val > customTo) {
+      effectiveTo = val;
+      setCustomTo(val);
+    }
+    if (val && effectiveTo) {
+      setDateRange({ from: val, to: effectiveTo });
     } else if (val) {
       setDateRange({ from: val, to: val });
     }
   };
 
   const handleCustomToChange = (val: string) => {
-    setCustomTo(val);
-    if (customFrom && val) {
-      setDateRange({ from: customFrom, to: val });
+    let effectiveVal = val;
+    if (val && customFrom && val < customFrom) {
+      effectiveVal = customFrom;
+    }
+    setCustomTo(effectiveVal);
+    if (customFrom && effectiveVal) {
+      setDateRange({ from: customFrom, to: effectiveVal });
     }
   };
 
@@ -670,6 +679,7 @@ export default function VisitsPage() {
             <input
               type="date"
               value={customFrom}
+              max={customTo || undefined}
               onChange={e => handleCustomFromChange(e.target.value)}
               className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
             />
@@ -677,6 +687,7 @@ export default function VisitsPage() {
             <input
               type="date"
               value={customTo}
+              min={customFrom || undefined}
               onChange={e => handleCustomToChange(e.target.value)}
               className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
             />
