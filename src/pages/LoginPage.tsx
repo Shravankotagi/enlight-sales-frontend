@@ -31,12 +31,18 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: `91${phone.replace(/\D/g, '').slice(-10)}` }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { error: text || `Backend server error (${res.status})` };
+      }
+      if (!res.ok) throw new Error(data.error || data.message || `Failed to send OTP (${res.status})`);
       if (data.data?.dev_otp) setDevOtp(data.data.dev_otp);
       setStep('otp');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Unable to connect to backend service. Please check backend server.');
     } finally {
       setLoading(false);
     }
@@ -58,12 +64,18 @@ export default function LoginPage() {
           otp
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Invalid OTP');
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { error: text || `Backend server error (${res.status})` };
+      }
+      if (!res.ok) throw new Error(data.error || data.message || `Invalid OTP (${res.status})`);
       login(data.data.token, data.data.employee);
       navigate('/');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Verification failed. Please check backend service.');
     } finally {
       setLoading(false);
     }
