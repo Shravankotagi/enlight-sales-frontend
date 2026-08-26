@@ -24,7 +24,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  ArrowUpRight,
   ArrowRight,
   Sparkles,
   Plus,
@@ -266,7 +265,7 @@ export default function HomePage() {
 
     // Convert all values to mm so we can identify thickness
     const inMm = parsed.map(p => {
-      if (p.unit === 'm')  return p.value * 1000;
+      if (p.unit === 'm') return p.value * 1000;
       if (p.unit === 'cm') return p.value * 10;
       return p.value; // 'mm' or no unit → assume mm
     });
@@ -274,12 +273,12 @@ export default function HomePage() {
     // Thickness = smallest dimension (usually 2–20 mm for sheets)
     const sorted = [...inMm].sort((a, b) => a - b);
     const thicknessMm = sorted[0];
-    const otherMm     = sorted.slice(1);        // remaining = length, width
-    const lengthMm    = otherMm[otherMm.length - 1];
-    const widthMm     = otherMm[otherMm.length - 2] ?? lengthMm;
+    const otherMm = sorted.slice(1);        // remaining = length, width
+    const lengthMm = otherMm[otherMm.length - 1];
+    const widthMm = otherMm[otherMm.length - 2] ?? lengthMm;
 
     const lengthM = lengthMm / 1000;
-    const widthM  = widthMm  / 1000;
+    const widthM = widthMm / 1000;
 
     // Weight (kg) = L(m) × W(m) × T(mm) × 8 × NOS
     return lengthM * widthM * thicknessMm * 8 * count;
@@ -414,16 +413,8 @@ export default function HomePage() {
 
   const grandTotalTopTonnage = topCustomerAccounts.reduce((acc, c) => acc + c.tonnage, 0) || 1;
 
-  // Month-on-month growth %
-  const lastMonthIdx = currentMonthIdx === 0 ? 11 : currentMonthIdx - 1;
-  const currentMonthTonnage = monthlyStats[currentMonthIdx]?.tonnage || totalDeliveredTonnage;
-  const lastMonthTonnage = monthlyStats[lastMonthIdx]?.tonnage || 0;
-  const tonnageGrowthPct =
-    lastMonthTonnage > 0
-      ? Math.round(((currentMonthTonnage - lastMonthTonnage) / lastMonthTonnage) * 100)
-      : 18;
 
-  const avgOrderSize = totalWonOrdersCount > 0 ? (totalDeliveredTonnage / totalWonOrdersCount).toFixed(1) : '0';
+
 
   // Sales Rep Leaderboard (Manager / Admin only)
   const salesRepLeaderboard = useMemo(() => {
@@ -620,78 +611,91 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Header Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleRefreshAll}
-            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
-            title="Refresh Dashboard">
-            <RefreshCw
-              size={17}
-              className={dashLoading || actionLoading || ordersLoading ? 'animate-spin text-blue-600' : ''}
-            />
-          </button>
+        {/* Header Action Buttons — Refresh · Filter · Log Won Order */}
+        <div className="flex flex-col items-end gap-2">
 
-          <button
-            onClick={() => navigate('/orders')}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
-            <Plus size={15} />
-            Log Won Order
-          </button>
-        </div>
-      </div>
+          {/* Top row: Refresh, Date Filter dropdown, Log Won Order */}
+          <div className="flex flex-wrap items-center gap-2">
 
-      {/* ── Inline Filter Bar (Visits-tab style) ─────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="relative inline-flex items-center">
-          <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-          <select
-            value={dayPreset}
-            onChange={e => handleDayPresetChange(e.target.value)}
-            className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-            <option value="today">Today</option>
-            <option value="7_days">Last 7 Days</option>
-            <option value="30_days">Last 30 Days</option>
-            <option value="90_days">Last 90 Days</option>
-            <option value="this_month">This Month</option>
-            <option value="custom">Custom Range</option>
-          </select>
-          <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-        </div>
+            {/* Refresh */}
+            <button
+              onClick={handleRefreshAll}
+              className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+              title="Refresh Dashboard">
+              <RefreshCw
+                size={17}
+                className={dashLoading || actionLoading || ordersLoading ? 'animate-spin text-blue-600' : ''}
+              />
+            </button>
 
-        {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
-            <span className="text-slate-500 font-semibold">From:</span>
-            <input
-              type="date"
-              value={customFrom}
-              onChange={e => {
-                setCustomFrom(e.target.value);
-                if (e.target.value && customTo) setDateRange({ preset: 'custom', from: e.target.value, to: customTo });
-              }}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
-            />
-            <span className="text-slate-500 font-semibold">To:</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={e => {
-                setCustomTo(e.target.value);
-                if (customFrom && e.target.value) setDateRange({ preset: 'custom', from: customFrom, to: e.target.value });
-              }}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
-            />
+            {/* Date Filter — same size/style as the other buttons */}
+            <div className="relative inline-flex items-center">
+              <Calendar size={13} className="absolute left-2.5 text-blue-600 pointer-events-none" />
+              <select
+                value={dayPreset}
+                onChange={e => handleDayPresetChange(e.target.value)}
+                className="pl-7 pr-7 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+                <option value="today">Today</option>
+                <option value="7_days">Last 7 Days</option>
+                <option value="30_days">Last 30 Days</option>
+                <option value="90_days">Last 90 Days</option>
+                <option value="this_month">This Month</option>
+                <option value="custom">Custom Range</option>
+              </select>
+              <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
+            </div>
+
+            {/* Log Won Order */}
+            <button
+              onClick={() => navigate('/orders')}
+              className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
+              <Plus size={15} />
+              Log Won Order
+            </button>
           </div>
-        )}
 
-        {dayPreset !== 'this_month' && (
-          <button
-            type="button"
-            onClick={handleClearFilter}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
-            Clear Filter
-          </button>
-        )}
+          {/* Custom date pickers — expand inline below the button row when active */}
+          {showCustomDate && (
+            <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+              <span className="text-slate-500 font-semibold">From:</span>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={e => {
+                  setCustomFrom(e.target.value);
+                  if (e.target.value && customTo) setDateRange({ preset: 'custom', from: e.target.value, to: customTo });
+                }}
+                className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+              />
+              <span className="text-slate-500 font-semibold">To:</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={e => {
+                  setCustomTo(e.target.value);
+                  if (customFrom && e.target.value) setDateRange({ preset: 'custom', from: customFrom, to: e.target.value });
+                }}
+                className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+              />
+              <button
+                type="button"
+                onClick={handleClearFilter}
+                className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer">
+                Clear
+              </button>
+            </div>
+          )}
+
+          {/* Non-custom active filter — quick clear link */}
+          {dayPreset !== 'this_month' && dayPreset !== 'custom' && (
+            <button
+              type="button"
+              onClick={handleClearFilter}
+              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 underline underline-offset-2 cursor-pointer transition-colors">
+              Clear filter
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── 5 Stat Cards ─────────────────────────────────────────────── */}
@@ -715,11 +719,6 @@ export default function HomePage() {
               </p>
               <span className="text-xs sm:text-sm font-bold text-blue-100">MT</span>
             </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="inline-flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-md border border-white/20">
-                <ArrowUpRight size={11} /> +{tonnageGrowthPct}% vs last month
-              </span>
-            </div>
           </div>
           <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
         </div>
@@ -739,11 +738,6 @@ export default function HomePage() {
               </p>
               <span className="text-xs font-bold text-blue-700">Orders</span>
             </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="px-2 py-0.5 rounded-md bg-white text-blue-900 border border-blue-200 text-[11px] font-bold shadow-2xs">
-                Avg: <strong className="text-blue-950 font-black">{avgOrderSize} MT</strong> / order
-              </span>
-            </div>
           </div>
         </div>
 
@@ -761,11 +755,6 @@ export default function HomePage() {
                 {totalVisitsCount}
               </p>
               <span className="text-xs font-bold text-emerald-700">Visits</span>
-            </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="px-2 py-0.5 rounded-md bg-white text-emerald-900 border border-emerald-200 text-[11px] font-bold shadow-2xs">
-                Field visits logged
-              </span>
             </div>
           </div>
         </div>
@@ -785,11 +774,6 @@ export default function HomePage() {
               </p>
               <span className="text-xs font-bold text-indigo-700">Customers</span>
             </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="px-2 py-0.5 rounded-md bg-white text-indigo-900 border border-indigo-200 text-[11px] font-bold shadow-2xs">
-                New accounts onboarded
-              </span>
-            </div>
           </div>
         </div>
 
@@ -807,11 +791,6 @@ export default function HomePage() {
                 {openComplaints.length}
               </p>
               <span className="text-xs font-bold text-indigo-700">Pending</span>
-            </div>
-            <div className="mt-2.5 flex items-center">
-              <span className="px-2 py-0.5 rounded-md bg-white text-indigo-900 border border-indigo-200 text-[11px] font-bold shadow-2xs">
-                {openComplaints.length === 0 ? 'All resolved' : `${openComplaints.length} open for resolution`}
-              </span>
             </div>
           </div>
         </div>
