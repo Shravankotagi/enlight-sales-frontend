@@ -861,19 +861,19 @@ export default function HomePage() {
                 <div
                   key={item.id}
                   onClick={() => navigate(item.link)}
-                  className="snap-start shrink-0 w-[280px] sm:w-[320px] md:w-[350px] p-5 bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400 rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-center gap-2.5 cursor-pointer group">
-                  {/* Top Left: Icon in blue badge + Beside: Category text in increased size */}
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-xs shrink-0">
-                      <IconComp size={18} />
+                  className="snap-start shrink-0 w-[300px] sm:w-[340px] md:w-[360px] p-4 sm:p-5 bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400 rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-center gap-2 cursor-pointer group">
+                  {/* Top Left: Icon + Category */}
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-xs shrink-0">
+                      <IconComp size={14} />
                     </div>
-                    <span className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-tight">
+                    <span className="text-xs sm:text-sm font-bold text-slate-600 tracking-wide whitespace-nowrap">
                       {item.category}
                     </span>
                   </div>
 
-                  {/* Below: Action Card Title with increased font */}
-                  <h3 className="text-sm sm:text-base font-semibold text-slate-700 leading-snug">
+                  {/* Below: Action Card Title - 1 line single row */}
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-snug whitespace-nowrap">
                     {item.title}
                   </h3>
                 </div>
