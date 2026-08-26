@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -979,6 +979,36 @@ export default function InquiriesPage() {
     return { label: stage, className: 'bg-slate-50 text-slate-700 border-slate-200' };
   };
 
+  const getInquiryDealStageKey = (inq: InquiryItem, companyName?: string): string => {
+    const linkedDeal = getLinkedDeal(inq, companyName);
+    const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
+    if (dealStage === 'won' || dealStage === 'lost' || dealStage === 'negotiation') {
+      return dealStage;
+    }
+    if (dealStage === 'qualified' || dealStage === 'quoted') {
+      return dealStage;
+    }
+    const details = parseInquiryText(inq.raw_text || '', inq);
+    const st = (inq.status || '').toLowerCase();
+    const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
+    const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
+    const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
+
+    if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
+      return 'quoted';
+    }
+    if (isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed' || inq.inquiry_type === 'purchase_order') {
+      return 'qualified';
+    }
+    if (st === 'review' || st === 'needs_review' || st === 'pending' || !st) {
+      return 'new_inquiry';
+    }
+    if (dealStage) {
+      return dealStage;
+    }
+    return 'new_inquiry';
+  };
+
   const handleUpdateDealStage = async (inq: InquiryItem, details: ExtractedDetails, targetStage: string) => {
     setOpenActionMenuId(null);
     setSubMenuInqId(null);
@@ -1727,20 +1757,25 @@ export default function InquiriesPage() {
   const rawList = Array.isArray(inquiries) && inquiries.length > 0 ? inquiries : (Array.isArray(rawInquiries) ? rawInquiries : []);
   const productInquiries = rawList.filter(isProductInquiry);
   const activeInquiryList = productInquiries;
-  const reviewCount = activeInquiryList.filter(i => {
-    const st = (i?.status || 'review').toLowerCase();
-    return ['review', 'needs_review', 'pending', 'new', 'draft'].includes(st);
-  }).length;
-
-  const savedCount = activeInquiryList.filter(i => {
-    const st = (i?.status || '').toLowerCase();
-    return ['processed', 'confirmed', 'won', 'auto_created', 'order_created', 'quotation_ready'].includes(st);
-  }).length;
-
-  const quotedCount = activeInquiryList.filter(i => {
-    const st = (i?.status || '').toLowerCase();
-    return st === 'quoted' || st === 'quotation_sent';
-  }).length;
+  const stageCounts = useMemo(() => {
+    const counts = {
+      all: activeInquiryList.length,
+      new_inquiry: 0,
+      qualified: 0,
+      quoted: 0,
+      negotiation: 0,
+      won: 0,
+      lost: 0,
+    };
+    activeInquiryList.forEach(inq => {
+      const parsed = parseInquiryText(inq.raw_text || '', inq);
+      const stageKey = getInquiryDealStageKey(inq, parsed.companyName);
+      if (counts[stageKey as keyof typeof counts] !== undefined) {
+        counts[stageKey as keyof typeof counts]++;
+      }
+    });
+    return counts;
+  }, [activeInquiryList, rawDeals]);
 
   const filtered = activeInquiryList.filter(i => {
     try {
@@ -1789,17 +1824,8 @@ export default function InquiriesPage() {
         phone.includes(s) ||
         text.toLowerCase().includes(s);
 
-      const statusStr = (i?.status || 'review').toLowerCase();
-      const hasRates = (parsed.lineItems || []).length > 0 && (parsed.lineItems || []).every((li: any) => Number(li.rate) > 0 && Number(li.quantity) > 0);
-      const isQuoted = (statusStr === 'quoted' || statusStr === 'quotation_sent') && hasRates;
-      const isSaved = ['processed', 'confirmed', 'won', 'auto_created', 'order_created', 'quotation_ready'].includes(statusStr) && hasRates;
-      const isReview = !isSaved && !isQuoted;
-
-      const matchesStatus =
-        filterStatus === 'all' ||
-        (filterStatus === 'review' && isReview) ||
-        (filterStatus === 'saved' && isSaved) ||
-        (filterStatus === 'quoted' && isQuoted);
+      const dealStage = getInquiryDealStageKey(i, parsed.companyName);
+      const matchesStatus = filterStatus === 'all' || dealStage === filterStatus;
 
       return matchesSearch && matchesStatus;
     } catch {
@@ -1942,10 +1968,13 @@ export default function InquiriesPage() {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
             >
-              <option value="all">All ({activeInquiryList.length})</option>
-              <option value="review">Review ({reviewCount})</option>
-              <option value="saved">Saved ({savedCount})</option>
-              <option value="quoted">Quotation Sent ({quotedCount})</option>
+              <option value="all">All ({stageCounts.all})</option>
+              <option value="new_inquiry">New Inquiry ({stageCounts.new_inquiry})</option>
+              <option value="qualified">Qualified ({stageCounts.qualified})</option>
+              <option value="quoted">Quoted ({stageCounts.quoted})</option>
+              <option value="negotiation">Negotiation ({stageCounts.negotiation})</option>
+              <option value="won">Won ({stageCounts.won})</option>
+              <option value="lost">Lost ({stageCounts.lost})</option>
             </select>
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
@@ -2067,33 +2096,8 @@ export default function InquiriesPage() {
                   ? `(${rowTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
                   : '';
                 const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
-
-                const linkedDeal = getLinkedDeal(inq, details.companyName);
-                const dealStageInfo = (() => {
-                  const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
-                  // 1. If linked deal has an explicit terminal/advanced stage, always respect it
-                  if (dealStage === 'won' || dealStage === 'lost' || dealStage === 'negotiation') {
-                    return getDealStageDisplay(dealStage);
-                  }
-                  // 2. If deal has qualified or quoted, respect it
-                  if (dealStage === 'qualified' || dealStage === 'quoted') {
-                    return getDealStageDisplay(dealStage);
-                  }
-                  // 3. Otherwise align strictly with inquiry status mapping
-                  if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
-                    return getDealStageDisplay('quoted');
-                  }
-                  if (isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed' || inq.inquiry_type === 'purchase_order') {
-                    return getDealStageDisplay('qualified');
-                  }
-                  if (st === 'review' || st === 'needs_review' || st === 'pending' || !st) {
-                    return getDealStageDisplay('new_inquiry');
-                  }
-                  if (dealStage) {
-                    return getDealStageDisplay(dealStage);
-                  }
-                  return getDealStageDisplay('new_inquiry');
-                })();
+                const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
+                const dealStageInfo = getDealStageDisplay(dealStageKey);
 
                 const currentStageLabel = dealStageInfo?.label || 'New Inquiry';
                 const isNewInquiryStage = currentStageLabel === 'New Inquiry';
