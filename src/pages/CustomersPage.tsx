@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { customersApi, employeesApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import {
@@ -148,10 +149,13 @@ function BillingChart({ customer }: { customer: any }) {
 export default function CustomersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRisk, setFilterRisk] = useState<string>('all');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(() => {
+    return searchParams.get('id') || searchParams.get('customerId') || null;
+  });
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -226,6 +230,35 @@ export default function CustomersPage() {
   });
 
   const safeCustomers: any[] = Array.isArray(rawCustomersData) ? rawCustomersData : [];
+
+  // Synchronize URL search params with selected customer
+  useEffect(() => {
+    const cid = searchParams.get('id') || searchParams.get('customerId');
+    const cname = searchParams.get('name');
+    if (cid) {
+      setSelectedCustomerId(cid);
+    } else if (cname && safeCustomers.length > 0) {
+      const match = safeCustomers.find(
+        c => (c.customer_name || c.name || '').trim().toLowerCase() === cname.trim().toLowerCase()
+      );
+      if (match) {
+        setSelectedCustomerId(match.id || `virtual-${match.customer_name || match.name}`);
+      } else {
+        setSelectedCustomerId(`virtual-${cname}`);
+      }
+    }
+  }, [searchParams, safeCustomers]);
+
+  const handleCloseModal = () => {
+    setSelectedCustomerId(null);
+    if (searchParams.get('id') || searchParams.get('customerId') || searchParams.get('name')) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('id');
+      nextParams.delete('customerId');
+      nextParams.delete('name');
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
 
   // Reset pagination on filter change
   useEffect(() => {
@@ -606,7 +639,7 @@ export default function CustomersPage() {
               <div className="flex items-center gap-2">
                 {singleCustomer && <HealthBadge risk={singleCustomer.churn_risk || 'active'} />}
                 <button
-                  onClick={() => setSelectedCustomerId(null)}
+                  onClick={handleCloseModal}
                   className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors ml-1 cursor-pointer"
                   title="Close">
                   <X size={20} />
