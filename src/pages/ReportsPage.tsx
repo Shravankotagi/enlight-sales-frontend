@@ -66,7 +66,7 @@ export default function ReportsPage() {
 
   const anyLoading = monthlyLoading || funnelLoading || skuLoading;
 
-  const { totalMt, hasUnconvertible } = useMemo(() => {
+  const { totalMt } = useMemo(() => {
     const skusList = (sku?.skus || []).map((item: any) => ({
       ...item,
       quantity: item.total_quantity || item.quantity,
@@ -118,9 +118,6 @@ export default function ReportsPage() {
               <p className="text-2xl font-bold text-emerald-600">
                 {totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
               </p>
-              {hasUnconvertible && (
-                <p className="text-[10px] text-slate-400">* some items excluded</p>
-              )}
               <p className="text-sm text-gray-500 mt-1">Total Tonnage (MT)</p>
             </div>
 
@@ -247,42 +244,6 @@ export default function ReportsPage() {
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <Package size={16} className="text-indigo-600" /> SKU Breakdown
             </h3>
-
-            {/* SKU Summary Cards */}
-            {sku && (sku?.skus || []).length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                  <p className="text-xs font-medium text-slate-500">Unique Products Sold</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-1">
-                    {(sku?.skus || []).length}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                  <p className="text-xs font-medium text-slate-500">Total Tonnage (MT)</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">
-                    {totalMt.toLocaleString('en-IN', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}{' '}
-                    MT
-                  </p>
-                  {hasUnconvertible && (
-                    <p className="text-[11px] text-slate-400 mt-0.5">* some items excluded</p>
-                  )}
-                </div>
-
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                  <p className="text-xs font-medium text-slate-500">Total Deals Closed</p>
-                  <p className="text-2xl font-bold text-indigo-600 mt-1">
-                    {(sku?.skus || []).reduce(
-                      (sum: number, item: any) => sum + (Number(item.deal_count) || 0),
-                      0,
-                    )}
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* SKU Table */}
             <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
