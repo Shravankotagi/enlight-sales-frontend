@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { reportsApi, ordersApi } from '../lib/api';
+import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, Loader2, RefreshCw } from 'lucide-react';
@@ -70,14 +70,27 @@ export default function ReportsPage() {
         }),
   });
 
+  // Query actual inquiries received using the exact same endpoint as Inquiries tab
+  const { data: rawInquiries = [], isLoading: inquiriesLoading, refetch: refetchInquiries } = useQuery({
+    queryKey: ['inquiries-list', effectivePhone, dateRange],
+    queryFn: () =>
+      inquiriesApi
+        .getAll(getParams())
+        .then((r) => {
+          const list = Array.isArray(r?.data) ? r.data : (Array.isArray(r?.data?.data) ? r.data.data : []);
+          return list;
+        }),
+  });
+
   const refetchAll = () => {
     refetchMonthly();
     refetchFunnel();
     refetchSku();
     refetchOrders();
+    refetchInquiries();
   };
 
-  const anyLoading = monthlyLoading || funnelLoading || skuLoading || ordersLoading;
+  const anyLoading = monthlyLoading || funnelLoading || skuLoading || ordersLoading || inquiriesLoading;
 
   // Single source of truth: calculate total tonnage across actual won orders in scope
   const totalTonnageResult = useMemo(() => {
@@ -86,6 +99,10 @@ export default function ReportsPage() {
 
   const totalMt = totalTonnageResult.totalMt;
   const hasUnconvertible = totalTonnageResult.hasUnconvertible;
+
+  // Exact parity for KPI cards:
+  const totalDealsCount = rawInquiries.length > 0 ? rawInquiries.length : (monthly?.summary?.total_inquiries || monthly?.summary?.total_deals || 0);
+  const wonOrdersCount = orders.length > 0 ? orders.length : (monthly?.summary?.deals_won ?? monthly?.summary?.won ?? 0);
 
   return (
     <div className="space-y-6">
@@ -116,13 +133,13 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {/* Card 1: Total Deals */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-              <p className="text-2xl font-bold text-gray-900">{monthly?.summary?.total_deals ?? 0}</p>
+              <p className="text-2xl font-bold text-gray-900">{totalDealsCount}</p>
               <p className="text-sm text-gray-500 mt-1">Total Deals</p>
             </div>
 
             {/* Card 2: Won */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-              <p className="text-2xl font-bold text-gray-900">{monthly?.summary?.deals_won ?? monthly?.summary?.won ?? 0}</p>
+              <p className="text-2xl font-bold text-gray-900">{wonOrdersCount}</p>
               <p className="text-sm text-gray-500 mt-1">Won</p>
             </div>
 
