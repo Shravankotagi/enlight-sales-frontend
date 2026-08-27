@@ -13,7 +13,7 @@ import {
   Layers,
   User,
   ChevronDown,
-  Clock,
+  Calendar,
   Check,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
@@ -281,16 +281,11 @@ export default function LogsPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
             </span>
-            <span className="text-[10px] sm:text-xs font-mono font-bold tracking-[0.2em] text-blue-600 uppercase">
-              LIVE · ENLIGHT METALS SALES
-            </span>
+            
           </div>
 
           {/* Title with Blue Glyph */}
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
-            <span className="inline-flex items-center justify-center text-blue-600">
-              <RefreshCw size={26} className="rotate-45" />
-            </span>
             Activity Logs
           </h1>
         </div>
@@ -304,100 +299,88 @@ export default function LogsPage() {
         </div>
       </div>
 
-      {/* Filter Action Bar (Light Theme) */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs w-full">
-        <div className="flex flex-wrap items-center justify-between gap-3 w-full">
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
-            {/* 1. Search Bar */}
-            <div className="relative flex-1 min-w-[220px] max-w-md">
-              <Search
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                size={15}
-              />
-              <input
-                type="text"
-                placeholder="Search customer, rep, action..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-blue-500 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 font-medium outline-none transition-all focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                  title="Clear Search"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-
-            {/* 2. Module Dropdown Filter */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Layers size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={moduleFilter}
-                onChange={(e) => setModuleFilter(e.target.value as ModuleFilter)}
-                className="w-full sm:w-auto pl-8.5 pr-8 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl appearance-none cursor-pointer outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
+      {/* Filter & Search Bar - Compact Single Row Matching Image 2 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs w-full">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
+          {/* 1. Compact Search Bar with Clear (X) Icon */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+            <input
+              type="text"
+              placeholder="Search customer, rep, action..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400 bg-white shadow-2xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                title="Clear Search"
               >
-                <option value="All">All ({moduleCounts.All})</option>
-                <option value="Inquiries">Inquiries ({moduleCounts.Inquiries})</option>
-                <option value="Orders">Orders ({moduleCounts.Orders})</option>
-                <option value="Visits">Visits ({moduleCounts.Visits})</option>
-                <option value="Complaints">Complaints ({moduleCounts.Complaints})</option>
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-2.5 text-slate-400 pointer-events-none"
-              />
-            </div>
-
-            {/* 3. Light Date Preset Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Clock size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={datePreset}
-                onChange={(e) => handleDatePresetChange(e.target.value as FilterPreset)}
-                className="w-full sm:w-auto pl-8.5 pr-8 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl appearance-none cursor-pointer outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
-              >
-                <option value="today">Today</option>
-                <option value="7_days">Last 7 Days</option>
-                <option value="30_days">Last 30 Days</option>
-                <option value="90_days">Last 90 Days</option>
-                <option value="custom">Custom Range</option>
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-2.5 text-slate-400 pointer-events-none"
-              />
-            </div>
-
-            {/* 4. Clear Filter Button */}
-            <button
-              type="button"
-              onClick={handleClearAllFilters}
-              className="px-3.5 py-2 bg-rose-50/80 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold transition-all shadow-2xs cursor-pointer"
-            >
-              Clear Filter
-            </button>
+                <X size={14} />
+              </button>
+            )}
           </div>
 
-          {/* 5. Refresh Button Right-Aligned */}
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={() => refetch()}
-              className="p-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-xl transition-all shadow-2xs cursor-pointer flex items-center justify-center"
-              title="Refresh Logs"
+          {/* 2. Days Filter Dropdown (2nd Position with Calendar Icon) */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+            <select
+              value={datePreset}
+              onChange={(e) => handleDatePresetChange(e.target.value as FilterPreset)}
+              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
             >
-              <RefreshCw size={15} className={isLoading ? 'animate-spin text-blue-700' : ''} />
-            </button>
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
+
+          {/* 3. Module Dropdown Filter (3rd Position) */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <select
+              value={moduleFilter}
+              onChange={(e) => setModuleFilter(e.target.value as ModuleFilter)}
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
+            >
+              <option value="All">All ({moduleCounts.All})</option>
+              <option value="Inquiries">Inquiries ({moduleCounts.Inquiries})</option>
+              <option value="Orders">Orders ({moduleCounts.Orders})</option>
+              <option value="Visits">Visits ({moduleCounts.Visits})</option>
+              <option value="Complaints">Complaints ({moduleCounts.Complaints})</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 4. Clear Filter Button (4th Position) */}
+          <button
+            type="button"
+            onClick={handleClearAllFilters}
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+          >
+            Clear Filter
+          </button>
+        </div>
+
+        {/* 5. Refresh Button Right-Aligned */}
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => refetch()}
+            className="p-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-xl transition-all shadow-2xs cursor-pointer flex items-center justify-center"
+            title="Refresh Logs"
+          >
+            <RefreshCw size={15} className={isLoading ? 'animate-spin text-blue-700' : ''} />
+          </button>
         </div>
 
         {/* Custom Date Pickers (when custom range is active) */}
         {showCustomDate && (
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 text-xs font-medium animate-in fade-in duration-150">
+          <div className="w-full flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 text-xs font-medium animate-in fade-in duration-150">
             <span className="text-slate-500 font-medium">From:</span>
             <input
               type="date"
