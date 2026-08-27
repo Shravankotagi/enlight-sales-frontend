@@ -108,7 +108,7 @@ export default function AdminDashboard() {
     setIsPushing(true);
     setSyncMsg(null);
     try {
-      await axios.get('https://enlight-sales-bot-production.up.railway.app/bigin-sync');
+      await axios.get('https://enlight-sales-bot-production-3e03.up.railway.app/bigin-sync');
       setSyncMsg({ text: ' Database records & live deals pushed to Zoho Bigin CRM successfully!', type: 'success' });
       handleRefreshAll();
     } catch (err: any) {
@@ -123,7 +123,7 @@ export default function AdminDashboard() {
     setIsPulling(true);
     setSyncMsg(null);
     try {
-      await axios.get('https://enlight-sales-bot-production.up.railway.app/bigin-import');
+      await axios.get('https://enlight-sales-bot-production-3e03.up.railway.app/bigin-import');
       setSyncMsg({ text: ' Contacts & active deals pulled from Zoho Bigin CRM to Database!', type: 'success' });
       handleRefreshAll();
     } catch (err: any) {
