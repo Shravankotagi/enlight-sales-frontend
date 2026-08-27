@@ -346,7 +346,7 @@ export function calculateLineItem(item: LineItemInput): CalculatedLineItem {
   let amount = item.amount && Number(item.amount) > 0 ? Number(item.amount) : 0;
   if (!amount && quantity > 0 && rate > 0) {
     if (unit === 'KG' && rate > 1000) {
-      // Rate is stated per MT (e.g. ₹52,000/MT) but quantity is in KG
+      // Rate is stated per MT (e.g. Rs.52,000/MT) but quantity is in KG
       amount = Math.round((quantity / 1000) * rate);
     } else {
       amount = Math.round(quantity * rate);
@@ -504,7 +504,7 @@ export function calculatePricingSummary(
   if (inputObj) {
     const statedGrand = Number(inputObj.grand_total ?? inputObj.grandTotal ?? 0);
     if (statedGrand > 0 && Math.abs(statedGrand - grandTotal) > 2) {
-      calculationWarning = `Calculated total (₹${grandTotal.toLocaleString('en-IN')}) does not match PO document total (₹${statedGrand.toLocaleString('en-IN')}) — please review`;
+      calculationWarning = `Calculated total (Rs.${grandTotal.toLocaleString('en-IN')}) does not match PO document total (Rs.${statedGrand.toLocaleString('en-IN')}) — please review`;
     }
   }
 
@@ -583,7 +583,7 @@ export function calculateQuotationBreakdown(baseAmount: number): QuotationFinanc
     formattedCGST: formatIndianCurrency(CGST, true),
     formattedSGST: formatIndianCurrency(SGST, true),
     formattedRounding: formatIndianCurrency(rounding, true),
-    formattedGrandTotal: `₹${formatIndianCurrency(grandTotal, true)}`,
+    formattedGrandTotal: `Rs.${formatIndianCurrency(grandTotal, true)}`,
   };
 }
 

@@ -50,7 +50,7 @@ function KRACard({ number, label, data, onClick }: {
           <div className="flex justify-between">
             <span className="text-gray-500">Total Value</span>
             <span className="font-semibold">
-              ₹{Number(data.total_value || 0).toLocaleString('en-IN')}
+              Rs.{Number(data.total_value || 0).toLocaleString('en-IN')}
             </span>
           </div>
         </div>
@@ -117,13 +117,13 @@ function KRACard({ number, label, data, onClick }: {
           <div className="flex justify-between">
             <span className="text-gray-500">Collected</span>
             <span className="font-semibold text-green-600">
-              {data.collected_amount ? `₹${Number(data.collected_amount).toLocaleString('en-IN')}` : data.collected_count}
+              {data.collected_amount ? `Rs.${Number(data.collected_amount).toLocaleString('en-IN')}` : data.collected_count}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Outstanding</span>
             <span className="font-semibold text-red-600">
-              ₹{Number(data.total_outstanding || 0).toLocaleString('en-IN')}
+              Rs.{Number(data.total_outstanding || 0).toLocaleString('en-IN')}
             </span>
           </div>
         </div>

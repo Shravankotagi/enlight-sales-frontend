@@ -154,7 +154,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
     /^(visited|met with|site visit|meeting with)\b/i,
     /^new customer\b/i,
     /^(deal|we have won|won the|lost the|paid|advance)\b/i,
-    /\b(paid\s+₹?|paid\s+rs|advance\s+via|via\s+cheque|via\s+rtgs|via\s+neft)\b/i,
+    /\b(paid\s+Rs.?|paid\s+rs|advance\s+via|via\s+cheque|via\s+rtgs|via\s+neft)\b/i,
     /^#deal-\w+/i,
     /^\d+$/,
     /^this is the new inquiry$/i,
@@ -494,7 +494,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   // 6. Unit Price & Total Amount (Strict active rate sheet lookup)
   const rateMatch =
-    textRaw.match(/(?:rate|price|rs\.?|₹)\s*:?\s*₹?\s*(\d{4,6}|\d{2,3}(?:,\d{3})+)/i);
+    textRaw.match(/(?:rate|price|rs\.?|Rs.)\s*:?\s*Rs.?\s*(\d{4,6}|\d{2,3}(?:,\d{3})+)/i);
 
   let unitPrice = 0;
   if (aiJson.unitPrice && Number(aiJson.unitPrice) > 0) {
@@ -1321,7 +1321,7 @@ export default function InquiriesPage() {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       const rateErrMsg = Object.keys(errors).some(k => k.startsWith('rate_'))
-        ? 'Rate (₹) is mandatory and must be greater than 0 for all line items.'
+        ? 'Rate (Rs.) is mandatory and must be greater than 0 for all line items.'
         : null;
       const firstMsg = rateErrMsg || errors['companyName'] || Object.values(errors)[0] || 'Please complete all required fields.';
       setDrawerError(firstMsg);
@@ -1348,10 +1348,10 @@ export default function InquiriesPage() {
 
       let summaryRequirement = '';
       if (currentItems.length > 0) {
-        const itemStrs = currentItems.map(item => `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}: ${item.quantity} ${item.unit || 'MT'} @ ₹${item.rate}/${item.unit || 'MT'}`);
-        summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+        const itemStrs = currentItems.map(item => `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}: ${item.quantity} ${item.unit || 'MT'} @ Rs.${item.rate}/${item.unit || 'MT'}`);
+        summaryRequirement = `${itemStrs.join(', ')}. Subtotal: Rs.${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       } else {
-        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ Rs.${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Subtotal: Rs.${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       }
 
       const mediaUrlsPayload = drawerFileBase64 ? [drawerFileBase64] : (selectedInquiry.media_urls || []);
@@ -1483,7 +1483,7 @@ export default function InquiriesPage() {
                 const qty = (li.quantity !== undefined && li.quantity !== null && li.quantity !== '')
                   ? ` - ${li.quantity} ${li.unit || 'Nos'}`
                   : '';
-                const rate = li.rate ? ` @ ₹${li.rate}` : '';
+                const rate = li.rate ? ` @ Rs.${li.rate}` : '';
                 return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
               })
               .filter(Boolean)
@@ -2472,9 +2472,9 @@ export default function InquiriesPage() {
                           Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                          Rate (₹) <span className="text-red-500 font-bold">*</span>
+                          Rate (Rs.) <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (Rs.)</th>
                         <th className="px-2 py-3 text-center w-[4%]"></th>
                       </tr>
                     </thead>

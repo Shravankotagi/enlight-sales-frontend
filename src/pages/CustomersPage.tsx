@@ -118,7 +118,7 @@ function BillingChart({ customer }: { customer: any }) {
                   className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full flex items-center pl-2 transition-all"
                   style={{ width: `${Math.max(8, (month.value / maxValue) * 100)}%` }}>
                   <span className="text-[10px] text-white font-bold truncate">
-                    ₹{Number(month.value).toLocaleString('en-IN')}
+                    Rs.{Number(month.value).toLocaleString('en-IN')}
                   </span>
                 </div>
               ) : (
@@ -775,7 +775,7 @@ export default function CustomersPage() {
                               </div>
                               <div className="text-right shrink-0">
                                 <p className="font-bold text-slate-900 text-sm">
-                                  {deal.total_amount ? '₹' + Number(deal.total_amount).toLocaleString('en-IN') : '-'}
+                                  {deal.total_amount ? 'Rs.' + Number(deal.total_amount).toLocaleString('en-IN') : '-'}
                                 </p>
                                 <span
                                   className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold inline-block mt-0.5 ${

@@ -322,7 +322,7 @@ export default function AdminDashboard() {
 
           <div className="mt-4">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-              ₹{Number(totalValue).toLocaleString('en-IN')}
+              Rs.{Number(totalValue).toLocaleString('en-IN')}
             </h2>
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -442,7 +442,7 @@ export default function AdminDashboard() {
             </span>
             <div className="flex items-baseline gap-3 mt-1">
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-                ₹{Number(wonValue || totalValue).toLocaleString('en-IN')}
+                Rs.{Number(wonValue || totalValue).toLocaleString('en-IN')}
               </h2>
               <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                 <ArrowUpRight size={13} /> +12.5%
@@ -512,7 +512,7 @@ export default function AdminDashboard() {
 
                     <div className="text-right">
                       <p className="text-sm font-bold text-slate-900">
-                        ₹{Number(deal.total_amount || 0).toLocaleString('en-IN')}
+                        Rs.{Number(deal.total_amount || 0).toLocaleString('en-IN')}
                       </p>
                       <span className={`inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full capitalize mt-0.5 border ${
                         deal.stage === 'won'
@@ -553,7 +553,7 @@ export default function AdminDashboard() {
                     <th className="px-4 py-3">SKU / Product Name</th>
                     <th className="px-4 py-3 text-right">Total Qty</th>
                     <th className="px-4 py-3 text-center">Unit</th>
-                    <th className="px-4 py-3 text-right">Total Value (₹)</th>
+                    <th className="px-4 py-3 text-right">Total Value (Rs.)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -569,7 +569,7 @@ export default function AdminDashboard() {
                         {item.unit || 'MT'}
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-slate-900 font-mono">
-                        {item.total_value ? `₹${Number(item.total_value).toLocaleString('en-IN')}` : '-'}
+                        {item.total_value ? `Rs.${Number(item.total_value).toLocaleString('en-IN')}` : '-'}
                       </td>
                     </tr>
                   ))}

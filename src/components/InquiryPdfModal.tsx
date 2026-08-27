@@ -492,7 +492,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
                 <div className="flex justify-between items-center pt-2 font-bold text-slate-900 text-[13px]">
                   <span className="font-bold">Total</span>
-                  <span className="font-bold text-[14px]">{breakdown.formattedGrandTotal.startsWith('₹') ? breakdown.formattedGrandTotal : `₹${breakdown.formattedGrandTotal}`}</span>
+                  <span className="font-bold text-[14px]">{breakdown.formattedGrandTotal.startsWith('Rs.') ? breakdown.formattedGrandTotal : `Rs.${breakdown.formattedGrandTotal}`}</span>
                 </div>
               </div>
             </div>

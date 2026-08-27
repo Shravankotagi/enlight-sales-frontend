@@ -422,7 +422,7 @@ export default function HomePage() {
   };
 
   // Helper: Extract total tonnage (MT) from an order, respecting the unit on each line item.
-  // Returns 0 for orders with no quantity data (no ₹-to-MT estimation).
+  // Returns 0 for orders with no quantity data (no Rs.-to-MT estimation).
   const getOrderTonnage = (o: any): number => {
     if (Array.isArray(o.deal_items) && o.deal_items.length > 0) {
       const sum = o.deal_items.reduce((acc: number, item: any) => {
