@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -49,15 +49,14 @@ interface DateRange {
   year?: number;
 }
 
-interface SearchResult {
+interface CustomerDirectoryItem {
   id: string;
-  type: 'Customer' | 'Order' | 'Quote';
-  label: string;
-  sublabel: string;
-  link: string;
-  Icon: React.ElementType;
-  iconBg: string;
-  typeBg: string;
+  name: string;
+  contactPerson?: string;
+  phone?: string;
+  risk?: string;
+  tier?: string;
+  daysSinceLastOrder?: number;
 }
 
 // ── Number & Curve Formatting Helpers ────────────────────────────────────────
@@ -106,9 +105,21 @@ export default function HomePage() {
   const [customTo, setCustomTo] = useState('');
   const [showCustomDate, setShowCustomDate] = useState(false);
 
-  // ── Global Search State ───────────────────────────────────────────────────
-  const [globalSearch, setGlobalSearch] = useState('');
-  const [showSearchResults, setShowSearchResults] = useState(false);
+  // ── Customer Search & Dropdown State ──────────────────────────────────────
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [dateRange, setDateRange] = useState<DateRange>({
     preset: 'this_month',
@@ -283,78 +294,118 @@ export default function HomePage() {
   const safeReviewQueue: any[] = Array.isArray(reviewQueueData) ? reviewQueueData : [];
   const safeCustomers: any[] = Array.isArray(churnData) ? churnData : [];
 
-  // ── Global Quick-Search Results ───────────────────────────────────────────
-  const searchResults = useMemo((): SearchResult[] => {
-    const q = globalSearch.trim().toLowerCase();
-    if (q.length < 2) return [];
-    const results: SearchResult[] = [];
+  // ── Customer Directory for Search Dropdown ──────────────────────────────
+  const customerDirectory = useMemo((): CustomerDirectoryItem[] => {
+    const map = new Map<string, CustomerDirectoryItem>();
 
-    // Orders — match customer_name or po_number
-    safeOrders.forEach(o => {
-      if (
-        (o.customer_name || '').toLowerCase().includes(q) ||
-        (o.po_number || '').toLowerCase().includes(q)
-      ) {
-        results.push({
-          id: `order-${o.id}`,
-          type: 'Order',
-          label: o.customer_name || 'Order',
-          sublabel: `Won Order · ${o.po_number || 'No PO#'}`,
-          link: '/orders',
-          Icon: ShoppingBag,
-          iconBg: 'bg-blue-100 text-blue-600',
-          typeBg: 'bg-blue-100 text-blue-700',
+    // 1. Add from safeCustomers (churn / recurring customer data)
+    safeCustomers.forEach((c: any) => {
+      const name = (c.customer_name || c.name || '').trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      map.set(key, {
+        id: c.id || `virtual-${name}`,
+        name,
+        contactPerson: c.contact_person || '',
+        phone: c.customer_phone || c.contact_phone || '',
+        risk: (c.churn_risk || 'active').toLowerCase(),
+        tier: c.tier || 'C',
+        daysSinceLastOrder: c.days_since_last_order,
+      });
+    });
+
+    // 2. Add any customer from won orders not yet in map
+    safeOrders.forEach((o: any) => {
+      const name = (o.customer_name || '').trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          id: `virtual-order-${name}`,
+          name,
+          contactPerson: o.contact_person || '',
+          phone: o.customer_phone || '',
+          risk: 'active',
+          tier: 'C',
         });
       }
     });
 
-    // Deals / Quotes — match customer_name or product_name
-    safeDeals.forEach(d => {
-      if (
-        (d.customer_name || '').toLowerCase().includes(q) ||
-        (d.product_name || '').toLowerCase().includes(q)
-      ) {
-        results.push({
-          id: `deal-${d.id}`,
-          type: 'Quote',
-          label: d.customer_name || 'Quote',
-          sublabel: `${d.stage || 'Pipeline'} · ${d.product_name || 'Steel'}`,
-          link: '/pipeline',
-          Icon: Package,
-          iconBg: 'bg-indigo-100 text-indigo-600',
-          typeBg: 'bg-indigo-100 text-indigo-700',
+    // 3. Add any customer from deals/quotes not yet in map
+    safeDeals.forEach((d: any) => {
+      const name = (d.customer_name || '').trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          id: `virtual-deal-${name}`,
+          name,
+          contactPerson: d.contact_person || '',
+          phone: d.customer_phone || '',
+          risk: 'active',
+          tier: 'C',
         });
       }
     });
 
-    // Customers — from churn/reorder list
-    safeCustomers.forEach(c => {
-      const name = c.customer_name || c.name || '';
-      if (name.toLowerCase().includes(q)) {
-        results.push({
-          id: `customer-${c.id || name}`,
-          type: 'Customer',
-          label: name,
-          sublabel: c.days_since_last_order
-            ? `Last order ${c.days_since_last_order}d ago`
-            : 'Active customer',
-          link: '/customers',
-          Icon: Users,
-          iconBg: 'bg-emerald-100 text-emerald-600',
-          typeBg: 'bg-emerald-100 text-emerald-700',
-        });
-      }
-    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [safeCustomers, safeOrders, safeDeals]);
 
-    // Deduplicate by label+type and cap at 8
-    const seen = new Set<string>();
-    return results.filter(r => {
-      const key = `${r.type}-${r.label}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).slice(0, 8);
-  }, [globalSearch, safeOrders, safeDeals, safeCustomers]);
+  // Filtered Customers based on user input
+  const filteredCustomers = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase();
+    if (!q) {
+      return customerDirectory.slice(0, 15);
+    }
+    return customerDirectory
+      .filter(c => {
+        const nameMatch = c.name.toLowerCase().includes(q);
+        const contactMatch = (c.contactPerson || '').toLowerCase().includes(q);
+        const phoneMatch = (c.phone || '').toLowerCase().includes(q);
+        return nameMatch || contactMatch || phoneMatch;
+      })
+      .slice(0, 20);
+  }, [customerDirectory, customerSearch]);
+
+  const handleSelectCustomer = (customer: CustomerDirectoryItem) => {
+    setIsDropdownOpen(false);
+    setCustomerSearch('');
+    setHighlightedIndex(-1);
+    if (customer.id && !customer.id.startsWith('virtual-')) {
+      navigate(`/customers?id=${encodeURIComponent(customer.id)}`);
+    } else {
+      navigate(`/customers?name=${encodeURIComponent(customer.name)}`);
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDropdownOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setIsDropdownOpen(true);
+        setHighlightedIndex(0);
+        return;
+      }
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev < filteredCustomers.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : 0));
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < filteredCustomers.length) {
+        e.preventDefault();
+        handleSelectCustomer(filteredCustomers[highlightedIndex]);
+      } else if (filteredCustomers.length > 0) {
+        e.preventDefault();
+        handleSelectCustomer(filteredCustomers[0]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsDropdownOpen(false);
+      setHighlightedIndex(-1);
+    }
+  };
 
   // ── Steel sheet weight formula for NOS/PCS items ──────────────────────────
   // Weight (kg) = L(m) × W(m) × T(mm) × 8 × count
@@ -669,48 +720,108 @@ export default function HomePage() {
       {/* ── Nav Bar ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
 
-        {/* Left: Global Quick-Search */}
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={globalSearch}
-            onChange={e => setGlobalSearch(e.target.value)}
-            onFocus={() => setShowSearchResults(true)}
-            onBlur={() => setTimeout(() => setShowSearchResults(false), 150)}
-            placeholder="Search customers, orders, quotes..."
-            className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all placeholder:text-slate-400 font-medium"
-          />
-          {globalSearch && (
-            <button
-              type="button"
-              onClick={() => { setGlobalSearch(''); setShowSearchResults(false); }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-              title="Clear search">
-              <X size={13} />
-            </button>
-          )}
-          {/* Search results dropdown */}
-          {showSearchResults && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
-              {searchResults.map(result => (
+        {/* Left: Customer Search Dropdown */}
+        <div ref={searchContainerRef} className="relative flex-1 max-w-sm sm:max-w-md">
+          <div className="relative flex items-center">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={customerSearch}
+              onChange={e => {
+                setCustomerSearch(e.target.value);
+                setIsDropdownOpen(true);
+                setHighlightedIndex(0);
+              }}
+              onFocus={() => setIsDropdownOpen(true)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search or select customer..."
+              className="w-full pl-9 pr-14 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all placeholder:text-slate-400 font-medium text-slate-800"
+            />
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {customerSearch && (
                 <button
-                  key={result.id}
                   type="button"
-                  onMouseDown={() => { navigate(result.link); setGlobalSearch(''); setShowSearchResults(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors border-b border-slate-100 last:border-0">
-                  <div className={`p-1.5 rounded-lg shrink-0 ${result.iconBg}`}>
-                    <result.Icon size={13} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-800 truncate">{result.label}</p>
-                    <p className="text-[11px] text-slate-500 truncate">{result.sublabel}</p>
-                  </div>
-                  <span className={`ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${result.typeBg}`}>
-                    {result.type}
-                  </span>
+                  onClick={() => { setCustomerSearch(''); setHighlightedIndex(-1); }}
+                  className="p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                  title="Clear search">
+                  <X size={13} />
                 </button>
-              ))}
+              )}
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(prev => !prev)}
+                className="p-0.5 text-slate-400 hover:text-slate-600 rounded transition-colors cursor-pointer"
+                title="Toggle customer list">
+                <ChevronDown size={14} className={`transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Customer Dropdown Menu */}
+          {isDropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in-50 duration-100 max-h-72 flex flex-col">
+              <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+                <span>Customers {customerDirectory.length > 0 ? `(${customerDirectory.length})` : ''}</span>
+                <span className="text-[10px] text-slate-400 font-normal">Click to view details</span>
+              </div>
+              <div className="overflow-y-auto divide-y divide-slate-100">
+                {filteredCustomers.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400">
+                    No customers found matching &quot;{customerSearch}&quot;
+                  </div>
+                ) : (
+                  filteredCustomers.map((cust, idx) => {
+                    const isHighlighted = highlightedIndex === idx;
+                    return (
+                      <button
+                        key={cust.id || cust.name}
+                        type="button"
+                        onMouseDown={e => {
+                          e.preventDefault();
+                          handleSelectCustomer(cust);
+                        }}
+                        onMouseEnter={() => setHighlightedIndex(idx)}
+                        className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors cursor-pointer ${
+                          isHighlighted ? 'bg-blue-50/80 text-blue-900' : 'hover:bg-slate-50 text-slate-800'
+                        }`}>
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className={`p-1.5 rounded-lg shrink-0 ${isHighlighted ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                            <Building2 size={14} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-xs font-bold truncate ${isHighlighted ? 'text-blue-900' : 'text-slate-800'}`}>
+                              {cust.name}
+                            </p>
+                            <p className="text-[10px] text-slate-500 truncate">
+                              {cust.contactPerson ? `${cust.contactPerson} · ` : ''}
+                              {cust.phone ? cust.phone : (cust.daysSinceLastOrder ? `Last ordered ${cust.daysSinceLastOrder}d ago` : 'Active Account')}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          cust.risk === 'credit_watch'
+                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                            : cust.risk === 'churning' || cust.risk === 'high'
+                              ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                              : cust.risk === 'at_risk' || cust.risk === 'medium'
+                                ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                        }`}>
+                          {cust.risk === 'credit_watch'
+                            ? 'Credit Watch'
+                            : cust.risk === 'churning' || cust.risk === 'high'
+                              ? 'Churning'
+                              : cust.risk === 'at_risk' || cust.risk === 'medium'
+                                ? 'At Risk'
+                                : 'Active'}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -926,21 +1037,21 @@ export default function HomePage() {
                 <div
                   key={item.id}
                   onClick={() => navigate(item.link)}
-                  className="snap-start shrink-0 w-[300px] sm:w-[340px] md:w-[360px] p-4 sm:p-5 bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400 rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-center gap-2 cursor-pointer group">
-                  {/* Top Left: Icon + Category */}
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-xs shrink-0">
-                      <IconComp size={14} />
-                    </div>
-                    <span className="text-xs sm:text-sm font-bold text-slate-600 tracking-wide whitespace-nowrap">
-                      {item.category}
-                    </span>
+                  className="snap-start shrink-0 w-[300px] sm:w-[340px] md:w-[360px] p-4 sm:p-5 bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400 rounded-xl shadow-2xs hover:shadow-md transition-all flex items-start gap-3 cursor-pointer group">
+                  {/* Left: Icon */}
+                  <div className="p-2 bg-blue-600 text-white rounded-lg shadow-xs shrink-0 mt-0.5">
+                    <IconComp size={16} />
                   </div>
 
-                  {/* Below: Action Card Title - 1 line single row */}
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-snug whitespace-nowrap">
-                    {item.title}
-                  </h3>
+                  {/* Right: Bold Header & Normal Description right below header */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight leading-snug truncate">
+                      {item.category}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-normal text-slate-600 group-hover:text-blue-700 transition-colors leading-snug truncate mt-0.5">
+                      {item.title}
+                    </p>
+                  </div>
                 </div>
               );
             })}
@@ -1051,9 +1162,7 @@ export default function HomePage() {
                   top: `${(chartPoints[activeBarHover].y / 200) * 100}%`,
                   marginTop: '-10px',
                 }}>
-                <span className="text-blue-300">{chartPoints[activeBarHover].month} 2026:</span>{' '}
-                {formatTonnage(chartPoints[activeBarHover].tonnage)} MT{' '}
-                <span className="text-slate-400">({chartPoints[activeBarHover].ordersCount} orders)</span>
+                {chartPoints[activeBarHover].month} 2026: {formatTonnage(chartPoints[activeBarHover].tonnage)} MT ({chartPoints[activeBarHover].ordersCount} orders)
               </div>
             )}
 
