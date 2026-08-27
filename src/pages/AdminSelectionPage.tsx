@@ -17,16 +17,9 @@ import {
   Search,
 } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
+import { employeesApi } from '../lib/api';
 
-const isLocal =
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1');
-const defaultBackend = isLocal
-  ? 'http://localhost:3000'
-  : 'https://enlight-sales-backend-production.up.railway.app';
-const rawBackend = import.meta.env.VITE_BACKEND_URL || defaultBackend;
-const BACKEND = rawBackend.replace(/\/+$/, '');
+
 
 interface Employee {
   id: string;
@@ -91,12 +84,12 @@ export default function AdminSelectionPage() {
 
   const fetchEmployees = () => {
     setLoading(true);
-    fetch(`${BACKEND}/employees`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        const rawList = Array.isArray(data) ? data : data.data || [];
+    setError('');
+    employeesApi
+      .getAll()
+      .then((res) => {
+        const data = res?.data;
+        const rawList = Array.isArray(data) ? data : data?.data || [];
         const activeList = rawList.filter((e: Employee) => e.is_active);
 
         // Filter managers for assignment dropdown
@@ -120,7 +113,10 @@ export default function AdminSelectionPage() {
           setEmployees(activeList);
         }
       })
-      .catch(() => setError('Failed to load employees'))
+      .catch((err) => {
+        console.error('Failed to load employees:', err);
+        setError('Failed to load employees');
+      })
       .finally(() => setLoading(false));
   };
 
@@ -130,15 +126,12 @@ export default function AdminSelectionPage() {
 
   const fetchNextId = async () => {
     try {
-      const res = await fetch(`${BACKEND}/employees/next-id`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const res = await employeesApi.getNextId();
+      const data = res?.data?.data || res?.data;
       return (
-        data.data?.next_employee_id ||
-        data.next_employee_id ||
-        data.data?.next_id ||
-        (typeof data.data === 'string' ? data.data : 'EMP001')
+        data?.next_employee_id ||
+        data?.next_id ||
+        (typeof data === 'string' ? data : 'EMP001')
       );
     } catch {
       return 'EMP001';
@@ -229,28 +222,10 @@ export default function AdminSelectionPage() {
         payload.manager_phone = null;
       }
 
-      const url = isEditMode
-        ? `${BACKEND}/employees/${form.id}`
-        : `${BACKEND}/employees`;
-      const method = isEditMode ? 'PATCH' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(
-          data.error ||
-            data.message ||
-            `Failed to ${isEditMode ? 'update' : 'create'} account`,
-        );
+      if (isEditMode && form.id) {
+        await employeesApi.update(form.id, payload);
+      } else {
+        await employeesApi.create(payload);
       }
 
       const roleDisplay =
@@ -284,11 +259,7 @@ export default function AdminSelectionPage() {
 
     setFormLoading(true);
     try {
-      const res = await fetch(`${BACKEND}/employees/${form.id}/deactivate`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to deactivate account');
+      await employeesApi.deactivate(form.id);
       setFormSuccess(`${form.name} deactivated successfully.`);
       fetchEmployees();
       setTimeout(() => {
