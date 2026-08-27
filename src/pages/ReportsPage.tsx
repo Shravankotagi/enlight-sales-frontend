@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
-import { TrendingUp, ShoppingBag, Package, Loader2 } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, Loader2, RefreshCw } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -34,8 +34,7 @@ export default function ReportsPage() {
     return params;
   };
 
-  // All three queries fire simultaneously — no tab guard
-  const { data: monthly, isLoading: monthlyLoading } = useQuery({
+  const { data: monthly, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery({
     queryKey: ['reports-monthly', dateRange, effectivePhone],
     queryFn: () =>
       reportsApi
@@ -43,7 +42,7 @@ export default function ReportsPage() {
         .then((r) => r.data?.data || r.data),
   });
 
-  const { data: funnel, isLoading: funnelLoading } = useQuery({
+  const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
     queryKey: ['reports-funnel', dateRange, effectivePhone],
     queryFn: () =>
       reportsApi
@@ -51,7 +50,7 @@ export default function ReportsPage() {
         .then((r) => r.data?.data || r.data),
   });
 
-  const { data: sku, isLoading: skuLoading } = useQuery({
+  const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
     queryKey: ['reports-sku', dateRange, effectivePhone],
     queryFn: () =>
       reportsApi
@@ -59,9 +58,14 @@ export default function ReportsPage() {
         .then((r) => r.data?.data || r.data),
   });
 
+  const refetchAll = () => {
+    refetchMonthly();
+    refetchFunnel();
+    refetchSku();
+  };
+
   const anyLoading = monthlyLoading || funnelLoading || skuLoading;
 
-  // Calculate Total Tonnage (MT) across all sold SKUs
   const { totalMt, hasUnconvertible } = useMemo(() => {
     const skusList = (sku?.skus || []).map((item: any) => ({
       ...item,
@@ -72,14 +76,22 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* â”€â”€ Header â”€â”€ */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Reports &amp; Analytics</h1>
-        <DateFilterControl onChange={setDateRange} />
+        <div className="flex items-center gap-2">
+          <DateFilterControl onChange={setDateRange} />
+          <button
+            onClick={refetchAll}
+            title="Refresh all reports"
+            className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all text-slate-500 hover:text-blue-600 cursor-pointer"
+          >
+            <RefreshCw size={16} className={anyLoading ? 'animate-spin text-blue-600' : ''} />
+          </button>
+        </div>
       </div>
 
       {anyLoading ? (
-        /* â”€â”€ Global skeleton while all three queries load â”€â”€ */
         <div className="flex flex-col items-center justify-center h-64 bg-white border border-slate-200 rounded-2xl shadow-sm">
           <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
           <p className="text-sm text-slate-500 font-medium">Loading reports...</p>
@@ -87,36 +99,39 @@ export default function ReportsPage() {
       ) : (
         <div className="space-y-8">
 
-          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              SECTION 1 — Summary Cards
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {/* SECTION 1 — Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { label: 'Total Deals', value: monthly?.summary?.total_deals ?? 0 },
-              { label: 'Won', value: monthly?.summary?.deals_won ?? monthly?.summary?.won ?? 0 },
-              {
-                label: 'Total Value',
-                value:
-                  '\u20B9' +
-                  Number(
-                    monthly?.summary?.won_revenue ??
-                      monthly?.summary?.total_value ??
-                      monthly?.summary?.total_revenue ??
-                      0,
-                  ).toLocaleString('en-IN'),
-              },
-              { label: 'Conversion', value: `${monthly?.summary?.conversion_rate ?? 0}%` },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
-              </div>
-            ))}
+            {/* Card 1: Total Deals */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-gray-900">{monthly?.summary?.total_deals ?? 0}</p>
+              <p className="text-sm text-gray-500 mt-1">Total Deals</p>
+            </div>
+
+            {/* Card 2: Won */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-gray-900">{monthly?.summary?.deals_won ?? monthly?.summary?.won ?? 0}</p>
+              <p className="text-sm text-gray-500 mt-1">Won</p>
+            </div>
+
+            {/* Card 3: Total Tonnage (MT) — auto-converted from all SKU units */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-emerald-600">
+                {totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
+              </p>
+              {hasUnconvertible && (
+                <p className="text-[10px] text-slate-400">* some items excluded</p>
+              )}
+              <p className="text-sm text-gray-500 mt-1">Total Tonnage (MT)</p>
+            </div>
+
+            {/* Card 4: Unique Products Sold */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-indigo-600">{(sku?.skus || []).length}</p>
+              <p className="text-sm text-gray-500 mt-1">Unique Products Sold</p>
+            </div>
           </div>
 
-          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              SECTION 2 — Sales Funnel
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {/* SECTION 2 — Sales Funnel */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <TrendingUp size={16} className="text-green-600" /> Sales Funnel
@@ -176,9 +191,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              SECTION 3 — Top Customers + Lost Reasons
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {/* SECTION 3 — Top Customers + Lost Reasons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Top Customers */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
@@ -229,9 +242,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              SECTION 4 — SKU Breakdown
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {/* SECTION 4 — SKU Breakdown */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <Package size={16} className="text-indigo-600" /> SKU Breakdown
@@ -282,7 +293,7 @@ export default function ReportsPage() {
                       <th className="px-5 py-3.5 text-left w-[36%]">SKU / Product Specification</th>
                       <th className="px-5 py-3.5 text-center w-[16%]">HSN/SAC</th>
                       <th className="px-5 py-3.5 text-center w-[16%]">Total Quantity</th>
-                      <th className="px-5 py-3.5 text-center w-[18%]">Total Value (₹)</th>
+                      <th className="px-5 py-3.5 text-center w-[18%]">Total Value ({'\u20B9'})</th>
                       <th className="px-5 py-3.5 text-center w-[14%]">Won Deals</th>
                     </tr>
                   </thead>
@@ -292,35 +303,26 @@ export default function ReportsPage() {
                       const qtyStr = `${Number(item.total_quantity || item.quantity || 0).toLocaleString('en-IN')} ${item.unit || 'MT'}`;
                       return (
                         <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                          {/* 1. SKU / Product Specification - Left Aligned */}
                           <td className="px-5 py-3.5 text-left font-bold text-slate-900">
-                            {item.sku_text || item.sku || '—'}
+                            {item.sku_text || item.sku || '\u2014'}
                           </td>
-
-                          {/* 2. HSN/SAC - Center Aligned */}
                           <td className="px-5 py-3.5 text-center text-xs">
                             {hsn ? (
                               <span className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 font-mono text-xs font-semibold border border-slate-200/60">
                                 {hsn}
                               </span>
                             ) : (
-                              <span className="text-slate-400">—</span>
+                              <span className="text-slate-400">\u2014</span>
                             )}
                           </td>
-
-                          {/* 3. Total Quantity (Merged with Unit) - Center Aligned */}
                           <td className="px-5 py-3.5 text-center font-semibold text-slate-800">
                             {qtyStr}
                           </td>
-
-                          {/* 4. Total Value (₹) - Center Aligned */}
                           <td className="px-5 py-3.5 text-center font-bold text-emerald-700">
                             {item.total_value
                               ? `\u20B9${Number(item.total_value).toLocaleString('en-IN')}`
-                              : '—'}
+                              : '\u2014'}
                           </td>
-
-                          {/* 5. Won Deals - Center Aligned */}
                           <td className="px-5 py-3.5 text-center text-xs font-bold text-slate-700">
                             {item.deal_count || item.count || 1}
                           </td>
