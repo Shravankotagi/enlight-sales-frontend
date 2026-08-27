@@ -926,21 +926,21 @@ export default function HomePage() {
                 <div
                   key={item.id}
                   onClick={() => navigate(item.link)}
-                  className="snap-start shrink-0 w-[300px] sm:w-[340px] md:w-[360px] p-4 sm:p-5 bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400 rounded-xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-center gap-2 cursor-pointer group">
-                  {/* Top Left: Icon + Category */}
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-xs shrink-0">
-                      <IconComp size={14} />
-                    </div>
-                    <span className="text-xs sm:text-sm font-bold text-slate-600 tracking-wide whitespace-nowrap">
-                      {item.category}
-                    </span>
+                  className="snap-start shrink-0 w-[300px] sm:w-[340px] md:w-[360px] p-4 sm:p-5 bg-blue-50/80 border-2 border-blue-200/90 hover:border-blue-400 rounded-xl shadow-2xs hover:shadow-md transition-all flex items-start gap-3 cursor-pointer group">
+                  {/* Left: Icon */}
+                  <div className="p-2 bg-blue-600 text-white rounded-lg shadow-xs shrink-0 mt-0.5">
+                    <IconComp size={16} />
                   </div>
 
-                  {/* Below: Action Card Title - 1 line single row */}
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-700 transition-colors leading-snug whitespace-nowrap">
-                    {item.title}
-                  </h3>
+                  {/* Right: Bold Header & Normal Description right below header */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight leading-snug truncate">
+                      {item.category}
+                    </h3>
+                    <p className="text-xs sm:text-sm font-normal text-slate-600 group-hover:text-blue-700 transition-colors leading-snug truncate mt-0.5">
+                      {item.title}
+                    </p>
+                  </div>
                 </div>
               );
             })}
@@ -1051,9 +1051,7 @@ export default function HomePage() {
                   top: `${(chartPoints[activeBarHover].y / 200) * 100}%`,
                   marginTop: '-10px',
                 }}>
-                <span className="text-blue-300">{chartPoints[activeBarHover].month} 2026:</span>{' '}
-                {formatTonnage(chartPoints[activeBarHover].tonnage)} MT{' '}
-                <span className="text-slate-400">({chartPoints[activeBarHover].ordersCount} orders)</span>
+                {chartPoints[activeBarHover].month} 2026: {formatTonnage(chartPoints[activeBarHover].tonnage)} MT ({chartPoints[activeBarHover].ordersCount} orders)
               </div>
             )}
 
