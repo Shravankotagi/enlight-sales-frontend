@@ -308,13 +308,9 @@ export default function IntelligencePage() {
                 <span>High Risk — {highRiskCount}</span>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-              <span>Last scan: {lastScanFormatted} · Next scan in 6h</span>
+            <div className="text-[11px] text-slate-400">
+              Last scan: {lastScanFormatted}
             </div>
-
-            
           </div>
         </div>
       </section>
