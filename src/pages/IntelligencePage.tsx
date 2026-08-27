@@ -162,10 +162,7 @@ export default function IntelligencePage() {
           Intelligence Center
         </h1>
 
-        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold shadow-2xs">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Model status: nominal</span>
-        </div>
+        
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -312,10 +309,12 @@ export default function IntelligencePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
               <span>Last scan: {lastScanFormatted} · Next scan in 6h</span>
             </div>
+
+            
           </div>
         </div>
       </section>
