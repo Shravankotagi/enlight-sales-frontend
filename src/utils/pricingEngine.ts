@@ -291,10 +291,10 @@ export function calculateTotalTonnageMt(
     }
   }
 
-  const roundedMt = Math.round(totalMt * 100) / 100;
+  const roundedMt = Math.round(totalMt * 1000) / 1000;
   const formattedMtStr = roundedMt.toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
   });
 
   if (hasUnconvertible) {
@@ -320,6 +320,55 @@ export function calculateTotalTonnageMt(
     hasUnconvertible: false,
     formattedText: `${formattedMtStr} MT`,
   };
+}
+
+/**
+ * Extracts line items from an order object in standard LineItemInput format.
+ */
+export function getOrderLineItems(order: any): LineItemInput[] {
+  if (!order) return [];
+  if (Array.isArray(order.deal_items) && order.deal_items.length > 0) {
+    return order.deal_items.map((item: any) => ({
+      ...item,
+      quantity: item.quantity ?? item.quantity_mt ?? item.qty ?? 0,
+      unit: item.unit || 'MT',
+      sku_text: item.sku_text || item.description || item.name || item.sku || order.product_type || '',
+      dimensions: item.dimensions || item.spec || item.specification || order.dimensions || '',
+    }));
+  }
+  if (order.quantity && Number(order.quantity) > 0) {
+    return [
+      {
+        quantity: Number(order.quantity),
+        unit: order.unit || 'MT',
+        sku_text: order.product_type || order.sku_text || '',
+        dimensions: order.dimensions || '',
+      },
+    ];
+  }
+  return [];
+}
+
+/**
+ * Calculates converted total tonnage in MT for a single order.
+ */
+export function getOrderTonnage(order: any): number {
+  const items = getOrderLineItems(order);
+  return calculateTotalTonnageMt(items).totalMt;
+}
+
+/**
+ * Calculates converted total tonnage in MT across an array of orders (Single Source of Truth).
+ */
+export function calculateOrdersTotalTonnage(orders: any[]): TotalTonnageResult {
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return { totalMt: 0, hasUnconvertible: false, formattedText: '0 MT' };
+  }
+  const allItems: LineItemInput[] = [];
+  for (const order of orders) {
+    allItems.push(...getOrderLineItems(order));
+  }
+  return calculateTotalTonnageMt(allItems);
 }
 
 /**

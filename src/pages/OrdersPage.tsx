@@ -32,6 +32,8 @@ import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
+  calculateOrdersTotalTonnage,
+  getOrderTonnage,
   normalizeUnit,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -752,15 +754,6 @@ export default function OrdersPage() {
 
   const safeOrders: Order[] = Array.isArray(rawOrders) ? rawOrders : [];
 
-  const getOrderTonnage = (ord: Order): number => {
-    return (ord?.deal_items || []).reduce((iSum: number, i: any) => {
-      const q = Number(i?.quantity || 0);
-      const u = (i?.unit || 'MT').toUpperCase().trim();
-      const inMt = u === 'KG' || u === 'KGS' || u === 'KILOGRAM' || u === 'KILOGRAMS' ? q / 1000 : q;
-      return iSum + inMt;
-    }, 0);
-  };
-
   const filtered = safeOrders
     .filter((o: Order) => {
       if (dateRange.from && dateRange.to) {
@@ -813,7 +806,8 @@ export default function OrdersPage() {
     const count = (o?.deal_items && o.deal_items.length > 0) ? o.deal_items.length : 1;
     return sum + count;
   }, 0);
-  const totalTonnage = filtered.reduce((sum: number, o: Order) => sum + getOrderTonnage(o), 0);
+  const totalTonnageResult = calculateOrdersTotalTonnage(filtered);
+  const totalTonnage = totalTonnageResult.totalMt;
 
   const handleViewPoDocument = async (ord: Order) => {
     setSelectedPoOrder(ord);
@@ -911,6 +905,9 @@ export default function OrdersPage() {
             <p className="text-2xl font-bold text-indigo-600 mt-1">
               {totalTonnage.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
             </p>
+            {totalTonnageResult.hasUnconvertible && (
+              <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
+            )}
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
             <Truck size={22} />

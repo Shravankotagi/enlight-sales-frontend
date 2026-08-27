@@ -66,7 +66,7 @@ export default function ReportsPage() {
 
   const anyLoading = monthlyLoading || funnelLoading || skuLoading;
 
-  const { totalMt } = useMemo(() => {
+  const { totalMt, hasUnconvertible } = useMemo(() => {
     const skusList = (sku?.skus || []).map((item: any) => ({
       ...item,
       quantity: item.total_quantity || item.quantity,
@@ -116,8 +116,11 @@ export default function ReportsPage() {
             {/* Card 3: Total Tonnage (MT) — auto-converted from all SKU units */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
               <p className="text-2xl font-bold text-emerald-600">
-                {totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT
+                {totalMt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
               </p>
+              {hasUnconvertible && (
+                <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
+              )}
               <p className="text-sm text-gray-500 mt-1">Total Tonnage (MT)</p>
             </div>
 
