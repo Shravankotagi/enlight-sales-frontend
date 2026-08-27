@@ -106,6 +106,7 @@ export const inquiriesApi = {
 };
 
 export const reportsApi = {
+  getOverview: (params?: any) => API.get('/reports/overview', { params }),
   getMonthly: (params?: any) => API.get('/reports/monthly', { params }),
   getFunnel: (params?: any) => API.get('/reports/funnel', { params }),
   getSalesperson: (params?: any) => API.get('/reports/salesperson', { params }),

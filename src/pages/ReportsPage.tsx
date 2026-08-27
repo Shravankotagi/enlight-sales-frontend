@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
+import { reportsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
-import { TrendingUp, ShoppingBag, Package, Loader2, RefreshCw } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, RefreshCw } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -34,75 +34,47 @@ export default function ReportsPage() {
     return params;
   };
 
-  const { data: monthly, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery({
-    queryKey: ['reports-monthly', dateRange, effectivePhone],
-    queryFn: () =>
-      reportsApi
-        .getMonthly(getParams())
-        .then((r) => r.data?.data || r.data),
-  });
-
-  const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
-    queryKey: ['reports-funnel', dateRange, effectivePhone],
-    queryFn: () =>
-      reportsApi
-        .getFunnel(getParams())
-        .then((r) => r.data?.data || r.data),
-  });
-
-  const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
-    queryKey: ['reports-sku', dateRange, effectivePhone],
-    queryFn: () =>
-      reportsApi
-        .getSku(getParams())
-        .then((r) => r.data?.data || r.data),
-  });
-
-  // Query actual won orders using the exact same endpoint as Orders tab & Dashboard
-  const { data: orders = [], isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
-    queryKey: ['orders-list', effectivePhone, dateRange],
-    queryFn: () =>
-      ordersApi
-        .getAll(getParams())
-        .then((r) => {
-          const raw = r?.data;
-          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-        }),
-  });
-
-  // Query actual inquiries received using the exact same endpoint as Inquiries tab
-  const { data: rawInquiries = [], isLoading: inquiriesLoading, refetch: refetchInquiries } = useQuery({
-    queryKey: ['inquiries-list', effectivePhone, dateRange],
-    queryFn: () =>
-      inquiriesApi
-        .getAll(getParams())
-        .then((r) => {
-          const list = Array.isArray(r?.data) ? r.data : (Array.isArray(r?.data?.data) ? r.data.data : []);
-          return list;
-        }),
+  // Single high-speed query: replaces 5 separate HTTP roundtrips with 1 consolidated fetch
+  const {
+    data: overview,
+    isLoading,
+    isFetching,
+    refetch: refetchOverview,
+  } = useQuery({
+    queryKey: ['reports-overview', dateRange, effectivePhone],
+    queryFn: async () => {
+      const res = await reportsApi.getOverview(getParams());
+      return res?.data?.data || res?.data;
+    },
+    staleTime: 30000,
   });
 
   const refetchAll = () => {
-    refetchMonthly();
-    refetchFunnel();
-    refetchSku();
-    refetchOrders();
-    refetchInquiries();
+    refetchOverview();
   };
-
-  const anyLoading = monthlyLoading || funnelLoading || skuLoading || ordersLoading || inquiriesLoading;
 
   // Single source of truth: calculate total tonnage across actual won orders in scope
   const totalTonnageResult = useMemo(() => {
-    return calculateOrdersTotalTonnage(orders);
-  }, [orders]);
+    return calculateOrdersTotalTonnage(overview?.orders || []);
+  }, [overview?.orders]);
 
   const totalMt = totalTonnageResult.totalMt;
   const hasUnconvertible = totalTonnageResult.hasUnconvertible;
 
   // Exact parity for KPI cards:
-  const totalDealsCount = rawInquiries.length > 0 ? rawInquiries.length : (monthly?.summary?.total_inquiries || monthly?.summary?.total_deals || 0);
-  const wonOrdersCount = orders.length > 0 ? orders.length : (monthly?.summary?.deals_won ?? monthly?.summary?.won ?? 0);
+  const totalDealsCount =
+    overview?.inquiries_count ??
+    overview?.summary?.total_deals ??
+    overview?.summary?.total_inquiries ??
+    0;
+
+  const wonOrdersCount =
+    overview?.summary?.deals_won ??
+    overview?.summary?.won ??
+    (overview?.orders || []).length;
+
+  const funnelList = overview?.funnel || [];
+  const maxFunnelCount = Math.max(...funnelList.map((f: any) => Number(f.count) || 0), 1);
 
   return (
     <div className="space-y-6">
@@ -116,19 +88,69 @@ export default function ReportsPage() {
             title="Refresh all reports"
             className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all text-slate-500 hover:text-blue-600 cursor-pointer"
           >
-            <RefreshCw size={16} className={anyLoading ? 'animate-spin text-blue-600' : ''} />
+            <RefreshCw size={16} className={isFetching ? 'animate-spin text-blue-600' : ''} />
           </button>
         </div>
       </div>
 
-      {anyLoading ? (
-        <div className="flex flex-col items-center justify-center h-64 bg-white border border-slate-200 rounded-2xl shadow-sm">
-          <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
-          <p className="text-sm text-slate-500 font-medium">Loading reports...</p>
+      {isLoading ? (
+        /* ── Progressive Skeleton Shimmer UI ── */
+        <div className="space-y-8 animate-pulse">
+          {/* Skeleton Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm space-y-2">
+                <div className="h-7 w-20 bg-slate-200 rounded-lg mx-auto" />
+                <div className="h-4 w-28 bg-slate-100 rounded mx-auto" />
+              </div>
+            ))}
+          </div>
+
+          {/* Skeleton Funnel Chart */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <div className="h-5 w-32 bg-slate-200 rounded" />
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <div className="w-28 h-4 bg-slate-100 rounded" />
+                  <div className="flex-1 h-7 bg-slate-100 rounded-full" />
+                  <div className="w-16 h-4 bg-slate-100 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Skeleton Top Customers + Lost Reasons */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+              <div className="h-5 w-36 bg-slate-200 rounded" />
+              <div className="space-y-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-5 bg-slate-100 rounded" />
+                ))}
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+              <div className="h-5 w-32 bg-slate-200 rounded" />
+              <div className="flex gap-2">
+                <div className="h-7 w-28 bg-slate-100 rounded-full" />
+                <div className="h-7 w-32 bg-slate-100 rounded-full" />
+              </div>
+            </div>
+          </div>
+
+          {/* Skeleton SKU Table */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm p-4 space-y-3">
+            <div className="h-5 w-36 bg-slate-200 rounded" />
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-8 bg-slate-100 rounded" />
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-8">
-
           {/* SECTION 1 — Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {/* Card 1: Total Deals */}
@@ -156,7 +178,7 @@ export default function ReportsPage() {
 
             {/* Card 4: Unique Products Sold */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-              <p className="text-2xl font-bold text-indigo-600">{(sku?.skus || []).length}</p>
+              <p className="text-2xl font-bold text-indigo-600">{(overview?.skus || []).length}</p>
               <p className="text-sm text-gray-500 mt-1">Unique Products Sold</p>
             </div>
           </div>
@@ -166,53 +188,48 @@ export default function ReportsPage() {
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <TrendingUp size={16} className="text-green-600" /> Sales Funnel
             </h3>
-            {funnel ? (
+            {funnelList.length > 0 ? (
               <>
                 <div className="space-y-3">
-                  {(() => {
-                    const maxCount =
-                      funnel.max_count ||
-                      Math.max(...(funnel.funnel || []).map((f: any) => f.count || 0), 1);
-                    return (funnel?.funnel || []).map((stage: any) => {
-                      const count = Number(stage.count) || 0;
-                      const pct =
-                        maxCount > 0 && count > 0
-                          ? Math.max(10, Math.round((count / maxCount) * 100))
-                          : 0;
-                      return (
-                        <div key={stage.stage} className="flex items-center gap-4">
-                          <span className="text-sm font-medium text-gray-700 w-28">
-                            {stage.label ||
-                              (stage.stage === 'new_inquiry' || stage.stage === 'new_deals'
-                                ? 'New Deals'
-                                : String(stage.stage).replace('_', ' '))}
-                          </span>
-                          <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
-                            {count > 0 ? (
-                              <div
-                                className="bg-gradient-to-r from-blue-500 to-blue-700 h-full rounded-full flex items-center pl-3 transition-all"
-                                style={{ width: `${pct}%` }}
-                              >
-                                <span className="text-xs text-white font-bold">{count}</span>
-                              </div>
-                            ) : (
-                              <div className="h-full flex items-center pl-3 text-xs text-gray-400 font-medium">
-                                0
-                              </div>
-                            )}
-                          </div>
-                          <span className="text-xs font-semibold text-gray-500 w-16 text-right">
-                            {count > 0 ? `${count} deal${count > 1 ? 's' : ''}` : '-'}
-                          </span>
+                  {funnelList.map((stage: any) => {
+                    const count = Number(stage.count) || 0;
+                    const pct =
+                      maxFunnelCount > 0 && count > 0
+                        ? Math.max(10, Math.round((count / maxFunnelCount) * 100))
+                        : 0;
+                    return (
+                      <div key={stage.stage} className="flex items-center gap-4">
+                        <span className="text-sm font-medium text-gray-700 w-28">
+                          {stage.label ||
+                            (stage.stage === 'new_inquiry' || stage.stage === 'new_deals'
+                              ? 'New Deals'
+                              : String(stage.stage).replace('_', ' '))}
+                        </span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
+                          {count > 0 ? (
+                            <div
+                              className="bg-gradient-to-r from-blue-500 to-blue-700 h-full rounded-full flex items-center pl-3 transition-all"
+                              style={{ width: `${pct}%` }}
+                            >
+                              <span className="text-xs text-white font-bold">{count}</span>
+                            </div>
+                          ) : (
+                            <div className="h-full flex items-center pl-3 text-xs text-gray-400 font-medium">
+                              0
+                            </div>
+                          )}
                         </div>
-                      );
-                    });
-                  })()}
+                        <span className="text-xs font-semibold text-gray-500 w-16 text-right">
+                          {count > 0 ? `${count} deal${count > 1 ? 's' : ''}` : '-'}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
                 <p className="text-sm text-gray-500 mt-5 pt-3 border-t">
                   Overall win rate:{' '}
                   <span className="font-bold text-green-600 text-base">
-                    {funnel?.overall_win_rate || 0}%
+                    {overview?.summary?.conversion_rate || 0}%
                   </span>
                 </p>
               </>
@@ -229,18 +246,18 @@ export default function ReportsPage() {
                 <ShoppingBag size={16} className="text-blue-600" /> Top Customers
               </h3>
               <div className="space-y-2">
-                {(monthly?.by_customer || []).slice(0, 6).map((c: any) => (
+                {(overview?.by_customer || []).slice(0, 6).map((c: any) => (
                   <div key={c.customer || c.name || Math.random()} className="flex items-center justify-between">
                     <span className="text-sm text-gray-700">{c.customer || c.name || 'Unknown'}</span>
                     <div className="text-right">
                       <span className="text-sm font-semibold text-gray-800">
-                        {'\u20B9'}{Number(c.value || c.amount || 0).toLocaleString('en-IN')}
+                        {'₹'}{Number(c.value || c.amount || 0).toLocaleString('en-IN')}
                       </span>
                       <span className="text-xs text-gray-400 ml-2">{c.deals || c.count || 0} deals</span>
                     </div>
                   </div>
                 ))}
-                {(!monthly?.by_customer || monthly.by_customer.length === 0) && (
+                {(!overview?.by_customer || overview.by_customer.length === 0) && (
                   <p className="text-gray-400 text-sm py-4 text-center">No customer data for this period</p>
                 )}
               </div>
@@ -249,9 +266,9 @@ export default function ReportsPage() {
             {/* Lost Reasons */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <h3 className="font-semibold text-gray-800 mb-3">Lost Reasons</h3>
-              {monthly?.lost_reasons && Object.keys(monthly.lost_reasons).length > 0 ? (
+              {overview?.lost_reasons && Object.keys(overview.lost_reasons).length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(monthly.lost_reasons).map(([reason, rawVal]: [string, any]) => {
+                  {Object.entries(overview.lost_reasons).map(([reason, rawVal]: [string, any]) => {
                     const count =
                       typeof rawVal === 'object' && rawVal !== null
                         ? rawVal.count ?? 1
@@ -287,18 +304,18 @@ export default function ReportsPage() {
                       <th className="px-5 py-3.5 text-left w-[36%]">SKU / Product Specification</th>
                       <th className="px-5 py-3.5 text-center w-[16%]">HSN/SAC</th>
                       <th className="px-5 py-3.5 text-center w-[16%]">Total Quantity</th>
-                      <th className="px-5 py-3.5 text-center w-[18%]">Total Value ({'\u20B9'})</th>
+                      <th className="px-5 py-3.5 text-center w-[18%]">Total Value ({'₹'})</th>
                       <th className="px-5 py-3.5 text-center w-[14%]">Won Deals</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
-                    {(sku?.skus || []).map((item: any, i: number) => {
+                    {(overview?.skus || []).map((item: any, i: number) => {
                       const hsn = detectHsnCode(item.sku_text || item.sku || '');
                       const qtyStr = `${Number(item.total_quantity || item.quantity || 0).toLocaleString('en-IN')} ${item.unit || 'MT'}`;
                       return (
                         <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                           <td className="px-5 py-3.5 text-left font-bold text-slate-900">
-                            {item.sku_text || item.sku || '\u2014'}
+                            {item.sku_text || item.sku || '—'}
                           </td>
                           <td className="px-5 py-3.5 text-center text-xs">
                             {hsn ? (
@@ -306,7 +323,7 @@ export default function ReportsPage() {
                                 {hsn}
                               </span>
                             ) : (
-                              <span className="text-slate-400">\u2014</span>
+                              <span className="text-slate-400">—</span>
                             )}
                           </td>
                           <td className="px-5 py-3.5 text-center font-semibold text-slate-800">
@@ -314,8 +331,8 @@ export default function ReportsPage() {
                           </td>
                           <td className="px-5 py-3.5 text-center font-bold text-emerald-700">
                             {item.total_value
-                              ? `\u20B9${Number(item.total_value).toLocaleString('en-IN')}`
-                              : '\u2014'}
+                              ? `₹${Number(item.total_value).toLocaleString('en-IN')}`
+                              : '—'}
                           </td>
                           <td className="px-5 py-3.5 text-center text-xs font-bold text-slate-700">
                             {item.deal_count || item.count || 1}
@@ -326,7 +343,7 @@ export default function ReportsPage() {
                   </tbody>
                 </table>
               </div>
-              {(!sku || (sku?.skus || []).length === 0) && (
+              {(!overview?.skus || overview.skus.length === 0) && (
                 <div className="text-center py-12 text-slate-400">
                   <Package size={28} className="mx-auto mb-2 text-slate-300" />
                   <p className="font-semibold text-slate-700">No SKU sales data in this period</p>
@@ -337,7 +354,6 @@ export default function ReportsPage() {
               )}
             </div>
           </div>
-
         </div>
       )}
     </div>
