@@ -245,38 +245,99 @@ export default function ReportsPage() {
           )}
 
           {/* TAB 3 - SKU BREAKDOWN */}
-          {tab === 'sku' && sku && (
-            <div className="border rounded-xl overflow-hidden bg-white">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    {['SKU', 'Grade', 'Total Qty', 'Unit', 'Total Value', 'Deals'].map((h) => (
-                      <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(sku?.skus || []).map((item: any, i: number) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-800">{item.sku_text || item.sku || '-'}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{item.grade || '-'}</td>
-                      <td className="px-4 py-3 text-gray-800 font-semibold">
-                        {item.total_quantity || item.quantity || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{item.unit || 'MT'}</td>
-                      <td className="px-4 py-3 text-gray-800 font-medium">
-                        {item.total_value ? `₹${Number(item.total_value).toLocaleString('en-IN')}` : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500">{item.deal_count || item.count || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {(!sku || (sku?.skus || []).length === 0) && (
-                <div className="text-center py-12 text-gray-400">No SKU data this month</div>
+          {tab === 'sku' && (
+            <div className="space-y-6">
+              {sku && (sku?.skus || []).length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
+                    <p className="text-xs font-medium text-slate-500">Unique Products Sold</p>
+                    <p className="text-2xl font-bold text-slate-900 mt-1">
+                      {(sku?.skus || []).length}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
+                    <p className="text-xs font-medium text-slate-500">Total SKU Revenue</p>
+                    <p className="text-2xl font-bold text-emerald-600 mt-1">
+                      ₹
+                      {Number(
+                        (sku?.skus || []).reduce(
+                          (sum: number, item: any) => sum + (Number(item.total_value) || 0),
+                          0,
+                        ),
+                      ).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
+                    <p className="text-xs font-medium text-slate-500">Total Deals Closed</p>
+                    <p className="text-2xl font-bold text-indigo-600 mt-1">
+                      {(sku?.skus || []).reduce(
+                        (sum: number, item: any) => sum + (Number(item.deal_count) || 0),
+                        0,
+                      )}
+                    </p>
+                  </div>
+                </div>
               )}
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm text-slate-700">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-5 py-3.5">SKU / Product Specification</th>
+                        <th className="px-5 py-3.5 w-36">Grade / Finish</th>
+                        <th className="px-5 py-3.5 w-36 text-right">Total Quantity</th>
+                        <th className="px-5 py-3.5 w-24">Unit</th>
+                        <th className="px-5 py-3.5 w-44 text-right">Total Value (₹)</th>
+                        <th className="px-5 py-3.5 w-28 text-right">Won Deals</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {(sku?.skus || []).map((item: any, i: number) => (
+                        <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-5 py-3.5 font-bold text-slate-900">
+                            {item.sku_text || item.sku || '-'}
+                          </td>
+                          <td className="px-5 py-3.5 text-xs text-slate-500">
+                            {item.grade ? (
+                              <span className="px-2 py-0.5 rounded bg-slate-100 font-mono text-[11px]">
+                                {item.grade}
+                              </span>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-semibold text-slate-900">
+                            {Number(item.total_quantity || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-5 py-3.5 text-xs font-semibold text-slate-500">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-[11px]">
+                              {item.unit || 'MT'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-bold text-emerald-700">
+                            {item.total_value
+                              ? `₹${Number(item.total_value).toLocaleString('en-IN')}`
+                              : '-'}
+                          </td>
+                          <td className="px-5 py-3.5 text-right text-xs font-bold text-slate-700">
+                            {item.deal_count || item.count || 1}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {(!sku || (sku?.skus || []).length === 0) && (
+                  <div className="text-center py-12 text-slate-400">
+                    <Package size={28} className="mx-auto mb-2 text-slate-300" />
+                    <p className="font-semibold text-slate-700">No SKU sales data in this period</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Product breakdowns for won orders will appear here automatically.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </>
