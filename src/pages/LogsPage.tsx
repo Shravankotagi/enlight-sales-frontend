@@ -275,16 +275,6 @@ export default function LogsPage() {
       {/* Top Eyebrow & Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          {/* Live Status Eyebrow */}
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-            </span>
-            
-          </div>
-
-          {/* Title with Blue Glyph */}
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
             Activity Logs
           </h1>
