@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { reportsApi } from '../lib/api';
+import { reportsApi, ordersApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, Loader2, RefreshCw } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
-import { calculateTotalTonnageMt } from '../utils/pricingEngine';
+import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 
 export default function ReportsPage() {
   const { effectivePhone } = useAuth();
@@ -58,21 +58,34 @@ export default function ReportsPage() {
         .then((r) => r.data?.data || r.data),
   });
 
+  // Query actual won orders using the exact same endpoint as Orders tab & Dashboard
+  const { data: orders = [], isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
+    queryKey: ['orders-list', effectivePhone, dateRange],
+    queryFn: () =>
+      ordersApi
+        .getAll(getParams())
+        .then((r) => {
+          const raw = r?.data;
+          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+        }),
+  });
+
   const refetchAll = () => {
     refetchMonthly();
     refetchFunnel();
     refetchSku();
+    refetchOrders();
   };
 
-  const anyLoading = monthlyLoading || funnelLoading || skuLoading;
+  const anyLoading = monthlyLoading || funnelLoading || skuLoading || ordersLoading;
 
-  const { totalMt, hasUnconvertible } = useMemo(() => {
-    const skusList = (sku?.skus || []).map((item: any) => ({
-      ...item,
-      quantity: item.total_quantity || item.quantity,
-    }));
-    return calculateTotalTonnageMt(skusList);
-  }, [sku]);
+  // Single source of truth: calculate total tonnage across actual won orders in scope
+  const totalTonnageResult = useMemo(() => {
+    return calculateOrdersTotalTonnage(orders);
+  }, [orders]);
+
+  const totalMt = totalTonnageResult.totalMt;
+  const hasUnconvertible = totalTonnageResult.hasUnconvertible;
 
   return (
     <div className="space-y-6">
