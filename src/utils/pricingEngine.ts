@@ -504,7 +504,7 @@ export function calculatePricingSummary(
   if (inputObj) {
     const statedGrand = Number(inputObj.grand_total ?? inputObj.grandTotal ?? 0);
     if (statedGrand > 0 && Math.abs(statedGrand - grandTotal) > 2) {
-      calculationWarning = `Calculated total (Rs.${grandTotal.toLocaleString('en-IN')}) does not match PO document total (Rs.${statedGrand.toLocaleString('en-IN')}) — please review`;
+      calculationWarning = `Calculated total (₹${grandTotal.toLocaleString('en-IN')}) does not match PO document total (₹${statedGrand.toLocaleString('en-IN')}) — please review`;
     }
   }
 
@@ -583,7 +583,7 @@ export function calculateQuotationBreakdown(baseAmount: number): QuotationFinanc
     formattedCGST: formatIndianCurrency(CGST, true),
     formattedSGST: formatIndianCurrency(SGST, true),
     formattedRounding: formatIndianCurrency(rounding, true),
-    formattedGrandTotal: `Rs.${formatIndianCurrency(grandTotal, true)}`,
+    formattedGrandTotal: `\u20B9${formatIndianCurrency(grandTotal, true)}`,
   };
 }
 

@@ -273,7 +273,7 @@ export default function IntelligencePage() {
               </div>
               <div className="bg-white border border-red-100 rounded-xl p-4">
                 <p className="text-3xl font-bold text-red-600">
-                  Rs.{Number(lossData?.total_lost_value || 0).toLocaleString('en-IN')}
+                  {'\u20B9'}{Number(lossData?.total_lost_value || 0).toLocaleString('en-IN')}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">Total Lost Value</p>
               </div>
@@ -300,7 +300,7 @@ export default function IntelligencePage() {
                           style={{ width: `${Math.max(4, (item.count / maxLossCount) * 100)}%` }}
                         >
                           <span className="text-xs text-white font-medium">
-                            Rs.{Number(item.value).toLocaleString('en-IN')}
+                            {'\u20B9'}{Number(item.value).toLocaleString('en-IN')}
                           </span>
                         </div>
                       </div>
@@ -331,7 +331,7 @@ export default function IntelligencePage() {
                         <td className="px-4 py-3">
                           <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full">{d.lost_reason || '-'}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{d.total_amount ? `Rs.${Number(d.total_amount).toLocaleString('en-IN')}` : '-'}</td>
+                        <td className="px-4 py-3 text-gray-700">{d.total_amount ? `\u20B9${Number(d.total_amount).toLocaleString('en-IN')}` : '-'}</td>
                         <td className="px-4 py-3 text-gray-400 text-xs">
                           {new Date(d.created_at).toLocaleDateString('en-IN')}
                         </td>

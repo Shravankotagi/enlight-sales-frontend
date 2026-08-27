@@ -34,7 +34,7 @@ export default function ReportsPage() {
     return params;
   };
 
-  // All three queries fire simultaneously â€” no tab guard
+  // All three queries fire simultaneously — no tab guard
   const { data: monthly, isLoading: monthlyLoading } = useQuery({
     queryKey: ['reports-monthly', dateRange, effectivePhone],
     queryFn: () =>
@@ -88,7 +88,7 @@ export default function ReportsPage() {
         <div className="space-y-8">
 
           {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              SECTION 1 â€” Summary Cards
+              SECTION 1 — Summary Cards
           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
@@ -97,7 +97,7 @@ export default function ReportsPage() {
               {
                 label: 'Total Value',
                 value:
-                  'Rs.' +
+                  '\u20B9' +
                   Number(
                     monthly?.summary?.won_revenue ??
                       monthly?.summary?.total_value ??
@@ -115,7 +115,7 @@ export default function ReportsPage() {
           </div>
 
           {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              SECTION 2 â€” Sales Funnel
+              SECTION 2 — Sales Funnel
           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -177,7 +177,7 @@ export default function ReportsPage() {
           </div>
 
           {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              SECTION 3 â€” Top Customers + Lost Reasons
+              SECTION 3 — Top Customers + Lost Reasons
           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Top Customers */}
@@ -191,7 +191,7 @@ export default function ReportsPage() {
                     <span className="text-sm text-gray-700">{c.customer || c.name || 'Unknown'}</span>
                     <div className="text-right">
                       <span className="text-sm font-semibold text-gray-800">
-                        Rs.{Number(c.value || c.amount || 0).toLocaleString('en-IN')}
+                        {'\u20B9'}{Number(c.value || c.amount || 0).toLocaleString('en-IN')}
                       </span>
                       <span className="text-xs text-gray-400 ml-2">{c.deals || c.count || 0} deals</span>
                     </div>
@@ -230,7 +230,7 @@ export default function ReportsPage() {
           </div>
 
           {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              SECTION 4 â€” SKU Breakdown
+              SECTION 4 — SKU Breakdown
           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
@@ -282,7 +282,7 @@ export default function ReportsPage() {
                       <th className="px-5 py-3.5 text-left w-[36%]">SKU / Product Specification</th>
                       <th className="px-5 py-3.5 text-center w-[16%]">HSN/SAC</th>
                       <th className="px-5 py-3.5 text-center w-[16%]">Total Quantity</th>
-                      <th className="px-5 py-3.5 text-center w-[18%]">Total Value (Rs.)</th>
+                      <th className="px-5 py-3.5 text-center w-[18%]">Total Value (₹)</th>
                       <th className="px-5 py-3.5 text-center w-[14%]">Won Deals</th>
                     </tr>
                   </thead>
@@ -294,7 +294,7 @@ export default function ReportsPage() {
                         <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                           {/* 1. SKU / Product Specification - Left Aligned */}
                           <td className="px-5 py-3.5 text-left font-bold text-slate-900">
-                            {item.sku_text || item.sku || 'â€”'}
+                            {item.sku_text || item.sku || '—'}
                           </td>
 
                           {/* 2. HSN/SAC - Center Aligned */}
@@ -304,7 +304,7 @@ export default function ReportsPage() {
                                 {hsn}
                               </span>
                             ) : (
-                              <span className="text-slate-400">â€”</span>
+                              <span className="text-slate-400">—</span>
                             )}
                           </td>
 
@@ -313,11 +313,11 @@ export default function ReportsPage() {
                             {qtyStr}
                           </td>
 
-                          {/* 4. Total Value (Rs.) - Center Aligned */}
+                          {/* 4. Total Value (₹) - Center Aligned */}
                           <td className="px-5 py-3.5 text-center font-bold text-emerald-700">
                             {item.total_value
-                              ? `Rs.${Number(item.total_value).toLocaleString('en-IN')}`
-                              : 'â€”'}
+                              ? `\u20B9${Number(item.total_value).toLocaleString('en-IN')}`
+                              : '—'}
                           </td>
 
                           {/* 5. Won Deals - Center Aligned */}

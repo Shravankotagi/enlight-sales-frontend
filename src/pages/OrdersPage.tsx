@@ -114,7 +114,7 @@ export function formatOrderSourceText(ord?: Order | null): string {
       let itemStr = `${idx + 1}. ${name}`;
       if (spec) itemStr += ` | Spec: ${spec}`;
       itemStr += ` | Qty: ${qty} ${unit}`;
-      if (rate > 0) itemStr += ` | Rate: Rs.${rate.toLocaleString('en-IN')}/${unit}`;
+      if (rate > 0) itemStr += ` | Rate: ₹${rate.toLocaleString('en-IN')}/${unit}`;
       if (hsn) itemStr += ` | (Auto HSN: ${hsn})`;
       lines.push(itemStr);
     });
@@ -1609,9 +1609,9 @@ export default function OrdersPage() {
                         Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                       </th>
                       <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                        Rate (Rs.) <span className="text-red-500 font-bold">*</span>
+                        Rate (₹) <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (Rs.)</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
                       <th className="px-2 py-3 text-center w-[4%]"></th>
                     </tr>
                   </thead>

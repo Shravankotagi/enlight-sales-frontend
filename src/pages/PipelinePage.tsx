@@ -482,7 +482,7 @@ export default function PipelinePage() {
               {confirmDeleteDeal.total_amount > 0 && (
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Deal Amount:</span>
-                  <span className="font-bold text-emerald-600">Rs.{Number(confirmDeleteDeal.total_amount).toLocaleString('en-IN')}</span>
+                  <span className="font-bold text-emerald-600">{'\u20B9'}{Number(confirmDeleteDeal.total_amount).toLocaleString('en-IN')}</span>
                 </div>
               )}
               <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
