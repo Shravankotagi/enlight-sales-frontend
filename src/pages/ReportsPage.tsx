@@ -82,7 +82,7 @@ export default function ReportsPage() {
         /* â”€â”€ Global skeleton while all three queries load â”€â”€ */
         <div className="flex flex-col items-center justify-center h-64 bg-white border border-slate-200 rounded-2xl shadow-sm">
           <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
-          <p className="text-sm text-slate-500 font-medium">Loading reportsâ€¦</p>
+          <p className="text-sm text-slate-500 font-medium">Loading reports...</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -97,7 +97,7 @@ export default function ReportsPage() {
               {
                 label: 'Total Value',
                 value:
-                  'â‚¹' +
+                  '₹' +
                   Number(
                     monthly?.summary?.won_revenue ??
                       monthly?.summary?.total_value ??
@@ -191,7 +191,7 @@ export default function ReportsPage() {
                     <span className="text-sm text-gray-700">{c.customer || c.name || 'Unknown'}</span>
                     <div className="text-right">
                       <span className="text-sm font-semibold text-gray-800">
-                        â‚¹{Number(c.value || c.amount || 0).toLocaleString('en-IN')}
+                        ₹{Number(c.value || c.amount || 0).toLocaleString('en-IN')}
                       </span>
                       <span className="text-xs text-gray-400 ml-2">{c.deals || c.count || 0} deals</span>
                     </div>
@@ -282,7 +282,7 @@ export default function ReportsPage() {
                       <th className="px-5 py-3.5 text-left w-[36%]">SKU / Product Specification</th>
                       <th className="px-5 py-3.5 text-center w-[16%]">HSN/SAC</th>
                       <th className="px-5 py-3.5 text-center w-[16%]">Total Quantity</th>
-                      <th className="px-5 py-3.5 text-center w-[18%]">Total Value (â‚¹)</th>
+                      <th className="px-5 py-3.5 text-center w-[18%]">Total Value (₹)</th>
                       <th className="px-5 py-3.5 text-center w-[14%]">Won Deals</th>
                     </tr>
                   </thead>
@@ -313,10 +313,10 @@ export default function ReportsPage() {
                             {qtyStr}
                           </td>
 
-                          {/* 4. Total Value (â‚¹) - Center Aligned */}
+                          {/* 4. Total Value (₹) - Center Aligned */}
                           <td className="px-5 py-3.5 text-center font-bold text-emerald-700">
                             {item.total_value
-                              ? `â‚¹${Number(item.total_value).toLocaleString('en-IN')}`
+                              ? `₹${Number(item.total_value).toLocaleString('en-IN')}`
                               : 'â€”'}
                           </td>
 
