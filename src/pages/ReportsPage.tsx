@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { reportsApi } from '../lib/api';
+import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, RefreshCw } from 'lucide-react';
@@ -34,17 +34,55 @@ export default function ReportsPage() {
     return params;
   };
 
-  // Single high-speed query: replaces 5 separate HTTP roundtrips with 1 consolidated fetch
+  // Resilient single/parallel query with automatic zero-failure fallback
   const {
     data: overview,
     isLoading,
     isFetching,
     refetch: refetchOverview,
   } = useQuery({
-    queryKey: ['reports-overview', dateRange, effectivePhone],
+    queryKey: ['reports-overview-data', dateRange, effectivePhone],
     queryFn: async () => {
-      const res = await reportsApi.getOverview(getParams());
-      return res?.data?.data || res?.data;
+      const params = getParams();
+
+      // 1. Try unified high-speed overview endpoint first
+      try {
+        const res = await reportsApi.getOverview(params);
+        const d = res?.data?.data || res?.data;
+        if (d && (d.summary || d.orders || d.skus)) {
+          return d;
+        }
+      } catch (err) {
+        console.warn('getOverview not available, falling back to parallel endpoints:', err);
+      }
+
+      // 2. Resilient fallback: fetch from individual endpoints in parallel
+      const [monthlyRes, funnelRes, skuRes, ordersRes, inquiriesRes] = await Promise.all([
+        reportsApi.getMonthly(params).catch(() => null),
+        reportsApi.getFunnel(params).catch(() => null),
+        reportsApi.getSku(params).catch(() => null),
+        ordersApi.getAll(params).catch(() => null),
+        inquiriesApi.getAll(params).catch(() => null),
+      ]);
+
+      const monthly = monthlyRes?.data?.data || monthlyRes?.data || {};
+      const funnelData = funnelRes?.data?.data || funnelRes?.data || {};
+      const skuData = skuRes?.data?.data || skuRes?.data || {};
+      const rawOrders = ordersRes?.data;
+      const orders = Array.isArray(rawOrders) ? rawOrders : (Array.isArray(rawOrders?.data) ? rawOrders.data : []);
+      const rawInquiries = inquiriesRes?.data;
+      const inquiries = Array.isArray(rawInquiries) ? rawInquiries : (Array.isArray(rawInquiries?.data) ? rawInquiries.data : []);
+
+      return {
+        summary: monthly.summary || {},
+        funnel: Array.isArray(funnelData) ? funnelData : (funnelData.funnel || []),
+        by_customer: monthly.by_customer || [],
+        by_type: monthly.by_type || [],
+        lost_reasons: monthly.lost_reasons || {},
+        skus: skuData.skus || [],
+        orders: orders,
+        inquiries_count: inquiries.length || monthly.summary?.total_inquiries || monthly.summary?.total_deals || 0,
+      };
     },
     staleTime: 30000,
   });
@@ -63,18 +101,25 @@ export default function ReportsPage() {
 
   // Exact parity for KPI cards:
   const totalDealsCount =
-    overview?.inquiries_count ??
-    overview?.summary?.total_deals ??
-    overview?.summary?.total_inquiries ??
+    overview?.inquiries_count ||
+    overview?.summary?.total_deals ||
+    overview?.summary?.total_inquiries ||
     0;
 
   const wonOrdersCount =
-    overview?.summary?.deals_won ??
-    overview?.summary?.won ??
-    (overview?.orders || []).length;
+    overview?.summary?.deals_won ||
+    overview?.summary?.won ||
+    (overview?.orders || []).length ||
+    0;
 
-  const funnelList = overview?.funnel || [];
-  const maxFunnelCount = Math.max(...funnelList.map((f: any) => Number(f.count) || 0), 1);
+  const funnelList: any[] = Array.isArray(overview?.funnel)
+    ? overview.funnel
+    : (overview?.funnel?.funnel || []);
+
+  const maxFunnelCount = Math.max(
+    ...funnelList.map((f: any) => Number(f.count) || 0),
+    1
+  );
 
   return (
     <div className="space-y-6">
