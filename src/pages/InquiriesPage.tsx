@@ -1284,9 +1284,22 @@ export default function InquiriesPage() {
     }
 
     // 2. Line Items validation (Rate > 0, Quantity > 0, Description required, HSN/SAC required)
-    const currentItems = editDetails.lineItems && editDetails.lineItems.length > 0
+    const rawItems = editDetails.lineItems && editDetails.lineItems.length > 0
       ? editDetails.lineItems
       : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+
+    // Filter out completely blank trailing rows added via '+' but left unfilled
+    let currentItems = rawItems.filter((item) => {
+      const hasSku = Boolean(item.sku_text && item.sku_text.trim());
+      const hasDim = Boolean(item.dimensions && item.dimensions.trim());
+      const hasQty = Number(item.quantity) > 0;
+      const hasRate = Number(item.rate) > 0;
+      return hasSku || hasDim || hasQty || hasRate;
+    });
+
+    if (currentItems.length === 0) {
+      currentItems = rawItems;
+    }
 
     if (currentItems.length === 0) {
       errors['lineItems'] = 'Please add at least one line item.';
