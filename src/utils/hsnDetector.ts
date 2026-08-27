@@ -103,18 +103,18 @@ export function detectHsnCode(productName: string): string {
   }
 
   // 13. CR Coil / Cold Rolled Coil / CR Sheet / CRCA
-  if (/\bcold\s*rolled\b|\bcrca\b|\bcr\s*coil\b|\bcr\s*sheet\b|\bcr\s*plate\b|\bcr\b/i.test(text)) {
+  if (/\bcold\s*rolled\b|\bcrca\b|\bcr\s*coils?\b|\bcr\s*sheets?\b|\bcr\s*plates?\b|\bcr\b/i.test(text)) {
     return '72092900';
   }
 
   // 14. HR Coil / Hot Rolled Coil / HR Sheet
-  if (/\bhot\s*rolled\b|\bhr\s*coil\b|\bhr\s*sheet\b|\bhr\s*plate\b|\bhrpo\b|\bhr\b/i.test(text)) {
+  if (/\bhot\s*rolled\b|\bhr\s*coils?\b|\bhr\s*sheets?\b|\bhr\s*plates?\b|\bhrpo\b|\bhr\b/i.test(text)) {
     return '72082700';
   }
 
   // 15. MS Sheet / MS Plate / Mild Steel Sheet / Mild Steel Plate
   if (
-    /\bms\s*sheet\b|\bms\s*plate\b|\bmild\s*steel\s*sheet\b|\bmild\s*steel\s*plate\b|\bmild\s*steel\b|\bis\s*2062\b|\be250\b|\be350\b|\bplate\b|\bsheet\b|\bms\b/i.test(
+    /\bms\s*sheets?\b|\bms\s*plates?\b|\bmild\s*steel\s*sheets?\b|\bmild\s*steel\s*plates?\b|\bmild\s*steel\b|\bis\s*2062\b|\be250\b|\be350\b|\bplates?\b|\bsheets?\b|\bms\b/i.test(
       text,
     )
   ) {

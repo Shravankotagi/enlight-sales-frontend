@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { detectHsnCode } from '../utils/hsnDetector';
+import { calculateTotalTonnageMt } from '../utils/pricingEngine';
 
 type Tab = 'monthly' | 'funnel' | 'sku';
 
@@ -75,12 +77,20 @@ export default function ReportsPage() {
         ? funnelLoading
         : skuLoading;
 
+  // Calculate Total Tonnage (MT) across all sold SKUs
+  const { totalMt, hasUnconvertible } = useMemo(() => {
+    const skusList = (sku?.skus || []).map((item: any) => ({
+      ...item,
+      quantity: item.total_quantity || item.quantity,
+    }));
+    return calculateTotalTonnageMt(skusList);
+  }, [sku]);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports &amp; Analytics</h1>
-          
         </div>
 
         <DateFilterControl onChange={setDateRange} />
@@ -249,24 +259,30 @@ export default function ReportsPage() {
             <div className="space-y-6">
               {sku && (sku?.skus || []).length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Card 1: Unique Products Sold */}
                   <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
                     <p className="text-xs font-medium text-slate-500">Unique Products Sold</p>
                     <p className="text-2xl font-bold text-slate-900 mt-1">
                       {(sku?.skus || []).length}
                     </p>
                   </div>
+
+                  {/* Card 2: Total Tonnage (MT) (Replaces Total SKU Revenue) */}
                   <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
-                    <p className="text-xs font-medium text-slate-500">Total SKU Revenue</p>
+                    <p className="text-xs font-medium text-slate-500">Total Tonnage (MT)</p>
                     <p className="text-2xl font-bold text-emerald-600 mt-1">
-                      ₹
-                      {Number(
-                        (sku?.skus || []).reduce(
-                          (sum: number, item: any) => sum + (Number(item.total_value) || 0),
-                          0,
-                        ),
-                      ).toLocaleString('en-IN')}
+                      {totalMt.toLocaleString('en-IN', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      MT
                     </p>
+                    {hasUnconvertible && (
+                      <p className="text-[11px] text-slate-400 mt-0.5">* some items excluded</p>
+                    )}
                   </div>
+
+                  {/* Card 3: Total Deals Closed */}
                   <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
                     <p className="text-xs font-medium text-slate-500">Total Deals Closed</p>
                     <p className="text-2xl font-bold text-indigo-600 mt-1">
@@ -281,50 +297,57 @@ export default function ReportsPage() {
 
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm text-slate-700">
+                  <table className="w-full text-sm text-slate-700">
                     <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       <tr>
-                        <th className="px-5 py-3.5">SKU / Product Specification</th>
-                        <th className="px-5 py-3.5 w-36">Grade / Finish</th>
-                        <th className="px-5 py-3.5 w-36 text-right">Total Quantity</th>
-                        <th className="px-5 py-3.5 w-24">Unit</th>
-                        <th className="px-5 py-3.5 w-44 text-right">Total Value (₹)</th>
-                        <th className="px-5 py-3.5 w-28 text-right">Won Deals</th>
+                        <th className="px-5 py-3.5 text-left w-[36%]">SKU / Product Specification</th>
+                        <th className="px-5 py-3.5 text-center w-[16%]">HSN/SAC</th>
+                        <th className="px-5 py-3.5 text-center w-[16%]">Total Quantity</th>
+                        <th className="px-5 py-3.5 text-center w-[18%]">Total Value (₹)</th>
+                        <th className="px-5 py-3.5 text-center w-[14%]">Won Deals</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
-                      {(sku?.skus || []).map((item: any, i: number) => (
-                        <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-5 py-3.5 font-bold text-slate-900">
-                            {item.sku_text || item.sku || '-'}
-                          </td>
-                          <td className="px-5 py-3.5 text-xs text-slate-500">
-                            {item.grade ? (
-                              <span className="px-2 py-0.5 rounded bg-slate-100 font-mono text-[11px]">
-                                {item.grade}
-                              </span>
-                            ) : (
-                              '-'
-                            )}
-                          </td>
-                          <td className="px-5 py-3.5 text-right font-semibold text-slate-900">
-                            {Number(item.total_quantity || 0).toLocaleString('en-IN')}
-                          </td>
-                          <td className="px-5 py-3.5 text-xs font-semibold text-slate-500">
-                            <span className="px-2 py-0.5 rounded bg-slate-100 text-[11px]">
-                              {item.unit || 'MT'}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-right font-bold text-emerald-700">
-                            {item.total_value
-                              ? `₹${Number(item.total_value).toLocaleString('en-IN')}`
-                              : '-'}
-                          </td>
-                          <td className="px-5 py-3.5 text-right text-xs font-bold text-slate-700">
-                            {item.deal_count || item.count || 1}
-                          </td>
-                        </tr>
-                      ))}
+                      {(sku?.skus || []).map((item: any, i: number) => {
+                        const hsn = detectHsnCode(item.sku_text || item.sku || '');
+                        const qtyStr = `${Number(item.total_quantity || item.quantity || 0).toLocaleString('en-IN')} ${item.unit || 'MT'}`;
+                        return (
+                          <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                            {/* 1. SKU / Product Specification - Left Aligned */}
+                            <td className="px-5 py-3.5 text-left font-bold text-slate-900">
+                              {item.sku_text || item.sku || '—'}
+                            </td>
+
+                            {/* 2. HSN/SAC (Replaced Grade/Finish) - Center Aligned */}
+                            <td className="px-5 py-3.5 text-center text-xs">
+                              {hsn ? (
+                                <span className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 font-mono text-xs font-semibold border border-slate-200/60">
+                                  {hsn}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+
+                            {/* 3. Total Quantity (Merged with Unit) - Center Aligned */}
+                            <td className="px-5 py-3.5 text-center font-semibold text-slate-800">
+                              {qtyStr}
+                            </td>
+
+                            {/* 4. Total Value (₹) - Center Aligned */}
+                            <td className="px-5 py-3.5 text-center font-bold text-emerald-700">
+                              {item.total_value
+                                ? `₹${Number(item.total_value).toLocaleString('en-IN')}`
+                                : '—'}
+                            </td>
+
+                            {/* 5. Won Deals - Center Aligned */}
+                            <td className="px-5 py-3.5 text-center text-xs font-bold text-slate-700">
+                              {item.deal_count || item.count || 1}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
