@@ -170,7 +170,7 @@ export default function IntelligencePage() {
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             01 CHURN RADAR
           </span>
         </div>
@@ -320,7 +320,7 @@ export default function IntelligencePage() {
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             02 REORDER QUEUE
           </span>
         </div>
@@ -474,7 +474,7 @@ export default function IntelligencePage() {
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             03 LOSS ANALYTICS
           </span>
         </div>
