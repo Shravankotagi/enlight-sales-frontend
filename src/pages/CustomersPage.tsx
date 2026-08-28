@@ -18,6 +18,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Building2,
   TrendingUp,
   FileText,
@@ -29,6 +30,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 
 function HealthBadge({ risk }: { risk: string }) {
   const r = (risk || '').toLowerCase();
@@ -162,6 +164,61 @@ export default function CustomersPage() {
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
   const pageSize = 15;
 
+  // Date Filter Presets (Matching Visits & Inquiries tab pattern)
+  const [dayPreset, setDayPreset] = useState<string>('all');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
+  const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({});
+
+  const handleDayPresetChange = (preset: string) => {
+    setDayPreset(preset);
+    if (preset === 'all') {
+      setDateRange({});
+      setShowCustomDate(false);
+    } else if (preset === 'today') {
+      const today = formatLocalDate();
+      setDateRange({ from: today, to: today });
+      setShowCustomDate(false);
+    } else if (preset === '7_days') {
+      setDateRange({ from: getDaysAgo(7), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === '30_days') {
+      setDateRange({ from: getDaysAgo(30), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === '90_days') {
+      setDateRange({ from: getDaysAgo(90), to: formatLocalDate() });
+      setShowCustomDate(false);
+    } else if (preset === 'custom') {
+      setShowCustomDate(true);
+    }
+  };
+
+  const handleCustomFromChange = (val: string) => {
+    setCustomFrom(val);
+    let effectiveTo = customTo;
+    if (val && customTo && val > customTo) {
+      effectiveTo = val;
+      setCustomTo(val);
+    }
+    if (val && effectiveTo) {
+      setDateRange({ from: val, to: effectiveTo });
+    } else if (val) {
+      setDateRange({ from: val, to: val });
+    }
+  };
+
+  const handleCustomToChange = (val: string) => {
+    let effectiveVal = val;
+    if (val && customFrom && val < customFrom) {
+      effectiveVal = customFrom;
+    }
+    setCustomTo(effectiveVal);
+    if (customFrom && effectiveVal) {
+      setDateRange({ from: customFrom, to: effectiveVal });
+    }
+  };
+
   // Edit Form State
   const [editForm, setEditForm] = useState({
     customer_name: '',
@@ -263,7 +320,7 @@ export default function CustomersPage() {
   // Reset pagination on filter change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterRisk]);
+  }, [searchTerm, filterRisk, dateRange]);
 
   // Metrics
   const totalCustomers = safeCustomers.length;
@@ -282,6 +339,13 @@ export default function CustomersPage() {
 
   // Filtered List
   const filteredCustomers = safeCustomers.filter(c => {
+    if (dateRange.from && dateRange.to) {
+      const orderDateStr = c.last_order_date;
+      if (!orderDateStr) return false;
+      const itemDate = new Date(orderDateStr).toISOString().split('T')[0];
+      if (itemDate < dateRange.from || itemDate > dateRange.to) return false;
+    }
+
     const name = (c?.customer_name || '').toLowerCase();
     const phone = (c?.customer_phone || '').toLowerCase();
     const person = (c?.contact_person || '').toLowerCase();
@@ -309,6 +373,11 @@ export default function CustomersPage() {
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterRisk('all');
+    setDayPreset('all');
+    setShowCustomDate(false);
+    setCustomFrom('');
+    setCustomTo('');
+    setDateRange({});
   };
 
   const handleOpenEdit = (c: any) => {
@@ -408,41 +477,93 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Unified Search & Filter Bar */}
-      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
-        {/* Search Input */}
-        <div className="relative w-full sm:w-72">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search Customer, Contact, Phone..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400 bg-white"
-          />
+      {/* Filter & Search Bar - Single Row matching Visits tab pattern */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* 1. Compact Search Bar with Clear (X) Icon */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+            <input
+              type="text"
+              placeholder="Search Customer, Contact, Phone..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                title="Clear Search">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* 2. Date Preset Dropdown with 'All Time' default */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+            <select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
+              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
+              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
+              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
+              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
+              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 3. Health Risk Filter Dropdown */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <select
+              value={filterRisk}
+              onChange={e => setFilterRisk(e.target.value)}
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Health Statuses ({totalCustomers})</option>
+              <option value="active" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Active ({activeCount}) 🟢</option>
+              <option value="at_risk" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>At Risk 35-45d ({atRiskCount}) 🟡</option>
+              <option value="churning" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Churning &gt;45d ({churningCount}) 🔴</option>
+              <option value="credit_watch" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Credit Watch ({creditWatchCount}) ⚠️</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 4. Clear Filter Button */}
+          {(searchTerm || filterRisk !== 'all' || dayPreset !== 'all') && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+              Clear Filter
+            </button>
+          )}
         </div>
 
-        {/* Health Risk Filter Dropdown */}
-        <div className="relative inline-flex items-center">
-          <select
-            value={filterRisk}
-            onChange={e => setFilterRisk(e.target.value)}
-            className="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer transition-all">
-            <option value="all">All Health Statuses ({totalCustomers})</option>
-            <option value="active">Active ({activeCount}) 🟢</option>
-            <option value="at_risk">At Risk 35-45d ({atRiskCount}) 🟡</option>
-            <option value="churning">Churning &gt;45d ({churningCount}) 🔴</option>
-            <option value="credit_watch">Credit Watch ({creditWatchCount}) ⚠️</option>
-          </select>
-        </div>
-
-        {/* Clear Filter Button */}
-        {(searchTerm || filterRisk !== 'all') && (
-          <button
-            onClick={handleClearFilters}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100/90 hover:bg-slate-200/80 rounded-xl transition-colors shadow-2xs cursor-pointer">
-            Clear Filter
-          </button>
+        {/* Custom Range Inputs */}
+        {showCustomDate && (
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <span className="text-slate-500 font-semibold">From:</span>
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={e => handleCustomFromChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+            <span className="text-slate-500 font-semibold">To:</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={e => handleCustomToChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+          </div>
         )}
       </div>
 
@@ -456,7 +577,7 @@ export default function CustomersPage() {
                 <th className="px-4 py-3 min-w-[200px]">Customer</th>
                 <th className="px-4 py-3 min-w-[170px]">Order Activity</th>
                 <th className="px-4 py-3 min-w-[130px]">Account Health</th>
-                <th className="px-4 py-3 text-right w-16">Actions</th>
+                <th className="px-4 py-3 text-center w-20">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -489,8 +610,7 @@ export default function CustomersPage() {
 
                       {/* 1. Customer */}
                       <td className="px-4 py-3.5">
-                        <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors flex items-center gap-2">
-                          <Building2 size={16} className="text-blue-600 shrink-0" />
+                        <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {c.customer_name || 'Customer'}
                         </div>
                       </td>
@@ -507,10 +627,6 @@ export default function CustomersPage() {
                               })
                             : '-'}
                         </div>
-                        <div className="text-slate-500 flex items-center gap-1 mt-0.5 whitespace-nowrap">
-                          <Clock size={11} className="text-slate-400 shrink-0" />
-                          Every {c.avg_order_frequency_days || 30}d
-                        </div>
                       </td>
 
                       {/* 3. Account Health */}
@@ -519,8 +635,8 @@ export default function CustomersPage() {
                       </td>
 
                       {/* 4. Actions (Bordered 3-dots button) */}
-                      <td className="px-4 py-3.5 text-right relative whitespace-nowrap">
-                        <div className="inline-block text-left">
+                      <td className="px-4 py-3.5 text-center relative whitespace-nowrap">
+                        <div className="relative inline-block text-left">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -535,7 +651,11 @@ export default function CustomersPage() {
                           {activeActionMenuId === c.id && (
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              className="absolute right-4 top-11 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1.5 min-w-[140px] text-left animate-in fade-in-50 duration-100">
+                              className={`absolute right-0 ${
+                                idx >= paginatedCustomers.length - 2 && paginatedCustomers.length >= 3
+                                  ? 'bottom-full mb-1'
+                                  : 'top-full mt-1'
+                              } bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1.5 min-w-[140px] text-left animate-in fade-in-50 duration-100`}>
                               <button
                                 type="button"
                                 onClick={() => {
