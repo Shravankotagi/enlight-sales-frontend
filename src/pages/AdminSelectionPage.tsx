@@ -328,52 +328,54 @@ export default function AdminSelectionPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-slate-900 p-4 sm:p-6 font-sans">
+    <div className="min-h-screen bg-slate-50/70 p-4 sm:p-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
               <span>{pageTitle}</span>
               <span
-                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider ${
+                className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                   isSalesManager
-                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                    : 'bg-blue-50 text-blue-700 border border-blue-200'
                 }`}
               >
                 {isSalesManager ? 'Sales Manager' : 'Admin'}
               </span>
             </h1>
-            <p className="text-slate-400 text-sm mt-1">{pageSubtitle}</p>
+            <p className="text-slate-500 text-sm mt-1">{pageSubtitle}</p>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm px-3 py-1.5 rounded-lg hover:bg-slate-800 self-start sm:self-auto"
+            className="flex items-center gap-2 text-slate-600 hover:text-rose-600 bg-white border border-slate-200 hover:border-rose-200 hover:bg-rose-50/50 transition-all text-xs font-bold px-3.5 py-2 rounded-xl shadow-2xs self-start sm:self-auto cursor-pointer"
           >
-            <LogOut size={16} />
+            <LogOut size={15} />
             Logout
           </button>
         </div>
 
         {/* Action Header & Filter Controls */}
-        <div className="flex flex-col gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div
                 className={`p-2.5 rounded-xl ${
-                  isSalesManager ? 'bg-indigo-600' : 'bg-blue-600'
+                  isSalesManager
+                    ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                    : 'bg-blue-50 text-blue-600 border border-blue-100'
                 }`}
               >
-                <Users size={20} className="text-white" />
+                <Users size={20} />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-base font-bold text-slate-900">
                   {isSalesManager
                     ? 'My Assigned Sales Team'
                     : 'Team & Admin Accounts'}
                 </h2>
-                <p className="text-slate-400 text-xs">
+                <p className="text-slate-500 text-xs mt-0.5">
                   {isSalesManager
                     ? 'Click any team member to view their dashboard or view aggregate'
                     : 'Select any account to view dashboard, or manage permissions'}
@@ -381,13 +383,13 @@ export default function AdminSelectionPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
               {isSalesManager && (
                 <button
                   onClick={handleViewTeamAggregate}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
                 >
-                  <LayoutDashboard size={16} />
+                  <LayoutDashboard size={15} />
                   View Team Aggregate Dashboard
                 </button>
               )}
@@ -396,24 +398,23 @@ export default function AdminSelectionPage() {
                 <>
                   <button
                     onClick={() => navigate('/admin-dashboard')}
-                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-2xs cursor-pointer"
                   >
-                    <ShieldAlert size={16} className="text-blue-400" />
+                    <ShieldAlert size={15} className="text-blue-600" />
                     Admin Overview
                   </button>
                   <button
                     onClick={() => setShowImportModal(true)}
-                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                    className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-2xs cursor-pointer"
                   >
-                    <FileSpreadsheet size={16} />
+                    <FileSpreadsheet size={15} className="text-emerald-600" />
                     Import Clients
                   </button>
-                  
                   <button
                     onClick={handleOpenAddModal}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-blue-500/20 cursor-pointer"
                   >
-                    <UserPlus size={16} />
+                    <UserPlus size={15} />
                     Add Employee / Admin
                   </button>
                 </>
@@ -423,46 +424,46 @@ export default function AdminSelectionPage() {
 
           {/* Search and Role Filter Tabs (for Admin) */}
           {isAdmin && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
               {/* Role filter buttons */}
-              <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-xl border border-slate-700/80 overflow-x-auto">
+              <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 overflow-x-auto">
                 <button
                   onClick={() => setRoleFilter('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                     roleFilter === 'all'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-white text-blue-600 shadow-xs border border-slate-200/60'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   All ({employees.length})
                 </button>
                 <button
                   onClick={() => setRoleFilter('admin')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                     roleFilter === 'admin'
-                      ? 'bg-amber-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-amber-300'
+                      ? 'bg-white text-amber-700 shadow-xs border border-amber-200/60'
+                      : 'text-slate-600 hover:text-amber-700'
                   }`}
                 >
-                  <Crown size={12} />
+                  <Crown size={12} className={roleFilter === 'admin' ? 'text-amber-500' : ''} />
                   Admins ({adminCount})
                 </button>
                 <button
                   onClick={() => setRoleFilter('sales_manager')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                     roleFilter === 'sales_manager'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-indigo-300'
+                      ? 'bg-white text-indigo-600 shadow-xs border border-indigo-200/60'
+                      : 'text-slate-600 hover:text-indigo-600'
                   }`}
                 >
                   Managers ({managerCount})
                 </button>
                 <button
                   onClick={() => setRoleFilter('salesperson')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                     roleFilter === 'salesperson'
-                      ? 'bg-slate-700 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Sales Team ({salespersonCount})
@@ -472,7 +473,7 @@ export default function AdminSelectionPage() {
               {/* Search bar */}
               <div className="relative flex-1 sm:max-w-xs">
                 <Search
-                  size={15}
+                  size={14}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <input
@@ -480,7 +481,7 @@ export default function AdminSelectionPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name, ID, phone..."
-                  className="w-full pl-9 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-xs placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                 />
               </div>
             </div>
@@ -490,21 +491,21 @@ export default function AdminSelectionPage() {
         {/* Employee / Admin List */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="animate-spin text-blue-400" size={32} />
+            <Loader2 className="animate-spin text-blue-600" size={32} />
           </div>
         ) : error ? (
-          <div className="text-red-400 text-center py-10 bg-red-500/10 border border-red-500/20 rounded-xl">
+          <div className="text-rose-700 text-center py-10 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-semibold">
             {error}
           </div>
         ) : filteredEmployees.length === 0 ? (
-          <div className="text-center py-20 bg-slate-800/50 border border-slate-800 rounded-2xl p-8">
-            <Users size={48} className="text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-300 font-semibold">
+          <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl p-8 shadow-xs">
+            <Users size={48} className="text-slate-300 mx-auto mb-3" />
+            <p className="text-slate-800 font-bold text-sm">
               {isSalesManager
                 ? 'No salespersons assigned to your team yet'
                 : 'No matching accounts found'}
             </p>
-            <p className="text-slate-500 text-sm mt-1">
+            <p className="text-slate-400 text-xs mt-1">
               {isSalesManager
                 ? 'Contact an administrator to assign sales team members under your guidance.'
                 : 'Click "Add Employee / Admin" to create new accounts.'}
@@ -527,19 +528,19 @@ export default function AdminSelectionPage() {
                 <div
                   key={emp.id}
                   onClick={() => handleSelect(emp)}
-                  className={`w-full bg-slate-800 hover:bg-slate-700/80 border rounded-xl p-4 text-left transition-all group shadow-sm cursor-pointer flex items-center justify-between gap-4 ${
+                  className={`w-full bg-white hover:bg-slate-50/80 border rounded-2xl p-4.5 text-left transition-all group shadow-2xs hover:shadow-md cursor-pointer flex items-center justify-between gap-4 ${
                     isEmpAdmin
-                      ? 'border-amber-500/40 hover:border-amber-400/80'
+                      ? 'border-amber-200/90 hover:border-amber-300'
                       : isMgr
-                        ? 'border-indigo-500/40 hover:border-indigo-400/80'
-                        : 'border-slate-700/80 hover:border-blue-500/80'
+                        ? 'border-indigo-200/90 hover:border-indigo-300'
+                        : 'border-slate-200 hover:border-blue-300'
                   }`}
                 >
                   <div className="flex items-center gap-4 min-w-0">
                     <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs ${
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm ${
                         isEmpAdmin
-                          ? 'bg-gradient-to-br from-amber-500 to-orange-600'
+                          ? 'bg-gradient-to-br from-amber-500 to-orange-500'
                           : isMgr
                             ? 'bg-gradient-to-br from-indigo-600 to-purple-600'
                             : 'bg-gradient-to-br from-blue-600 to-cyan-600'
@@ -553,26 +554,26 @@ export default function AdminSelectionPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-white font-semibold truncate">
+                        <p className="text-slate-900 font-bold group-hover:text-blue-600 transition-colors truncate">
                           {emp.name}
                         </p>
                         {emp.id === employee?.id && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30">
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold border border-blue-200">
                             You
                           </span>
                         )}
                         <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-semibold flex items-center gap-1 ${
+                          className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 ${
                             isEmpAdmin
-                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
                               : isMgr
-                                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                                : 'bg-slate-700 text-slate-300'
+                                ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
                           }`}
                         >
                           {isEmpAdmin ? (
                             <>
-                              <Crown size={11} /> Admin
+                              <Crown size={11} className="text-amber-600" /> Admin
                             </>
                           ) : isMgr ? (
                             'Sales Manager'
@@ -581,15 +582,15 @@ export default function AdminSelectionPage() {
                           )}
                         </span>
                       </div>
-                      <p className="text-slate-400 text-xs mt-0.5 font-mono">
+                      <p className="text-slate-500 text-xs mt-1 font-mono">
                         {emp.employee_id} · +{emp.phone}
                         {emp.email ? ` · ${emp.email}` : ''}
                       </p>
                       {isAdmin && assignedMgr && (
-                        <p className="text-indigo-400 text-xs mt-1 flex items-center gap-1">
-                          <UserCheck size={12} />
+                        <p className="text-indigo-600 text-xs mt-1 flex items-center gap-1 font-medium">
+                          <UserCheck size={13} className="text-indigo-500" />
                           Reporting to:{' '}
-                          <span className="font-semibold">
+                          <span className="font-bold text-indigo-900">
                             {assignedMgr.name}
                           </span>
                         </p>
@@ -602,12 +603,12 @@ export default function AdminSelectionPage() {
                       <button
                         onClick={(e) => handleOpenEditModal(emp, e)}
                         title="Edit Account Details"
-                        className="p-2 rounded-lg bg-slate-700/60 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
+                        className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
                       >
-                        <Edit2 size={15} />
+                        <Edit2 size={14} />
                       </button>
                     )}
-                    <div className="hidden sm:flex items-center gap-1 text-slate-400 group-hover:text-blue-400 transition-colors text-xs font-semibold pl-2">
+                    <div className="hidden sm:flex items-center gap-1 text-slate-500 group-hover:text-blue-600 transition-colors text-xs font-bold pl-2">
                       <span>{isEmpAdmin ? 'Company Overview' : 'View Dashboard'}</span>
                       <span className="group-hover:translate-x-0.5 transition-transform">
                         →
@@ -623,35 +624,35 @@ export default function AdminSelectionPage() {
 
       {/* Add / Edit Account Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-2xl w-full max-w-md p-6 border border-slate-700 shadow-2xl">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 {isEditMode ? (
                   <>
-                    <Edit2 size={18} className="text-blue-400" />
+                    <Edit2 size={18} className="text-blue-600" />
                     Edit Account
                   </>
                 ) : (
                   <>
-                    <UserPlus size={18} className="text-blue-400" />
+                    <UserPlus size={18} className="text-blue-600" />
                     Add New Employee / Admin
                   </>
                 )}
               </h3>
               <button
                 onClick={handleCloseModal}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Success Message */}
             {formSuccess && (
-              <div className="mb-4 p-3 bg-green-500/20 border border-green-500/30 rounded-lg text-green-400 text-sm flex items-center gap-2">
-                <Check size={16} /> {formSuccess}
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <Check size={16} className="text-emerald-600 shrink-0" /> {formSuccess}
               </div>
             )}
 
@@ -660,8 +661,8 @@ export default function AdminSelectionPage() {
               <div className="space-y-4">
                 {/* Name */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Full Name <span className="text-red-400">*</span>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Full Name <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -670,14 +671,14 @@ export default function AdminSelectionPage() {
                       setForm((f) => ({ ...f, name: e.target.value }))
                     }
                     placeholder="e.g. Rahul Sharma"
-                    className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
                   />
                 </div>
 
                 {/* Phone */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    WhatsApp Number <span className="text-red-400">*</span>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    WhatsApp Number <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="tel"
@@ -690,17 +691,17 @@ export default function AdminSelectionPage() {
                     }
                     placeholder="919876543210"
                     maxLength={12}
-                    className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500 font-mono"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono"
                   />
-                  <p className="text-slate-500 text-xs mt-1">
+                  <p className="text-slate-400 text-[11px] mt-1">
                     12 digits starting with 91 (e.g. 919876543210)
                   </p>
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Email <span className="text-slate-500 text-xs">(optional)</span>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Email <span className="text-slate-400 text-xs font-normal">(optional)</span>
                   </label>
                   <input
                     type="email"
@@ -709,34 +710,34 @@ export default function AdminSelectionPage() {
                       setForm((f) => ({ ...f, email: e.target.value }))
                     }
                     placeholder="rahul@enlightmetals.com"
-                    className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
                   />
                 </div>
 
                 {/* Role */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Role & Permissions <span className="text-red-400">*</span>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Role &amp; Permissions <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={form.role}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, role: e.target.value }))
                     }
-                    className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                   >
-                    <option value="salesperson"> Salesperson (Standard Access)</option>
-                    <option value="sales_manager"> Sales Manager (Team Scoped Access)</option>
-                    <option value="admin"> Admin (Full Company Access & Management)</option>
+                    <option value="salesperson">Salesperson (Standard Access)</option>
+                    <option value="sales_manager">Sales Manager (Team Scoped Access)</option>
+                    <option value="admin">Admin (Full Company Access &amp; Management)</option>
                   </select>
                 </div>
 
                 {/* Notice for Admin role */}
                 {form.role === 'admin' && (
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 text-xs flex items-start gap-2">
-                    <Crown size={15} className="shrink-0 mt-0.5 text-amber-400" />
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2">
+                    <Crown size={15} className="shrink-0 mt-0.5 text-amber-600" />
                     <span>
-                      <strong>Admin Privileges:</strong> This account will have 100% full company-wide visibility, access to all module dashboards, staff creation, client imports, and settings.
+                      <strong>Admin Privileges:</strong> This account will have full company-wide visibility, access to all module dashboards, staff creation, client imports, and settings.
                     </span>
                   </div>
                 )}
@@ -744,9 +745,9 @@ export default function AdminSelectionPage() {
                 {/* Manager Assignment (only when role is salesperson) */}
                 {form.role === 'salesperson' && allManagers.length > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Assigned Sales Manager{' '}
-                      <span className="text-slate-500 text-xs">(optional)</span>
+                      <span className="text-slate-400 text-xs font-normal">(optional)</span>
                     </label>
                     <select
                       value={form.manager_id || ''}
@@ -759,7 +760,7 @@ export default function AdminSelectionPage() {
                               ?.phone || '',
                         }))
                       }
-                      className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                      className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                     >
                       <option value="">-- None (Direct to Admin) --</option>
                       {allManagers.map((mgr) => (
@@ -773,8 +774,8 @@ export default function AdminSelectionPage() {
 
                 {/* Employee ID */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Employee ID <span className="text-red-400">*</span>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Employee ID <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -786,42 +787,42 @@ export default function AdminSelectionPage() {
                       }))
                     }
                     placeholder="EMP001"
-                    className="w-full px-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500 font-mono"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono font-bold"
                   />
-                  <p className="text-slate-500 text-xs mt-1">
+                  <p className="text-slate-400 text-[11px] mt-1">
                     Auto-generated identifier
                   </p>
                 </div>
 
                 {/* Error */}
                 {formError && (
-                  <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium">
                     {formError}
                   </div>
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-2">
+                <div className="flex gap-3 pt-3 border-t border-slate-100">
                   {isEditMode && form.id !== employee?.id && (
                     <button
                       type="button"
                       onClick={handleDeactivate}
                       disabled={formLoading}
-                      className="px-3 py-2.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/30 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                      className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Deactivate
                     </button>
                   )}
                   <button
                     onClick={handleCloseModal}
-                    className="flex-1 px-4 py-2.5 border border-slate-600 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-colors"
+                    className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSubmit}
                     disabled={formLoading}
-                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {formLoading ? (
                       <>
