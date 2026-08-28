@@ -254,5 +254,6 @@ export function detectHsnCode(productName: string, dimensions?: string): string 
     return '72193390';
   }
 
-  return '72083840';
+  // Unknown product -> leave blank
+  return '';
 }

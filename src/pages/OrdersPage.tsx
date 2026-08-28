@@ -567,7 +567,7 @@ export default function OrdersPage() {
               return {
                 sku_text: skuText,
                 dimensions: i.dimensions || '',
-                hsn_code: i.hsn_code || i.hsn || detectHsnCode(skuText) || '',
+                hsn_code: i.hsn_code || i.hsn || detectHsnCode(skuText, i.dimensions) || '',
                 quantity: Number(i.quantity) || 0,
                 unit: normalizeUnit(i.unit) || 'MT',
                 rate: Number(i.rate) || 0,
@@ -1665,8 +1665,8 @@ export default function OrdersPage() {
                                 const newSku = e.target.value;
                                 const updated = [...formLineItems];
                                 const currentHsn = updated[idx]?.hsn_code || '';
-                                const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '');
-                                const newAutoHsn = detectHsnCode(newSku);
+                                const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions);
+                                const newAutoHsn = detectHsnCode(newSku, item.dimensions);
 
                                 let finalHsn = currentHsn;
                                 if (!currentHsn || currentHsn === prevAutoHsn) {
@@ -1687,8 +1687,18 @@ export default function OrdersPage() {
                                 required
                                 value={item.dimensions || ''}
                                 onChange={(e) => {
+                                  const newDim = e.target.value;
                                   const updated = [...formLineItems];
-                                  updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                  const currentHsn = updated[idx]?.hsn_code || '';
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions);
+                                  const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
+
+                                  let finalHsn = currentHsn;
+                                  if (!currentHsn || currentHsn === prevAutoHsn) {
+                                    finalHsn = newAutoHsn;
+                                  }
+
+                                  updated[idx] = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
                                   setFormLineItems(updated);
                                 }}
                                 className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
