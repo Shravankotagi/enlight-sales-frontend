@@ -493,11 +493,6 @@ export default function CustomersPage() {
                           <Building2 size={16} className="text-blue-600 shrink-0" />
                           {c.customer_name || 'Customer'}
                         </div>
-                        {c.customer_gst && (
-                          <div className="text-xs text-slate-500 font-mono mt-0.5">
-                            GST: {c.customer_gst}
-                          </div>
-                        )}
                       </td>
 
                       {/* 2. Order Activity */}
