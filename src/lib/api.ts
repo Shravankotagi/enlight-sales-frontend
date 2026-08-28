@@ -105,6 +105,11 @@ export const inquiriesApi = {
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
 };
 
+export const productsApi = {
+  getAll: (params?: any) => API.get('/products', { params }),
+  lookup: (name: string, dimensions?: string) => API.get('/products/lookup', { params: { name, dimensions } }),
+};
+
 export const reportsApi = {
   getOverview: (params?: any) => API.get('/reports/overview', { params }),
   getMonthly: (params?: any) => API.get('/reports/monthly', { params }),

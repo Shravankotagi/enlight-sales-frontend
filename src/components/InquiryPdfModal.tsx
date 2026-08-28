@@ -8,6 +8,7 @@ import {
   calculateTotalTonnageMt,
   formatIndianCurrency,
 } from '../utils/pricingEngine';
+import { detectHsnCode } from '../utils/hsnDetector';
 
 interface InquiryItem {
   id: string;
@@ -420,7 +421,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                     const qty = Number(item.quantity) || 0;
                     const rate = Number(item.rate) || 0;
                     const amt = Number(item.amount) || (qty * rate) || 0;
-                    const hsn = item.hsn_code || '72083730';
+                    const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
                     const unit = item.unit || 'MT';
 
                     return (

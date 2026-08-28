@@ -2793,8 +2793,8 @@ export default function InquiriesPage() {
                                   const newSku = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
                                   const currentHsn = updated[idx]?.hsn_code || '';
-                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '');
-                                  const newAutoHsn = detectHsnCode(newSku);
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions);
+                                  const newAutoHsn = detectHsnCode(newSku, item.dimensions);
 
                                   let finalHsn = currentHsn;
                                   if (!currentHsn || currentHsn === prevAutoHsn) {
@@ -2827,12 +2827,25 @@ export default function InquiriesPage() {
                                   type="text"
                                   value={item.dimensions || ''}
                                   onChange={(e) => {
+                                    const newDim = e.target.value;
                                     const updated = [...(editDetails.lineItems || [])];
-                                    updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                    const currentHsn = updated[idx]?.hsn_code || '';
+                                    const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions);
+                                    const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
+
+                                    let finalHsn = currentHsn;
+                                    if (!currentHsn || currentHsn === prevAutoHsn) {
+                                      finalHsn = newAutoHsn;
+                                    }
+
+                                    updated[idx] = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
                                     if (fieldErrors[`dim_${idx}`]) {
                                       setFieldErrors(prev => { const n = { ...prev }; delete n[`dim_${idx}`]; return n; });
+                                    }
+                                    if (finalHsn && fieldErrors[`hsn_${idx}`]) {
+                                      setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
                                     }
                                   }}
                                   className={`w-full px-2 py-0.5 bg-white rounded text-[11px] font-mono outline-none focus:ring-1 text-slate-700 placeholder:text-slate-400 placeholder:font-normal transition-all ${
