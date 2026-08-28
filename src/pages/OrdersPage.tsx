@@ -511,9 +511,13 @@ export default function OrdersPage() {
     },
   ]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | File[] } }) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if ('value' in e.target) {
+      (e.target as HTMLInputElement).value = '';
+    }
 
     setPoFileName(file.name);
     setIsParsingDoc(true);
@@ -522,67 +526,96 @@ export default function OrdersPage() {
     reader.onload = async () => {
       try {
         const base64Data = reader.result as string;
-        setFormUploadedBase64(base64Data);
+
+        let mimeType = file.type;
+        if (!mimeType || mimeType === 'application/octet-stream') {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext === 'pdf') mimeType = 'application/pdf';
+          else if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+          else if (ext === 'webp') mimeType = 'image/webp';
+          else mimeType = 'application/pdf';
+        }
 
         const res = await inquiriesApi.parseDocument({
           file_base64: base64Data,
-          mime_type: file.type || 'image/jpeg',
+          mime_type: mimeType,
         });
 
-        const extraction = res?.data?.data || res?.data;
-        if (extraction) {
-          const rawCust =
-            extraction.customer?.name ||
-            extraction.customer_name ||
-            extraction.companyName ||
-            '';
-          if (rawCust && rawCust.trim().length > 0) {
-            setFormCustomerName(rawCust.trim());
-          }
-
-          const rawPhone =
-            extraction.customer?.phone ||
-            extraction.customer_phone ||
-            extraction.phone ||
-            '';
-          if (rawPhone && rawPhone.trim().length > 0) {
-            setFormCustomerPhone(rawPhone.trim());
-          }
-
-          if (extraction.po_number) {
-            setFormPoNumber(extraction.po_number);
-          }
-          if (extraction.po_date) {
-            setFormPoDate(extraction.po_date);
-          }
-          if (extraction.delivery_location) {
-            setFormDeliveryLocation(extraction.delivery_location);
-          }
-          if (extraction.payment_terms) {
-            setFormPaymentTerms(extraction.payment_terms);
-          }
-
-          if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
-            const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
-              const skuText = i.sku_text || i.description || 'Material';
-              return {
-                sku_text: skuText,
-                dimensions: i.dimensions || '',
-                hsn_code: i.hsn_code || i.hsn || detectHsnCode(skuText, i.dimensions) || '',
-                quantity: Number(i.quantity) || 0,
-                unit: normalizeUnit(i.unit) || 'MT',
-                rate: Number(i.rate) || 0,
-                amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
-              };
-            });
-            setFormLineItems(mappedItems);
-          }
-
-          toast.success('PO Document parsed! Fields auto-filled.');
+        if (!res?.data?.success || !res?.data?.data) {
+          throw new Error(res?.data?.error || 'Failed to extract PO details from document');
         }
+
+        const extraction = res.data.data;
+        setFormUploadedBase64(base64Data);
+
+        const rawCust =
+          extraction.customer_name ||
+          extraction.customer?.name ||
+          extraction.companyName ||
+          extraction.company_name ||
+          '';
+        if (rawCust && String(rawCust).trim().length > 0) {
+          const cleanCust = String(rawCust).trim();
+          setFormCustomerName(cleanCust);
+        }
+
+        const rawPhone =
+          extraction.customer_phone ||
+          extraction.contact_phone ||
+          extraction.customer?.phone ||
+          extraction.phone ||
+          '';
+        const cleanPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
+        if (cleanPhone.length >= 10) {
+          setFormCustomerPhone(cleanPhone);
+        }
+
+        if (extraction.po_number) {
+          setFormPoNumber(String(extraction.po_number).trim());
+        }
+        if (extraction.po_date) {
+          let formattedDate = String(extraction.po_date).trim();
+          const dMatch = formattedDate.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+          if (dMatch) {
+            formattedDate = `${dMatch[3]}-${dMatch[2].padStart(2, '0')}-${dMatch[1].padStart(2, '0')}`;
+          }
+          setFormPoDate(formattedDate);
+        }
+        if (extraction.delivery_location) {
+          setFormDeliveryLocation(String(extraction.delivery_location).trim());
+        }
+        if (extraction.payment_terms) {
+          setFormPaymentTerms(String(extraction.payment_terms).trim());
+        }
+
+        if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
+          const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
+            const skuText = (i.sku_text || i.description || i.product || 'Material').trim();
+            const dims = (i.dimensions || '').trim();
+            const rawUnit = (i.unit || 'MT').trim();
+            const q = Number(i.quantity) || 0;
+            const r = Number(i.rate) || 0;
+            const amt = Number(i.amount) || Math.round(q * r);
+            return {
+              sku_text: skuText,
+              dimensions: dims,
+              hsn_code: (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '').trim(),
+              quantity: q,
+              unit: normalizeUnit(rawUnit) || 'MT',
+              rate: r,
+              amount: amt,
+            };
+          });
+          setFormLineItems(mappedItems);
+        }
+
+        toast.success('PO Document parsed! All details auto-filled.');
       } catch (err: any) {
         console.error('Error parsing PO document:', err);
-        toast.error('Could not auto-extract PO details. You can enter the fields manually.');
+        setFormUploadedBase64(null);
+        setPoFileName('');
+        toast.error(err?.message || 'Could not auto-extract PO details. You can enter the fields manually.');
       } finally {
         setIsParsingDoc(false);
       }
@@ -1527,6 +1560,18 @@ export default function OrdersPage() {
 
               <label
                 htmlFor="order-po-file-upload"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const files = e.dataTransfer.files;
+                  if (files && files.length > 0) {
+                    handleFileUpload({ target: { files } } as any);
+                  }
+                }}
                 className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
                 <input
                   id="order-po-file-upload"
