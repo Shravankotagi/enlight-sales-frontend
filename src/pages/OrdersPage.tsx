@@ -68,6 +68,25 @@ interface Order {
   media_urls?: string[];
   deal_items?: DealItem[];
   raw_text?: string;
+  source_channel?: string;
+  inquiries?: {
+    source_channel?: string;
+    inquiry_type?: string;
+  };
+}
+
+export function getOrderSourceChannel(ord?: Order | null): string {
+  if (!ord) return 'WhatsApp';
+  const channel = (
+    ord.source_channel ||
+    ord.inquiries?.source_channel ||
+    ''
+  ).toLowerCase().trim();
+
+  if (channel === 'web_dashboard' || channel === 'dashboard') {
+    return 'Dashboard';
+  }
+  return 'WhatsApp';
 }
 
 interface LineItemDetail {
@@ -1009,7 +1028,7 @@ export default function OrdersPage() {
                 <th className="px-5 py-3 text-left w-[26%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
                 <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
-                <th className="px-4 py-3 text-center w-[14%]">Order Tonnage (MT)</th>
+                <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
               </tr>
@@ -1065,8 +1084,8 @@ export default function OrdersPage() {
                           <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap font-mono text-xs">
-                        {ordTonnage.totalMt > 0 ? `${ordTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT` : '—'}
+                      <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
+                        {getOrderSourceChannel(ord)}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
                         {formatDeliveryLocation(ord.delivery_location)}
