@@ -331,7 +331,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 </div>
               </div>
 
-              {/* Quote Builder — Print Only */}
+              {/* Quote Builder - Print Only */}
               {deal.deal_items && deal.deal_items.length > 0 && (
                 <div>
                   

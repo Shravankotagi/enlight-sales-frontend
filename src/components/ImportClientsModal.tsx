@@ -204,7 +204,7 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
                 <option value="">Use CSV "Assigned Salesperson" Column / Unassigned</option>
                 {salespeople.map(sp => (
                   <option key={sp.phone} value={sp.phone}>
-                    {sp.name} ({sp.employee_id}) — +{sp.phone}
+                    {sp.name} ({sp.employee_id}) - +{sp.phone}
                   </option>
                 ))}
               </select>

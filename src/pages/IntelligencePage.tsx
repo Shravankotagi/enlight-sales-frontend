@@ -166,7 +166,7 @@ export default function IntelligencePage() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SECTION 1 — CHURN RADAR
+          SECTION 1 - CHURN RADAR
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
@@ -297,15 +297,15 @@ export default function IntelligencePage() {
             <div className="flex items-center gap-5 text-xs font-medium">
               <div className="flex items-center gap-1.5 text-slate-700">
                 <span className="w-2.5 h-2.5 rounded-xs bg-emerald-500" />
-                <span>Healthy — {healthyCount}</span>
+                <span>Healthy - {healthyCount}</span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-700">
                 <span className="w-2.5 h-2.5 rounded-xs bg-amber-400" />
-                <span>At Risk — {atRiskCount}</span>
+                <span>At Risk - {atRiskCount}</span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-700">
                 <span className="w-2.5 h-2.5 rounded-xs bg-rose-500" />
-                <span>High Risk — {highRiskCount}</span>
+                <span>High Risk - {highRiskCount}</span>
               </div>
             </div>
             <div className="text-[11px] text-slate-400">
@@ -316,7 +316,7 @@ export default function IntelligencePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SECTION 2 — REORDER QUEUE
+          SECTION 2 - REORDER QUEUE
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
@@ -435,7 +435,7 @@ export default function IntelligencePage() {
                       Avg frequency: Every {item.avg_order_frequency_days}d · Last order:{' '}
                       {item.last_order_date
                         ? new Date(item.last_order_date).toLocaleDateString('en-IN')
-                        : '—'}
+                        : '-'}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -444,7 +444,7 @@ export default function IntelligencePage() {
                         ? new Date(item.predicted_reorder_date).toLocaleDateString(
                             'en-IN'
                           )
-                        : '—'}
+                        : '-'}
                     </span>
                     <span
                       className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
@@ -470,7 +470,7 @@ export default function IntelligencePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SECTION 3 — LOSS ANALYTICS
+          SECTION 3 - LOSS ANALYTICS
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
@@ -546,11 +546,11 @@ export default function IntelligencePage() {
                 <div className="space-y-1 text-xs text-slate-600">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-xs bg-emerald-500" />
-                    <span>Won — {wonDealsCount}</span>
+                    <span>Won - {wonDealsCount}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-xs bg-rose-500" />
-                    <span>Lost — {totalLostCount} (3mo)</span>
+                    <span>Lost - {totalLostCount} (3mo)</span>
                   </div>
                 </div>
               </div>
@@ -577,7 +577,7 @@ export default function IntelligencePage() {
                       Credit terms
                     </strong>
                   </span>{' '}
-                  — the only reason logged across the account's lifetime.
+                  - the only reason logged across the account's lifetime.
                 </p>
               </div>
             ) : (

@@ -193,7 +193,7 @@ export default function HomePage() {
     refetchInterval: 30000,
   });
 
-  // 3. Won Orders Query (for Delivered Tonnage) — date range filter applied for RBAC + date accuracy
+  // 3. Won Orders Query (for Delivered Tonnage) - date range filter applied for RBAC + date accuracy
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
     queryKey: ['orders-list', effectivePhone, dateRange],
     queryFn: () =>
@@ -411,7 +411,7 @@ export default function HomePage() {
   // Orders are already date-filtered by the API query, so use safeOrders directly
   const targetOrders = safeOrders;
 
-  // 1. Total Delivered Tonnage (MT) — from Orders API (date-range filtered, centralized calculation)
+  // 1. Total Delivered Tonnage (MT) - from Orders API (date-range filtered, centralized calculation)
   const deliveredTonnageResult = useMemo(() => {
     return calculateOrdersTotalTonnage(targetOrders);
   }, [targetOrders]);
@@ -776,7 +776,7 @@ export default function HomePage() {
             <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* Custom date inputs — inline in the same row when Custom Range is active */}
+          {/* Custom date inputs - inline in the same row when Custom Range is active */}
           {showCustomDate && (
             <>
               <span className="text-slate-400 text-xs font-semibold shrink-0">From:</span>
@@ -831,7 +831,7 @@ export default function HomePage() {
       {/* ── 5 Stat Cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
 
-        {/* Card 1: Delivered Tonnage — Blue Hero */}
+        {/* Card 1: Delivered Tonnage - Blue Hero */}
         <div
           onClick={() => navigate('/orders')}
           className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white rounded-xl p-4 sm:p-5 shadow-sm shadow-blue-600/25 flex flex-col justify-between min-h-[145px] relative overflow-hidden group hover:shadow-md transition-all cursor-pointer">
@@ -858,7 +858,7 @@ export default function HomePage() {
           <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
         </div>
 
-        {/* Card 2: Won Orders — Blue Soft */}
+        {/* Card 2: Won Orders - Blue Soft */}
         <div
           onClick={() => navigate('/orders')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
@@ -875,7 +875,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 3: Customer Visits — Blue Soft */}
+        {/* Card 3: Customer Visits - Blue Soft */}
         <div
           onClick={() => navigate('/visits')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
@@ -892,7 +892,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 4: New Customers — Blue Soft */}
+        {/* Card 4: New Customers - Blue Soft */}
         <div
           onClick={() => navigate('/customers')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
@@ -909,7 +909,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 5: Complaints — Blue Soft */}
+        {/* Card 5: Complaints - Blue Soft */}
         <div
           onClick={() => navigate('/complaints')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1 cursor-pointer">
@@ -1040,7 +1040,7 @@ export default function HomePage() {
                           {rep.complaintsCount} Pending
                         </span>
                       ) : (
-                        <span className="text-slate-400 font-medium">—</span>
+                        <span className="text-slate-400 font-medium">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-right">

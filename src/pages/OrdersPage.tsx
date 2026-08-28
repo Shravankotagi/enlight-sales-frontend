@@ -167,7 +167,7 @@ export function formatOrderSourceText(ord?: Order | null): string {
 }
 
 export function formatDeliveryLocation(raw?: string): string {
-  if (!raw || !raw.trim() || raw === '-') return '—';
+  if (!raw || !raw.trim() || raw === '-') return '-';
   const text = raw.trim();
 
   // If already clean and short (e.g. "Chakan, Maharashtra" or "Talegaon, Maharashtra")
@@ -274,7 +274,7 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
   }
 
   // Thickness patterns if dimensions already extracted or present: e.g. "8 MM THK", "10 MM THK", "1.2mm", "1.4 mm"
-  if (dims && dims !== '—' && dims !== '-') {
+  if (dims && dims !== '-' && dims !== '-') {
     sku = sku.replace(/\b\d+(?:\.\d+)?\s*(?:mm\s*thk|mm|thk|thick)\b/gi, '');
   }
 
@@ -288,7 +288,7 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
 
   return {
     materialDescription: sku || (rawSku || 'Steel Material').trim(),
-    dimensions: dims || '—',
+    dimensions: dims || '-',
   };
 }
 
@@ -1314,7 +1314,7 @@ export default function OrdersPage() {
                           const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
                           return {
                             sku_text: materialDescription,
-                            dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
+                            dimensions: dimensions !== '-' && dimensions !== '-' ? dimensions : '',
                             hsn_code: i.hsn_code || '7208',
                             quantity: Number(i.quantity) || 0,
                             unit: normalizeUnit(i.unit) || 'MT',

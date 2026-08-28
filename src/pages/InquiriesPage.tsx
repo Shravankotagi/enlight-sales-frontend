@@ -318,7 +318,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   const senderNameLower = (inq?.sender_name || '').toLowerCase().trim();
 
-  // 1. Customer / Company Name (Strictly customer only — NEVER salesperson profile or product name)
+  // 1. Customer / Company Name (Strictly customer only - NEVER salesperson profile or product name)
   let candidateName =
     aiJson.customer?.name ||
     aiJson.customer_name ||
@@ -438,7 +438,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   }
   const productType = cleanProductType(rawPt || 'HR Coil');
 
-  // 4. Dimensions (Thickness x Width x Length) — extract only what is stated
+  // 4. Dimensions (Thickness x Width x Length) - extract only what is stated
   let thickness = '';
   let width = '';
   let length = '';
@@ -1378,7 +1378,7 @@ export default function InquiriesPage() {
 
     let activeItems: any[] = [];
     if (lineItemsSrc.length > 0) {
-      // Has structured line items in ai_extraction_json — use directly for ALL inquiries (review, confirmed, etc.)
+      // Has structured line items in ai_extraction_json - use directly for ALL inquiries (review, confirmed, etc.)
       const frozenLineItems = lineItemsSrc.map((item: any) => {
         const skuText = item.sku_text || item.description || '';
         return {
@@ -2398,7 +2398,7 @@ export default function InquiriesPage() {
                 const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
                 const dealStageInfo = getDealStageDisplay(dealStageKey);
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
-                const dealIdDisplay = linkedDeal?.deal_number || (linkedDeal?.id ? `DEAL-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `DEAL-${inq.id.substring(0, 6).toUpperCase()}` : '—'));
+                const dealIdDisplay = linkedDeal?.deal_number || (linkedDeal?.id ? `DEAL-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `DEAL-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
 
                 const showUpdateStatus = dealStageKey === 'quoted' || dealStageKey === 'negotiation';
                 const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
@@ -2412,7 +2412,7 @@ export default function InquiriesPage() {
                     <td className="px-5 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
                         <span className="group-hover:text-blue-600 transition-colors inline-block">
-                          {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
+                          {details.companyName || <span className="text-slate-300 font-normal italic">-</span>}
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5 font-mono">
@@ -2439,7 +2439,7 @@ export default function InquiriesPage() {
                           {dealStageInfo.label}
                         </span>
                       ) : (
-                        <span className="text-slate-400 font-normal italic">—</span>
+                        <span className="text-slate-400 font-normal italic">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
