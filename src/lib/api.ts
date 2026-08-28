@@ -9,7 +9,8 @@ if (rawBackend && !rawBackend.startsWith('http://') && !rawBackend.startsWith('h
 
 const API = axios.create({
   baseURL: rawBackend.replace(/\/+$/, ''),
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
 });
 
 // Attach JWT token and salesperson filter to every request
