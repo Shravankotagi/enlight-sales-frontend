@@ -4,7 +4,6 @@ import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import AdminSelectionPage from './pages/AdminSelectionPage';
 import HomePage from './pages/HomePage';
-import PipelinePage from './pages/PipelinePage';
 import CustomersPage from './pages/CustomersPage';
 import KRADashboard from './pages/KRADashboard';
 import InquiriesPage from './pages/InquiriesPage';
@@ -28,7 +27,7 @@ function AppRoutes() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/" element={<Navigate to="/home" replace />} />
-        <Route path="/pipeline" element={<PipelinePage />} />
+        <Route path="/pipeline" element={<Navigate to="/inquiries?view=pipeline" replace />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/customers" element={<CustomersPage />} />

@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2,
+  LayoutDashboard, IndianRupee, Trash2
 } from 'lucide-react';
+import DealDetailDrawer from '../components/DealDetailDrawer';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
@@ -680,11 +682,147 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   };
 }
 
+const DEFAULT_PIPELINE_STAGES = [
+  { key: 'new_inquiry', label: 'New Deals', color: 'bg-amber-50 border-amber-200' },
+  { key: 'qualified', label: 'Qualified', color: 'bg-emerald-50 border-emerald-200' },
+  { key: 'quoted', label: 'Quoted', color: 'bg-blue-50 border-blue-200' },
+  { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
+];
+
+function DealCard({ deal, onStageChange, onSelect, onDelete }: {
+  deal: any;
+  onStageChange: (id: string, stage: string, reason?: string) => void;
+  onSelect: (id: string) => void;
+  onDelete: (deal: any) => void;
+}) {
+  return (
+    <div
+      onClick={() => onSelect(deal.id)}
+      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
+    >
+      <div className="flex items-start justify-between mb-2 gap-1">
+        <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
+          {deal.customer_name || 'Unknown Customer'}
+        </h4>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+            ${deal.stage === 'won' || deal.inquiry_type === 'purchase_order'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-blue-100 text-blue-700'}`}>
+            {deal.stage === 'won' ? 'WON' : deal.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
+          </span>
+          <button
+            type="button"
+            title="Delete this deal and all records"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(deal);
+            }}
+            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+
+      {deal.po_number && (
+        <p className="text-xs text-gray-500 mb-1">PO: {deal.po_number}</p>
+      )}
+
+      {deal.deal_items && deal.deal_items.length > 0 && (
+        <div className="mb-2">
+          {deal.deal_items.slice(0, 2).map((item: any, i: number) => (
+            <p key={i} className="text-xs text-gray-600">
+              • {item.sku_text} - {item.quantity} {item.unit}
+            </p>
+          ))}
+          {deal.deal_items.length > 2 && (
+            <p className="text-xs text-gray-400">+{deal.deal_items.length - 2} more</p>
+          )}
+        </div>
+      )}
+
+      {(() => {
+        let computedTotal = Number(deal.total_amount) || 0;
+        if (
+          computedTotal <= 0 &&
+          Array.isArray(deal.deal_items) &&
+          deal.deal_items.length > 0
+        ) {
+          const subtotal = deal.deal_items.reduce((sum: number, item: any) => {
+            const amt =
+              Number(item.amount) ||
+              (Number(item.quantity) || 0) *
+                (Number(item.rate || item.quoted_price || item.price_per_mt) || 0);
+            return sum + amt;
+          }, 0);
+          if (subtotal > 0) {
+            computedTotal = subtotal + Math.round(subtotal * 0.18);
+          }
+        }
+
+        if (computedTotal > 0) {
+          return (
+            <div className="flex items-center gap-1 text-sm font-bold text-gray-900 my-1.5">
+              <IndianRupee size={13} className="text-gray-700" />
+              <span>{Number(computedTotal).toLocaleString('en-IN')}</span>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      <div className="mt-3 flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
+        {['qualified', 'quoted', 'negotiation', 'won', 'lost']
+          .filter(stage => {
+            const currentStage = (deal.stage || 'new_inquiry').toLowerCase().trim();
+            if ((currentStage === 'new_inquiry' || currentStage === 'review') && (stage === 'won' || stage === 'lost')) {
+              return false;
+            }
+            return true;
+          })
+          .map(stage => (
+            <button key={stage}
+              onClick={() => onStageChange(deal.id, stage)}
+              className={`text-xs px-2 py-1 rounded border transition-colors
+                ${stage === 'won'
+                  ? 'border-green-300 text-green-700 hover:bg-green-50'
+                  : stage === 'lost'
+                  ? 'border-red-300 text-red-700 hover:bg-red-50'
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}>
+              → {stage.charAt(0).toUpperCase() + stage.slice(1)}
+            </button>
+          ))}
+      </div>
+
+      <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+        <span className="text-gray-400 font-medium">
+          {new Date(deal.created_at).toLocaleDateString('en-IN')}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded tracking-wide uppercase">
+            #{deal.deal_number || (deal.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InquiriesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { effectivePhone, employee, viewingAs } = useAuth();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
+  const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'pipeline' ? 'pipeline' : 'table';
+  });
+  const [selectedPipelineDealId, setSelectedPipelineDealId] = useState<string | null>(null);
+  const [pipelineLostModal, setPipelineLostModal] = useState<{ dealId: string; reason: string } | null>(null);
+  const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
@@ -695,6 +833,19 @@ export default function InquiriesPage() {
     (selectedInquiry as any)?.salesperson_name ||
     (selectedInquiry as any)?.assigned_salesperson_name ||
     'Shravan Kotagi';
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('view') === 'pipeline') {
+      setViewMode('pipeline');
+    } else {
+      setViewMode('table');
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    document.title = viewMode === 'pipeline' ? 'Pipeline - Enlight Sales OS' : 'Inquiries - Enlight Sales OS';
+  }, [viewMode]);
+
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
@@ -926,17 +1077,61 @@ export default function InquiriesPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: rawDeals = [] } = useQuery<any[]>({
-    queryKey: ['deals', effectivePhone],
+  const { data: rawDeals = [], isFetching: dealsFetching, refetch: fetchDeals } = useQuery<any[]>({
+    queryKey: ['deals', effectivePhone, dateRange],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (dateRange.from) params.from = dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`;
+      if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
       const res = await dealsApi.getAll(params).catch(() => null);
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
     refetchInterval: 15000,
   });
+
+  const stageMutation = useMutation({
+    mutationFn: ({ id, stage, reason }: { id: string; stage: string; reason?: string }) =>
+      dealsApi.updateStage(id, stage, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      toast.success('Deal stage updated');
+      setPipelineLostModal(null);
+    },
+    onError: () => toast.error('Failed to update deal'),
+  });
+
+  const deleteDealMutation = useMutation({
+    mutationFn: (id: string) => dealsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      toast.success('Deal and all associated records deleted successfully');
+      setConfirmDeleteDeal(null);
+      setSelectedPipelineDealId(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'Failed to delete deal');
+    },
+  });
+
+  const handlePipelineStageChange = (id: string, stage: string) => {
+    if (stage === 'lost') {
+      setPipelineLostModal({ dealId: id, reason: '' });
+    } else {
+      stageMutation.mutate({ id, stage });
+    }
+  };
 
   const getLinkedDeal = (inq: InquiryItem, companyName?: string) => {
     if (!rawDeals || rawDeals.length === 0) return null;
@@ -1759,6 +1954,49 @@ export default function InquiriesPage() {
     }
   };
 
+  const filteredPipelineDeals = useMemo(() => {
+    return (rawDeals || []).filter((d: any) => {
+      const st = (d.stage || 'new_inquiry').toLowerCase().trim();
+      const normStage = (st === 'review' || !st) ? 'new_inquiry' : st;
+      if (filterStatus !== 'all' && normStage !== filterStatus) {
+        return false;
+      }
+      if (!searchTerm) return true;
+      const s = searchTerm.toLowerCase().trim();
+      const cName = (d.customer_name || '').toLowerCase();
+      const poNum = (d.po_number || '').toLowerCase();
+      const dealNum = (d.deal_number || (d.id ? `deal-${d.id.substring(0, 6)}` : '')).toLowerCase();
+      const phone = (d.customer_phone || '').toLowerCase();
+      const items = (d.deal_items || [])
+        .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''}`)
+        .join(' ')
+        .toLowerCase();
+      const dateFormatted = d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
+      return (
+        cName.includes(s) ||
+        poNum.includes(s) ||
+        dealNum.includes(s) ||
+        phone.includes(s) ||
+        items.includes(s) ||
+        dateFormatted.includes(s)
+      );
+    });
+  }, [rawDeals, searchTerm, filterStatus]);
+
+  const pipelineBoard = useMemo(() => {
+    const stages = ['new_inquiry', 'qualified', 'quoted', 'negotiation'];
+    return stages.reduce((acc, st) => {
+      acc[st] = filteredPipelineDeals.filter((d: any) => {
+        const dealStage = (d.stage || 'new_inquiry').toLowerCase().trim();
+        if (st === 'new_inquiry') {
+          return dealStage === 'new_inquiry' || dealStage === 'review' || !dealStage;
+        }
+        return dealStage === st;
+      });
+      return acc;
+    }, {} as Record<string, any[]>);
+  }, [filteredPipelineDeals]);
+
   // Keep ONLY actual Product Inquiries (filters out generic chat greetings, deal logs, and status questions!)
   const rawList = Array.isArray(inquiries) && inquiries.length > 0 ? inquiries : (Array.isArray(rawInquiries) ? rawInquiries : []);
   const productInquiries = rawList.filter(isProductInquiry);
@@ -1890,41 +2128,89 @@ export default function InquiriesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <FileText className="text-blue-600" size={28} />
-            Inquiries &amp; Quotations Management
-          </h1>
+      {/* Dynamic Header: Pipeline View vs Inquiries View */}
+      {viewMode === 'pipeline' ? (
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Sales Pipeline</h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-center">
+            <div className="text-center">
+              <p className="text-base font-bold text-gray-800">{stageCounts.new_inquiry}</p>
+              <p className="text-[10px] text-gray-500 capitalize">New Inquiry</p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-bold text-gray-800">{stageCounts.qualified}</p>
+              <p className="text-[10px] text-gray-500 capitalize">Qualified</p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-bold text-gray-800">{stageCounts.quoted}</p>
+              <p className="text-[10px] text-gray-500 capitalize">Quoted</p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-bold text-gray-800">{stageCounts.negotiation}</p>
+              <p className="text-[10px] text-gray-500 capitalize">Negotiation</p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-bold text-gray-800">{stageCounts.won}</p>
+              <p className="text-[10px] text-gray-500 capitalize">Won</p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-bold text-gray-800">{stageCounts.lost}</p>
+              <p className="text-[10px] text-gray-500 capitalize">Lost</p>
+            </div>
+
+            <div className="flex items-center gap-2 ml-2">
+              <button
+                type="button"
+                disabled={dealsFetching || isFetching}
+                onClick={async () => {
+                  await Promise.all([fetchDeals(), fetchMonthlyInquiries()]);
+                  toast.success('Pipeline refreshed');
+                }}
+                title="Refresh Pipeline"
+                className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer">
+                <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
+              </button>
+            </div>
+          </div>
         </div>
+      ) : (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <FileText className="text-blue-600" size={28} />
+              Inquiries &amp; Quotations Management
+            </h1>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            disabled={isFetching}
-            onClick={async () => {
-              await fetchMonthlyInquiries();
-              toast.success('Inquiries list refreshed');
-            }}
-            title="Refresh Inquiries"
-            className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
-            <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              disabled={isFetching}
+              onClick={async () => {
+                await fetchMonthlyInquiries();
+                toast.success('Inquiries list refreshed');
+              }}
+              title="Refresh Inquiries"
+              className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+              <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+            </button>
 
-          <button
-            onClick={() => navigate('/orders')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
-            <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
-          </button>
+            <button
+              onClick={() => navigate('/orders')}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
+              <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
+            </button>
 
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
-            <Plus size={15} /> Log New Inquiry
-          </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+              <Plus size={15} /> Log New Inquiry
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filter & Search Bar - Compact Single Row */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
@@ -1992,6 +2278,30 @@ export default function InquiriesPage() {
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs">
             Clear Filter
           </button>
+
+          {/* 5. Pipeline Toggle Button */}
+          <button
+            type="button"
+            onClick={() => {
+              const nextMode = viewMode === 'pipeline' ? 'table' : 'pipeline';
+              setViewMode(nextMode);
+              const params = new URLSearchParams(window.location.search);
+              if (nextMode === 'pipeline') {
+                params.set('view', 'pipeline');
+              } else {
+                params.delete('view');
+              }
+              navigate({ search: params.toString() }, { replace: true });
+            }}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer border ${
+              viewMode === 'pipeline'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+            }`}
+            title={viewMode === 'pipeline' ? 'Switch to Inquiries Listing' : 'Open Sales Pipeline Kanban'}>
+            <LayoutDashboard size={14} className={viewMode === 'pipeline' ? 'text-white' : 'text-blue-600'} />
+            <span>Pipeline</span>
+          </button>
         </div>
 
         {/* Custom Range Picker Inputs */}
@@ -2017,8 +2327,37 @@ export default function InquiriesPage() {
         )}
       </div>
 
-      {/* Main Inquiries Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
+      {viewMode === 'pipeline' ? (
+        /* Kanban Board View */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
+            <div key={key} className={`rounded-xl border-2 ${color} p-3`}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
+                <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
+                  {pipelineBoard[key]?.length || 0}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {(pipelineBoard[key] || []).map((deal: any) => (
+                  <DealCard
+                    key={deal.id}
+                    deal={deal}
+                    onStageChange={handlePipelineStageChange}
+                    onSelect={(id) => setSelectedPipelineDealId(id)}
+                    onDelete={(d) => setConfirmDeleteDeal(d)}
+                  />
+                ))}
+                {(!pipelineBoard[key] || pipelineBoard[key].length === 0) && (
+                  <div className="text-center py-6 text-gray-400 text-sm">No deals</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Standard Inquiries Table View */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -2321,6 +2660,7 @@ export default function InquiriesPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
       {showEditDrawer && selectedInquiry && editDetails && (
@@ -3313,6 +3653,102 @@ export default function InquiriesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+            {/* Pipeline Deal Detail Drawer */}
+      <DealDetailDrawer
+        dealId={selectedPipelineDealId}
+        onClose={() => setSelectedPipelineDealId(null)}
+      />
+
+      {/* Pipeline Mark as Lost Modal */}
+      {pipelineLostModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-96 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Mark as Lost</h3>
+            <p className="text-sm text-gray-500 mb-4">Please select a reason (required)</p>
+            <div className="space-y-2 mb-4">
+              {LOST_REASONS.map(reason => (
+                <label key={reason} className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="pipeline_reason" value={reason}
+                    checked={pipelineLostModal.reason === reason}
+                    onChange={() => setPipelineLostModal(prev => prev ? { ...prev, reason } : null)}
+                    className="text-blue-600" />
+                  <span className="text-sm text-gray-700">{reason}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setPipelineLostModal(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                disabled={!pipelineLostModal.reason}
+                onClick={() => stageMutation.mutate({ id: pipelineLostModal.dealId, stage: 'lost', reason: pipelineLostModal.reason })}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                Confirm Lost
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline Permanent Delete Deal Confirmation Modal */}
+      {confirmDeleteDeal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Delete Deal Permanently?</h3>
+                <p className="text-xs text-slate-500">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1.5 mb-5">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Customer:</span>
+                <span className="font-bold text-slate-900">{confirmDeleteDeal.customer_name || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Deal Ref:</span>
+                <span className="font-mono font-bold text-indigo-600">
+                  #{confirmDeleteDeal.deal_number || (confirmDeleteDeal.id ? `DEAL-${confirmDeleteDeal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+                </span>
+              </div>
+              {confirmDeleteDeal.total_amount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Deal Amount:</span>
+                  <span className="font-bold text-emerald-600">₹{Number(confirmDeleteDeal.total_amount).toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
+                All line items, payment tracking records, and KRA logs tied to this deal will be permanently removed from the database and dashboard.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteDeal(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteDealMutation.isPending}
+                onClick={() => deleteDealMutation.mutate(confirmDeleteDeal.id)}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {deleteDealMutation.isPending ? 'Deleting...' : 'Yes, Delete Deal'}
+              </button>
+            </div>
           </div>
         </div>
       )}
