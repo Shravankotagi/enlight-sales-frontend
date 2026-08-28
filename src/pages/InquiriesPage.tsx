@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, AlertCircle, Loader2
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2
 } from 'lucide-react';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -702,7 +702,6 @@ export default function InquiriesPage() {
   const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [showEditCompanyDropdown, setShowEditCompanyDropdown] = useState(false);
-  const [drawerError, setDrawerError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
@@ -1241,7 +1240,6 @@ export default function InquiriesPage() {
     const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
 
     setSaveSuccess(isConfirmedState || isQuotedState);
-    setDrawerError(null);
     setFieldErrors({});
   };
 
@@ -1251,7 +1249,6 @@ export default function InquiriesPage() {
     setSelectedInquiry(null);
     setEditDetails(null);
     setDrawerFileBase64(null);
-    setDrawerError(null);
   };
 
   useEffect(() => {
@@ -1336,12 +1333,6 @@ export default function InquiriesPage() {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      const rateErrMsg = Object.keys(errors).some(k => k.startsWith('rate_'))
-        ? 'Rate (₹) is mandatory and must be greater than 0 for all line items.'
-        : null;
-      const firstMsg = rateErrMsg || errors['companyName'] || Object.values(errors)[0] || 'Please complete all required fields.';
-      setDrawerError(firstMsg);
-      toast.error(firstMsg);
       setSaveSuccess(false);
 
       // Scroll to first invalid field
@@ -1355,7 +1346,6 @@ export default function InquiriesPage() {
     }
 
     setFieldErrors({});
-    setDrawerError(null);
     try {
       setSubmitting(true);
 
@@ -2095,10 +2085,6 @@ export default function InquiriesPage() {
                     salespersonName: activeSalesperson,
                   };
                 })();
-                const st = (inq.status || '').toLowerCase();
-                const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
-                const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
-                const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
                 const rowLineItems = (details.lineItems && details.lineItems.length > 0)
                   ? details.lineItems
                   : [{
@@ -2115,10 +2101,8 @@ export default function InquiriesPage() {
                 const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
                 const dealStageInfo = getDealStageDisplay(dealStageKey);
 
-                const currentStageLabel = dealStageInfo?.label || 'New Inquiry';
-                const isNewInquiryStage = currentStageLabel === 'New Inquiry';
-                const isClosedStage = currentStageLabel === 'Won' || currentStageLabel === 'Lost';
-                const canMarkWonOrLost = !isNewInquiryStage && !isClosedStage;
+                const showUpdateStatus = dealStageKey === 'quoted' || dealStageKey === 'negotiation';
+                const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
 
                 return (
                   <tr
@@ -2178,8 +2162,8 @@ export default function InquiriesPage() {
                                 ? 'bottom-full mb-1'
                                 : 'top-full mt-1'
                             } w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
-                            {/* 1. Update Status Button & Sub-Menu */}
-                            {!isClosedStage && (
+                            {/* 1. Update Status Button & Sub-Menu (Only Quoted or Negotiation) */}
+                            {showUpdateStatus && (
                               <div>
                                 <button
                                   type="button"
@@ -2202,46 +2186,44 @@ export default function InquiriesPage() {
 
                                 {subMenuInqId === inq.id && (
                                   <div className="bg-slate-50 border-y border-slate-200 py-1 px-1 space-y-0.5 animate-in fade-in duration-100">
-                                    {canMarkWonOrLost && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleUpdateDealStage(inq, details, 'won');
-                                        }}
-                                        className="w-full px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                        <span>Won</span>
-                                      </button>
-                                    )}
-                                    {canMarkWonOrLost && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleUpdateDealStage(inq, details, 'lost');
-                                        }}
-                                        className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                        <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                                        <span>Lost</span>
-                                      </button>
-                                    )}
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleUpdateDealStage(inq, details, 'negotiation');
+                                        handleUpdateDealStage(inq, details, 'won');
                                       }}
-                                      className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                                      <span>Negotiation</span>
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                      <span>Won</span>
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateDealStage(inq, details, 'lost');
+                                      }}
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                      <span>Lost</span>
+                                    </button>
+                                    {dealStageKey !== 'negotiation' && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateDealStage(inq, details, 'negotiation');
+                                        }}
+                                        className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                        <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                        <span>Negotiation</span>
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
                             )}
 
-                            {/* 2. View PDF */}
+                            {/* 2. View PDF (Always visible) */}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -2257,8 +2239,8 @@ export default function InquiriesPage() {
                               <span>View PDF</span>
                             </button>
 
-                            {/* 3. Share Quotation */}
-                            {(isConfirmed || isQuoted) && (
+                            {/* 3. Share Quotation (Only Qualified, Quoted, Negotiation) */}
+                            {showShareQuotation && (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -2407,7 +2389,6 @@ export default function InquiriesPage() {
                             setEditDetails({ ...editDetails, companyName: e.target.value });
                             setShowEditCompanyDropdown(true);
                             setSaveSuccess(false);
-                            setDrawerError(null);
                             if (fieldErrors['companyName']) {
                               setFieldErrors(prev => { const n = { ...prev }; delete n['companyName']; return n; });
                             }
@@ -2439,7 +2420,6 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, companyName: cName });
                                   setShowEditCompanyDropdown(false);
                                   setSaveSuccess(false);
-                                  setDrawerError(null);
                                 }}
                                 className="px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-blue-50 hover:text-blue-700 cursor-pointer flex items-center justify-between transition-colors">
                                 <span className="flex items-center gap-2">
@@ -2521,7 +2501,6 @@ export default function InquiriesPage() {
                                   updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
-                                  setDrawerError(null);
                                   if (fieldErrors[`sku_${idx}`]) {
                                     setFieldErrors(prev => { const n = { ...prev }; delete n[`sku_${idx}`]; return n; });
                                   }
@@ -2549,7 +2528,6 @@ export default function InquiriesPage() {
                                     updated[idx] = { ...updated[idx], dimensions: e.target.value };
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
-                                    setDrawerError(null);
                                     if (fieldErrors[`dim_${idx}`]) {
                                       setFieldErrors(prev => { const n = { ...prev }; delete n[`dim_${idx}`]; return n; });
                                     }
@@ -2578,7 +2556,6 @@ export default function InquiriesPage() {
                                 updated[idx] = { ...updated[idx], hsn_code: e.target.value };
                                 setEditDetails({ ...editDetails, lineItems: updated });
                                 setSaveSuccess(false);
-                                setDrawerError(null);
                                 if (fieldErrors[`hsn_${idx}`]) {
                                   setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
                                 }
@@ -2611,7 +2588,6 @@ export default function InquiriesPage() {
                                   const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
-                                  setDrawerError(null);
                                   if (fieldErrors[`qty_${idx}`]) {
                                     setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
                                   }
@@ -2630,7 +2606,6 @@ export default function InquiriesPage() {
                                   updated[idx] = { ...updated[idx], unit: e.target.value };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
-                                  setDrawerError(null);
                                 }}
                                 className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
@@ -2659,7 +2634,6 @@ export default function InquiriesPage() {
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
                                 setSaveSuccess(false);
-                                setDrawerError(null);
                                 if (fieldErrors[`rate_${idx}`]) {
                                   setFieldErrors(prev => { const n = { ...prev }; delete n[`rate_${idx}`]; return n; });
                                 }
@@ -2793,7 +2767,6 @@ export default function InquiriesPage() {
                         onChange={(e) => {
                           setEditDetails({ ...editDetails, deliveryLocation: e.target.value });
                           setSaveSuccess(false);
-                          setDrawerError(null);
                           if (fieldErrors['deliveryLocation']) {
                             setFieldErrors(prev => { const n = { ...prev }; delete n['deliveryLocation']; return n; });
                           }
@@ -2820,7 +2793,6 @@ export default function InquiriesPage() {
                         onChange={(e) => {
                           setEditDetails({ ...editDetails, paymentTerms: e.target.value });
                           setSaveSuccess(false);
-                          setDrawerError(null);
                           if (fieldErrors['paymentTerms']) {
                             setFieldErrors(prev => { const n = { ...prev }; delete n['paymentTerms']; return n; });
                           }
@@ -2840,13 +2812,6 @@ export default function InquiriesPage() {
                 </div>
               </div>
             </div>
-
-            {drawerError && (
-              <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-700 flex items-center gap-2 shrink-0 animate-in fade-in duration-150">
-                <AlertCircle size={16} className="text-red-600 shrink-0" />
-                <span>{drawerError}</span>
-              </div>
-            )}
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
