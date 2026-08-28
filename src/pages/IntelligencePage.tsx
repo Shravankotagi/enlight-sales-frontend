@@ -133,23 +133,6 @@ export default function IntelligencePage() {
       ? Math.round((highRiskCount / totalMonitoredAccounts) * 100)
       : 0;
 
-  const lastScanFormatted = useMemo(() => {
-    const d = new Date();
-    const datePart = d.toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-    const timePart = d
-      .toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      })
-      .toLowerCase();
-    return `${datePart}, ${timePart}`;
-  }, []);
-
   // ── Section 2: Reorder Queue Metrics ────────────────────────────────────────
   const reorderList = Array.isArray(reorderData) ? reorderData : [];
   const predictedCount = reorderList.length;
@@ -368,9 +351,7 @@ export default function IntelligencePage() {
                 <span>High Risk - {highRiskCount}</span>
               </div>
             </div>
-            <div className="text-[11px] text-slate-400">
-              Last scan: {lastScanFormatted}
-            </div>
+            
           </div>
         </div>
 
