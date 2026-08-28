@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { kraApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, CheckCircle, AlertCircle, Clock, ExternalLink, X } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, Clock, ExternalLink, X, LayoutDashboard } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 
@@ -424,11 +424,13 @@ export default function KRADashboard() {
     : null;
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <LayoutDashboard className="text-blue-600" size={28} />
+            KRA Performance Dashboard
+          </h1>
         </div>
 
         <DateFilterControl onChange={setDateRange} />

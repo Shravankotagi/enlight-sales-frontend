@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Calendar,
   Check,
+  History,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
@@ -271,11 +272,12 @@ export default function LogsPage() {
             : 'last 30 days';
 
   return (
-    <div className="w-full space-y-6 animate-fade-in pb-12 font-sans text-slate-800">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Top Eyebrow & Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <History className="text-blue-600" size={28} />
             Activity Logs
           </h1>
         </div>

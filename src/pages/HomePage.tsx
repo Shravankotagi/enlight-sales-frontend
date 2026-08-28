@@ -629,7 +629,7 @@ export default function HomePage() {
   }, [safeDeals, safeCustomers, openComplaints, safeVisits, safeReviewQueue]);
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
 
       {/* ── Greeting ────────────────────────────────────────────────── */}
       <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">

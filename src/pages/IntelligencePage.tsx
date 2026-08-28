@@ -154,15 +154,15 @@ export default function IntelligencePage() {
     : [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* ── Top Header ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Brain size={26} className="text-indigo-600" />
-          Intelligence Center
-        </h1>
-
-        
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Brain size={28} className="text-blue-600" />
+            Intelligence Center
+          </h1>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════

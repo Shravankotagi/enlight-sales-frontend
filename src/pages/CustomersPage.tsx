@@ -344,11 +344,11 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Users className="text-blue-600" size={28} />
             Customers &amp; Account Health
           </h1>

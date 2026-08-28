@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
-import { TrendingUp, ShoppingBag, Package, RefreshCw } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3 } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -122,10 +122,15 @@ export default function ReportsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Reports &amp; Analytics</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <BarChart3 className="text-blue-600" size={28} />
+            Reports &amp; Analytics
+          </h1>
+        </div>
         <div className="flex items-center gap-2">
           <DateFilterControl onChange={setDateRange} />
           <button
