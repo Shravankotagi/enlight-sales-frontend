@@ -2128,89 +2128,41 @@ export default function InquiriesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
-      {/* Dynamic Header: Pipeline View vs Inquiries View */}
-      {viewMode === 'pipeline' ? (
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Sales Pipeline</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-center">
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800">{stageCounts.new_inquiry}</p>
-              <p className="text-[10px] text-gray-500 capitalize">New Inquiry</p>
-            </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800">{stageCounts.qualified}</p>
-              <p className="text-[10px] text-gray-500 capitalize">Qualified</p>
-            </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800">{stageCounts.quoted}</p>
-              <p className="text-[10px] text-gray-500 capitalize">Quoted</p>
-            </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800">{stageCounts.negotiation}</p>
-              <p className="text-[10px] text-gray-500 capitalize">Negotiation</p>
-            </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800">{stageCounts.won}</p>
-              <p className="text-[10px] text-gray-500 capitalize">Won</p>
-            </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800">{stageCounts.lost}</p>
-              <p className="text-[10px] text-gray-500 capitalize">Lost</p>
-            </div>
-
-            <div className="flex items-center gap-2 ml-2">
-              <button
-                type="button"
-                disabled={dealsFetching || isFetching}
-                onClick={async () => {
-                  await Promise.all([fetchDeals(), fetchMonthlyInquiries()]);
-                  toast.success('Pipeline refreshed');
-                }}
-                title="Refresh Pipeline"
-                className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer">
-                <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
-              </button>
-            </div>
-          </div>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <FileText className="text-blue-600" size={28} />
+            {viewMode === 'pipeline' ? 'Sales Pipeline' : 'Inquiries & Quotations Management'}
+          </h1>
         </div>
-      ) : (
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <FileText className="text-blue-600" size={28} />
-              Inquiries &amp; Quotations Management
-            </h1>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              disabled={isFetching}
-              onClick={async () => {
-                await fetchMonthlyInquiries();
-                toast.success('Inquiries list refreshed');
-              }}
-              title="Refresh Inquiries"
-              className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
-              <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
-            </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            disabled={dealsFetching || isFetching}
+            onClick={async () => {
+              await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+              toast.success(viewMode === 'pipeline' ? 'Pipeline refreshed' : 'Inquiries list refreshed');
+            }}
+            title={viewMode === 'pipeline' ? 'Refresh Pipeline' : 'Refresh Inquiries'}
+            className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+            <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
+          </button>
 
-            <button
-              onClick={() => navigate('/orders')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
-              <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
-            </button>
+          <button
+            onClick={() => navigate('/orders')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
+            <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
+          </button>
 
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
-              <Plus size={15} /> Log New Inquiry
-            </button>
-          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+            <Plus size={15} /> Log New Inquiry
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Filter & Search Bar - Compact Single Row */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
@@ -2278,30 +2230,6 @@ export default function InquiriesPage() {
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs">
             Clear Filter
           </button>
-
-          {/* 5. Pipeline Toggle Button */}
-          <button
-            type="button"
-            onClick={() => {
-              const nextMode = viewMode === 'pipeline' ? 'table' : 'pipeline';
-              setViewMode(nextMode);
-              const params = new URLSearchParams(window.location.search);
-              if (nextMode === 'pipeline') {
-                params.set('view', 'pipeline');
-              } else {
-                params.delete('view');
-              }
-              navigate({ search: params.toString() }, { replace: true });
-            }}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer border ${
-              viewMode === 'pipeline'
-                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
-            }`}
-            title={viewMode === 'pipeline' ? 'Switch to Inquiries Listing' : 'Open Sales Pipeline Kanban'}>
-            <LayoutDashboard size={14} className={viewMode === 'pipeline' ? 'text-white' : 'text-blue-600'} />
-            <span>Pipeline</span>
-          </button>
         </div>
 
         {/* Custom Range Picker Inputs */}
@@ -2325,6 +2253,32 @@ export default function InquiriesPage() {
             />
           </div>
         )}
+
+        {/* 5. Kanban View Button (Very Right in the Same Row) */}
+        <div className="flex items-center ml-auto">
+          <button
+            type="button"
+            onClick={() => {
+              const nextMode = viewMode === 'pipeline' ? 'table' : 'pipeline';
+              setViewMode(nextMode);
+              const params = new URLSearchParams(window.location.search);
+              if (nextMode === 'pipeline') {
+                params.set('view', 'pipeline');
+              } else {
+                params.delete('view');
+              }
+              navigate({ search: params.toString() }, { replace: true });
+            }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer border ${
+              viewMode === 'pipeline'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+            }`}
+            title={viewMode === 'pipeline' ? 'Switch to Inquiries Listing' : 'Open Kanban View'}>
+            <LayoutDashboard size={14} className={viewMode === 'pipeline' ? 'text-white' : 'text-blue-600'} />
+            <span>Kanban View</span>
+          </button>
+        </div>
       </div>
 
       {viewMode === 'pipeline' ? (
