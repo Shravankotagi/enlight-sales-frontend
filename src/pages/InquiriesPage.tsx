@@ -600,10 +600,15 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
   let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => {
     const skuText = item.sku_text || item.description || '';
+    const itemDim = item.dimensions || '';
     return {
       sku_text: skuText,
-      dimensions: item.dimensions || '',
-      hsn_code: item.hsn_code || (item as any).hsn || detectHsnCode(skuText) || '',
+      dimensions: itemDim,
+      hsn_code:
+        (item.hsn_code && item.hsn_code.trim()) ||
+        (item as any).hsn ||
+        detectHsnCode(skuText, itemDim) ||
+        '72083840',
       quantity: item.quantity,
       unit: normalizeUnit(item.unit) || 'MT',
       rate: item.rate,
@@ -620,17 +625,21 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     if (multiItems.length > 0) {
       rawLineItems = multiItems.map(m => ({
         ...m,
-        hsn_code: m.hsn_code || detectHsnCode(m.sku_text) || '',
+        hsn_code:
+          (m.hsn_code && m.hsn_code.trim()) ||
+          detectHsnCode(m.sku_text, m.dimensions) ||
+          '72083840',
       }));
     }
   }
 
   if (rawLineItems.length === 0 && (productType || quantityTons > 0)) {
     const defaultSku = productType || 'Hot Rolled';
+    const defaultDim = [thickness, width, length].filter(Boolean).join(' x ') || '';
     rawLineItems.push({
       sku_text: defaultSku,
-      dimensions: [thickness, width, length].filter(Boolean).join(' x ') || '',
-      hsn_code: detectHsnCode(defaultSku) || '',
+      dimensions: defaultDim,
+      hsn_code: detectHsnCode(defaultSku, defaultDim) || '72083840',
       quantity: quantityTons || 0,
       unit: 'MT',
       rate: unitPrice || 0,
@@ -1381,10 +1390,15 @@ export default function InquiriesPage() {
       // Has structured line items in ai_extraction_json - use directly for ALL inquiries (review, confirmed, etc.)
       const frozenLineItems = lineItemsSrc.map((item: any) => {
         const skuText = item.sku_text || item.description || '';
+        const itemDim = item.dimensions || '';
         return {
           sku_text: skuText,
-          dimensions: item.dimensions || '',
-          hsn_code: item.hsn_code || item.hsn || detectHsnCode(skuText) || '',
+          dimensions: itemDim,
+          hsn_code:
+            (item.hsn_code && item.hsn_code.trim()) ||
+            item.hsn ||
+            detectHsnCode(skuText, itemDim) ||
+            '72083840',
           quantity: Number(item.quantity) || 0,
           unit: item.unit || 'MT',
           rate: Number(item.rate) || 0,
@@ -1796,10 +1810,15 @@ export default function InquiriesPage() {
         // Normalize line_items to match Review & Edit popup expectations
         const lineItems = extractedJson.line_items.map((li: any) => {
           const skuText = li.sku_text || li.description || li.material || li.sku || 'Material';
+          const liDim = li.dimensions || '';
           return {
             sku_text: skuText,
-            dimensions: li.dimensions || '',
-            hsn_code: li.hsn_code || li.hsn || detectHsnCode(skuText) || '',
+            dimensions: liDim,
+            hsn_code:
+              (li.hsn_code && li.hsn_code.trim()) ||
+              li.hsn ||
+              detectHsnCode(skuText, liDim) ||
+              '72083840',
             quantity: Number(li.quantity) || 0,
             unit: li.unit || 'MT',
             rate: Number(li.rate) || 0,
@@ -1839,11 +1858,17 @@ export default function InquiriesPage() {
         });
 
         const lineItems = (parsedReq.lineItems && parsedReq.lineItems.length > 0)
-          ? parsedReq.lineItems.map(i => ({ ...i, hsn_code: '' }))
+          ? parsedReq.lineItems.map(i => ({
+              ...i,
+              hsn_code:
+                (i.hsn_code && i.hsn_code.trim()) ||
+                detectHsnCode(i.sku_text, i.dimensions) ||
+                '72083840',
+            }))
           : (formProductSKU.trim() ? [{
               sku_text: formProductSKU.trim(),
               dimensions: '',
-              hsn_code: '',
+              hsn_code: detectHsnCode(formProductSKU.trim(), '') || '72083840',
               quantity: parsedReq.quantityTons || 1,
               unit: parsedReq.lineItems?.[0]?.unit || 'MT',
               rate: parsedReq.unitPrice || 0,
@@ -2365,15 +2390,22 @@ export default function InquiriesPage() {
                       companyName: parsed.companyName,
                       customerPhone: parsed.customerPhone,
                       salespersonName: activeSalesperson,
-                      lineItems: lineItemsSrc.map((item: any) => ({
-                        sku_text: item.sku_text || item.sku || item.product_name || '',
-                        dimensions: item.dimensions || '',
-                        hsn_code: item.hsn_code || '',
-                        quantity: Number(item.quantity) || 0,
-                        unit: item.unit || 'MT',
-                        rate: Number(item.rate) || 0,
-                        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
-                      })),
+                      lineItems: lineItemsSrc.map((item: any) => {
+                        const sText = item.sku_text || item.sku || item.product_name || '';
+                        const sDim = item.dimensions || '';
+                        return {
+                          sku_text: sText,
+                          dimensions: sDim,
+                          hsn_code:
+                            (item.hsn_code && item.hsn_code.trim()) ||
+                            detectHsnCode(sText, sDim) ||
+                            '72083840',
+                          quantity: Number(item.quantity) || 0,
+                          unit: item.unit || 'MT',
+                          rate: Number(item.rate) || 0,
+                          amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+                        };
+                      }),
                       totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0),
                     };
                   }
@@ -2780,7 +2812,7 @@ export default function InquiriesPage() {
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '', [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -2798,7 +2830,7 @@ export default function InquiriesPage() {
 
                                   let finalHsn = currentHsn;
                                   if (!currentHsn || currentHsn === prevAutoHsn) {
-                                    finalHsn = newAutoHsn;
+                                    finalHsn = newAutoHsn || '72083840';
                                   }
 
                                   updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
@@ -2835,7 +2867,7 @@ export default function InquiriesPage() {
 
                                     let finalHsn = currentHsn;
                                     if (!currentHsn || currentHsn === prevAutoHsn) {
-                                      finalHsn = newAutoHsn;
+                                      finalHsn = newAutoHsn || '72083840';
                                     }
 
                                     updated[idx] = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
@@ -3007,10 +3039,10 @@ export default function InquiriesPage() {
                                   onClick={() => {
                                     const current = editDetails.lineItems && editDetails.lineItems.length > 0
                                       ? editDetails.lineItems
-                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                                     const updated = [
                                       ...current,
-                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                      { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
                                     ];
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
