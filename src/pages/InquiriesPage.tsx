@@ -3460,7 +3460,7 @@ export default function InquiriesPage() {
                 }}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
                 {sendingQuotation ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                {sendingQuotation ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}
+                {sendingQuotation ? 'Dispatching Email & PDF...' : 'Share Quotation Email'}
               </button>
             </div>
           </div>
