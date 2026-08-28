@@ -2056,11 +2056,14 @@ export default function InquiriesPage() {
       const formattedDate = i?.created_at ? new Date(i.created_at).toLocaleString('en-IN').toLowerCase() : '';
       const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
       const isoDate = (i?.created_at || '').toLowerCase();
+      const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
+      const dealIdStr = (linkedDealForSearch?.deal_number || (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
 
       const s = searchTerm.toLowerCase().trim();
       const matchesSearch =
         !s ||
         name.includes(s) ||
+        dealIdStr.includes(s) ||
         itemsSummary.includes(s) ||
         formattedDate.includes(s) ||
         dateOnly.includes(s) ||
@@ -2316,23 +2319,24 @@ export default function InquiriesPage() {
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <th className="px-3 py-3.5 text-center w-[4%]">#</th>
-              <th className="px-6 py-3.5 text-left w-[28%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[20%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[16%]">Source Channel</th>
-              <th className="px-4 py-3.5 text-center w-[18%]">Deal Status</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Actions</th>
+              <th className="px-5 py-3.5 text-left w-[22%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Deal ID</th>
+              <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Deal Status</th>
+              <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   Loading monthly inquiries...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   No product inquiries found for this period.
                 </td>
               </tr>
@@ -2393,6 +2397,8 @@ export default function InquiriesPage() {
                 const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
                 const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
                 const dealStageInfo = getDealStageDisplay(dealStageKey);
+                const linkedDeal = getLinkedDeal(inq, details.companyName);
+                const dealIdDisplay = linkedDeal?.deal_number || (linkedDeal?.id ? `DEAL-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `DEAL-${inq.id.substring(0, 6).toUpperCase()}` : '—'));
 
                 const showUpdateStatus = dealStageKey === 'quoted' || dealStageKey === 'negotiation';
                 const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
@@ -2403,7 +2409,7 @@ export default function InquiriesPage() {
                     onClick={() => handleOpenDrawer(inq)}
                     className="group hover:bg-slate-50/75 transition-colors cursor-pointer">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                    <td className="px-6 py-3.5 text-left">
+                    <td className="px-5 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
                         <span className="group-hover:text-blue-600 transition-colors inline-block">
                           {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
@@ -2412,6 +2418,9 @@ export default function InquiriesPage() {
                       <div className="text-xs text-slate-500 mt-0.5 font-mono">
                         {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                      {dealIdDisplay}
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
