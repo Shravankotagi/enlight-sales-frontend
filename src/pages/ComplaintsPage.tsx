@@ -44,7 +44,7 @@ interface Complaint {
 }
 
 export default function ComplaintsPage() {
-  const { isSalesManager, isAdmin } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -247,6 +247,7 @@ export default function ComplaintsPage() {
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to;
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
       const res = await complaintsApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -261,7 +262,7 @@ export default function ComplaintsPage() {
 
   useEffect(() => {
     fetchComplaints();
-  }, [dateRange]);
+  }, [dateRange, effectivePhone]);
 
   const handleOpenAddModal = () => {
     setFormCustomerName('');

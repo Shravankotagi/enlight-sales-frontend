@@ -52,7 +52,7 @@ interface CustomerVisit {
 }
 
 export default function VisitsPage() {
-  const { isSalesManager, isAdmin } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
@@ -318,6 +318,7 @@ export default function VisitsPage() {
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to;
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
       const res = await visitsApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -332,7 +333,7 @@ export default function VisitsPage() {
 
   useEffect(() => {
     fetchVisits();
-  }, [dateRange]);
+  }, [dateRange, effectivePhone]);
 
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
