@@ -2400,7 +2400,7 @@ export default function InquiriesPage() {
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
                 const dealIdDisplay = linkedDeal?.deal_number || (linkedDeal?.id ? `DEAL-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `DEAL-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
 
-                const showUpdateStatus = dealStageKey === 'quoted' || dealStageKey === 'negotiation';
+                const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
                 const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
 
                 return (
@@ -2464,7 +2464,7 @@ export default function InquiriesPage() {
                                 ? 'bottom-full mb-1'
                                 : 'top-full mt-1'
                             } w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
-                            {/* 1. Update Status Button & Sub-Menu (Only Quoted or Negotiation) */}
+                            {/* 1. Update Status Button & Sub-Menu (Qualified, Quoted, or Negotiation) */}
                             {showUpdateStatus && (
                               <div>
                                 <button
