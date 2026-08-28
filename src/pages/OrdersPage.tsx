@@ -1282,17 +1282,7 @@ export default function OrdersPage() {
               )}
             </div>
 
-            <div className="pt-2 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSendModal(false);
-                  setResendNotice('');
-                }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
-                Cancel
-              </button>
-
+            <div className="pt-2 flex justify-end">
               <button
                 type="button"
                 disabled={sendingEmail || !sendEmail.trim()}
@@ -1356,7 +1346,7 @@ export default function OrdersPage() {
                     };
 
                     const res = await inquiriesApi.sendQuotation(shareOrder.id, payload);
-                    const msg = res?.data?.message || res?.data?.data?.message || `PO Quotation dispatched to ${targetEmail}!`;
+                    const msg = res?.data?.message || res?.data?.data?.message || `PO Document dispatched to ${targetEmail}!`;
                     setResendNotice(msg);
                     toast.success(msg);
                     if (res?.data?.email_sent !== false) {
@@ -1376,7 +1366,7 @@ export default function OrdersPage() {
                 }}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
                 {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Share Quotation Email'}</span>
+                <span>{sendingEmail ? 'Dispatching Email & PO...' : 'Share PO Email'}</span>
               </button>
             </div>
           </div>
