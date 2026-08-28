@@ -76,17 +76,35 @@ interface Order {
 }
 
 export function getOrderSourceChannel(ord?: Order | null): string {
-  if (!ord) return 'WhatsApp';
+  if (!ord) return 'Dashboard';
   const channel = (
     ord.source_channel ||
     ord.inquiries?.source_channel ||
     ''
   ).toLowerCase().trim();
 
-  if (channel === 'web_dashboard' || channel === 'dashboard') {
+  // Explicit WhatsApp signals
+  if (
+    channel.startsWith('whatsapp') ||
+    channel === 'wa' ||
+    Boolean((ord.inquiries as any)?.whatsapp_message_id)
+  ) {
+    return 'WhatsApp';
+  }
+
+  // Dashboard / Web / Manual signals or default
+  if (
+    channel === 'web_dashboard' ||
+    channel === 'dashboard' ||
+    channel === 'purchase_order' ||
+    channel === 'manual' ||
+    channel === 'web' ||
+    !channel
+  ) {
     return 'Dashboard';
   }
-  return 'WhatsApp';
+
+  return channel.includes('whatsapp') ? 'WhatsApp' : 'Dashboard';
 }
 
 interface LineItemDetail {
@@ -679,6 +697,7 @@ export default function OrdersPage() {
         total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim() || undefined,
+        source_channel: 'web_dashboard',
         line_items: formLineItems.map(i => ({
           sku_text: i.sku_text.trim(),
           dimensions: i.dimensions ? i.dimensions.trim() : undefined,
