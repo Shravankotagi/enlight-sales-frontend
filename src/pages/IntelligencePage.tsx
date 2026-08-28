@@ -8,6 +8,8 @@ import {
   TrendingUp,
   Brain,
   Check,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function IntelligencePage() {
@@ -19,7 +21,11 @@ export default function IntelligencePage() {
   }, []);
 
   // ── Real Data Queries ───────────────────────────────────────────────────────
-  const { data: churnData = [] } = useQuery({
+  const {
+    data: churnData = [],
+    refetch: refetchChurn,
+    isFetching: fetchingChurn,
+  } = useQuery({
     queryKey: ['churn-risk', salespersonPhone],
     queryFn: () =>
       customersApi
@@ -27,7 +33,11 @@ export default function IntelligencePage() {
         .then((r) => r.data?.data || r.data || []),
   });
 
-  const { data: reorderData = [] } = useQuery({
+  const {
+    data: reorderData = [],
+    refetch: refetchReorder,
+    isFetching: fetchingReorder,
+  } = useQuery({
     queryKey: ['reorder-queue', salespersonPhone],
     queryFn: () =>
       customersApi
@@ -35,7 +45,11 @@ export default function IntelligencePage() {
         .then((r) => r.data?.data || r.data || []),
   });
 
-  const { data: lossData } = useQuery({
+  const {
+    data: lossData,
+    refetch: refetchLoss,
+    isFetching: fetchingLoss,
+  } = useQuery({
     queryKey: ['loss-analytics', salespersonPhone],
     queryFn: () =>
       customersApi
@@ -43,7 +57,11 @@ export default function IntelligencePage() {
         .then((r) => r.data?.data || r.data || {}),
   });
 
-  const { data: allCustomers = [] } = useQuery({
+  const {
+    data: allCustomers = [],
+    refetch: refetchCustomers,
+    isFetching: fetchingCustomers,
+  } = useQuery({
     queryKey: ['recurring-customers-list', salespersonPhone],
     queryFn: () =>
       customersApi
@@ -54,7 +72,11 @@ export default function IntelligencePage() {
         }),
   });
 
-  const { data: dealsData = [] } = useQuery({
+  const {
+    data: dealsData = [],
+    refetch: refetchDeals,
+    isFetching: fetchingDeals,
+  } = useQuery({
     queryKey: ['intelligence-deals', salespersonPhone],
     queryFn: () =>
       dealsApi
@@ -64,6 +86,13 @@ export default function IntelligencePage() {
           return Array.isArray(raw) ? raw : [];
         }),
   });
+
+  const isRefreshing =
+    fetchingChurn ||
+    fetchingReorder ||
+    fetchingLoss ||
+    fetchingCustomers ||
+    fetchingDeals;
 
   // ── Section 1: Churn Radar Metrics ──────────────────────────────────────────
   const churnList = Array.isArray(churnData) ? churnData : [];
@@ -147,7 +176,11 @@ export default function IntelligencePage() {
   );
   const totalDecided = wonDealsCount + totalLostCount;
   const winRate =
-    totalDecided > 0 ? Math.round((wonDealsCount / totalDecided) * 100) : 99;
+    totalDecided > 0
+      ? Math.round((wonDealsCount / totalDecided) * 100)
+      : wonDealsCount > 0
+        ? 100
+        : 0;
 
   const lossReasonsList: any[] = Array.isArray(lossData?.by_reason)
     ? lossData.by_reason
@@ -168,6 +201,27 @@ export default function IntelligencePage() {
             <Brain size={28} className="text-blue-600" />
             Intelligence Center
           </h1>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              await Promise.all([
+                refetchChurn(),
+                refetchReorder(),
+                refetchLoss(),
+                refetchCustomers(),
+                refetchDeals(),
+              ]);
+            }}
+            title="Refresh Intelligence Data"
+            className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60"
+          >
+            <RefreshCw
+              size={16}
+              className={isRefreshing ? 'animate-spin text-blue-600' : ''}
+            />
+          </button>
         </div>
       </div>
 
@@ -319,6 +373,76 @@ export default function IntelligencePage() {
             </div>
           </div>
         </div>
+
+        {/* Dynamic At-Risk & High-Risk Accounts Watchlist */}
+        {(atRiskCount > 0 || highRiskCount > 0) && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-500" />
+                <h3 className="font-semibold text-gray-800">
+                  Accounts Requiring Attention
+                </h3>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                {atRiskCount + highRiskCount} account{atRiskCount + highRiskCount !== 1 ? 's' : ''} monitored
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="px-6 py-3">Customer Account</th>
+                    <th className="px-6 py-3">Risk Status</th>
+                    <th className="px-6 py-3">Days Inactive</th>
+                    <th className="px-6 py-3">Last Order Date</th>
+                    <th className="px-6 py-3 text-right">Cadence Cycle</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {[...highRiskCustomers, ...atRiskCustomers].map((item: any, idx: number) => {
+                    const isHigh = item.churn_risk === 'churning' || item.churn_risk === 'credit_watch' || item.churn_risk === 'high';
+                    return (
+                      <tr key={item.id || idx} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-6 py-3.5 font-bold text-slate-900">
+                          {item.customer_name}
+                        </td>
+                        <td className="px-6 py-3.5">
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                              isHigh
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {item.churn_risk === 'credit_watch' ? 'CREDIT WATCH' : isHigh ? 'HIGH RISK' : 'AT RISK'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5 font-mono text-slate-700">
+                          {item.days_since_order !== null && item.days_since_order !== undefined
+                            ? `${item.days_since_order} days`
+                            : 'No prior orders'}
+                        </td>
+                        <td className="px-6 py-3.5 font-mono text-slate-600">
+                          {item.last_order_date
+                            ? new Date(item.last_order_date).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-mono font-medium text-slate-600">
+                          Every {item.avg_order_frequency_days || 30}d
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
