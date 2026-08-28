@@ -431,6 +431,7 @@ export default function OrdersPage() {
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
   const [selectedPoOrder, setSelectedPoOrder] = useState<Order | null>(null);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [loadingPoId, setLoadingPoId] = useState<string | null>(null);
 
   // Send / Share Modal
   const [showSendModal, setShowSendModal] = useState(false);
@@ -857,6 +858,10 @@ export default function OrdersPage() {
       return;
     }
 
+    // Immediately open modal in loading state so user sees instant feedback!
+    setLoadingPoId(ord.id);
+    setPoImageViewerUrl('loading://preview');
+
     // 2. Fetch full deal details from database to see if document is stored in deal or linked inquiry
     try {
       const res = await dealsApi.getOne(ord.id);
@@ -873,6 +878,8 @@ export default function OrdersPage() {
       }
     } catch (e) {
       console.warn('Could not load deal document attachment from API:', e);
+    } finally {
+      setLoadingPoId(null);
     }
 
     // 3. If no document attachment, open the structured text viewer without error toast
@@ -1136,9 +1143,13 @@ export default function OrdersPage() {
                                   setOpenActionMenuId(null);
                                   handleViewPoDocument(ord);
                                 }}
-                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                                <Eye size={14} className="text-slate-500 shrink-0" />
-                                <span>View PO</span>
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors cursor-pointer">
+                                {loadingPoId === ord.id ? (
+                                  <RefreshCw size={14} className="animate-spin text-blue-600 shrink-0" />
+                                ) : (
+                                  <Eye size={14} className="text-slate-500 shrink-0" />
+                                )}
+                                <span>{loadingPoId === ord.id ? 'Opening...' : 'View PO'}</span>
                               </button>
                               <button
                                 type="button"
@@ -1388,9 +1399,11 @@ export default function OrdersPage() {
             <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
               <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <FileText size={18} className="text-blue-600" />
-                {poImageViewerUrl.startsWith('extracted_preview://')
-                  ? 'Original Customer Inquiry Message'
-                  : 'Original Purchase Order (PO) Document / WhatsApp Image'}
+                {poImageViewerUrl === 'loading://preview'
+                  ? 'Purchase Order (PO) Document'
+                  : poImageViewerUrl.startsWith('extracted_preview://')
+                    ? 'Original Customer Inquiry Message'
+                    : 'Original Purchase Order (PO) Document / WhatsApp Image'}
               </span>
               <button
                 onClick={() => {
@@ -1402,7 +1415,22 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            {poImageViewerUrl.startsWith('extracted_preview://') ? (
+            {poImageViewerUrl === 'loading://preview' ? (
+              <div className="w-full h-[60vh] flex flex-col items-center justify-center bg-slate-50 rounded-xl p-8 border border-slate-200 space-y-4">
+                <div className="relative">
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-sm">
+                    <FileText size={28} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 p-1 bg-white rounded-full shadow-md">
+                    <RefreshCw size={16} className="animate-spin text-blue-600" />
+                  </div>
+                </div>
+                <div className="text-center space-y-1">
+                  <h4 className="text-sm font-bold text-slate-800">Opening Purchase Order...</h4>
+                  <p className="text-xs text-slate-500">Retrieving original PO document attachment and details</p>
+                </div>
+              </div>
+            ) : poImageViewerUrl.startsWith('extracted_preview://') ? (
               <div className="w-full space-y-3">
                 <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                   <span>Source Inquiry Text</span>
