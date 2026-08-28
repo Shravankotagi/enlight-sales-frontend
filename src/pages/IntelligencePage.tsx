@@ -153,6 +153,12 @@ export default function IntelligencePage() {
     ? lossData.by_reason
     : [];
 
+  const recentLossesList: any[] = Array.isArray(lossData?.recent_losses)
+    ? lossData.recent_losses
+    : Array.isArray(lossData?.deals)
+      ? lossData.deals
+      : [];
+
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* ── Top Header ───────────────────────────────────────────────────────── */}
@@ -569,16 +575,6 @@ export default function IntelligencePage() {
             {lossReasonsList.length === 0 ? (
               <div className="space-y-2 pt-1 text-xs text-slate-500">
                 <p>No lost deals in the last 3 months</p>
-                <p className="text-slate-400 text-[11px] leading-relaxed">
-                  Historical reference:{' '}
-                  <span className="text-slate-600 font-medium">
-                    1 deal lost earlier this year to{' '}
-                    <strong className="text-gray-800 font-semibold">
-                      Credit terms
-                    </strong>
-                  </span>{' '}
-                  - the only reason logged across the account's lifetime.
-                </p>
               </div>
             ) : (
               <div className="flex flex-wrap gap-2 pt-1">
@@ -593,6 +589,75 @@ export default function IntelligencePage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Detailed Lost Deals Table */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingDown size={16} className="text-red-500" />
+              <h3 className="font-semibold text-gray-800">
+                Lost Deals &amp; Reasons Log
+              </h3>
+            </div>
+            <span className="text-xs font-semibold text-slate-500">
+              {recentLossesList.length} deal{recentLossesList.length !== 1 ? 's' : ''} lost (3 months)
+            </span>
+          </div>
+
+          {recentLossesList.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-500">
+              No lost deals recorded in the last 3 months.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="px-6 py-3">Deal ID</th>
+                    <th className="px-6 py-3">Customer Account</th>
+                    <th className="px-6 py-3">Lost Reason</th>
+                    <th className="px-6 py-3 text-right">Lost Value</th>
+                    <th className="px-6 py-3 text-right">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentLossesList.map((item: any, idx: number) => {
+                    const dateFormatted = item.created_at
+                      ? new Date(item.created_at).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                      : '—';
+                    return (
+                      <tr key={item.id || idx} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-6 py-3.5 font-mono text-slate-700 font-medium">
+                          {item.deal_number || (item.id ? `DEAL-${item.id.substring(0, 6).toUpperCase()}` : '—')}
+                        </td>
+                        <td className="px-6 py-3.5 font-bold text-slate-900">
+                          {item.customer_name}
+                        </td>
+                        <td className="px-6 py-3.5">
+                          <span className="inline-block bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-full text-xs font-medium">
+                            {item.lost_reason || 'Not specified'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-mono font-bold text-slate-900">
+                          {Number(item.total_amount) > 0
+                            ? `₹${Number(item.total_amount).toLocaleString('en-IN')}`
+                            : '₹0'}
+                        </td>
+                        <td className="px-6 py-3.5 text-right text-slate-500 font-mono text-[11px]">
+                          {dateFormatted}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
     </div>
