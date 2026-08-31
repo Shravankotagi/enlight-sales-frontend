@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, ChevronDown, X, Hash, Package, FileText, Check } from 'lucide-react';
+import { ChevronDown, X, Hash, Package, FileText } from 'lucide-react';
 
 export interface DealItem {
   sku_text?: string;
@@ -23,28 +23,30 @@ export interface DealOption {
 
 interface DealProductComboboxProps {
   deals: DealOption[];
-  selectedDealId: string;
-  selectedPoNumber?: string;
-  selectedProduct?: string;
+  value: string;
+  onChange: (val: string) => void;
   onSelectDeal: (deal: DealOption | null, specificProduct?: string) => void;
-  loading?: boolean;
+  placeholder?: string;
   disabled?: boolean;
+  loading?: boolean;
+  className?: string;
 }
 
 export default function DealProductCombobox({
   deals = [],
-  selectedDealId,
-  selectedProduct,
+  value,
+  onChange,
   onSelectDeal,
-  loading = false,
+  placeholder = 'Type or select Deal ID, PO Number, Product...',
   disabled = false,
+  loading = false,
+  className = '',
 }: DealProductComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Close dropdown on click outside
+  // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -52,196 +54,196 @@ export default function DealProductCombobox({
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
-  // Focus search input when dropdown opens
-  useEffect(() => {
-    if (isOpen && searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, [isOpen]);
+  // Flatten deals and their items into searchable selectable entries
+  const flattenedOptions = useMemo(() => {
+    const list: Array<{
+      key: string;
+      deal: DealOption | null;
+      dealCode: string;
+      poNumber: string;
+      productSummary: string;
+      fullLabel: string;
+      stage?: string;
+      isUnlinked?: boolean;
+    }> = [];
 
-  const selectedDeal = useMemo(() => {
-    return deals.find(d => d.id === selectedDealId);
-  }, [deals, selectedDealId]);
-
-  const filteredDeals = useMemo(() => {
-    if (!searchQuery.trim()) return deals;
-    const q = searchQuery.toLowerCase().trim();
-
-    return deals.filter(deal => {
-      const dealCode = (deal.id ? `DEAL-${deal.id.substring(0, 6)}` : '').toLowerCase();
-      const poNum = (deal.po_number || '').toLowerCase();
-      const cust = (deal.customer_name || '').toLowerCase();
-      const itemsMatch = Array.isArray(deal.deal_items) && deal.deal_items.some(it => {
-        const sku = (it.sku_text || '').toLowerCase();
-        const dims = (it.dimensions || '').toLowerCase();
-        const qty = `${it.quantity || ''} ${it.unit || ''}`.toLowerCase();
-        return sku.includes(q) || dims.includes(q) || qty.includes(q);
-      });
-
-      return dealCode.includes(q) || poNum.includes(q) || cust.includes(q) || itemsMatch;
+    // Option 1: Unlinked
+    list.push({
+      key: 'unlinked-direct',
+      deal: null,
+      dealCode: '',
+      poNumber: '',
+      productSummary: '',
+      fullLabel: '-- Unlinked / Direct Complaint (No Deal Linked) --',
+      isUnlinked: true,
     });
-  }, [deals, searchQuery]);
 
-  const handleSelect = (deal: DealOption | null, product?: string) => {
-    onSelectDeal(deal, product);
+    deals.forEach(deal => {
+      const dealCode = `#DEAL-${deal.id.substring(0, 6).toUpperCase()}`;
+      const poStr = deal.po_number ? ` (PO: ${deal.po_number})` : '';
+      const items = Array.isArray(deal.deal_items) && deal.deal_items.length > 0 ? deal.deal_items : [];
+
+      if (items.length === 0) {
+        list.push({
+          key: `${deal.id}-deal`,
+          deal,
+          dealCode,
+          poNumber: deal.po_number || '',
+          productSummary: 'General Material',
+          fullLabel: `${dealCode}${poStr} — General Material`,
+          stage: deal.stage,
+        });
+      } else {
+        items.forEach((it, idx) => {
+          const itemSummary = `${it.sku_text || ''} ${it.dimensions || ''} ${it.quantity ? `${it.quantity} ${it.unit || 'MT'}` : ''}`.trim();
+          list.push({
+            key: `${deal.id}-item-${idx}`,
+            deal,
+            dealCode,
+            poNumber: deal.po_number || '',
+            productSummary: itemSummary || 'General Material',
+            fullLabel: `${dealCode}${poStr} — ${itemSummary || 'General Material'}`,
+            stage: deal.stage,
+          });
+        });
+      }
+    });
+
+    return list;
+  }, [deals]);
+
+  const query = (value || '').trim().toLowerCase();
+
+  const filteredOptions = useMemo(() => {
+    if (!query) return flattenedOptions;
+    return flattenedOptions.filter(opt => {
+      if (opt.isUnlinked) return 'unlinked direct complaint'.includes(query);
+      const code = opt.dealCode.toLowerCase();
+      const rawCode = opt.dealCode.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const po = opt.poNumber.toLowerCase();
+      const prod = opt.productSummary.toLowerCase();
+      const label = opt.fullLabel.toLowerCase();
+      return code.includes(query) || rawCode.includes(query) || po.includes(query) || prod.includes(query) || label.includes(query);
+    });
+  }, [flattenedOptions, query]);
+
+  const handleSelect = (option: typeof flattenedOptions[0]) => {
+    if (option.isUnlinked || !option.deal) {
+      onChange('');
+      onSelectDeal(null, '');
+    } else {
+      onChange(option.fullLabel);
+      onSelectDeal(option.deal, option.productSummary);
+    }
     setIsOpen(false);
-    setSearchQuery('');
   };
 
-  const displayLabel = useMemo(() => {
-    if (!selectedDealId) {
-      return '-- Select Specific Deal / PO & Product --';
-    }
-    if (selectedDeal) {
-      const dealCode = `#DEAL-${selectedDeal.id.substring(0, 6).toUpperCase()}`;
-      const poStr = selectedDeal.po_number ? ` (PO: ${selectedDeal.po_number})` : '';
-      const prodStr = selectedProduct ? ` — ${selectedProduct}` : '';
-      return `${dealCode}${poStr}${prodStr}`;
-    }
-    return `#DEAL-${selectedDealId.substring(0, 6).toUpperCase()}`;
-  }, [selectedDealId, selectedDeal, selectedProduct]);
-
   return (
-    <div ref={containerRef} className="relative w-full text-xs font-sans">
-      {/* Trigger Button */}
-      <button
-        type="button"
-        disabled={disabled || loading}
-        onClick={() => setIsOpen(prev => !prev)}
-        className={`w-full flex items-center justify-between pl-3 pr-2.5 py-2 border rounded-xl bg-white text-left font-medium transition-all cursor-pointer ${
-          isOpen ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300 hover:border-slate-400'
-        } ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}`}>
-        <div className="flex items-center gap-2 truncate pr-2">
-          <Hash size={14} className={selectedDealId ? 'text-blue-600 shrink-0' : 'text-slate-400 shrink-0'} />
-          <span className={`truncate ${selectedDealId ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
-            {loading ? 'Loading deals...' : displayLabel}
-          </span>
-        </div>
-        <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
+    <div ref={containerRef} className={`relative ${className}`}>
+      <div className="relative flex items-center">
+        <Hash size={14} className="absolute left-3 text-slate-400 pointer-events-none" />
+        <input
+          ref={inputRef}
+          type="text"
+          disabled={disabled || loading}
+          autoComplete="off"
+          placeholder={loading ? 'Loading deals...' : placeholder}
+          value={value}
+          onFocus={() => setIsOpen(true)}
+          onClick={() => setIsOpen(true)}
+          onChange={e => {
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          className={`w-full pl-8.5 pr-14 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400 bg-white transition-all ${
+            disabled ? 'bg-slate-50 opacity-60 cursor-not-allowed' : ''
+          }`}
+        />
 
-      {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 flex flex-col max-h-72">
-          {/* Search Box Header */}
-          <div className="p-2 border-b border-slate-100 bg-slate-50/80 shrink-0">
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by Deal ID, PO Number, Product, Grade..."
-                className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
-                  <X size={12} />
-                </button>
-              )}
+        {value && !disabled && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange('');
+              onSelectDeal(null, '');
+              inputRef.current?.focus();
+            }}
+            className="absolute right-7 p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+            <X size={13} />
+          </button>
+        )}
+
+        <button
+          type="button"
+          tabIndex={-1}
+          disabled={disabled || loading}
+          onClick={() => {
+            if (!disabled && !loading) {
+              setIsOpen(prev => !prev);
+              inputRef.current?.focus();
+            }
+          }}
+          className="absolute right-2.5 p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+          <ChevronDown
+            size={14}
+            className={`transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600' : ''}`}
+          />
+        </button>
+      </div>
+
+      {/* Dropdown Options List */}
+      {isOpen && !disabled && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+          {filteredOptions.length === 0 ? (
+            <div className="px-4 py-3 text-center text-xs text-slate-400">
+              No matching deals or products found.
             </div>
-          </div>
-
-          {/* Options List */}
-          <div className="overflow-y-auto flex-1 p-1.5 space-y-1">
-            {/* Unlinked Option */}
-            <button
-              type="button"
-              onClick={() => handleSelect(null)}
-              className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between cursor-pointer ${
-                !selectedDealId ? 'bg-blue-50 text-blue-800 font-semibold' : 'hover:bg-slate-50 text-slate-700'
-              }`}>
-              <div className="flex items-center gap-2">
-                <FileText size={14} className="text-slate-400 shrink-0" />
-                <span>-- Unlinked / Direct Complaint (No Deal Linked) --</span>
-              </div>
-              {!selectedDealId && <Check size={14} className="text-blue-600" />}
-            </button>
-
-            {filteredDeals.length === 0 ? (
-              <div className="py-6 text-center text-slate-400">
-                <Package size={22} className="mx-auto text-slate-300 mb-1" />
-                <p className="text-xs font-medium text-slate-500">No matching deals or products found</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Try searching with a different keyword</p>
-              </div>
-            ) : (
-              filteredDeals.map(deal => {
-                const dealCode = `#DEAL-${deal.id.substring(0, 6).toUpperCase()}`;
-                const isDealSelected = selectedDealId === deal.id;
-                const items = Array.isArray(deal.deal_items) ? deal.deal_items : [];
-
-                return (
-                  <div
-                    key={deal.id}
-                    className={`rounded-xl border transition-all p-2.5 space-y-1.5 ${
-                      isDealSelected
-                        ? 'border-blue-300 bg-blue-50/40'
-                        : 'border-slate-100 hover:border-slate-200 bg-white hover:bg-slate-50/60'
-                    }`}>
-                    {/* Deal Header Row */}
-                    <div
-                      onClick={() => handleSelect(deal)}
-                      className="flex items-center justify-between cursor-pointer">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[11px]">
-                          {dealCode}
+          ) : (
+            filteredOptions.map((opt) => (
+              <div
+                key={opt.key}
+                onClick={() => handleSelect(opt)}
+                className="px-3.5 py-2.5 hover:bg-blue-50/70 transition-colors cursor-pointer flex items-center justify-between gap-2 group text-xs">
+                <div className="flex items-center gap-2 truncate min-w-0">
+                  {opt.isUnlinked ? (
+                    <FileText size={14} className="text-slate-400 shrink-0" />
+                  ) : (
+                    <Package size={14} className="text-blue-500 shrink-0" />
+                  )}
+                  <div className="truncate min-w-0">
+                    {opt.isUnlinked ? (
+                      <span className="text-slate-600 font-medium">{opt.fullLabel}</span>
+                    ) : (
+                      <div className="flex items-center gap-1.5 flex-wrap truncate">
+                        <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded text-[10px]">
+                          {opt.dealCode}
                         </span>
-                        {deal.po_number && (
-                          <span className="font-mono text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[11px]">
-                            PO: {deal.po_number}
+                        {opt.poNumber && (
+                          <span className="font-mono text-slate-600 bg-slate-100 px-1 py-0.5 rounded text-[10px]">
+                            PO: {opt.poNumber}
                           </span>
                         )}
-                        {deal.stage && (
-                          <span className="capitalize text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            {deal.stage}
-                          </span>
-                        )}
-                      </div>
-                      {isDealSelected && <Check size={14} className="text-blue-600 shrink-0" />}
-                    </div>
-
-                    {/* Products List under this deal */}
-                    {items.length > 0 && (
-                      <div className="pt-1 space-y-1 pl-2 border-l-2 border-slate-200">
-                        {items.map((item, iIdx) => {
-                          const itemSummary = `${item.sku_text || ''} ${item.dimensions || ''} ${item.quantity ? `${item.quantity} ${item.unit || 'MT'}` : ''}`.trim();
-                          const isProductActive = isDealSelected && selectedProduct === itemSummary;
-
-                          return (
-                            <button
-                              key={iIdx}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelect(deal, itemSummary);
-                              }}
-                              className={`w-full text-left px-2 py-1 rounded-lg text-[11px] font-medium flex items-center justify-between transition-colors cursor-pointer ${
-                                isProductActive
-                                  ? 'bg-blue-600 text-white shadow-2xs'
-                                  : 'text-slate-600 hover:bg-slate-200/60 hover:text-slate-900'
-                              }`}>
-                              <span className="flex items-center gap-1.5 truncate">
-                                <Package size={11} className={isProductActive ? 'text-white' : 'text-slate-400'} />
-                                <span className="truncate">{itemSummary}</span>
-                              </span>
-                              <span className="text-[10px] opacity-75 shrink-0 ml-2">Click to select</span>
-                            </button>
-                          );
-                        })}
+                        <span className="font-semibold text-slate-900 truncate">
+                          {opt.productSummary}
+                        </span>
                       </div>
                     )}
                   </div>
-                );
-              })
-            )}
-          </div>
+                </div>
+
+                {opt.stage && (
+                  <span className="capitalize text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                    {opt.stage}
+                  </span>
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>

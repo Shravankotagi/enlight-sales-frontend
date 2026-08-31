@@ -153,6 +153,7 @@ export default function ComplaintsPage() {
   const [editCustomerName, setEditCustomerName] = useState('');
   const [editDealId, setEditDealId] = useState('');
   const [editPoNumber, setEditPoNumber] = useState('');
+  const [editDealDisplay, setEditDealDisplay] = useState('');
   const [editProduct, setEditProduct] = useState('');
   const [editType, setEditType] = useState('Quality Defect');
   const [editDescription, setEditDescription] = useState('');
@@ -166,6 +167,7 @@ export default function ComplaintsPage() {
   const [formCustomerName, setFormCustomerName] = useState('');
   const [formDealId, setFormDealId] = useState('');
   const [formPoNumber, setFormPoNumber] = useState('');
+  const [formDealDisplay, setFormDealDisplay] = useState('');
   const [formProduct, setFormProduct] = useState('');
   const [formType, setFormType] = useState('Quality Defect');
   const [formDescription, setFormDescription] = useState('');
@@ -294,11 +296,15 @@ export default function ComplaintsPage() {
     setFormCustomerName(cust.customer_name);
     setFormDealId('');
     setFormPoNumber('');
+    setFormDealDisplay('');
     if (formErrors.customerName) setFormErrors(prev => ({ ...prev, customerName: false }));
   };
 
   const handleSelectCustomerForEdit = (cust: CustomerDirectoryItem) => {
     setEditCustomerName(cust.customer_name);
+    setEditDealId('');
+    setEditPoNumber('');
+    setEditDealDisplay('');
   };
 
   const getSalespersonDisplayName = (comp: Complaint) => {
@@ -342,6 +348,7 @@ export default function ComplaintsPage() {
     setFormCustomerName('');
     setFormDealId('');
     setFormPoNumber('');
+    setFormDealDisplay('');
     setFormProduct('');
     setFormType('Quality Defect');
     setFormDescription('');
@@ -398,6 +405,7 @@ export default function ComplaintsPage() {
         setFormCustomerName('');
         setFormDealId('');
         setFormPoNumber('');
+        setFormDealDisplay('');
         setFormProduct('');
         setFormType('Quality Defect');
         setFormDescription('');
@@ -421,6 +429,16 @@ export default function ComplaintsPage() {
     setEditCustomerName(comp.customer_name || '');
     setEditDealId(comp.deal_id || '');
     setEditPoNumber(comp.po_number || '');
+
+    if (comp.deal_id) {
+      const dealCode = `#DEAL-${comp.deal_id.startsWith('DEAL-') ? comp.deal_id.replace(/^DEAL-/, '') : comp.deal_id.substring(0, 6).toUpperCase()}`;
+      const poStr = comp.po_number ? ` (PO: ${comp.po_number})` : '';
+      const prodStr = comp.product_name || comp.affected_product ? ` — ${comp.product_name || comp.affected_product}` : '';
+      setEditDealDisplay(`${dealCode}${poStr}${prodStr}`);
+    } else {
+      setEditDealDisplay('');
+    }
+
     setEditProduct(comp.product_name || comp.affected_product || '');
     setEditType(comp.complaint_type || 'Quality Defect');
     setEditDescription(comp.description || '');
@@ -1114,9 +1132,8 @@ export default function ComplaintsPage() {
                   </label>
                   <DealProductCombobox
                     deals={editCustomerDeals}
-                    selectedDealId={editDealId}
-                    selectedPoNumber={editPoNumber}
-                    selectedProduct={editProduct}
+                    value={editDealDisplay}
+                    onChange={setEditDealDisplay}
                     onSelectDeal={(deal, specificProduct) => {
                       if (!deal) {
                         setEditDealId('');
@@ -1299,13 +1316,12 @@ export default function ComplaintsPage() {
                 {/* 2. Searchable Deal ID / PO Number Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number &amp; Product <span className="text-slate-400 font-normal">(Searchable)</span>
+                    Linked Deal ID / PO Number &amp; Product
                   </label>
                   <DealProductCombobox
                     deals={customerDeals}
-                    selectedDealId={formDealId}
-                    selectedPoNumber={formPoNumber}
-                    selectedProduct={formProduct}
+                    value={formDealDisplay}
+                    onChange={setFormDealDisplay}
                     loading={loadingDeals}
                     onSelectDeal={(deal, specificProduct) => {
                       if (!deal) {
