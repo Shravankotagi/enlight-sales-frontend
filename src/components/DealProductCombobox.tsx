@@ -186,9 +186,17 @@ export default function DealProductCombobox({
           <span
             key={`${item.dealId}-${item.product}-${idx}`}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-[11px] font-semibold animate-in fade-in zoom-in-95">
-            <span className="font-mono text-blue-700">{item.dealCode}</span>
-            {item.poNumber && <span className="text-slate-600 font-mono text-[10px]">({item.poNumber})</span>}
-            <span className="text-slate-700 font-medium truncate max-w-[150px]">{item.product}</span>
+            {item.poNumber ? (
+              <>
+                <span className="font-mono text-slate-800 font-bold bg-white border border-slate-300 px-1 py-0.2 rounded text-[10px]">
+                  PO: {item.poNumber}
+                </span>
+                <span className="text-blue-600 font-mono text-[10px]">({item.dealCode})</span>
+              </>
+            ) : (
+              <span className="font-mono text-blue-700">{item.dealCode}</span>
+            )}
+            <span className="text-slate-800 font-medium truncate max-w-[150px]">{item.product}</span>
             {!disabled && (
               <button
                 type="button"
@@ -273,12 +281,18 @@ export default function DealProductCombobox({
 
                     {/* Deal & Product details */}
                     <div className="truncate min-w-0 flex items-center gap-1.5 flex-wrap">
-                      <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded text-[10px]">
-                        {opt.dealCode}
-                      </span>
-                      {opt.poNumber && (
-                        <span className="font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded text-[10px]">
-                          PO: {opt.poNumber}
+                      {opt.poNumber ? (
+                        <>
+                          <span className="font-mono font-bold text-slate-800 bg-slate-100 border border-slate-300 px-1.5 py-0.5 rounded text-[10px] shadow-2xs">
+                            PO: {opt.poNumber}
+                          </span>
+                          <span className="font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded text-[10px]">
+                            {opt.dealCode}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
+                          {opt.dealCode}
                         </span>
                       )}
                       <span className={`truncate font-medium ${selected ? 'text-blue-900 font-bold' : 'text-slate-800'}`}>

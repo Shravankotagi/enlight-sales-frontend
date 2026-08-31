@@ -17,7 +17,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Save,
-  Hash,
 } from 'lucide-react';
 import { complaintsApi, employeesApi, customersApi, dealsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -847,20 +846,33 @@ export default function ComplaintsPage() {
 
                       {/* 2. Deal / PO & Product */}
                       <td className="px-4 py-3.5 text-xs">
-                        {cleanDealCode ? (
+                        {comp.po_number ? (
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono font-bold text-slate-800 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded text-[11px] shadow-2xs">
+                                PO: {comp.po_number}
+                              </span>
+                              {cleanDealCode && (
+                                <span className="font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
+                                  #{`DEAL-${cleanDealCode}`}
+                                </span>
+                              )}
+                            </div>
+                            {prodDisplay && (
+                              <div className="text-slate-700 font-medium mt-1 truncate max-w-[240px]">
+                                {prodDisplay}
+                              </div>
+                            )}
+                          </div>
+                        ) : cleanDealCode ? (
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[11px]">
                                 #{`DEAL-${cleanDealCode}`}
                               </span>
-                              {comp.po_number && (
-                                <span className="font-mono text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[11px]">
-                                  PO: {comp.po_number}
-                                </span>
-                              )}
                             </div>
                             {prodDisplay && (
-                              <div className="text-slate-600 font-medium mt-1 truncate max-w-[220px]">
+                              <div className="text-slate-700 font-medium mt-1 truncate max-w-[240px]">
                                 {prodDisplay}
                               </div>
                             )}
@@ -868,7 +880,7 @@ export default function ComplaintsPage() {
                         ) : (
                           <div className="flex items-center gap-1.5 font-medium text-slate-800">
                             <Package size={13} className="text-blue-500 shrink-0" />
-                            <span className="truncate max-w-[220px]">{prodDisplay || 'General Steel Material'}</span>
+                            <span className="truncate max-w-[240px]">{prodDisplay || 'General Steel Material'}</span>
                           </div>
                         )}
                       </td>
@@ -969,22 +981,22 @@ export default function ComplaintsPage() {
 
             {/* Info Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
-              {/* Linked Deal / PO */}
+              {/* Linked Won Deal & PO */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                <p className="text-xs font-medium text-slate-400 mb-1">Linked Won Deal &amp; PO</p>
+                <p className="text-xs font-medium text-slate-400 mb-1">Linked Order / PO Reference</p>
                 <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
-                  <Hash size={14} className="text-blue-600 shrink-0" />
-                  {selectedComplaint.deal_id ? (
-                    <span className="font-mono text-blue-700">
-                      #{selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id : `DEAL-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
-                    </span>
-                  ) : (
-                    <span className="text-slate-400 font-normal">Won Order</span>
-                  )}
                   {selectedComplaint.po_number && (
-                    <span className="text-xs font-mono font-semibold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
+                    <span className="font-mono text-slate-800 font-bold bg-white border border-slate-300 px-2 py-0.5 rounded shadow-2xs text-xs">
                       PO: {selectedComplaint.po_number}
                     </span>
+                  )}
+                  {selectedComplaint.deal_id && (
+                    <span className="font-mono text-blue-700 text-xs bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                      #{selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id : `DEAL-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
+                    </span>
+                  )}
+                  {!selectedComplaint.po_number && !selectedComplaint.deal_id && (
+                    <span className="text-slate-400 font-normal text-xs">Won Order</span>
                   )}
                 </div>
               </div>
