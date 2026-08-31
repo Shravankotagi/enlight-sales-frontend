@@ -983,9 +983,7 @@ export default function OrdersPage() {
             <p className="text-2xl font-bold text-indigo-600 mt-1">
               {totalTonnage.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
             </p>
-            {totalTonnageResult.hasUnconvertible && (
-              <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
-            )}
+            
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
             <Truck size={22} />

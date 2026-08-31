@@ -851,9 +851,7 @@ export default function HomePage() {
               </p>
               <span className="text-xs sm:text-sm font-bold text-blue-100">MT</span>
             </div>
-            {deliveredTonnageResult.hasUnconvertible && (
-              <p className="text-[10px] text-blue-200 mt-1">* some items excluded</p>
-            )}
+            
           </div>
           <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
         </div>

@@ -97,7 +97,6 @@ export default function ReportsPage() {
   }, [overview?.orders]);
 
   const totalMt = totalTonnageResult.totalMt;
-  const hasUnconvertible = totalTonnageResult.hasUnconvertible;
 
   // Exact parity for KPI cards:
   const totalDealsCount =
@@ -220,9 +219,7 @@ export default function ReportsPage() {
               <p className="text-2xl font-bold text-emerald-600">
                 {totalMt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
               </p>
-              {hasUnconvertible && (
-                <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
-              )}
+              
               <p className="text-sm text-gray-500 mt-1">Total Tonnage (MT)</p>
             </div>
 

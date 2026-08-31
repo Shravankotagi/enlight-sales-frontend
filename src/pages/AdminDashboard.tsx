@@ -346,9 +346,7 @@ export default function AdminDashboard() {
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-600">
               {Number(deliveredTonnage.toFixed(3)).toLocaleString('en-IN')} MT
             </h2>
-            {deliveredTonnageResult.hasUnconvertible && (
-              <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
-            )}
+            
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <ArrowUpRight size={12} /> +25%
