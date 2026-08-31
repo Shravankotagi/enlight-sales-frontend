@@ -1,4 +1,4 @@
-# 💻 Enlight Metals Web Dashboard — User & Operations Manual
+# 💻 Enlight Metals Web Dashboard - User & Operations Manual
 
 Welcome! This is the **Web Dashboard App** (Frontend) of Enlight Metals Sales OS.
 

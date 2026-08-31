@@ -9,7 +9,8 @@ if (rawBackend && !rawBackend.startsWith('http://') && !rawBackend.startsWith('h
 
 const API = axios.create({
   baseURL: rawBackend.replace(/\/+$/, ''),
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
 });
 
 // Attach JWT token and salesperson filter to every request
@@ -103,6 +104,11 @@ export const inquiriesApi = {
   generatePdf: (payload: any) => API.post('/inquiries/generate-pdf', payload, { responseType: 'blob' }),
   parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
+};
+
+export const productsApi = {
+  getAll: (params?: any) => API.get('/products', { params }),
+  lookup: (name: string, dimensions?: string) => API.get('/products/lookup', { params: { name, dimensions } }),
 };
 
 export const reportsApi = {

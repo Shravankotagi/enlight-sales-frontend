@@ -1,125 +1,313 @@
 /**
- * Steel Products HSN/SAC Code Auto-Detection Mapping:
+ * Steel Products & Dimensions Master HSN Code Detection Catalog
  *
- * | Product | HSN Code |
- * |---|---|
- * | HR Coil / Hot Rolled Coil / HR Sheet | 72082700 |
- * | CR Coil / Cold Rolled Coil / CR Sheet / CRCA | 72092900 |
- * | MS Sheet / MS Plate / Mild Steel Sheet / Mild Steel Plate | 72083730 |
- * | MS Round Bar / Round Bar | 72141000 |
- * | MS Square Bar / Square Bar | 72142000 |
- * | MS Flat Bar / Flat Bar / MS Flat | 72149100 |
- * | TMT Bar / TMT Rebar / Reinforcement Bar | 72139190 |
- * | MS Angle / Angle Iron | 72162100 |
- * | MS Channel / Channel Section | 72163100 |
- * | MS Beam / Joist / I-Beam / H-Beam | 72163200 |
- * | MS Square Pipe / Square Hollow Section / SHS | 73063090 |
- * | MS Rectangular Pipe / Rectangular Hollow Section / RHS | 73063090 |
- * | MS Round Pipe / ERW Pipe / Seamless Pipe | 73061090 |
- * | GI Sheet / Galvanized Sheet / GI Coil / Galvanized Coil | 72104900 |
- * | Chequered Plate / Checkered Plate | 72085100 |
- * | Stainless Steel Sheet / SS Sheet / SS Coil | 72193390 |
+ * Source: Official Product Catalog
+ * Categories: Flat Steel, Structural Steel, Pipes and Tubes, Value Added Products
  */
 
-export function detectHsnCode(productName: string): string {
-  if (!productName || typeof productName !== 'string') return '';
-  const text = productName.toLowerCase().trim();
-  if (!text) return '';
+export interface MasterProductItem {
+  category: string;
+  product_name: string;
+  dimensions: string;
+  hsn_code: string;
+  min_thickness_mm?: number;
+  max_thickness_mm?: number;
+}
 
-  // 1. Stainless Steel / SS Sheet / SS Coil
-  if (/\bstainless\b|\bss\s*(?:sheet|coil|plate|pipe|bar|flat|round|angle|channel|304|316)?\b/i.test(text)) {
-    return '72193390';
+export const MASTER_PRODUCTS_CATALOG: MasterProductItem[] = [
+  // Flat Steel
+  { category: 'Flat Steel', product_name: 'HR Coil', dimensions: '1.60 mm – <3.00 mm; Width 1250/1500/2000/2500 mm', hsn_code: '72083940', min_thickness_mm: 1.60, max_thickness_mm: 2.99 },
+  { category: 'Flat Steel', product_name: 'HR Coil', dimensions: '3.00 mm – <4.75 mm; Width 1250/1500/2000/2500 mm', hsn_code: '72083840', min_thickness_mm: 3.00, max_thickness_mm: 4.74 },
+  { category: 'Flat Steel', product_name: 'HR Coil', dimensions: '4.75 mm – <10.00 mm; Width 1250/1500/2000/2500 mm', hsn_code: '72083740', min_thickness_mm: 4.75, max_thickness_mm: 9.99 },
+  { category: 'Flat Steel', product_name: 'HR Coil', dimensions: '10.00 mm and above; Width 1250/1500/2000/2500 mm', hsn_code: '72083740', min_thickness_mm: 10.00, max_thickness_mm: 999.0 },
+  { category: 'Flat Steel', product_name: 'HR Sheet', dimensions: '1.60 mm – <3.00 mm; Width 1250/1500/2000/2500 mm', hsn_code: '72083930', min_thickness_mm: 1.60, max_thickness_mm: 2.99 },
+  { category: 'Flat Steel', product_name: 'HR Sheet', dimensions: '3.00 mm – <4.75 mm; Width 1250/1500/2000/2500 mm', hsn_code: '72083830', min_thickness_mm: 3.00, max_thickness_mm: 4.74 },
+  { category: 'Flat Steel', product_name: 'HR Sheet', dimensions: '4.75 mm – <12.00 mm; Width 1250/1500/2000/2500 mm', hsn_code: '72083730', min_thickness_mm: 4.75, max_thickness_mm: 11.99 },
+  { category: 'Flat Steel', product_name: 'HR Plate', dimensions: '14.00 mm and above; Width 1250/1500/2000/2500 mm', hsn_code: '72085110', min_thickness_mm: 12.00, max_thickness_mm: 999.0 },
+  { category: 'Flat Steel', product_name: 'HRPO Coil', dimensions: '1.60 mm – <3.00 mm; Width 1250/1500 mm', hsn_code: '72083940', min_thickness_mm: 1.60, max_thickness_mm: 2.99 },
+  { category: 'Flat Steel', product_name: 'HRPO Coil', dimensions: '3.00 mm – <4.75 mm; Width 1250/1500 mm', hsn_code: '72083840', min_thickness_mm: 3.00, max_thickness_mm: 4.74 },
+  { category: 'Flat Steel', product_name: 'HRPO Coil', dimensions: '4.75 mm – 12.00 mm; Width 1250/1500 mm', hsn_code: '72082590', min_thickness_mm: 4.75, max_thickness_mm: 12.00 },
+  { category: 'Flat Steel', product_name: 'HRPO Sheet', dimensions: '1.60 mm – <3.00 mm; Width 1250/1500 mm', hsn_code: '72082590', min_thickness_mm: 1.60, max_thickness_mm: 2.99 },
+  { category: 'Flat Steel', product_name: 'HRPO Sheet', dimensions: '3.00 mm – <4.75 mm; Width 1250/1500 mm', hsn_code: '72082590', min_thickness_mm: 3.00, max_thickness_mm: 4.74 },
+  { category: 'Flat Steel', product_name: 'HRPO Sheet', dimensions: '4.75 mm – 12.00 mm; Width 1250/1500 mm', hsn_code: '72082590', min_thickness_mm: 4.75, max_thickness_mm: 12.00 },
+  { category: 'Flat Steel', product_name: 'CR Coil', dimensions: '0.30 mm – <0.50 mm; Width 1250/1500 mm', hsn_code: '72091890', min_thickness_mm: 0.30, max_thickness_mm: 0.49 },
+  { category: 'Flat Steel', product_name: 'CR Coil', dimensions: '0.50 mm – 1.00 mm; Width 1250/1500 mm', hsn_code: '72091790', min_thickness_mm: 0.50, max_thickness_mm: 1.00 },
+  { category: 'Flat Steel', product_name: 'CR Coil', dimensions: '>1.00 mm – <3.00 mm; Width 1250/1500 mm', hsn_code: '72091690', min_thickness_mm: 1.01, max_thickness_mm: 2.99 },
+  { category: 'Flat Steel', product_name: 'CR Sheet', dimensions: '0.30 mm – <0.50 mm; Width 1250/1500 mm', hsn_code: '72092820', min_thickness_mm: 0.30, max_thickness_mm: 0.49 },
+  { category: 'Flat Steel', product_name: 'CR Sheet', dimensions: '0.50 mm – 1.00 mm; Width 1250/1500 mm', hsn_code: '72092720', min_thickness_mm: 0.50, max_thickness_mm: 1.00 },
+  { category: 'Flat Steel', product_name: 'CR Sheet', dimensions: '>1.00 mm – <3.00 mm; Width 1250/1500 mm', hsn_code: '72092620', min_thickness_mm: 1.01, max_thickness_mm: 2.99 },
+  { category: 'Flat Steel', product_name: 'GP Coil', dimensions: '0.30 mm – 3.00 mm; Width 900/1220/1250/1500 mm', hsn_code: '72104900', min_thickness_mm: 0.30, max_thickness_mm: 3.00 },
+  { category: 'Flat Steel', product_name: 'GP Sheet', dimensions: '0.30 mm – 3.00 mm; Width 900/1220/1250/1500 mm', hsn_code: '72104900', min_thickness_mm: 0.30, max_thickness_mm: 3.00 },
+  { category: 'Flat Steel', product_name: 'Galvalume Coil', dimensions: '0.30 mm – 3.00 mm; Width ≥600 mm', hsn_code: '72106100', min_thickness_mm: 0.30, max_thickness_mm: 3.00 },
+  { category: 'Flat Steel', product_name: 'Galvalume Sheet', dimensions: '0.30 mm – 3.00 mm; Width ≥600 mm', hsn_code: '72106100', min_thickness_mm: 0.30, max_thickness_mm: 3.00 },
+  { category: 'Flat Steel', product_name: 'Chequered Coil', dimensions: '1.60 mm – 12.00 mm; Width 1250/1500 mm', hsn_code: '72081000', min_thickness_mm: 1.60, max_thickness_mm: 12.00 },
+  { category: 'Flat Steel', product_name: 'Chequered Sheet', dimensions: '1.60 mm – 12.00 mm; Width 1250/1500 mm', hsn_code: '72081000', min_thickness_mm: 1.60, max_thickness_mm: 12.00 },
+
+  // Structural Steel
+  { category: 'Structural Steel', product_name: 'MS Round Bar', dimensions: '6 mm – 75 mm', hsn_code: '72149990' },
+  { category: 'Structural Steel', product_name: 'MS Flat Bar', dimensions: '12×3 mm – 300×25 mm', hsn_code: '72111410' },
+  { category: 'Structural Steel', product_name: 'MS Square Bar', dimensions: '6 mm – 100 mm', hsn_code: '72149990' },
+  { category: 'Structural Steel', product_name: 'TMT Bar', dimensions: '8 mm – 40 mm', hsn_code: '72142090' },
+  { category: 'Structural Steel', product_name: 'MS Angle', dimensions: 'L or T sections, height <80 mm', hsn_code: '72162100', max_thickness_mm: 79.99 },
+  { category: 'Structural Steel', product_name: 'MS Angle', dimensions: 'L or T sections, height ≥80 mm', hsn_code: '72162200', min_thickness_mm: 80.00 },
+  { category: 'Structural Steel', product_name: 'MS Channel', dimensions: '70×35 mm – 400×100 mm', hsn_code: '72163100' },
+  { category: 'Structural Steel', product_name: 'MS Beam', dimensions: 'height ≥ 80 mm', hsn_code: '72163200', min_thickness_mm: 80.00 },
+
+  // Pipes and Tubes
+  { category: 'Pipes and Tubes', product_name: 'MS Round Pipe', dimensions: 'NB 15–400 mm; OD 21.3–406.4 mm; Thickness 1–25 mm', hsn_code: '73063090' },
+  { category: 'Pipes and Tubes', product_name: 'MS Square Pipe', dimensions: 'Thickness 1–25 mm', hsn_code: '73063090' },
+  { category: 'Pipes and Tubes', product_name: 'MS Rectangular Tube', dimensions: 'Thickness 1–25 mm', hsn_code: '73063090' },
+
+  // Value Added Products
+  { category: 'Value Added Products', product_name: 'Slotted Angle', dimensions: '30×30 mm; Thickness 1.2–3 mm; Length 1.8–3 m', hsn_code: '72169930' },
+  { category: 'Value Added Products', product_name: 'Slotted Angle', dimensions: '40×40 mm; Thickness 1.2–3 mm; Length 1.8–3 m', hsn_code: '72169930' },
+  { category: 'Value Added Products', product_name: 'Slotted Angle', dimensions: '50×50 mm; Thickness 1.2–3 mm; Length 1.8–3 m', hsn_code: '72169930' },
+  { category: 'Value Added Products', product_name: 'Slotted Angle', dimensions: '60×60 mm; Thickness 1.2–3 mm; Length 1.8–3 m', hsn_code: '72169930' },
+  { category: 'Value Added Products', product_name: 'Solar Mounting Structure', dimensions: 'C Channel / Z Purlin / Hat Section; Ground/Roof/Elevated', hsn_code: '73089090' },
+  { category: 'Value Added Products', product_name: 'Cable Tray – Perforated', dimensions: 'Width 50–1200 mm', hsn_code: '73089090' },
+  { category: 'Value Added Products', product_name: 'Cable Tray – Ladder', dimensions: 'Width 50–1200 mm', hsn_code: '73089090' },
+  { category: 'Value Added Products', product_name: 'GI Earthing Strip', dimensions: 'Hot-Dip Galvanized Steel Strip; Width <600 mm', hsn_code: '73082019' },
+];
+
+function extractThickness(str?: string): number | null {
+  if (!str || typeof str !== 'string') return null;
+  if (/>1(?:\.0+)?\s*mm/i.test(str)) return 1.5;
+
+  const mThk = str.match(/(\d+(?:\.\d+)?)\s*(?:mm\s*thk|thk|thick|gauge|g\b)/i);
+  if (mThk) return parseFloat(mThk[1]);
+
+  const nums = str.match(/\d+(?:\.\d+)?/g);
+  if (nums && nums.length > 1) {
+    const floatNums = nums.map((n) => parseFloat(n));
+    const candidates = floatNums.filter((n) => n > 0 && n <= 50);
+    if (candidates.length > 0) {
+      return Math.min(...candidates);
+    }
   }
 
-  // 2. Galvanized / GI Sheet / GI Coil
-  if (/\bgalvanized\b|\bgalvanised\b|\bgi\s*(?:sheet|coil|pipe|corrugated|plain)?\b|\bgp\s*sheet\b/i.test(text)) {
-    return '72104900';
+  const m =
+    str.match(/(\d+(?:\.\d+)?)\s*(?:mm)/i) ||
+    str.match(/\b(\d+(?:\.\d+)?)\s*x\s*\d+/i) ||
+    str.match(/x\s*(\d+(?:\.\d+)?)$/i);
+  if (m) return parseFloat(m[1]);
+  return null;
+}
+
+function extractHeight(str?: string): number | null {
+  if (!str || typeof str !== 'string') return null;
+  if (/<80\s*mm/i.test(str)) return 50;
+  if (/(?:>=|≥|above)\s*80\s*mm/i.test(str)) return 100;
+  const m =
+    str.match(/(?:isa\s*|angle\s*)?(\d+)\s*x\s*(\d+)/i) ||
+    str.match(/(\d+)\s*mm/i);
+  if (m) return parseFloat(m[1]);
+  return null;
+}
+
+function normalizeText(text?: string): string {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[._\-\/]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function detectHsnCode(
+  productName: string,
+  dimensions?: string,
+): string {
+  const pName = (productName || '').toLowerCase().trim();
+  const dStr = (dimensions || '').toLowerCase().trim();
+  const combined = `${pName} ${dStr}`.trim();
+  if (!combined) return '72083840';
+
+  const normCombined = normalizeText(combined);
+
+  const t = extractThickness(dimensions) || extractThickness(productName);
+
+  // --- Priority 1: Value Added Products ---
+  if (/\bearthing\b/i.test(normCombined)) {
+    return '73082019';
   }
 
-  // 3. Chequered / Checkered Plate
-  if (/\bchequered\b|\bcheckered\b|\bchequred\b/i.test(text)) {
-    return '72085100';
+  if (/\bsolar\b|\bz\s*purlin\b|\bhat\s*section\b/i.test(normCombined)) {
+    return '73089090';
   }
 
-  // 4. Square Pipe / Rectangular Pipe / Hollow Sections
+  if (/\bcable\s*tray\b/i.test(normCombined)) {
+    return '73089090';
+  }
+
+  if (/\bslotted\s*angle\b|\bslotted\b/i.test(normCombined)) {
+    return '72169930';
+  }
+
+  // --- Priority 2: Pipes and Tubes ---
+  if (/\bsquare\s*(?:pipe|tube|tubing)\b|\bshs\b/i.test(normCombined)) {
+    return '73063090';
+  }
+
   if (
-    /\bsquare\s*(?:pipe|tube|tubing|hollow)\b|\bshs\b|\brectangular\s*(?:pipe|tube|tubing|hollow)\b|\brhs\b|\bbox\s*(?:pipe|section)\b/i.test(
-      text,
+    /\brectangular\s*(?:pipe|tube|tubing)\b|\brhs\b|\bbox\s*(?:pipe|section)\b/i.test(
+      normCombined,
     )
   ) {
     return '73063090';
   }
 
-  // 5. Round Pipe / ERW Pipe / Seamless Pipe
   if (
-    /\bround\s*pipe\b|\berw\s*pipe\b|\berw\b|\bseamless\s*pipe\b|\bseamless\b|\bms\s*pipe\b|\bsteel\s*pipe\b|\bpipe\b|\btube\b/i.test(
-      text,
+    /\bround\s*pipe\b|\berw\s*pipe\b|\bseamless\s*pipe\b|\bms\s*pipe\b|\bpipe\b|\btube\b/i.test(
+      normCombined,
     )
   ) {
-    return '73061090';
+    return '73063090';
   }
 
-  // 6. MS Beam / Joist / I-Beam / H-Beam
+  // --- Priority 3: Structural Steel ---
   if (
-    /\bi-beam\b|\bh-beam\b|\bbeam\b|\bjoist\b|\bismb\b|\bisnb\b|\bisjb\b|\biswb\b|\bnpb\b|\bwfb\b|\buc\s*column\b|\bub\s*beam\b/i.test(
-      text,
+    /\bround\s*bar\b|\bbright\s*bar\b|\bround\s*rod\b|\bms\s*rod\b/i.test(
+      normCombined,
+    )
+  ) {
+    return '72149990';
+  }
+
+  if (
+    /\bflat\s*bar\b|\bms\s*flat\b|\bflats\b|\bpatti\b/i.test(normCombined) ||
+    (/\bflat\b/i.test(normCombined) && !/\bflat\s*steel\b/i.test(normCombined))
+  ) {
+    return '72111410';
+  }
+
+  if (/\bsquare\s*bar\b|\bsq\s*bar\b|\bsquare\s*rod\b/i.test(normCombined)) {
+    return '72149990';
+  }
+
+  if (
+    /\btmt\b|\brebar\b|\breinforcement\b|\bfe\s*500\b|\bfe\s*550\b|\bsariya\b/i.test(
+      normCombined,
+    )
+  ) {
+    return '72142090';
+  }
+
+  if (/\bangle\b|\bisa\b|\bl\s*angle\b/i.test(normCombined)) {
+    const h = extractHeight(dimensions) || extractHeight(productName);
+    if (h !== null && h >= 80) return '72162200';
+    return '72162100';
+  }
+
+  if (
+    /\bchannel\b|\bismc\b|\bisjc\b|\bispc\b|\bc\s*channel\b|\bu\s*channel\b/i.test(
+      normCombined,
+    )
+  ) {
+    return '72163100';
+  }
+
+  if (
+    /\bbeam\b|\bismb\b|\bisnb\b|\bjoist\b|\bi\s*beam\b|\bh\s*beam\b|\bnpb\b|\bwfb\b|\buc\s*column\b|\bub\s*beam\b/i.test(
+      normCombined,
     )
   ) {
     return '72163200';
   }
 
-  // 7. MS Channel / Channel Section
-  if (/\bchannel\b|\bismc\b|\bisjc\b|\bispc\b/i.test(text)) {
-    return '72163100';
+  // --- Priority 4: Flat Steel ---
+  // Chequered
+  if (/\bchequered\b|\bcheckered\b/i.test(normCombined)) {
+    return '72081000';
   }
 
-  // 8. MS Angle / Angle Iron
-  if (/\bangle\b|\bisa\b/i.test(text)) {
-    return '72162100';
+  // Galvalume
+  if (/\bgalvalume\b|\bgl\s*coil\b|\bgl\s*sheet\b/i.test(normCombined)) {
+    return '72106100';
   }
 
-  // 9. TMT Bar / TMT Rebar / Reinforcement Bar
+  // Galvanized (GP / GI)
+  if (/\bgp\b|\bgi\b|\bgalvanized\b|\bgalvanised\b/i.test(normCombined)) {
+    return '72104900';
+  }
+
+  // HRPO / Pickled & Oiled / Pickled Coil / H.R. Pickled Coil
   if (
-    /\btmt\b|\brebar\b|\breinforcement\b|\bfe\s*500\b|\bfe\s*550\b|\bfe\s*500d\b|\btor\s*steel\b|\bthermex\b/i.test(
-      text,
-    )
+    /\bhrpo\b|\bpickled\b|\bpickled\s*(?:and|&)?\s*oiled\b/i.test(
+      normCombined,
+    ) ||
+    /\bh\s*r\s*p\s*o\b/i.test(normCombined) ||
+    (/\bh\s*r\b/i.test(normCombined) && /\bpickled\b/i.test(normCombined))
   ) {
-    return '72139190';
+    const isSheet = /\bsheet\b/i.test(normCombined);
+    if (isSheet) {
+      return '72082590';
+    }
+    // Coil (or default HRPO coil)
+    if (t !== null) {
+      if (t >= 1.6 && t < 3.0) return '72083940';
+      if (t >= 3.0 && t < 4.75) return '72083840';
+      if (t >= 4.75) return '72082590';
+    }
+    return '72083940';
   }
 
-  // 10. Flat Bar / MS Flat Bar / MS Flat
-  if (/\bflat\s*bar\b|\bms\s*flat\s*bar\b|\bms\s*flat\b|\bflats\b|\bpatti\b|\bflat\b/i.test(text)) {
-    return '72149100';
+  // CR / CRCA / Cold Rolled
+  if (/\bcr\b|\bcrca\b|\bcold\s*rolled\b/i.test(normCombined)) {
+    const isSheet = /\bsheet\b/i.test(normCombined);
+    if (isSheet) {
+      if (t !== null) {
+        if (t < 0.5) return '72092820';
+        if (t <= 1.0) return '72092720';
+        return '72092620';
+      }
+      return '72092720';
+    }
+    // Coil
+    if (t !== null) {
+      if (t < 0.5) return '72091890';
+      if (t <= 1.0) return '72091790';
+      return '72091690';
+    }
+    return '72091790';
   }
 
-  // 11. Square Bar / MS Square Bar
-  if (/\bsquare\s*bar\b|\bms\s*square\s*bar\b|\bsq\s*bar\b|\bsquare\s*rod\b/i.test(text)) {
-    return '72142000';
-  }
-
-  // 12. Round Bar / MS Round Bar
-  if (/\bround\s*bar\b|\bms\s*round\s*bar\b|\bms\s*round\b|\bbright\s*bar\b|\bround\s*rod\b|\bwire\s*rod\b/i.test(text)) {
-    return '72141000';
-  }
-
-  // 13. CR Coil / Cold Rolled Coil / CR Sheet / CRCA
-  if (/\bcold\s*rolled\b|\bcrca\b|\bcr\s*coils?\b|\bcr\s*sheets?\b|\bcr\s*plates?\b|\bcr\b/i.test(text)) {
-    return '72092900';
-  }
-
-  // 14. HR Coil / Hot Rolled Coil / HR Sheet
-  if (/\bhot\s*rolled\b|\bhr\s*coils?\b|\bhr\s*sheets?\b|\bhr\s*plates?\b|\bhrpo\b|\bhr\b/i.test(text)) {
-    return '72082700';
-  }
-
-  // 15. MS Sheet / MS Plate / Mild Steel Sheet / Mild Steel Plate
+  // HR Plate
   if (
-    /\bms\s*sheets?\b|\bms\s*plates?\b|\bmild\s*steel\s*sheets?\b|\bmild\s*steel\s*plates?\b|\bmild\s*steel\b|\bis\s*2062\b|\be250\b|\be350\b|\bplates?\b|\bsheets?\b|\bms\b/i.test(
-      text,
-    )
+    /\bplate\b/i.test(normCombined) &&
+    (/\bhr\b|\bhot\s*rolled\b|\bms\b/i.test(normCombined) ||
+      normCombined.includes('plate'))
   ) {
-    return '72083730';
+    if (t !== null && t < 12.0) return '72083730';
+    return '72085110';
   }
 
-  return '';
+  // HR Sheet
+  if (
+    /\bsheet\b/i.test(normCombined) &&
+    (/\bhr\b|\bhot\s*rolled\b|\bms\b/i.test(normCombined) ||
+      normCombined.includes('sheet'))
+  ) {
+    if (t !== null) {
+      if (t < 3.0) return '72083930';
+      if (t < 4.75) return '72083830';
+      return '72083730';
+    }
+    return '72083830';
+  }
+
+  // HR Coil / Hot Rolled Coil / HR / Hot Rolled
+  if (/\bhr\b|\bhot\s*rolled\b/i.test(normCombined)) {
+    if (t !== null) {
+      if (t < 3.0) return '72083940';
+      if (t < 4.75) return '72083840';
+      return '72083740';
+    }
+    return '72083840';
+  }
+
+  // Stainless Steel
+  if (/\bstainless\b|\bss\b/i.test(normCombined)) {
+    return '72193390';
+  }
+
+  return '72083840';
 }

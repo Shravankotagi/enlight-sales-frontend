@@ -1,7 +1,6 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   Home,
-  LayoutDashboard,
   Users,
   FileText,
   BarChart3,
@@ -21,7 +20,6 @@ import { useAuth } from '../context/AuthContext';
 const navItems = [
   { path: '/home', label: 'Dashboard', icon: Home },
   { path: '/assistant', label: 'AI Assistant', icon: Sparkles },
-  { path: '/pipeline', label: 'Pipeline', icon: LayoutDashboard },
   { path: '/inquiries', label: 'Inquiries', icon: FileText },
   { path: '/orders', label: 'Orders', icon: ShoppingBag },
   { path: '/customers', label: 'Customers', icon: Users },

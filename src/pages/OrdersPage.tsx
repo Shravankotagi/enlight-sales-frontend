@@ -68,6 +68,43 @@ interface Order {
   media_urls?: string[];
   deal_items?: DealItem[];
   raw_text?: string;
+  source_channel?: string;
+  inquiries?: {
+    source_channel?: string;
+    inquiry_type?: string;
+  };
+}
+
+export function getOrderSourceChannel(ord?: Order | null): string {
+  if (!ord) return 'Dashboard';
+  const channel = (
+    ord.source_channel ||
+    ord.inquiries?.source_channel ||
+    ''
+  ).toLowerCase().trim();
+
+  // Explicit WhatsApp signals
+  if (
+    channel.startsWith('whatsapp') ||
+    channel === 'wa' ||
+    Boolean((ord.inquiries as any)?.whatsapp_message_id)
+  ) {
+    return 'WhatsApp';
+  }
+
+  // Dashboard / Web / Manual signals or default
+  if (
+    channel === 'web_dashboard' ||
+    channel === 'dashboard' ||
+    channel === 'purchase_order' ||
+    channel === 'manual' ||
+    channel === 'web' ||
+    !channel
+  ) {
+    return 'Dashboard';
+  }
+
+  return channel.includes('whatsapp') ? 'WhatsApp' : 'Dashboard';
 }
 
 interface LineItemDetail {
@@ -130,7 +167,7 @@ export function formatOrderSourceText(ord?: Order | null): string {
 }
 
 export function formatDeliveryLocation(raw?: string): string {
-  if (!raw || !raw.trim() || raw === '-') return '—';
+  if (!raw || !raw.trim() || raw === '-') return '-';
   const text = raw.trim();
 
   // If already clean and short (e.g. "Chakan, Maharashtra" or "Talegaon, Maharashtra")
@@ -237,7 +274,7 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
   }
 
   // Thickness patterns if dimensions already extracted or present: e.g. "8 MM THK", "10 MM THK", "1.2mm", "1.4 mm"
-  if (dims && dims !== '—' && dims !== '-') {
+  if (dims && dims !== '-' && dims !== '-') {
     sku = sku.replace(/\b\d+(?:\.\d+)?\s*(?:mm\s*thk|mm|thk|thick)\b/gi, '');
   }
 
@@ -251,7 +288,7 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
 
   return {
     materialDescription: sku || (rawSku || 'Steel Material').trim(),
-    dimensions: dims || '—',
+    dimensions: dims || '-',
   };
 }
 
@@ -394,6 +431,7 @@ export default function OrdersPage() {
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
   const [selectedPoOrder, setSelectedPoOrder] = useState<Order | null>(null);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [loadingPoId, setLoadingPoId] = useState<string | null>(null);
 
   // Send / Share Modal
   const [showSendModal, setShowSendModal] = useState(false);
@@ -473,9 +511,13 @@ export default function OrdersPage() {
     },
   ]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | File[] } }) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if ('value' in e.target) {
+      (e.target as HTMLInputElement).value = '';
+    }
 
     setPoFileName(file.name);
     setIsParsingDoc(true);
@@ -484,67 +526,96 @@ export default function OrdersPage() {
     reader.onload = async () => {
       try {
         const base64Data = reader.result as string;
-        setFormUploadedBase64(base64Data);
+
+        let mimeType = file.type;
+        if (!mimeType || mimeType === 'application/octet-stream') {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext === 'pdf') mimeType = 'application/pdf';
+          else if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+          else if (ext === 'webp') mimeType = 'image/webp';
+          else mimeType = 'application/pdf';
+        }
 
         const res = await inquiriesApi.parseDocument({
           file_base64: base64Data,
-          mime_type: file.type || 'image/jpeg',
+          mime_type: mimeType,
         });
 
-        const extraction = res?.data?.data || res?.data;
-        if (extraction) {
-          const rawCust =
-            extraction.customer?.name ||
-            extraction.customer_name ||
-            extraction.companyName ||
-            '';
-          if (rawCust && rawCust.trim().length > 0) {
-            setFormCustomerName(rawCust.trim());
-          }
-
-          const rawPhone =
-            extraction.customer?.phone ||
-            extraction.customer_phone ||
-            extraction.phone ||
-            '';
-          if (rawPhone && rawPhone.trim().length > 0) {
-            setFormCustomerPhone(rawPhone.trim());
-          }
-
-          if (extraction.po_number) {
-            setFormPoNumber(extraction.po_number);
-          }
-          if (extraction.po_date) {
-            setFormPoDate(extraction.po_date);
-          }
-          if (extraction.delivery_location) {
-            setFormDeliveryLocation(extraction.delivery_location);
-          }
-          if (extraction.payment_terms) {
-            setFormPaymentTerms(extraction.payment_terms);
-          }
-
-          if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
-            const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
-              const skuText = i.sku_text || i.description || 'Material';
-              return {
-                sku_text: skuText,
-                dimensions: i.dimensions || '',
-                hsn_code: i.hsn_code || i.hsn || detectHsnCode(skuText) || '',
-                quantity: Number(i.quantity) || 0,
-                unit: normalizeUnit(i.unit) || 'MT',
-                rate: Number(i.rate) || 0,
-                amount: Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0)),
-              };
-            });
-            setFormLineItems(mappedItems);
-          }
-
-          toast.success('PO Document parsed! Fields auto-filled.');
+        if (!res?.data?.success || !res?.data?.data) {
+          throw new Error(res?.data?.error || 'Failed to extract PO details from document');
         }
+
+        const extraction = res.data.data;
+        setFormUploadedBase64(base64Data);
+
+        const rawCust =
+          extraction.customer_name ||
+          extraction.customer?.name ||
+          extraction.companyName ||
+          extraction.company_name ||
+          '';
+        if (rawCust && String(rawCust).trim().length > 0) {
+          const cleanCust = String(rawCust).trim();
+          setFormCustomerName(cleanCust);
+        }
+
+        const rawPhone =
+          extraction.customer_phone ||
+          extraction.contact_phone ||
+          extraction.customer?.phone ||
+          extraction.phone ||
+          '';
+        const cleanPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
+        if (cleanPhone.length >= 10) {
+          setFormCustomerPhone(cleanPhone);
+        }
+
+        if (extraction.po_number) {
+          setFormPoNumber(String(extraction.po_number).trim());
+        }
+        if (extraction.po_date) {
+          let formattedDate = String(extraction.po_date).trim();
+          const dMatch = formattedDate.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+          if (dMatch) {
+            formattedDate = `${dMatch[3]}-${dMatch[2].padStart(2, '0')}-${dMatch[1].padStart(2, '0')}`;
+          }
+          setFormPoDate(formattedDate);
+        }
+        if (extraction.delivery_location) {
+          setFormDeliveryLocation(String(extraction.delivery_location).trim());
+        }
+        if (extraction.payment_terms) {
+          setFormPaymentTerms(String(extraction.payment_terms).trim());
+        }
+
+        if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
+          const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
+            const skuText = (i.sku_text || i.description || i.product || 'Material').trim();
+            const dims = (i.dimensions || '').trim();
+            const rawUnit = (i.unit || 'MT').trim();
+            const q = Number(i.quantity) || 0;
+            const r = Number(i.rate) || 0;
+            const amt = Number(i.amount) || Math.round(q * r);
+            return {
+              sku_text: skuText,
+              dimensions: dims,
+              hsn_code: (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '').trim(),
+              quantity: q,
+              unit: normalizeUnit(rawUnit) || 'MT',
+              rate: r,
+              amount: amt,
+            };
+          });
+          setFormLineItems(mappedItems);
+        }
+
+        toast.success('PO Document parsed! All details auto-filled.');
       } catch (err: any) {
         console.error('Error parsing PO document:', err);
-        toast.error('Could not auto-extract PO details. You can enter the fields manually.');
+        setFormUploadedBase64(null);
+        setPoFileName('');
+        toast.error(err?.message || 'Could not auto-extract PO details. You can enter the fields manually.');
       } finally {
         setIsParsingDoc(false);
       }
@@ -660,6 +731,7 @@ export default function OrdersPage() {
         total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim() || undefined,
+        source_channel: 'web_dashboard',
         line_items: formLineItems.map(i => ({
           sku_text: i.sku_text.trim(),
           dimensions: i.dimensions ? i.dimensions.trim() : undefined,
@@ -819,6 +891,10 @@ export default function OrdersPage() {
       return;
     }
 
+    // Immediately open modal in loading state so user sees instant feedback!
+    setLoadingPoId(ord.id);
+    setPoImageViewerUrl('loading://preview');
+
     // 2. Fetch full deal details from database to see if document is stored in deal or linked inquiry
     try {
       const res = await dealsApi.getOne(ord.id);
@@ -835,6 +911,8 @@ export default function OrdersPage() {
       }
     } catch (e) {
       console.warn('Could not load deal document attachment from API:', e);
+    } finally {
+      setLoadingPoId(null);
     }
 
     // 3. If no document attachment, open the structured text viewer without error toast
@@ -848,10 +926,10 @@ export default function OrdersPage() {
   const paginatedOrders = filtered.slice(startIndex, endIndex);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <ShoppingBag className="text-blue-600" size={28} />
             Orders &amp; Delivery Management
           </h1>
@@ -905,9 +983,7 @@ export default function OrdersPage() {
             <p className="text-2xl font-bold text-indigo-600 mt-1">
               {totalTonnage.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
             </p>
-            {totalTonnageResult.hasUnconvertible && (
-              <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
-            )}
+            
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
             <Truck size={22} />
@@ -1009,7 +1085,7 @@ export default function OrdersPage() {
                 <th className="px-5 py-3 text-left w-[26%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
                 <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
-                <th className="px-4 py-3 text-center w-[14%]">Order Tonnage (MT)</th>
+                <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
               </tr>
@@ -1065,8 +1141,8 @@ export default function OrdersPage() {
                           <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap font-mono text-xs">
-                        {ordTonnage.totalMt > 0 ? `${ordTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT` : '—'}
+                      <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
+                        {getOrderSourceChannel(ord)}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
                         {formatDeliveryLocation(ord.delivery_location)}
@@ -1098,9 +1174,13 @@ export default function OrdersPage() {
                                   setOpenActionMenuId(null);
                                   handleViewPoDocument(ord);
                                 }}
-                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                                <Eye size={14} className="text-slate-500 shrink-0" />
-                                <span>View PO</span>
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors cursor-pointer">
+                                {loadingPoId === ord.id ? (
+                                  <RefreshCw size={14} className="animate-spin text-blue-600 shrink-0" />
+                                ) : (
+                                  <Eye size={14} className="text-slate-500 shrink-0" />
+                                )}
+                                <span>{loadingPoId === ord.id ? 'Opening...' : 'View PO'}</span>
                               </button>
                               <button
                                 type="button"
@@ -1244,17 +1324,7 @@ export default function OrdersPage() {
               )}
             </div>
 
-            <div className="pt-2 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSendModal(false);
-                  setResendNotice('');
-                }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
-                Cancel
-              </button>
-
+            <div className="pt-2 flex justify-end">
               <button
                 type="button"
                 disabled={sendingEmail || !sendEmail.trim()}
@@ -1276,7 +1346,7 @@ export default function OrdersPage() {
                           const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
                           return {
                             sku_text: materialDescription,
-                            dimensions: dimensions !== '—' && dimensions !== '-' ? dimensions : '',
+                            dimensions: dimensions !== '-' && dimensions !== '-' ? dimensions : '',
                             hsn_code: i.hsn_code || '7208',
                             quantity: Number(i.quantity) || 0,
                             unit: normalizeUnit(i.unit) || 'MT',
@@ -1318,7 +1388,7 @@ export default function OrdersPage() {
                     };
 
                     const res = await inquiriesApi.sendQuotation(shareOrder.id, payload);
-                    const msg = res?.data?.message || res?.data?.data?.message || `PO Quotation dispatched to ${targetEmail}!`;
+                    const msg = res?.data?.message || res?.data?.data?.message || `PO Document dispatched to ${targetEmail}!`;
                     setResendNotice(msg);
                     toast.success(msg);
                     if (res?.data?.email_sent !== false) {
@@ -1338,7 +1408,7 @@ export default function OrdersPage() {
                 }}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
                 {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>{sendingEmail ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}</span>
+                <span>{sendingEmail ? 'Dispatching Email & PO...' : 'Share PO Email'}</span>
               </button>
             </div>
           </div>
@@ -1360,9 +1430,11 @@ export default function OrdersPage() {
             <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
               <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <FileText size={18} className="text-blue-600" />
-                {poImageViewerUrl.startsWith('extracted_preview://')
-                  ? 'Original Customer Inquiry Message'
-                  : 'Original Purchase Order (PO) Document / WhatsApp Image'}
+                {poImageViewerUrl === 'loading://preview'
+                  ? 'Purchase Order (PO) Document'
+                  : poImageViewerUrl.startsWith('extracted_preview://')
+                    ? 'Original Customer Inquiry Message'
+                    : 'Original Purchase Order (PO) Document / WhatsApp Image'}
               </span>
               <button
                 onClick={() => {
@@ -1374,7 +1446,22 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            {poImageViewerUrl.startsWith('extracted_preview://') ? (
+            {poImageViewerUrl === 'loading://preview' ? (
+              <div className="w-full h-[60vh] flex flex-col items-center justify-center bg-slate-50 rounded-xl p-8 border border-slate-200 space-y-4">
+                <div className="relative">
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-sm">
+                    <FileText size={28} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 p-1 bg-white rounded-full shadow-md">
+                    <RefreshCw size={16} className="animate-spin text-blue-600" />
+                  </div>
+                </div>
+                <div className="text-center space-y-1">
+                  <h4 className="text-sm font-bold text-slate-800">Opening Purchase Order...</h4>
+                  <p className="text-xs text-slate-500">Retrieving original PO document attachment and details</p>
+                </div>
+              </div>
+            ) : poImageViewerUrl.startsWith('extracted_preview://') ? (
               <div className="w-full space-y-3">
                 <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                   <span>Source Inquiry Text</span>
@@ -1471,6 +1558,18 @@ export default function OrdersPage() {
 
               <label
                 htmlFor="order-po-file-upload"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const files = e.dataTransfer.files;
+                  if (files && files.length > 0) {
+                    handleFileUpload({ target: { files } } as any);
+                  }
+                }}
                 className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
                 <input
                   id="order-po-file-upload"
@@ -1627,8 +1726,8 @@ export default function OrdersPage() {
                                 const newSku = e.target.value;
                                 const updated = [...formLineItems];
                                 const currentHsn = updated[idx]?.hsn_code || '';
-                                const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '');
-                                const newAutoHsn = detectHsnCode(newSku);
+                                const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions);
+                                const newAutoHsn = detectHsnCode(newSku, item.dimensions);
 
                                 let finalHsn = currentHsn;
                                 if (!currentHsn || currentHsn === prevAutoHsn) {
@@ -1649,8 +1748,18 @@ export default function OrdersPage() {
                                 required
                                 value={item.dimensions || ''}
                                 onChange={(e) => {
+                                  const newDim = e.target.value;
                                   const updated = [...formLineItems];
-                                  updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                  const currentHsn = updated[idx]?.hsn_code || '';
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions);
+                                  const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
+
+                                  let finalHsn = currentHsn;
+                                  if (!currentHsn || currentHsn === prevAutoHsn) {
+                                    finalHsn = newAutoHsn;
+                                  }
+
+                                  updated[idx] = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
                                   setFormLineItems(updated);
                                 }}
                                 className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
@@ -1769,7 +1878,7 @@ export default function OrdersPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                    { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
                                   ];
                                   setFormLineItems(updated);
                                 }}

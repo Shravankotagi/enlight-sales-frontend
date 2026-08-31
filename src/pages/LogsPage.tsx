@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Calendar,
   Check,
+  History,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
@@ -160,35 +161,35 @@ export default function LogsPage() {
     switch (mod) {
       case 'Inquiries':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold tracking-wider bg-blue-50 text-blue-700 border border-blue-200 uppercase shadow-2xs">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-blue-50 text-blue-700 border border-blue-200 uppercase shadow-2xs">
             <FileText size={12} className="text-blue-600" />
             Inquiries
           </span>
         );
       case 'Orders':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase shadow-2xs">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase shadow-2xs">
             <ShoppingCart size={12} className="text-emerald-600" />
             Orders
           </span>
         );
       case 'Visits':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold tracking-wider bg-purple-50 text-purple-700 border border-purple-200 uppercase shadow-2xs">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-purple-50 text-purple-700 border border-purple-200 uppercase shadow-2xs">
             <MapPin size={12} className="text-purple-600" />
             Visits
           </span>
         );
       case 'Complaints':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold tracking-wider bg-rose-50 text-rose-700 border border-rose-200 uppercase shadow-2xs">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-rose-50 text-rose-700 border border-rose-200 uppercase shadow-2xs">
             <AlertTriangle size={12} className="text-rose-600" />
             Complaints
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold tracking-wider bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-slate-100 text-slate-700 border border-slate-200 uppercase">
             <Layers size={12} className="text-slate-500" />
             {mod || 'General'}
           </span>
@@ -271,11 +272,12 @@ export default function LogsPage() {
             : 'last 30 days';
 
   return (
-    <div className="w-full space-y-6 animate-fade-in pb-12 font-sans text-slate-800">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Top Eyebrow & Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <History className="text-blue-600" size={28} />
             Activity Logs
           </h1>
         </div>
@@ -428,7 +430,7 @@ export default function LogsPage() {
           {groupedLogs.map((group) => (
             <div key={group.dateLabel} className="space-y-3">
               {/* Date Group Heading (e.g. 26 AUG 2026) */}
-              <div className="text-[11px] font-mono tracking-[0.25em] text-slate-500 uppercase font-bold pl-8 flex items-center gap-3">
+              <div className="text-[11px] tracking-[0.25em] text-slate-500 uppercase font-bold pl-8 flex items-center gap-3">
                 <span>{group.dateLabel}</span>
                 <div className="h-[1px] flex-1 bg-slate-200"></div>
               </div>

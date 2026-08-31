@@ -431,7 +431,7 @@ export function calculateSubtotal(lineItems: LineItemInput[]): number {
 }
 
 /**
- * Strict Forward GST calculation: always forward on line amount — never reverse calculated.
+ * Strict Forward GST calculation: always forward on line amount - never reverse calculated.
  */
 export function calculateGst(baseAmount: number, gstRate: number = DEFAULT_GST_RATE): number {
   const base = Number(baseAmount) || 0;
@@ -553,7 +553,7 @@ export function calculatePricingSummary(
   if (inputObj) {
     const statedGrand = Number(inputObj.grand_total ?? inputObj.grandTotal ?? 0);
     if (statedGrand > 0 && Math.abs(statedGrand - grandTotal) > 2) {
-      calculationWarning = `Calculated total (₹${grandTotal.toLocaleString('en-IN')}) does not match PO document total (₹${statedGrand.toLocaleString('en-IN')}) — please review`;
+      calculationWarning = `Calculated total (₹${grandTotal.toLocaleString('en-IN')}) does not match PO document total (₹${statedGrand.toLocaleString('en-IN')}) - please review`;
     }
   }
 

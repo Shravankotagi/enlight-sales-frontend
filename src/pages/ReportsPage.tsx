@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
-import { TrendingUp, ShoppingBag, Package, RefreshCw } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3 } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -97,7 +97,6 @@ export default function ReportsPage() {
   }, [overview?.orders]);
 
   const totalMt = totalTonnageResult.totalMt;
-  const hasUnconvertible = totalTonnageResult.hasUnconvertible;
 
   // Exact parity for KPI cards:
   const totalDealsCount =
@@ -122,10 +121,15 @@ export default function ReportsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Reports &amp; Analytics</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <BarChart3 className="text-blue-600" size={28} />
+            Reports &amp; Analytics
+          </h1>
+        </div>
         <div className="flex items-center gap-2">
           <DateFilterControl onChange={setDateRange} />
           <button
@@ -196,7 +200,7 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          {/* SECTION 1 — Summary Cards */}
+          {/* SECTION 1 - Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {/* Card 1: Total Deals */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
@@ -210,14 +214,12 @@ export default function ReportsPage() {
               <p className="text-sm text-gray-500 mt-1">Won</p>
             </div>
 
-            {/* Card 3: Total Tonnage (MT) — auto-converted from all SKU units */}
+            {/* Card 3: Total Tonnage (MT) - auto-converted from all SKU units */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
               <p className="text-2xl font-bold text-emerald-600">
                 {totalMt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
               </p>
-              {hasUnconvertible && (
-                <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
-              )}
+              
               <p className="text-sm text-gray-500 mt-1">Total Tonnage (MT)</p>
             </div>
 
@@ -228,7 +230,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* SECTION 2 — Sales Funnel */}
+          {/* SECTION 2 - Sales Funnel */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <TrendingUp size={16} className="text-green-600" /> Sales Funnel
@@ -283,7 +285,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          {/* SECTION 3 — Top Customers + Lost Reasons */}
+          {/* SECTION 3 - Top Customers + Lost Reasons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Top Customers */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
@@ -334,7 +336,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* SECTION 4 — SKU Breakdown */}
+          {/* SECTION 4 - SKU Breakdown */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <Package size={16} className="text-indigo-600" /> SKU Breakdown
@@ -360,7 +362,7 @@ export default function ReportsPage() {
                       return (
                         <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                           <td className="px-5 py-3.5 text-left font-bold text-slate-900">
-                            {item.sku_text || item.sku || '—'}
+                            {item.sku_text || item.sku || '-'}
                           </td>
                           <td className="px-5 py-3.5 text-center text-xs">
                             {hsn ? (
@@ -368,7 +370,7 @@ export default function ReportsPage() {
                                 {hsn}
                               </span>
                             ) : (
-                              <span className="text-slate-400">—</span>
+                              <span className="text-slate-400">-</span>
                             )}
                           </td>
                           <td className="px-5 py-3.5 text-center font-semibold text-slate-800">
@@ -377,7 +379,7 @@ export default function ReportsPage() {
                           <td className="px-5 py-3.5 text-center font-bold text-emerald-700">
                             {item.total_value
                               ? `₹${Number(item.total_value).toLocaleString('en-IN')}`
-                              : '—'}
+                              : '-'}
                           </td>
                           <td className="px-5 py-3.5 text-center text-xs font-bold text-slate-700">
                             {item.deal_count || item.count || 1}

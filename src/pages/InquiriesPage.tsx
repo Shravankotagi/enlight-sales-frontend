@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, AlertCircle, Loader2
+  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2,
+  LayoutDashboard, IndianRupee, Trash2
 } from 'lucide-react';
+import DealDetailDrawer from '../components/DealDetailDrawer';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
@@ -103,19 +105,23 @@ function isProductInquiry(inq: InquiryItem): boolean {
   const textLower = rawText.toLowerCase();
   const aiJson = (inq?.ai_extraction_json as any) || {};
 
-  // 0. Exclude Purchase Orders (POs belong strictly to the Orders tab)
-  const isPurchaseOrder =
-    inq?.inquiry_type === 'purchase_order' ||
-    inq?.source_channel === 'whatsapp_po' ||
-    rawText.startsWith('[PO Document Attached:');
-  if (isPurchaseOrder) return false;
-
-  // 1. All official genuine inquiry channels
+  // 1. All official genuine inquiry channels & types (WhatsApp & Dashboard)
+  const channel = String(inq?.source_channel || '').toLowerCase();
   if (
     inq?.inquiry_type === 'inquiry' ||
+    inq?.inquiry_type === 'purchase_order' ||
+    inq?.inquiry_type === 'quotation_sent' ||
+    channel.includes('whatsapp') ||
+    channel.includes('dashboard') ||
+    channel === 'manual' ||
+    channel === 'form' ||
+    channel === 'upload' ||
+    inq?.source_channel === 'whatsapp' ||
     inq?.source_channel === 'whatsapp_text' ||
     inq?.source_channel === 'whatsapp_image' ||
-    inq?.source_channel === 'web_dashboard'
+    inq?.source_channel === 'whatsapp_po' ||
+    inq?.source_channel === 'web_dashboard' ||
+    inq?.source_channel === 'dashboard'
   ) {
     return true;
   }
@@ -124,6 +130,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
   const isDocument =
     rawText.startsWith('[Inquiry Attachment:') ||
     rawText.startsWith('[Inquiry Document Attached]') ||
+    rawText.startsWith('[PO Document Attached:') ||
     (Array.isArray(inq.media_urls) && inq.media_urls.length > 0 && inq.media_urls[0] !== 'attached_document');
   if (isDocument) return true;
 
@@ -141,7 +148,12 @@ function isProductInquiry(inq: InquiryItem): boolean {
     return true;
   }
 
-  // 4. Web Dashboard manual inquiry
+  // 4. Has customer name
+  if (inq?.sender_name || inq?.customer_name || aiJson.companyName || aiJson.customer_name) {
+    return true;
+  }
+
+  // 5. Web Dashboard manual inquiry
   if (inq?.source_channel === 'web_dashboard' && rawText.length > 0) {
     return true;
   }
@@ -316,7 +328,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   const senderNameLower = (inq?.sender_name || '').toLowerCase().trim();
 
-  // 1. Customer / Company Name (Strictly customer only — NEVER salesperson profile or product name)
+  // 1. Customer / Company Name (Strictly customer only - NEVER salesperson profile or product name)
   let candidateName =
     aiJson.customer?.name ||
     aiJson.customer_name ||
@@ -436,7 +448,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   }
   const productType = cleanProductType(rawPt || 'HR Coil');
 
-  // 4. Dimensions (Thickness x Width x Length) — extract only what is stated
+  // 4. Dimensions (Thickness x Width x Length) - extract only what is stated
   let thickness = '';
   let width = '';
   let length = '';
@@ -598,10 +610,15 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
   let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => {
     const skuText = item.sku_text || item.description || '';
+    const itemDim = item.dimensions || '';
     return {
       sku_text: skuText,
-      dimensions: item.dimensions || '',
-      hsn_code: item.hsn_code || (item as any).hsn || detectHsnCode(skuText) || '',
+      dimensions: itemDim,
+      hsn_code:
+        (item.hsn_code && item.hsn_code.trim()) ||
+        (item as any).hsn ||
+        detectHsnCode(skuText, itemDim) ||
+        '72083840',
       quantity: item.quantity,
       unit: normalizeUnit(item.unit) || 'MT',
       rate: item.rate,
@@ -618,17 +635,21 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     if (multiItems.length > 0) {
       rawLineItems = multiItems.map(m => ({
         ...m,
-        hsn_code: m.hsn_code || detectHsnCode(m.sku_text) || '',
+        hsn_code:
+          (m.hsn_code && m.hsn_code.trim()) ||
+          detectHsnCode(m.sku_text, m.dimensions) ||
+          '72083840',
       }));
     }
   }
 
   if (rawLineItems.length === 0 && (productType || quantityTons > 0)) {
     const defaultSku = productType || 'Hot Rolled';
+    const defaultDim = [thickness, width, length].filter(Boolean).join(' x ') || '';
     rawLineItems.push({
       sku_text: defaultSku,
-      dimensions: [thickness, width, length].filter(Boolean).join(' x ') || '',
-      hsn_code: detectHsnCode(defaultSku) || '',
+      dimensions: defaultDim,
+      hsn_code: detectHsnCode(defaultSku, defaultDim) || '72083840',
       quantity: quantityTons || 0,
       unit: 'MT',
       rate: unitPrice || 0,
@@ -680,11 +701,147 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   };
 }
 
+const DEFAULT_PIPELINE_STAGES = [
+  { key: 'new_inquiry', label: 'New Deals', color: 'bg-amber-50 border-amber-200' },
+  { key: 'qualified', label: 'Qualified', color: 'bg-emerald-50 border-emerald-200' },
+  { key: 'quoted', label: 'Quoted', color: 'bg-blue-50 border-blue-200' },
+  { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
+];
+
+function DealCard({ deal, onStageChange, onSelect, onDelete }: {
+  deal: any;
+  onStageChange: (id: string, stage: string, reason?: string) => void;
+  onSelect: (id: string) => void;
+  onDelete: (deal: any) => void;
+}) {
+  return (
+    <div
+      onClick={() => onSelect(deal.id)}
+      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
+    >
+      <div className="flex items-start justify-between mb-2 gap-1">
+        <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
+          {deal.customer_name || 'Unknown Customer'}
+        </h4>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+            ${deal.stage === 'won' || deal.inquiry_type === 'purchase_order'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-blue-100 text-blue-700'}`}>
+            {deal.stage === 'won' ? 'WON' : deal.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
+          </span>
+          <button
+            type="button"
+            title="Delete this deal and all records"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(deal);
+            }}
+            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+
+      {deal.po_number && (
+        <p className="text-xs text-gray-500 mb-1">PO: {deal.po_number}</p>
+      )}
+
+      {deal.deal_items && deal.deal_items.length > 0 && (
+        <div className="mb-2">
+          {deal.deal_items.slice(0, 2).map((item: any, i: number) => (
+            <p key={i} className="text-xs text-gray-600">
+              • {item.sku_text} - {item.quantity} {item.unit}
+            </p>
+          ))}
+          {deal.deal_items.length > 2 && (
+            <p className="text-xs text-gray-400">+{deal.deal_items.length - 2} more</p>
+          )}
+        </div>
+      )}
+
+      {(() => {
+        let computedTotal = Number(deal.total_amount) || 0;
+        if (
+          computedTotal <= 0 &&
+          Array.isArray(deal.deal_items) &&
+          deal.deal_items.length > 0
+        ) {
+          const subtotal = deal.deal_items.reduce((sum: number, item: any) => {
+            const amt =
+              Number(item.amount) ||
+              (Number(item.quantity) || 0) *
+                (Number(item.rate || item.quoted_price || item.price_per_mt) || 0);
+            return sum + amt;
+          }, 0);
+          if (subtotal > 0) {
+            computedTotal = subtotal + Math.round(subtotal * 0.18);
+          }
+        }
+
+        if (computedTotal > 0) {
+          return (
+            <div className="flex items-center gap-1 text-sm font-bold text-gray-900 my-1.5">
+              <IndianRupee size={13} className="text-gray-700" />
+              <span>{Number(computedTotal).toLocaleString('en-IN')}</span>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      <div className="mt-3 flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
+        {['qualified', 'quoted', 'negotiation', 'won', 'lost']
+          .filter(stage => {
+            const currentStage = (deal.stage || 'new_inquiry').toLowerCase().trim();
+            if ((currentStage === 'new_inquiry' || currentStage === 'review') && (stage === 'won' || stage === 'lost')) {
+              return false;
+            }
+            return true;
+          })
+          .map(stage => (
+            <button key={stage}
+              onClick={() => onStageChange(deal.id, stage)}
+              className={`text-xs px-2 py-1 rounded border transition-colors
+                ${stage === 'won'
+                  ? 'border-green-300 text-green-700 hover:bg-green-50'
+                  : stage === 'lost'
+                  ? 'border-red-300 text-red-700 hover:bg-red-50'
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}>
+              → {stage.charAt(0).toUpperCase() + stage.slice(1)}
+            </button>
+          ))}
+      </div>
+
+      <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+        <span className="text-gray-400 font-medium">
+          {new Date(deal.created_at).toLocaleDateString('en-IN')}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded tracking-wide uppercase">
+            #{deal.deal_number || (deal.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InquiriesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { effectivePhone, employee, viewingAs } = useAuth();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
+  const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'pipeline' ? 'pipeline' : 'table';
+  });
+  const [selectedPipelineDealId, setSelectedPipelineDealId] = useState<string | null>(null);
+  const [pipelineLostModal, setPipelineLostModal] = useState<{ dealId: string; reason: string } | null>(null);
+  const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
@@ -695,6 +852,19 @@ export default function InquiriesPage() {
     (selectedInquiry as any)?.salesperson_name ||
     (selectedInquiry as any)?.assigned_salesperson_name ||
     'Shravan Kotagi';
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('view') === 'pipeline') {
+      setViewMode('pipeline');
+    } else {
+      setViewMode('table');
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    document.title = viewMode === 'pipeline' ? 'Pipeline - Enlight Sales OS' : 'Inquiries - Enlight Sales OS';
+  }, [viewMode]);
+
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
@@ -702,7 +872,6 @@ export default function InquiriesPage() {
   const [existingCustomers, setExistingCustomers] = useState<string[]>([]);
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [showEditCompanyDropdown, setShowEditCompanyDropdown] = useState(false);
-  const [drawerError, setDrawerError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
@@ -927,11 +1096,13 @@ export default function InquiriesPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: rawDeals = [] } = useQuery<any[]>({
-    queryKey: ['deals', effectivePhone],
+  const { data: rawDeals = [], isFetching: dealsFetching, refetch: fetchDeals } = useQuery<any[]>({
+    queryKey: ['deals', effectivePhone, dateRange],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (dateRange.from) params.from = dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`;
+      if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
       const res = await dealsApi.getAll(params).catch(() => null);
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
@@ -939,17 +1110,61 @@ export default function InquiriesPage() {
     refetchInterval: 15000,
   });
 
+  const stageMutation = useMutation({
+    mutationFn: ({ id, stage, reason }: { id: string; stage: string; reason?: string }) =>
+      dealsApi.updateStage(id, stage, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      toast.success('Deal stage updated');
+      setPipelineLostModal(null);
+    },
+    onError: () => toast.error('Failed to update deal'),
+  });
+
+  const deleteDealMutation = useMutation({
+    mutationFn: (id: string) => dealsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      toast.success('Deal and all associated records deleted successfully');
+      setConfirmDeleteDeal(null);
+      setSelectedPipelineDealId(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'Failed to delete deal');
+    },
+  });
+
+  const handlePipelineStageChange = (id: string, stage: string) => {
+    if (stage === 'lost') {
+      setPipelineLostModal({ dealId: id, reason: '' });
+    } else {
+      stageMutation.mutate({ id, stage });
+    }
+  };
+
   const getLinkedDeal = (inq: InquiryItem, companyName?: string) => {
     if (!rawDeals || rawDeals.length === 0) return null;
+    // 1. Direct 1-to-1 match by inquiry_id
     const directMatch = rawDeals.find((d: any) => d.inquiry_id && d.inquiry_id === inq.id);
     if (directMatch) return directMatch;
 
+    // 2. Match ONLY to an active open in-progress deal for this customer (never closed won/lost)
     const cName = (companyName || inq.customer_name || inq.sender_name || '').toLowerCase().trim();
     if (cName && !isProductOrGenericName(cName)) {
       const matchingDeals = rawDeals.filter((d: any) => (d.customer_name || '').toLowerCase().trim() === cName);
       if (matchingDeals.length > 0) {
         const openDeal = matchingDeals.find((d: any) => !['won', 'lost'].includes((d.stage || '').toLowerCase()));
-        return openDeal || matchingDeals[0];
+        if (openDeal) return openDeal;
       }
     }
     return null;
@@ -981,30 +1196,38 @@ export default function InquiriesPage() {
 
   const getInquiryDealStageKey = (inq: InquiryItem, companyName?: string): string => {
     const linkedDeal = getLinkedDeal(inq, companyName);
-    const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
-    if (dealStage === 'won' || dealStage === 'lost' || dealStage === 'negotiation') {
-      return dealStage;
+    if (linkedDeal) {
+      const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
+      if (['won', 'lost', 'negotiation', 'quoted', 'qualified', 'new_inquiry'].includes(dealStage)) {
+        return dealStage === 'review' ? 'new_inquiry' : dealStage;
+      }
     }
-    if (dealStage === 'qualified' || dealStage === 'quoted') {
-      return dealStage;
-    }
+
     const details = parseInquiryText(inq.raw_text || '', inq);
-    const st = (inq.status || '').toLowerCase();
+    const st = (inq.status || '').toLowerCase().trim();
+    const isPo = inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po' || (inq.raw_text || '').includes('[PO Document Attached');
+    if (isPo && (st === 'confirmed' || st === 'won' || st === 'processed')) {
+      return 'won';
+    }
+    if (st === 'won') {
+      return 'won';
+    }
+
     const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
-    const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
-    const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
+    const isQuoted = (st === 'quoted' || st === 'quotation_sent') && (hasRates || inq.inquiry_type === 'quotation_sent');
+    const isConfirmed = (st === 'confirmed' || st === 'saved' || st === 'processed' || st === 'quotation_ready') && hasRates;
 
     if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
       return 'quoted';
     }
-    if (isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed' || inq.inquiry_type === 'purchase_order') {
+    if (isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed') {
       return 'qualified';
     }
-    if (st === 'review' || st === 'needs_review' || st === 'pending' || !st) {
+    if (st === 'review' || st === 'needs_review' || st === 'pending' || !st || st === 'new' || st === 'draft') {
       return 'new_inquiry';
     }
-    if (dealStage) {
-      return dealStage;
+    if (st === 'lost') {
+      return 'lost';
     }
     return 'new_inquiry';
   };
@@ -1184,13 +1407,18 @@ export default function InquiriesPage() {
 
     let activeItems: any[] = [];
     if (lineItemsSrc.length > 0) {
-      // Has structured line items in ai_extraction_json — use directly for ALL inquiries (review, confirmed, etc.)
+      // Has structured line items in ai_extraction_json - use directly for ALL inquiries (review, confirmed, etc.)
       const frozenLineItems = lineItemsSrc.map((item: any) => {
         const skuText = item.sku_text || item.description || '';
+        const itemDim = item.dimensions || '';
         return {
           sku_text: skuText,
-          dimensions: item.dimensions || '',
-          hsn_code: item.hsn_code || item.hsn || detectHsnCode(skuText) || '',
+          dimensions: itemDim,
+          hsn_code:
+            (item.hsn_code && item.hsn_code.trim()) ||
+            item.hsn ||
+            detectHsnCode(skuText, itemDim) ||
+            '72083840',
           quantity: Number(item.quantity) || 0,
           unit: item.unit || 'MT',
           rate: Number(item.rate) || 0,
@@ -1241,7 +1469,6 @@ export default function InquiriesPage() {
     const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
 
     setSaveSuccess(isConfirmedState || isQuotedState);
-    setDrawerError(null);
     setFieldErrors({});
   };
 
@@ -1251,7 +1478,6 @@ export default function InquiriesPage() {
     setSelectedInquiry(null);
     setEditDetails(null);
     setDrawerFileBase64(null);
-    setDrawerError(null);
   };
 
   useEffect(() => {
@@ -1336,12 +1562,6 @@ export default function InquiriesPage() {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      const rateErrMsg = Object.keys(errors).some(k => k.startsWith('rate_'))
-        ? 'Rate (₹) is mandatory and must be greater than 0 for all line items.'
-        : null;
-      const firstMsg = rateErrMsg || errors['companyName'] || Object.values(errors)[0] || 'Please complete all required fields.';
-      setDrawerError(firstMsg);
-      toast.error(firstMsg);
       setSaveSuccess(false);
 
       // Scroll to first invalid field
@@ -1355,7 +1575,6 @@ export default function InquiriesPage() {
     }
 
     setFieldErrors({});
-    setDrawerError(null);
     try {
       setSubmitting(true);
 
@@ -1611,10 +1830,15 @@ export default function InquiriesPage() {
         // Normalize line_items to match Review & Edit popup expectations
         const lineItems = extractedJson.line_items.map((li: any) => {
           const skuText = li.sku_text || li.description || li.material || li.sku || 'Material';
+          const liDim = li.dimensions || '';
           return {
             sku_text: skuText,
-            dimensions: li.dimensions || '',
-            hsn_code: li.hsn_code || li.hsn || detectHsnCode(skuText) || '',
+            dimensions: liDim,
+            hsn_code:
+              (li.hsn_code && li.hsn_code.trim()) ||
+              li.hsn ||
+              detectHsnCode(skuText, liDim) ||
+              '72083840',
             quantity: Number(li.quantity) || 0,
             unit: li.unit || 'MT',
             rate: Number(li.rate) || 0,
@@ -1654,11 +1878,17 @@ export default function InquiriesPage() {
         });
 
         const lineItems = (parsedReq.lineItems && parsedReq.lineItems.length > 0)
-          ? parsedReq.lineItems.map(i => ({ ...i, hsn_code: '' }))
+          ? parsedReq.lineItems.map(i => ({
+              ...i,
+              hsn_code:
+                (i.hsn_code && i.hsn_code.trim()) ||
+                detectHsnCode(i.sku_text, i.dimensions) ||
+                '72083840',
+            }))
           : (formProductSKU.trim() ? [{
               sku_text: formProductSKU.trim(),
               dimensions: '',
-              hsn_code: '',
+              hsn_code: detectHsnCode(formProductSKU.trim(), '') || '72083840',
               quantity: parsedReq.quantityTons || 1,
               unit: parsedReq.lineItems?.[0]?.unit || 'MT',
               rate: parsedReq.unitPrice || 0,
@@ -1769,10 +1999,91 @@ export default function InquiriesPage() {
     }
   };
 
-  // Keep ONLY actual Product Inquiries (filters out generic chat greetings, deal logs, and status questions!)
-  const rawList = Array.isArray(inquiries) && inquiries.length > 0 ? inquiries : (Array.isArray(rawInquiries) ? rawInquiries : []);
-  const productInquiries = rawList.filter(isProductInquiry);
-  const activeInquiryList = productInquiries;
+  // Helper for 100% strictly monotonic descending sort by created_at with ISO timestamp parsing and secondary stable tie-breaker
+  const parseSafeTime = (dateVal: any): number => {
+    if (!dateVal) return 0;
+    if (typeof dateVal === 'number') return isNaN(dateVal) ? 0 : dateVal;
+    const parsed = new Date(dateVal).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const sortNewestFirst = <T extends { created_at?: any; id?: any }>(list: T[]): T[] => {
+    return [...list].sort((a, b) => {
+      const timeA = parseSafeTime(a?.created_at);
+      const timeB = parseSafeTime(b?.created_at);
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+      const idA = String(a?.id || '');
+      const idB = String(b?.id || '');
+      return idB.localeCompare(idA);
+    });
+  };
+
+  const filteredPipelineDeals = useMemo(() => {
+    const list = (rawDeals || []).filter((d: any) => {
+      const st = (d.stage || 'new_inquiry').toLowerCase().trim();
+      const normStage = (st === 'review' || !st) ? 'new_inquiry' : st;
+      if (filterStatus !== 'all' && normStage !== filterStatus) {
+        return false;
+      }
+      if (!searchTerm) return true;
+      const s = searchTerm.toLowerCase().trim();
+      const cName = (d.customer_name || '').toLowerCase();
+      const poNum = (d.po_number || '').toLowerCase();
+      const dealNum = (d.deal_number || (d.id ? `deal-${d.id.substring(0, 6)}` : '')).toLowerCase();
+      const phone = (d.customer_phone || '').toLowerCase();
+      const items = (d.deal_items || [])
+        .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''}`)
+        .join(' ')
+        .toLowerCase();
+      const dateFormatted = d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
+      return (
+        cName.includes(s) ||
+        poNum.includes(s) ||
+        dealNum.includes(s) ||
+        phone.includes(s) ||
+        items.includes(s) ||
+        dateFormatted.includes(s)
+      );
+    });
+    return sortNewestFirst(list);
+  }, [rawDeals, searchTerm, filterStatus]);
+
+  const pipelineBoard = useMemo(() => {
+    const stages = ['new_inquiry', 'qualified', 'quoted', 'negotiation'];
+    return stages.reduce((acc, st) => {
+      acc[st] = filteredPipelineDeals.filter((d: any) => {
+        const dealStage = (d.stage || 'new_inquiry').toLowerCase().trim();
+        if (st === 'new_inquiry') {
+          return dealStage === 'new_inquiry' || dealStage === 'review' || !dealStage;
+        }
+        return dealStage === st;
+      });
+      return acc;
+    }, {} as Record<string, any[]>);
+  }, [filteredPipelineDeals]);
+
+  // Single deterministic source of truth for active inquiries, always newest first
+  const activeInquiryList = useMemo(() => {
+    const serverList = Array.isArray(rawInquiries) ? rawInquiries : [];
+    const localList = Array.isArray(inquiries) ? inquiries : [];
+
+    const map = new Map<string, InquiryItem>();
+    serverList.forEach(item => {
+      if (item?.id) map.set(item.id, item);
+    });
+    localList.forEach(item => {
+      if (item?.id) {
+        const existing = map.get(item.id);
+        map.set(item.id, { ...existing, ...item });
+      }
+    });
+
+    const combined = Array.from(map.values()).filter(isProductInquiry);
+    return sortNewestFirst(combined);
+  }, [rawInquiries, inquiries]);
+
   const stageCounts = useMemo(() => {
     const counts = {
       all: activeInquiryList.length,
@@ -1793,65 +2104,68 @@ export default function InquiriesPage() {
     return counts;
   }, [activeInquiryList, rawDeals]);
 
-  const filtered = activeInquiryList.filter(i => {
-    try {
-      if (dateRange.from && dateRange.to) {
-        const parseSafeIso = (dStr?: string) => {
-          if (!dStr) return '';
-          try {
-            const trimmed = String(dStr).trim();
-            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-            const d = new Date(trimmed);
-            if (isNaN(d.getTime())) return '';
-            return d.toISOString().split('T')[0];
-          } catch {
-            return '';
+  const filtered = useMemo(() => {
+    const list = activeInquiryList.filter(i => {
+      try {
+        if (dateRange.from && dateRange.to) {
+          const parseSafeIso = (dStr?: string) => {
+            if (!dStr) return '';
+            try {
+              const trimmed = String(dStr).trim();
+              if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+              const d = new Date(trimmed);
+              if (isNaN(d.getTime())) return '';
+              return d.toISOString().split('T')[0];
+            } catch {
+              return '';
+            }
+          };
+          const inqDate = parseSafeIso(i?.created_at);
+          if (inqDate) {
+            const fromDate = dateRange.from.split('T')[0];
+            const toDate = dateRange.to.split('T')[0];
+            if (inqDate < fromDate || inqDate > toDate) return false;
           }
-        };
-        const inqDate = parseSafeIso(i?.created_at);
-        if (inqDate) {
-          const fromDate = dateRange.from.split('T')[0];
-          const toDate = dateRange.to.split('T')[0];
-          if (inqDate < fromDate || inqDate > toDate) return false;
         }
+
+        const text = i?.raw_text || '';
+        const parsed = parseInquiryText(text, i);
+        const name = (parsed.companyName || i?.customer_name || i?.sender_name || '').toLowerCase();
+        const phone = (parsed.customerPhone || i?.sender_phone || i?.customer_phone || '').toLowerCase();
+        const itemsSummary = (
+          (parsed.lineItems || []).map((li: LineItemDetail) => `${li.sku_text} ${li.dimensions || ''} ${li.quantity} ${li.unit || ''}`).join(' ') +
+          ' ' + (parsed.productType || '')
+        ).toLowerCase();
+
+        const formattedDate = i?.created_at ? new Date(i.created_at).toLocaleString('en-IN').toLowerCase() : '';
+        const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
+        const isoDate = (i?.created_at || '').toLowerCase();
+        const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
+        const dealIdStr = (linkedDealForSearch?.deal_number || (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
+
+        const s = searchTerm.toLowerCase().trim();
+        const matchesSearch =
+          !s ||
+          name.includes(s) ||
+          dealIdStr.includes(s) ||
+          itemsSummary.includes(s) ||
+          formattedDate.includes(s) ||
+          dateOnly.includes(s) ||
+          isoDate.includes(s) ||
+          phone.includes(s) ||
+          text.toLowerCase().includes(s);
+
+        const dealStage = getInquiryDealStageKey(i, parsed.companyName);
+        const matchesStatus = filterStatus === 'all' || dealStage === filterStatus;
+
+        return matchesSearch && matchesStatus;
+      } catch {
+        return true;
       }
+    });
 
-      const text = i?.raw_text || '';
-      const parsed = parseInquiryText(text, i);
-      const name = (parsed.companyName || i?.customer_name || i?.sender_name || '').toLowerCase();
-      const phone = (parsed.customerPhone || i?.sender_phone || i?.customer_phone || '').toLowerCase();
-      const itemsSummary = (
-        (parsed.lineItems || []).map((li: LineItemDetail) => `${li.sku_text} ${li.dimensions || ''} ${li.quantity} ${li.unit || ''}`).join(' ') +
-        ' ' + (parsed.productType || '')
-      ).toLowerCase();
-
-      const formattedDate = i?.created_at ? new Date(i.created_at).toLocaleString('en-IN').toLowerCase() : '';
-      const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
-      const isoDate = (i?.created_at || '').toLowerCase();
-
-      const s = searchTerm.toLowerCase().trim();
-      const matchesSearch =
-        !s ||
-        name.includes(s) ||
-        itemsSummary.includes(s) ||
-        formattedDate.includes(s) ||
-        dateOnly.includes(s) ||
-        isoDate.includes(s) ||
-        phone.includes(s) ||
-        text.toLowerCase().includes(s);
-
-      const dealStage = getInquiryDealStageKey(i, parsed.companyName);
-      const matchesStatus = filterStatus === 'all' || dealStage === filterStatus;
-
-      return matchesSearch && matchesStatus;
-    } catch {
-      return true;
-    }
-  }).sort((a, b) => {
-    const timeA = new Date(a.created_at || 0).getTime();
-    const timeB = new Date(b.created_at || 0).getTime();
-    return timeB - timeA;
-  });
+    return sortNewestFirst(list);
+  }, [activeInquiryList, dateRange, searchTerm, filterStatus, rawDeals]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const validCurrentPage = Math.min(currentPage, totalPages);
@@ -1905,21 +2219,21 @@ export default function InquiriesPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <FileText className="text-blue-600" size={28} />
-            Inquiries &amp; Quotations Management
+            {viewMode === 'pipeline' ? 'Sales Pipeline' : 'Inquiries & Quotations Management'}
           </h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            disabled={isFetching}
+            disabled={dealsFetching || isFetching}
             onClick={async () => {
-              await fetchMonthlyInquiries();
-              toast.success('Inquiries list refreshed');
+              await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+              toast.success(viewMode === 'pipeline' ? 'Pipeline refreshed' : 'Inquiries list refreshed');
             }}
-            title="Refresh Inquiries"
+            title={viewMode === 'pipeline' ? 'Refresh Pipeline' : 'Refresh Inquiries'}
             className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
-            <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+            <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
           </button>
 
           <button
@@ -2025,31 +2339,87 @@ export default function InquiriesPage() {
             />
           </div>
         )}
+
+        {/* 5. Kanban View Button (Very Right in the Same Row) */}
+        <div className="flex items-center ml-auto">
+          <button
+            type="button"
+            onClick={() => {
+              const nextMode = viewMode === 'pipeline' ? 'table' : 'pipeline';
+              setViewMode(nextMode);
+              const params = new URLSearchParams(window.location.search);
+              if (nextMode === 'pipeline') {
+                params.set('view', 'pipeline');
+              } else {
+                params.delete('view');
+              }
+              navigate({ search: params.toString() }, { replace: true });
+            }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer border ${
+              viewMode === 'pipeline'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+            }`}
+            title={viewMode === 'pipeline' ? 'Switch to Inquiries Listing' : 'Open Kanban View'}>
+            <LayoutDashboard size={14} className={viewMode === 'pipeline' ? 'text-white' : 'text-blue-600'} />
+            <span>Kanban View</span>
+          </button>
+        </div>
       </div>
 
-      {/* Main Inquiries Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
+      {viewMode === 'pipeline' ? (
+        /* Kanban Board View */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
+            <div key={key} className={`rounded-xl border-2 ${color} p-3`}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
+                <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
+                  {pipelineBoard[key]?.length || 0}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {(pipelineBoard[key] || []).map((deal: any) => (
+                  <DealCard
+                    key={deal.id}
+                    deal={deal}
+                    onStageChange={handlePipelineStageChange}
+                    onSelect={(id) => setSelectedPipelineDealId(id)}
+                    onDelete={(d) => setConfirmDeleteDeal(d)}
+                  />
+                ))}
+                {(!pipelineBoard[key] || pipelineBoard[key].length === 0) && (
+                  <div className="text-center py-6 text-gray-400 text-sm">No deals</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Standard Inquiries Table View */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
         <table className="w-full table-fixed text-left border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <th className="px-3 py-3.5 text-center w-[4%]">#</th>
-              <th className="px-6 py-3.5 text-left w-[28%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[20%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[16%]">Source Channel</th>
-              <th className="px-4 py-3.5 text-center w-[18%]">Deal Status</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Actions</th>
+              <th className="px-5 py-3.5 text-left w-[22%]">Customer</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Deal ID</th>
+              <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
+              <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
+              <th className="px-4 py-3.5 text-center w-[16%]">Deal Status</th>
+              <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   Loading monthly inquiries...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   No product inquiries found for this period.
                 </td>
               </tr>
@@ -2078,15 +2448,22 @@ export default function InquiriesPage() {
                       companyName: parsed.companyName,
                       customerPhone: parsed.customerPhone,
                       salespersonName: activeSalesperson,
-                      lineItems: lineItemsSrc.map((item: any) => ({
-                        sku_text: item.sku_text || item.sku || item.product_name || '',
-                        dimensions: item.dimensions || '',
-                        hsn_code: item.hsn_code || '',
-                        quantity: Number(item.quantity) || 0,
-                        unit: item.unit || 'MT',
-                        rate: Number(item.rate) || 0,
-                        amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
-                      })),
+                      lineItems: lineItemsSrc.map((item: any) => {
+                        const sText = item.sku_text || item.sku || item.product_name || '';
+                        const sDim = item.dimensions || '';
+                        return {
+                          sku_text: sText,
+                          dimensions: sDim,
+                          hsn_code:
+                            (item.hsn_code && item.hsn_code.trim()) ||
+                            detectHsnCode(sText, sDim) ||
+                            '72083840',
+                          quantity: Number(item.quantity) || 0,
+                          unit: item.unit || 'MT',
+                          rate: Number(item.rate) || 0,
+                          amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+                        };
+                      }),
                       totalAmount: ai.totalAmount || ai.total_amount || lineItemsSrc.reduce((s: number, i: any) => s + (Number(i.amount) || Math.round(Number(i.quantity || 0) * Number(i.rate || 0))), 0),
                     };
                   }
@@ -2095,10 +2472,6 @@ export default function InquiriesPage() {
                     salespersonName: activeSalesperson,
                   };
                 })();
-                const st = (inq.status || '').toLowerCase();
-                const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
-                const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
-                const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'won' || st === 'quotation_ready' || inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po') && hasRates;
                 const rowLineItems = (details.lineItems && details.lineItems.length > 0)
                   ? details.lineItems
                   : [{
@@ -2114,11 +2487,11 @@ export default function InquiriesPage() {
                 const itemCount = (details.lineItems && details.lineItems.length > 0) ? details.lineItems.length : 1;
                 const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
                 const dealStageInfo = getDealStageDisplay(dealStageKey);
+                const linkedDeal = getLinkedDeal(inq, details.companyName);
+                const dealIdDisplay = linkedDeal?.deal_number || (linkedDeal?.id ? `DEAL-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `DEAL-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
 
-                const currentStageLabel = dealStageInfo?.label || 'New Inquiry';
-                const isNewInquiryStage = currentStageLabel === 'New Inquiry';
-                const isClosedStage = currentStageLabel === 'Won' || currentStageLabel === 'Lost';
-                const canMarkWonOrLost = !isNewInquiryStage && !isClosedStage;
+                const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
+                const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
 
                 return (
                   <tr
@@ -2126,15 +2499,18 @@ export default function InquiriesPage() {
                     onClick={() => handleOpenDrawer(inq)}
                     className="group hover:bg-slate-50/75 transition-colors cursor-pointer">
                     <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                    <td className="px-6 py-3.5 text-left">
+                    <td className="px-5 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
                         <span className="group-hover:text-blue-600 transition-colors inline-block">
-                          {details.companyName || <span className="text-slate-300 font-normal italic">—</span>}
+                          {details.companyName || <span className="text-slate-300 font-normal italic">-</span>}
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5 font-mono">
                         {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                      {dealIdDisplay}
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
@@ -2153,7 +2529,7 @@ export default function InquiriesPage() {
                           {dealStageInfo.label}
                         </span>
                       ) : (
-                        <span className="text-slate-400 font-normal italic">—</span>
+                        <span className="text-slate-400 font-normal italic">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
@@ -2178,8 +2554,8 @@ export default function InquiriesPage() {
                                 ? 'bottom-full mb-1'
                                 : 'top-full mt-1'
                             } w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
-                            {/* 1. Update Status Button & Sub-Menu */}
-                            {!isClosedStage && (
+                            {/* 1. Update Status Button & Sub-Menu (Qualified, Quoted, or Negotiation) */}
+                            {showUpdateStatus && (
                               <div>
                                 <button
                                   type="button"
@@ -2202,46 +2578,44 @@ export default function InquiriesPage() {
 
                                 {subMenuInqId === inq.id && (
                                   <div className="bg-slate-50 border-y border-slate-200 py-1 px-1 space-y-0.5 animate-in fade-in duration-100">
-                                    {canMarkWonOrLost && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleUpdateDealStage(inq, details, 'won');
-                                        }}
-                                        className="w-full px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                        <span>Won</span>
-                                      </button>
-                                    )}
-                                    {canMarkWonOrLost && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleUpdateDealStage(inq, details, 'lost');
-                                        }}
-                                        className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                        <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                                        <span>Lost</span>
-                                      </button>
-                                    )}
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleUpdateDealStage(inq, details, 'negotiation');
+                                        handleUpdateDealStage(inq, details, 'won');
                                       }}
-                                      className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                                      <span>Negotiation</span>
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                      <span>Won</span>
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateDealStage(inq, details, 'lost');
+                                      }}
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                      <span>Lost</span>
+                                    </button>
+                                    {dealStageKey !== 'negotiation' && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateDealStage(inq, details, 'negotiation');
+                                        }}
+                                        className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                        <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                        <span>Negotiation</span>
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
                             )}
 
-                            {/* 2. View PDF */}
+                            {/* 2. View PDF (Always visible) */}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -2257,8 +2631,8 @@ export default function InquiriesPage() {
                               <span>View PDF</span>
                             </button>
 
-                            {/* 3. Share Quotation */}
-                            {(isConfirmed || isQuoted) && (
+                            {/* 3. Share Quotation (Only Qualified, Quoted, Negotiation) */}
+                            {showShareQuotation && (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -2339,6 +2713,7 @@ export default function InquiriesPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
       {showEditDrawer && selectedInquiry && editDetails && (
@@ -2407,7 +2782,6 @@ export default function InquiriesPage() {
                             setEditDetails({ ...editDetails, companyName: e.target.value });
                             setShowEditCompanyDropdown(true);
                             setSaveSuccess(false);
-                            setDrawerError(null);
                             if (fieldErrors['companyName']) {
                               setFieldErrors(prev => { const n = { ...prev }; delete n['companyName']; return n; });
                             }
@@ -2439,7 +2813,6 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, companyName: cName });
                                   setShowEditCompanyDropdown(false);
                                   setSaveSuccess(false);
-                                  setDrawerError(null);
                                 }}
                                 className="px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-blue-50 hover:text-blue-700 cursor-pointer flex items-center justify-between transition-colors">
                                 <span className="flex items-center gap-2">
@@ -2497,7 +2870,7 @@ export default function InquiriesPage() {
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '', [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -2510,18 +2883,17 @@ export default function InquiriesPage() {
                                   const newSku = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
                                   const currentHsn = updated[idx]?.hsn_code || '';
-                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '');
-                                  const newAutoHsn = detectHsnCode(newSku);
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions);
+                                  const newAutoHsn = detectHsnCode(newSku, item.dimensions);
 
                                   let finalHsn = currentHsn;
                                   if (!currentHsn || currentHsn === prevAutoHsn) {
-                                    finalHsn = newAutoHsn;
+                                    finalHsn = newAutoHsn || '72083840';
                                   }
 
                                   updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
-                                  setDrawerError(null);
                                   if (fieldErrors[`sku_${idx}`]) {
                                     setFieldErrors(prev => { const n = { ...prev }; delete n[`sku_${idx}`]; return n; });
                                   }
@@ -2545,13 +2917,25 @@ export default function InquiriesPage() {
                                   type="text"
                                   value={item.dimensions || ''}
                                   onChange={(e) => {
+                                    const newDim = e.target.value;
                                     const updated = [...(editDetails.lineItems || [])];
-                                    updated[idx] = { ...updated[idx], dimensions: e.target.value };
+                                    const currentHsn = updated[idx]?.hsn_code || '';
+                                    const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions);
+                                    const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
+
+                                    let finalHsn = currentHsn;
+                                    if (!currentHsn || currentHsn === prevAutoHsn) {
+                                      finalHsn = newAutoHsn || '72083840';
+                                    }
+
+                                    updated[idx] = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
-                                    setDrawerError(null);
                                     if (fieldErrors[`dim_${idx}`]) {
                                       setFieldErrors(prev => { const n = { ...prev }; delete n[`dim_${idx}`]; return n; });
+                                    }
+                                    if (finalHsn && fieldErrors[`hsn_${idx}`]) {
+                                      setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
                                     }
                                   }}
                                   className={`w-full px-2 py-0.5 bg-white rounded text-[11px] font-mono outline-none focus:ring-1 text-slate-700 placeholder:text-slate-400 placeholder:font-normal transition-all ${
@@ -2578,7 +2962,6 @@ export default function InquiriesPage() {
                                 updated[idx] = { ...updated[idx], hsn_code: e.target.value };
                                 setEditDetails({ ...editDetails, lineItems: updated });
                                 setSaveSuccess(false);
-                                setDrawerError(null);
                                 if (fieldErrors[`hsn_${idx}`]) {
                                   setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
                                 }
@@ -2611,7 +2994,6 @@ export default function InquiriesPage() {
                                   const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
-                                  setDrawerError(null);
                                   if (fieldErrors[`qty_${idx}`]) {
                                     setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
                                   }
@@ -2630,7 +3012,6 @@ export default function InquiriesPage() {
                                   updated[idx] = { ...updated[idx], unit: e.target.value };
                                   setEditDetails({ ...editDetails, lineItems: updated });
                                   setSaveSuccess(false);
-                                  setDrawerError(null);
                                 }}
                                 className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
@@ -2659,7 +3040,6 @@ export default function InquiriesPage() {
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
                                 setSaveSuccess(false);
-                                setDrawerError(null);
                                 if (fieldErrors[`rate_${idx}`]) {
                                   setFieldErrors(prev => { const n = { ...prev }; delete n[`rate_${idx}`]; return n; });
                                 }
@@ -2717,10 +3097,10 @@ export default function InquiriesPage() {
                                   onClick={() => {
                                     const current = editDetails.lineItems && editDetails.lineItems.length > 0
                                       ? editDetails.lineItems
-                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                                     const updated = [
                                       ...current,
-                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                      { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
                                     ];
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
@@ -2793,7 +3173,6 @@ export default function InquiriesPage() {
                         onChange={(e) => {
                           setEditDetails({ ...editDetails, deliveryLocation: e.target.value });
                           setSaveSuccess(false);
-                          setDrawerError(null);
                           if (fieldErrors['deliveryLocation']) {
                             setFieldErrors(prev => { const n = { ...prev }; delete n['deliveryLocation']; return n; });
                           }
@@ -2820,7 +3199,6 @@ export default function InquiriesPage() {
                         onChange={(e) => {
                           setEditDetails({ ...editDetails, paymentTerms: e.target.value });
                           setSaveSuccess(false);
-                          setDrawerError(null);
                           if (fieldErrors['paymentTerms']) {
                             setFieldErrors(prev => { const n = { ...prev }; delete n['paymentTerms']; return n; });
                           }
@@ -2840,13 +3218,6 @@ export default function InquiriesPage() {
                 </div>
               </div>
             </div>
-
-            {drawerError && (
-              <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-700 flex items-center gap-2 shrink-0 animate-in fade-in duration-150">
-                <AlertCircle size={16} className="text-red-600 shrink-0" />
-                <span>{drawerError}</span>
-              </div>
-            )}
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
@@ -3147,7 +3518,7 @@ export default function InquiriesPage() {
                 }}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
                 {sendingQuotation ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                {sendingQuotation ? 'Dispatching Email & PDF...' : 'Send Quotation Email'}
+                {sendingQuotation ? 'Dispatching Email & PDF...' : 'Share Quotation Email'}
               </button>
             </div>
           </div>
@@ -3348,6 +3719,102 @@ export default function InquiriesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+            {/* Pipeline Deal Detail Drawer */}
+      <DealDetailDrawer
+        dealId={selectedPipelineDealId}
+        onClose={() => setSelectedPipelineDealId(null)}
+      />
+
+      {/* Pipeline Mark as Lost Modal */}
+      {pipelineLostModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-96 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Mark as Lost</h3>
+            <p className="text-sm text-gray-500 mb-4">Please select a reason (required)</p>
+            <div className="space-y-2 mb-4">
+              {LOST_REASONS.map(reason => (
+                <label key={reason} className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="pipeline_reason" value={reason}
+                    checked={pipelineLostModal.reason === reason}
+                    onChange={() => setPipelineLostModal(prev => prev ? { ...prev, reason } : null)}
+                    className="text-blue-600" />
+                  <span className="text-sm text-gray-700">{reason}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setPipelineLostModal(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                disabled={!pipelineLostModal.reason}
+                onClick={() => stageMutation.mutate({ id: pipelineLostModal.dealId, stage: 'lost', reason: pipelineLostModal.reason })}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                Confirm Lost
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline Permanent Delete Deal Confirmation Modal */}
+      {confirmDeleteDeal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Delete Deal Permanently?</h3>
+                <p className="text-xs text-slate-500">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1.5 mb-5">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Customer:</span>
+                <span className="font-bold text-slate-900">{confirmDeleteDeal.customer_name || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Deal Ref:</span>
+                <span className="font-mono font-bold text-indigo-600">
+                  #{confirmDeleteDeal.deal_number || (confirmDeleteDeal.id ? `DEAL-${confirmDeleteDeal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+                </span>
+              </div>
+              {confirmDeleteDeal.total_amount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Deal Amount:</span>
+                  <span className="font-bold text-emerald-600">₹{Number(confirmDeleteDeal.total_amount).toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
+                All line items, payment tracking records, and KRA logs tied to this deal will be permanently removed from the database and dashboard.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteDeal(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteDealMutation.isPending}
+                onClick={() => deleteDealMutation.mutate(confirmDeleteDeal.id)}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {deleteDealMutation.isPending ? 'Deleting...' : 'Yes, Delete Deal'}
+              </button>
+            </div>
           </div>
         </div>
       )}

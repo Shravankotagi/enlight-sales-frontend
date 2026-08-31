@@ -8,6 +8,8 @@ import {
   TrendingUp,
   Brain,
   Check,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function IntelligencePage() {
@@ -19,7 +21,11 @@ export default function IntelligencePage() {
   }, []);
 
   // ── Real Data Queries ───────────────────────────────────────────────────────
-  const { data: churnData = [] } = useQuery({
+  const {
+    data: churnData = [],
+    refetch: refetchChurn,
+    isFetching: fetchingChurn,
+  } = useQuery({
     queryKey: ['churn-risk', salespersonPhone],
     queryFn: () =>
       customersApi
@@ -27,7 +33,11 @@ export default function IntelligencePage() {
         .then((r) => r.data?.data || r.data || []),
   });
 
-  const { data: reorderData = [] } = useQuery({
+  const {
+    data: reorderData = [],
+    refetch: refetchReorder,
+    isFetching: fetchingReorder,
+  } = useQuery({
     queryKey: ['reorder-queue', salespersonPhone],
     queryFn: () =>
       customersApi
@@ -35,7 +45,11 @@ export default function IntelligencePage() {
         .then((r) => r.data?.data || r.data || []),
   });
 
-  const { data: lossData } = useQuery({
+  const {
+    data: lossData,
+    refetch: refetchLoss,
+    isFetching: fetchingLoss,
+  } = useQuery({
     queryKey: ['loss-analytics', salespersonPhone],
     queryFn: () =>
       customersApi
@@ -43,7 +57,11 @@ export default function IntelligencePage() {
         .then((r) => r.data?.data || r.data || {}),
   });
 
-  const { data: allCustomers = [] } = useQuery({
+  const {
+    data: allCustomers = [],
+    refetch: refetchCustomers,
+    isFetching: fetchingCustomers,
+  } = useQuery({
     queryKey: ['recurring-customers-list', salespersonPhone],
     queryFn: () =>
       customersApi
@@ -54,7 +72,11 @@ export default function IntelligencePage() {
         }),
   });
 
-  const { data: dealsData = [] } = useQuery({
+  const {
+    data: dealsData = [],
+    refetch: refetchDeals,
+    isFetching: fetchingDeals,
+  } = useQuery({
     queryKey: ['intelligence-deals', salespersonPhone],
     queryFn: () =>
       dealsApi
@@ -64,6 +86,13 @@ export default function IntelligencePage() {
           return Array.isArray(raw) ? raw : [];
         }),
   });
+
+  const isRefreshing =
+    fetchingChurn ||
+    fetchingReorder ||
+    fetchingLoss ||
+    fetchingCustomers ||
+    fetchingDeals;
 
   // ── Section 1: Churn Radar Metrics ──────────────────────────────────────────
   const churnList = Array.isArray(churnData) ? churnData : [];
@@ -104,23 +133,6 @@ export default function IntelligencePage() {
       ? Math.round((highRiskCount / totalMonitoredAccounts) * 100)
       : 0;
 
-  const lastScanFormatted = useMemo(() => {
-    const d = new Date();
-    const datePart = d.toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-    const timePart = d
-      .toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      })
-      .toLowerCase();
-    return `${datePart}, ${timePart}`;
-  }, []);
-
   // ── Section 2: Reorder Queue Metrics ────────────────────────────────────────
   const reorderList = Array.isArray(reorderData) ? reorderData : [];
   const predictedCount = reorderList.length;
@@ -147,30 +159,61 @@ export default function IntelligencePage() {
   );
   const totalDecided = wonDealsCount + totalLostCount;
   const winRate =
-    totalDecided > 0 ? Math.round((wonDealsCount / totalDecided) * 100) : 99;
+    totalDecided > 0
+      ? Math.round((wonDealsCount / totalDecided) * 100)
+      : wonDealsCount > 0
+        ? 100
+        : 0;
 
   const lossReasonsList: any[] = Array.isArray(lossData?.by_reason)
     ? lossData.by_reason
     : [];
 
-  return (
-    <div className="space-y-8">
-      {/* ── Top Header ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Brain size={26} className="text-indigo-600" />
-          Intelligence Center
-        </h1>
+  const recentLossesList: any[] = Array.isArray(lossData?.recent_losses)
+    ? lossData.recent_losses
+    : Array.isArray(lossData?.deals)
+      ? lossData.deals
+      : [];
 
-        
+  return (
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
+      {/* ── Top Header ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Brain size={28} className="text-blue-600" />
+            Intelligence Center
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              await Promise.all([
+                refetchChurn(),
+                refetchReorder(),
+                refetchLoss(),
+                refetchCustomers(),
+                refetchDeals(),
+              ]);
+            }}
+            title="Refresh Intelligence Data"
+            className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60"
+          >
+            <RefreshCw
+              size={16}
+              className={isRefreshing ? 'animate-spin text-blue-600' : ''}
+            />
+          </button>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SECTION 1 — CHURN RADAR
+          SECTION 1 - CHURN RADAR
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             01 CHURN RADAR
           </span>
         </div>
@@ -297,30 +340,98 @@ export default function IntelligencePage() {
             <div className="flex items-center gap-5 text-xs font-medium">
               <div className="flex items-center gap-1.5 text-slate-700">
                 <span className="w-2.5 h-2.5 rounded-xs bg-emerald-500" />
-                <span>Healthy — {healthyCount}</span>
+                <span>Healthy - {healthyCount}</span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-700">
                 <span className="w-2.5 h-2.5 rounded-xs bg-amber-400" />
-                <span>At Risk — {atRiskCount}</span>
+                <span>At Risk - {atRiskCount}</span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-700">
                 <span className="w-2.5 h-2.5 rounded-xs bg-rose-500" />
-                <span>High Risk — {highRiskCount}</span>
+                <span>High Risk - {highRiskCount}</span>
               </div>
             </div>
-            <div className="text-[11px] text-slate-400">
-              Last scan: {lastScanFormatted}
-            </div>
+            
           </div>
         </div>
+
+        {/* Dynamic At-Risk & High-Risk Accounts Watchlist */}
+        {(atRiskCount > 0 || highRiskCount > 0) && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-500" />
+                <h3 className="font-semibold text-gray-800">
+                  Accounts Requiring Attention
+                </h3>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                {atRiskCount + highRiskCount} account{atRiskCount + highRiskCount !== 1 ? 's' : ''} monitored
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="px-6 py-3">Customer Account</th>
+                    <th className="px-6 py-3">Risk Status</th>
+                    <th className="px-6 py-3">Days Inactive</th>
+                    <th className="px-6 py-3">Last Order Date</th>
+                    <th className="px-6 py-3 text-right">Cadence Cycle</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {[...highRiskCustomers, ...atRiskCustomers].map((item: any, idx: number) => {
+                    const isHigh = item.churn_risk === 'churning' || item.churn_risk === 'credit_watch' || item.churn_risk === 'high';
+                    return (
+                      <tr key={item.id || idx} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-6 py-3.5 font-bold text-slate-900">
+                          {item.customer_name}
+                        </td>
+                        <td className="px-6 py-3.5">
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                              isHigh
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {item.churn_risk === 'credit_watch' ? 'CREDIT WATCH' : isHigh ? 'HIGH RISK' : 'AT RISK'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5 font-mono text-slate-700">
+                          {item.days_since_order !== null && item.days_since_order !== undefined
+                            ? `${item.days_since_order} days`
+                            : 'No prior orders'}
+                        </td>
+                        <td className="px-6 py-3.5 font-mono text-slate-600">
+                          {item.last_order_date
+                            ? new Date(item.last_order_date).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-mono font-medium text-slate-600">
+                          Every {item.avg_order_frequency_days || 30}d
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SECTION 2 — REORDER QUEUE
+          SECTION 2 - REORDER QUEUE
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             02 REORDER QUEUE
           </span>
         </div>
@@ -435,7 +546,7 @@ export default function IntelligencePage() {
                       Avg frequency: Every {item.avg_order_frequency_days}d · Last order:{' '}
                       {item.last_order_date
                         ? new Date(item.last_order_date).toLocaleDateString('en-IN')
-                        : '—'}
+                        : '-'}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -444,7 +555,7 @@ export default function IntelligencePage() {
                         ? new Date(item.predicted_reorder_date).toLocaleDateString(
                             'en-IN'
                           )
-                        : '—'}
+                        : '-'}
                     </span>
                     <span
                       className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
@@ -470,11 +581,11 @@ export default function IntelligencePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          SECTION 3 — LOSS ANALYTICS
+          SECTION 3 - LOSS ANALYTICS
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             03 LOSS ANALYTICS
           </span>
         </div>
@@ -546,11 +657,11 @@ export default function IntelligencePage() {
                 <div className="space-y-1 text-xs text-slate-600">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-xs bg-emerald-500" />
-                    <span>Won — {wonDealsCount}</span>
+                    <span>Won - {wonDealsCount}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-xs bg-rose-500" />
-                    <span>Lost — {totalLostCount} (3mo)</span>
+                    <span>Lost - {totalLostCount} (3mo)</span>
                   </div>
                 </div>
               </div>
@@ -569,16 +680,6 @@ export default function IntelligencePage() {
             {lossReasonsList.length === 0 ? (
               <div className="space-y-2 pt-1 text-xs text-slate-500">
                 <p>No lost deals in the last 3 months</p>
-                <p className="text-slate-400 text-[11px] leading-relaxed">
-                  Historical reference:{' '}
-                  <span className="text-slate-600 font-medium">
-                    1 deal lost earlier this year to{' '}
-                    <strong className="text-gray-800 font-semibold">
-                      Credit terms
-                    </strong>
-                  </span>{' '}
-                  — the only reason logged across the account's lifetime.
-                </p>
               </div>
             ) : (
               <div className="flex flex-wrap gap-2 pt-1">
@@ -593,6 +694,75 @@ export default function IntelligencePage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Detailed Lost Deals Table */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingDown size={16} className="text-red-500" />
+              <h3 className="font-semibold text-gray-800">
+                Lost Deals &amp; Reasons Log
+              </h3>
+            </div>
+            <span className="text-xs font-semibold text-slate-500">
+              {recentLossesList.length} deal{recentLossesList.length !== 1 ? 's' : ''} lost (3 months)
+            </span>
+          </div>
+
+          {recentLossesList.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-500">
+              No lost deals recorded in the last 3 months.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="px-6 py-3">Deal ID</th>
+                    <th className="px-6 py-3">Customer Account</th>
+                    <th className="px-6 py-3">Lost Reason</th>
+                    <th className="px-6 py-3 text-right">Lost Value</th>
+                    <th className="px-6 py-3 text-right">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentLossesList.map((item: any, idx: number) => {
+                    const dateFormatted = item.created_at
+                      ? new Date(item.created_at).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                      : '—';
+                    return (
+                      <tr key={item.id || idx} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-6 py-3.5 font-mono text-slate-700 font-medium">
+                          {item.deal_number || (item.id ? `DEAL-${item.id.substring(0, 6).toUpperCase()}` : '—')}
+                        </td>
+                        <td className="px-6 py-3.5 font-bold text-slate-900">
+                          {item.customer_name}
+                        </td>
+                        <td className="px-6 py-3.5">
+                          <span className="inline-block bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-full text-xs font-medium">
+                            {item.lost_reason || 'Not specified'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-mono font-bold text-slate-900">
+                          {Number(item.total_amount) > 0
+                            ? `₹${Number(item.total_amount).toLocaleString('en-IN')}`
+                            : '₹0'}
+                        </td>
+                        <td className="px-6 py-3.5 text-right text-slate-500 font-mono text-[11px]">
+                          {dateFormatted}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
     </div>

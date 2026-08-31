@@ -137,7 +137,7 @@ export default function AdminDashboard() {
   const isLoading = monthlyLoading || funnelLoading || skuLoading || salespersonLoading || inquiriesLoading || dealsLoading;
 
   if (isLoading) return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs animate-pulse flex justify-between items-center">
         <div>
           <div className="h-8 bg-slate-200 rounded-lg w-64 mb-2" />
@@ -184,7 +184,7 @@ export default function AdminDashboard() {
   });
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans">
+    <div className="space-y-6 animate-fade-in pb-12 font-sans">
       
       {/* Top Header & Navigation Banner (Identical to Home Page UI) */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
@@ -346,9 +346,7 @@ export default function AdminDashboard() {
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-600">
               {Number(deliveredTonnage.toFixed(3)).toLocaleString('en-IN')} MT
             </h2>
-            {deliveredTonnageResult.hasUnconvertible && (
-              <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
-            )}
+            
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <ArrowUpRight size={12} /> +25%
