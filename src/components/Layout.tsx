@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   Home,
   Users,
@@ -92,7 +92,7 @@ function EmployeeFooter() {
   );
 }
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { viewingAs, isAdmin } = useAuth();
@@ -166,7 +166,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="flex-1 overflow-auto">
-        <div className="p-6">{children}</div>
+        <div className="p-6">{children || <Outlet />}</div>
       </div>
     </div>
   );
