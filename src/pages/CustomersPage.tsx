@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { customersApi, employeesApi } from '../lib/api';
 import { useEffect, useState, useMemo } from 'react';
@@ -94,6 +95,7 @@ function deriveSegment(c: any): string {
 }
 
 export default function CustomersPage() {
+  const navigate = useNavigate();
   const { effectivePhone, isSalesManager, isAdmin } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
@@ -482,7 +484,8 @@ export default function CustomersPage() {
                   return (
                     <tr
                       key={c.id || idx}
-                      className="hover:bg-slate-50/70 transition-colors group">
+                      onClick={() => navigate('/customers/' + c.id)}
+                      className="hover:bg-slate-50/90 transition-colors group cursor-pointer">
                       {/* # Serial Number */}
                       <td className="px-4 py-3.5 text-xs text-slate-400 font-medium text-center">
                         {serialNum}

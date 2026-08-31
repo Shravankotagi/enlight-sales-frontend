@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
@@ -6,6 +6,7 @@ import AdminSelectionPage from './pages/AdminSelectionPage';
 import HomePage from './pages/HomePage';
 import PipelinePage from './pages/PipelinePage';
 import CustomersPage from './pages/CustomersPage';
+import CustomerProfilePage from './pages/CustomerProfilePage';
 import KRADashboard from './pages/KRADashboard';
 import InquiriesPage from './pages/InquiriesPage';
 import LogsPage from './pages/LogsPage';
@@ -19,19 +20,29 @@ import AdminDashboard from './pages/AdminDashboard';
 import AssistantPage from './pages/AssistantPage';
 
 function AppRoutes() {
-  const { employee } = useAuth();
+  const { isAuthenticated, employee } = useAuth();
   const isAdmin = employee?.role === 'admin';
 
   return (
-    <Layout>
-      <Routes>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/admin" element={<AdminSelectionPage />} />
+      <Route path="/404" element={<NotFoundPage />} />
+
+      {/* Authenticated Layout Hierarchy */}
+      <Route
+        element={
+          isAuthenticated ? <Layout /> : <Navigate to="/login" replace />
+        }
+      >
+        <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/assistant" element={<AssistantPage />} />
-        <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/customers/:id" element={<CustomerProfilePage />} />
         <Route path="/visits" element={<VisitsPage />} />
         <Route path="/complaints" element={<ComplaintsPage />} />
         <Route path="/kra" element={<KRADashboard />} />
@@ -39,47 +50,17 @@ function AppRoutes() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
         {isAdmin && <Route path="/admin-dashboard" element={<AdminDashboard />} />}
-      </Routes>
-    </Layout>
+      </Route>
+
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
   );
-}
-
-function AdminRoutes() {
-  const location = useLocation();
-  if (location.pathname === '/') return <Navigate to="/home" replace />;
-  return <AppRoutes />;
-}
-
-function SalesManagerRoutes() {
-  const location = useLocation();
-  if (location.pathname === '/') return <Navigate to="/home" replace />;
-  return <AppRoutes />;
-}
-
-function SalespersonRoutes() {
-  const location = useLocation();
-  if (location.pathname === '/') return <Navigate to="/home" replace />;
-  return <AppRoutes />;
-}
-
-function ProtectedRoutes() {
-  const { isAuthenticated, isAdmin, isSalesManager } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (isAdmin) return <AdminRoutes />;
-  if (isSalesManager) return <SalesManagerRoutes />;
-  return <SalespersonRoutes />;
 }
 
 function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/admin" element={<AdminSelectionPage />} />
-        <Route path="/404" element={<NotFoundPage />} />
-        <Route path="/*" element={<ProtectedRoutes />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <AppRoutes />
     </AuthProvider>
   );
 }

@@ -54,12 +54,12 @@ export const dealsApi = {
 
 export const customersApi = {
   getAll: (params?: any) => API.get('/customers', { params }),
-  getOne: (id: string) => API.get(`/customers/${id}`),
+  getOne: (id: string) => API.get(`/customers/${encodeURIComponent(id)}`),
   getChurnRisk: (params?: any) => API.get('/customers/churn-risk', { params }),
   getReorderQueue: (params?: any) => API.get('/customers/reorder-queue', { params }),
   getLossAnalytics: (params?: any) => API.get('/customers/loss-analytics', { params }),
   importClients: (data: any) => API.post('/customers/import', data),
-  update: (id: string, data: any) => API.patch(`/customers/${id}`, data),
+  update: (id: string, data: any) => API.patch(`/customers/${encodeURIComponent(id)}`, data),
 };
 
 export const kraApi = {
