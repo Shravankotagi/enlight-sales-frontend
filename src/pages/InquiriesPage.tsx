@@ -105,19 +105,16 @@ function isProductInquiry(inq: InquiryItem): boolean {
   const textLower = rawText.toLowerCase();
   const aiJson = (inq?.ai_extraction_json as any) || {};
 
-  // 0. Exclude Purchase Orders (POs belong strictly to the Orders tab)
-  const isPurchaseOrder =
-    inq?.inquiry_type === 'purchase_order' ||
-    inq?.source_channel === 'whatsapp_po' ||
-    rawText.startsWith('[PO Document Attached:');
-  if (isPurchaseOrder) return false;
-
-  // 1. All official genuine inquiry channels
+  // 1. All official genuine inquiry channels & types
   if (
     inq?.inquiry_type === 'inquiry' ||
+    inq?.inquiry_type === 'purchase_order' ||
+    inq?.inquiry_type === 'quotation_sent' ||
     inq?.source_channel === 'whatsapp_text' ||
     inq?.source_channel === 'whatsapp_image' ||
-    inq?.source_channel === 'web_dashboard'
+    inq?.source_channel === 'whatsapp_po' ||
+    inq?.source_channel === 'web_dashboard' ||
+    inq?.source_channel === 'dashboard'
   ) {
     return true;
   }
@@ -126,6 +123,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
   const isDocument =
     rawText.startsWith('[Inquiry Attachment:') ||
     rawText.startsWith('[Inquiry Document Attached]') ||
+    rawText.startsWith('[PO Document Attached:') ||
     (Array.isArray(inq.media_urls) && inq.media_urls.length > 0 && inq.media_urls[0] !== 'attached_document');
   if (isDocument) return true;
 
@@ -143,7 +141,12 @@ function isProductInquiry(inq: InquiryItem): boolean {
     return true;
   }
 
-  // 4. Web Dashboard manual inquiry
+  // 4. Has customer name
+  if (inq?.sender_name || inq?.customer_name || aiJson.companyName || aiJson.customer_name) {
+    return true;
+  }
+
+  // 5. Web Dashboard manual inquiry
   if (inq?.source_channel === 'web_dashboard' && rawText.length > 0) {
     return true;
   }
