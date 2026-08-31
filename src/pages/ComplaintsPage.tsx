@@ -29,6 +29,7 @@ import {
   getDaysAgo,
 } from '../utils/dateUtils';
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
+import DealProductCombobox from '../components/DealProductCombobox';
 
 interface Complaint {
   id: string;
@@ -298,46 +299,6 @@ export default function ComplaintsPage() {
 
   const handleSelectCustomerForEdit = (cust: CustomerDirectoryItem) => {
     setEditCustomerName(cust.customer_name);
-  };
-
-  const handleSelectDealForCreate = (dealId: string) => {
-    setFormDealId(dealId);
-    if (!dealId) {
-      setFormPoNumber('');
-      return;
-    }
-    const found = customerDeals.find(d => d.id === dealId);
-    if (found) {
-      if (found.po_number) setFormPoNumber(found.po_number);
-      if (!formProduct && Array.isArray(found.deal_items) && found.deal_items.length > 0) {
-        const itemSummaries = found.deal_items
-          .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''} ${i.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''}`.trim())
-          .filter(Boolean);
-        if (itemSummaries.length > 0) {
-          setFormProduct(itemSummaries.join(', '));
-        }
-      }
-    }
-  };
-
-  const handleSelectDealForEdit = (dealId: string) => {
-    setEditDealId(dealId);
-    if (!dealId) {
-      setEditPoNumber('');
-      return;
-    }
-    const found = editCustomerDeals.find(d => d.id === dealId);
-    if (found) {
-      if (found.po_number) setEditPoNumber(found.po_number);
-      if (!editProduct && Array.isArray(found.deal_items) && found.deal_items.length > 0) {
-        const itemSummaries = found.deal_items
-          .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''} ${i.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''}`.trim())
-          .filter(Boolean);
-        if (itemSummaries.length > 0) {
-          setEditProduct(itemSummaries.join(', '));
-        }
-      }
-    }
   };
 
   const getSalespersonDisplayName = (comp: Complaint) => {
@@ -649,6 +610,8 @@ export default function ComplaintsPage() {
   const endIndex = Math.min(startIndex + pageSize, filtered.length);
   const paginatedComplaints = filtered.slice(startIndex, endIndex);
 
+  const quickSteelProducts = ['HR Coil', 'CR Sheet', 'MS Plate', 'TMT Bar', 'MS Beam', 'Chequered Plate', 'GI Sheet', 'Seamless Pipe'];
+
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Header */}
@@ -808,7 +771,7 @@ export default function ComplaintsPage() {
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 text-left min-w-[220px]">Customer</th>
-                <th className="px-4 py-3.5 text-left min-w-[170px]">Deal / PO &amp; Product</th>
+                <th className="px-4 py-3.5 text-left min-w-[190px]">Deal / PO &amp; Product</th>
                 <th className="px-4 py-3.5 text-left min-w-[160px]">Date &amp; Time</th>
                 <th className="px-4 py-3.5 text-center min-w-[120px]">Status</th>
               </tr>
@@ -834,7 +797,9 @@ export default function ComplaintsPage() {
                   const globalIdx = startIndex + idx + 1;
                   const salespersonName = getSalespersonDisplayName(comp);
                   const prodDisplay = comp.product_name || comp.affected_product || '';
-                  const dealRef = comp.deal_id ? `DEAL-${comp.deal_id.substring(0, 6).toUpperCase()}` : '';
+                  const cleanDealCode = comp.deal_id
+                    ? (comp.deal_id.startsWith('DEAL-') ? comp.deal_id.replace(/^DEAL-/, '') : comp.deal_id.substring(0, 6).toUpperCase())
+                    : '';
 
                   return (
                     <tr
@@ -860,24 +825,28 @@ export default function ComplaintsPage() {
 
                       {/* 2. Deal / PO & Product */}
                       <td className="px-4 py-3.5 text-xs">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {dealRef && (
-                            <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[11px]">
-                              #{dealRef}
-                            </span>
-                          )}
-                          {comp.po_number && (
-                            <span className="font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[11px]">
-                              PO: {comp.po_number}
-                            </span>
-                          )}
-                          {!dealRef && !comp.po_number && (
-                            <span className="text-slate-400 italic text-[11px]">Unlinked</span>
-                          )}
-                        </div>
-                        {prodDisplay && prodDisplay !== 'General Material' && (
-                          <div className="text-slate-600 font-medium mt-1 truncate max-w-[200px]">
-                            {prodDisplay}
+                        {cleanDealCode ? (
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[11px]">
+                                #{`DEAL-${cleanDealCode}`}
+                              </span>
+                              {comp.po_number && (
+                                <span className="font-mono text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[11px]">
+                                  PO: {comp.po_number}
+                                </span>
+                              )}
+                            </div>
+                            {prodDisplay && (
+                              <div className="text-slate-600 font-medium mt-1 truncate max-w-[220px]">
+                                {prodDisplay}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                            <Package size={13} className="text-blue-500 shrink-0" />
+                            <span className="truncate max-w-[220px]">{prodDisplay || 'General Steel Material'}</span>
                           </div>
                         )}
                       </td>
@@ -985,10 +954,10 @@ export default function ComplaintsPage() {
                   <Hash size={14} className="text-blue-600 shrink-0" />
                   {selectedComplaint.deal_id ? (
                     <span className="font-mono text-blue-700">
-                      #DEAL-{selectedComplaint.deal_id.substring(0, 6).toUpperCase()}
+                      #{selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id : `DEAL-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
                     </span>
                   ) : (
-                    <span className="text-slate-400 font-normal">No Deal Linked</span>
+                    <span className="text-slate-400 font-normal">Direct Complaint</span>
                   )}
                   {selectedComplaint.po_number && (
                     <span className="text-xs font-mono font-semibold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
@@ -1138,30 +1107,34 @@ export default function ComplaintsPage() {
                   />
                 </div>
 
-                {/* 2. Deal ID / PO Selector */}
+                {/* 2. Searchable Deal ID / PO Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number
+                    Linked Deal ID / PO Number &amp; Product
                   </label>
-                  <div className="relative flex items-center">
-                    <select
-                      value={editDealId}
-                      onChange={e => handleSelectDealForEdit(e.target.value)}
-                      className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                      <option value="">-- Unlinked / No Specific Deal --</option>
-                      {editCustomerDeals.map(d => {
-                        const dealCode = d.id ? `DEAL-${d.id.substring(0, 6).toUpperCase()}` : '';
-                        const items = Array.isArray(d.deal_items) ? d.deal_items.map((i: any) => `${i.sku_text || ''} ${i.quantity ? `${i.quantity}${i.unit || 'MT'}` : ''}`).join(', ') : '';
-                        const poStr = d.po_number ? ` (PO: ${d.po_number})` : '';
-                        return (
-                          <option key={d.id} value={d.id}>
-                            #{dealCode} {items ? `— ${items}` : ''}{poStr}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                  </div>
+                  <DealProductCombobox
+                    deals={editCustomerDeals}
+                    selectedDealId={editDealId}
+                    selectedPoNumber={editPoNumber}
+                    selectedProduct={editProduct}
+                    onSelectDeal={(deal, specificProduct) => {
+                      if (!deal) {
+                        setEditDealId('');
+                        setEditPoNumber('');
+                      } else {
+                        setEditDealId(deal.id);
+                        setEditPoNumber(deal.po_number || '');
+                        if (specificProduct) {
+                          setEditProduct(specificProduct);
+                        } else if (!editProduct && Array.isArray(deal.deal_items) && deal.deal_items.length > 0) {
+                          const summaries = deal.deal_items
+                            .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''} ${i.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''}`.trim())
+                            .filter(Boolean);
+                          if (summaries.length > 0) setEditProduct(summaries[0]);
+                        }
+                      }
+                    }}
+                  />
                 </div>
 
                 {/* 3. Product Name & Complaint Type */}
@@ -1178,6 +1151,18 @@ export default function ComplaintsPage() {
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                       required
                     />
+                    {/* Quick Suggestions Chips */}
+                    <div className="flex items-center gap-1 flex-wrap mt-1.5">
+                      {quickSteelProducts.slice(0, 4).map(chip => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => setEditProduct(chip)}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium transition-colors cursor-pointer">
+                          + {chip}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div>
@@ -1311,33 +1296,35 @@ export default function ComplaintsPage() {
                   )}
                 </div>
 
-                {/* 2. Deal ID / PO Number Selector */}
+                {/* 2. Searchable Deal ID / PO Number Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number <span className="text-slate-400 font-normal">(Recommended)</span>
+                    Linked Deal ID / PO Number &amp; Product <span className="text-slate-400 font-normal">(Searchable)</span>
                   </label>
-                  <div className="relative flex items-center">
-                    <select
-                      value={formDealId}
-                      onChange={e => handleSelectDealForCreate(e.target.value)}
-                      disabled={loadingDeals}
-                      className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none disabled:bg-slate-50">
-                      <option value="">
-                        {loadingDeals ? 'Loading active deals for company...' : customerDeals.length > 0 ? '-- Select Specific Deal / PO --' : '-- No Deals Found (Unlinked Complaint) --'}
-                      </option>
-                      {customerDeals.map(d => {
-                        const dealCode = d.id ? `DEAL-${d.id.substring(0, 6).toUpperCase()}` : '';
-                        const items = Array.isArray(d.deal_items) ? d.deal_items.map((i: any) => `${i.sku_text || ''} ${i.quantity ? `${i.quantity}${i.unit || 'MT'}` : ''}`).join(', ') : '';
-                        const poStr = d.po_number ? ` (PO: ${d.po_number})` : '';
-                        return (
-                          <option key={d.id} value={d.id}>
-                            #{dealCode} {items ? `— ${items}` : ''}{poStr}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                  </div>
+                  <DealProductCombobox
+                    deals={customerDeals}
+                    selectedDealId={formDealId}
+                    selectedPoNumber={formPoNumber}
+                    selectedProduct={formProduct}
+                    loading={loadingDeals}
+                    onSelectDeal={(deal, specificProduct) => {
+                      if (!deal) {
+                        setFormDealId('');
+                        setFormPoNumber('');
+                      } else {
+                        setFormDealId(deal.id);
+                        setFormPoNumber(deal.po_number || '');
+                        if (specificProduct) {
+                          setFormProduct(specificProduct);
+                        } else if (!formProduct && Array.isArray(deal.deal_items) && deal.deal_items.length > 0) {
+                          const summaries = deal.deal_items
+                            .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''} ${i.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''}`.trim())
+                            .filter(Boolean);
+                          if (summaries.length > 0) setFormProduct(summaries[0]);
+                        }
+                      }
+                    }}
+                  />
                 </div>
 
                 {/* 3. Product Name & Complaint Type */}
@@ -1354,6 +1341,18 @@ export default function ComplaintsPage() {
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                       required
                     />
+                    {/* Quick Suggestions Chips */}
+                    <div className="flex items-center gap-1 flex-wrap mt-1.5">
+                      {quickSteelProducts.map(chip => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => setFormProduct(chip)}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium transition-colors cursor-pointer">
+                          + {chip}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div>
