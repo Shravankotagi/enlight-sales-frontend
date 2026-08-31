@@ -101,6 +101,41 @@ function formatCurrency(val?: number) {
   return '₹' + amount.toLocaleString('en-IN');
 }
 
+interface ParsedVisitRemarks {
+  cleanNotes: string;
+  outcome?: string;
+  followUp?: string;
+  requirement?: string;
+  interests?: string;
+  location?: string;
+}
+
+function parseVisitRemarks(raw?: string): ParsedVisitRemarks {
+  if (!raw || !raw.trim()) {
+    return { cleanNotes: 'No notes recorded for this visit.' };
+  }
+
+  const tags: Record<string, string> = {};
+  const tagRegex = /\[([a-zA-Z0-9_\s]+):\s*([^\]]+)\]/g;
+  let match;
+  while ((match = tagRegex.exec(raw)) !== null) {
+    const key = match[1].trim().toLowerCase();
+    const val = match[2].trim();
+    tags[key] = val;
+  }
+
+  const cleanNotes = raw.replace(tagRegex, '').trim();
+
+  return {
+    cleanNotes: cleanNotes || 'Meeting conducted.',
+    outcome: tags.outcome,
+    followUp: tags.followup || tags['follow up'] || tags['follow-up'],
+    requirement: tags.requirement || tags.requirements,
+    interests: tags.interests || tags.interest,
+    location: tags.location,
+  };
+}
+
 export default function CustomerProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -906,7 +941,7 @@ export default function CustomerProfilePage() {
                     <th className="py-3 px-3">Visited Date</th>
                     <th className="py-3 px-3">Salesperson</th>
                     <th className="py-3 px-3">Person Met</th>
-                    <th className="py-3 px-3">Discussion Notes</th>
+                    <th className="py-3 px-3 min-w-[280px]">Discussion Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -923,8 +958,41 @@ export default function CustomerProfilePage() {
                         <p className="font-semibold">{v.person_met || 'Site Representative'}</p>
                         {v.contact_no && <p className="text-2xs text-slate-500">{v.contact_no}</p>}
                       </td>
-                      <td className="py-3 px-3 text-slate-700 max-w-md">
-                        <p className="line-clamp-2">{v.remarks || 'Meeting conducted'}</p>
+                      <td className="py-3.5 px-3 text-slate-900 max-w-lg min-w-[280px]">
+                        {(() => {
+                          const parsed = parseVisitRemarks(v.remarks);
+                          return (
+                            <div className="space-y-1 text-xs text-slate-900">
+                              <p className="leading-relaxed font-normal text-slate-900">
+                                {parsed.cleanNotes}
+                              </p>
+                              {(parsed.outcome || parsed.requirement || parsed.interests || parsed.followUp) && (
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[11px] text-slate-900 border-t border-slate-100">
+                                  {parsed.outcome && (
+                                    <span>
+                                      <strong className="font-bold text-slate-900">Outcome:</strong> {parsed.outcome}
+                                    </span>
+                                  )}
+                                  {parsed.requirement && (
+                                    <span>
+                                      <strong className="font-bold text-slate-900">Requirement:</strong> {parsed.requirement}
+                                    </span>
+                                  )}
+                                  {parsed.interests && (
+                                    <span>
+                                      <strong className="font-bold text-slate-900">Interests:</strong> {parsed.interests}
+                                    </span>
+                                  )}
+                                  {parsed.followUp && (
+                                    <span>
+                                      <strong className="font-bold text-slate-900">Follow-up:</strong> {parsed.followUp}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}
