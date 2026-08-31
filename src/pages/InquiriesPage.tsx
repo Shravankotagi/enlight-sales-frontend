@@ -1154,18 +1154,17 @@ export default function InquiriesPage() {
 
   const getLinkedDeal = (inq: InquiryItem, companyName?: string) => {
     if (!rawDeals || rawDeals.length === 0) return null;
+    // 1. Direct 1-to-1 match by inquiry_id
     const directMatch = rawDeals.find((d: any) => d.inquiry_id && d.inquiry_id === inq.id);
     if (directMatch) return directMatch;
 
+    // 2. Match ONLY to an active open in-progress deal for this customer (never closed won/lost)
     const cName = (companyName || inq.customer_name || inq.sender_name || '').toLowerCase().trim();
     if (cName && !isProductOrGenericName(cName)) {
       const matchingDeals = rawDeals.filter((d: any) => (d.customer_name || '').toLowerCase().trim() === cName);
       if (matchingDeals.length > 0) {
-        const wonDeal = matchingDeals.find((d: any) => (d.stage || '').toLowerCase() === 'won');
-        if (wonDeal) return wonDeal;
-
         const openDeal = matchingDeals.find((d: any) => !['won', 'lost'].includes((d.stage || '').toLowerCase()));
-        return openDeal || matchingDeals[0];
+        if (openDeal) return openDeal;
       }
     }
     return null;
@@ -1197,22 +1196,15 @@ export default function InquiriesPage() {
 
   const getInquiryDealStageKey = (inq: InquiryItem, companyName?: string): string => {
     const linkedDeal = getLinkedDeal(inq, companyName);
-    const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
-    if (dealStage === 'won' || dealStage === 'lost') {
-      return dealStage;
-    }
-    if (dealStage === 'negotiation') {
-      return 'negotiation';
-    }
-    if (dealStage === 'quoted') {
-      return 'quoted';
-    }
-    if (dealStage === 'qualified') {
-      return 'qualified';
+    if (linkedDeal) {
+      const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
+      if (['won', 'lost', 'negotiation', 'quoted', 'qualified', 'new_inquiry'].includes(dealStage)) {
+        return dealStage === 'review' ? 'new_inquiry' : dealStage;
+      }
     }
 
     const details = parseInquiryText(inq.raw_text || '', inq);
-    const st = (inq.status || '').toLowerCase();
+    const st = (inq.status || '').toLowerCase().trim();
     const isPo = inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po' || (inq.raw_text || '').includes('[PO Document Attached');
     if (isPo && (st === 'confirmed' || st === 'won' || st === 'processed')) {
       return 'won';
@@ -1222,8 +1214,8 @@ export default function InquiriesPage() {
     }
 
     const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
-    const isQuoted = (st === 'quoted' || st === 'quotation_sent') && hasRates;
-    const isConfirmed = (st === 'confirmed' || st === 'processed' || st === 'quotation_ready') && hasRates;
+    const isQuoted = (st === 'quoted' || st === 'quotation_sent') && (hasRates || inq.inquiry_type === 'quotation_sent');
+    const isConfirmed = (st === 'confirmed' || st === 'saved' || st === 'processed' || st === 'quotation_ready') && hasRates;
 
     if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
       return 'quoted';
@@ -1231,11 +1223,11 @@ export default function InquiriesPage() {
     if (isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed') {
       return 'qualified';
     }
-    if (st === 'review' || st === 'needs_review' || st === 'pending' || !st) {
+    if (st === 'review' || st === 'needs_review' || st === 'pending' || !st || st === 'new' || st === 'draft') {
       return 'new_inquiry';
     }
-    if (dealStage) {
-      return dealStage;
+    if (st === 'lost') {
+      return 'lost';
     }
     return 'new_inquiry';
   };
