@@ -139,10 +139,23 @@ export default function CustomerProfilePage() {
     return map;
   }, [safeEmployees]);
 
-  const getSalespersonName = (phoneStr?: string) => {
+  const formatName = (str?: string) => {
+    if (!str) return '';
+    return str
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const getSalespersonName = (phoneStr?: string, assignedName?: string) => {
+    if (assignedName && assignedName.trim()) {
+      return formatName(assignedName);
+    }
     if (!phoneStr) return 'Unassigned';
-    const clean = phoneStr.replace(/\D/g, '').slice(-10);
-    return employeeMap.get(clean) || phoneStr;
+    const clean = String(phoneStr).replace(/\D/g, '').slice(-10);
+    const found = employeeMap.get(clean);
+    if (found) return formatName(found);
+    return 'Unassigned';
   };
 
   // Fetch single customer profile
@@ -219,23 +232,34 @@ export default function CustomerProfilePage() {
   }
 
   if (isError || !customer) {
+    const isForbidden =
+      (error as any)?.response?.status === 403 ||
+      String((error as any)?.message || '').toLowerCase().includes('denied') ||
+      String((error as any)?.message || '').toLowerCase().includes('permission');
+
     return (
       <div className="p-8 max-w-4xl mx-auto font-sans text-center space-y-4">
-        <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200">
-          <AlertTriangle size={32} />
+        <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 shadow-xs">
+          {isForbidden ? <ShieldAlert size={32} /> : <AlertTriangle size={32} />}
         </div>
-        <h2 className="text-xl font-bold text-slate-900">Customer Profile Not Found</h2>
+        <h2 className="text-xl font-bold text-slate-900">
+          {isForbidden ? 'Access Denied' : 'Customer Profile Not Found'}
+        </h2>
         <p className="text-sm text-slate-500 max-w-md mx-auto">
-          {error instanceof Error
-            ? error.message
-            : 'The requested customer profile could not be loaded or you do not have permission to view it.'}
+          {isForbidden
+            ? 'You do not have permission to view this customer. Salespersons can only view their own customers, and Sales Managers can only view customers belonging to their assigned team.'
+            : error instanceof Error
+              ? error.message
+              : 'The requested customer profile could not be loaded or does not exist.'}
         </p>
         <div className="flex items-center justify-center gap-3 pt-2">
-          <button
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer">
-            <RefreshCw size={14} /> Retry
-          </button>
+          {!isForbidden && (
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer">
+              <RefreshCw size={14} /> Retry
+            </button>
+          )}
           <button
             onClick={() => navigate('/customers')}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs cursor-pointer">
@@ -260,7 +284,6 @@ export default function CustomerProfilePage() {
   const inquiries = Array.isArray(customer.inquiries) ? customer.inquiries : [];
   const healthSignals = customer.health_signals || {};
 
-  const daysSinceOrder = customer.days_since_order;
   const lastOrderDateStr = customer.last_order_date
     ? safeFormatDate(customer.last_order_date)
     : 'No Orders Yet';
@@ -313,13 +336,7 @@ export default function CustomerProfilePage() {
                 {canViewSalesperson && (
                   <span className="font-semibold text-slate-600 inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md">
                     <UserCheck size={12} className="text-slate-500" />
-                    Rep: {getSalespersonName(customer.assigned_salesperson_phone)}
-                  </span>
-                )}
-                {customer.customer_phone && (
-                  <span className="inline-flex items-center gap-1 font-medium text-slate-600">
-                    <Phone size={12} className="text-slate-400" />
-                    {customer.customer_phone}
+                    Rep: {getSalespersonName(customer.assigned_salesperson_phone, customer.assigned_salesperson_name)}
                   </span>
                 )}
                 {customer.customer_address && (
@@ -343,9 +360,6 @@ export default function CustomerProfilePage() {
             <p className="text-2xl font-black text-slate-900 mt-1">
               {formatCurrency(customer.lifetime_value)}
             </p>
-            <p className="text-2xs font-semibold text-emerald-600 mt-0.5 flex items-center gap-1">
-              <TrendingUp size={11} /> Total Billing Value
-            </p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
             <IndianRupee size={22} />
@@ -358,9 +372,6 @@ export default function CustomerProfilePage() {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Orders</p>
             <p className="text-2xl font-black text-slate-900 mt-1">
               {customer.total_orders || 0}
-            </p>
-            <p className="text-2xs font-semibold text-slate-500 mt-0.5">
-              Confirmed Won Transactions
             </p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0">
@@ -375,11 +386,6 @@ export default function CustomerProfilePage() {
             <p className="text-lg font-black text-slate-900 mt-1 truncate">
               {lastOrderDateStr}
             </p>
-            <p className="text-2xs font-semibold text-slate-500 mt-0.5">
-              {daysSinceOrder !== null && daysSinceOrder !== undefined
-                ? `${daysSinceOrder} days ago`
-                : 'No purchase history'}
-            </p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shrink-0">
             <Calendar size={22} />
@@ -389,12 +395,9 @@ export default function CustomerProfilePage() {
         {/* Frequency Cadence */}
         <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Order Cadence</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Frequency</p>
             <p className="text-2xl font-black text-slate-900 mt-1">
               {customer.avg_order_frequency_days || 30}d
-            </p>
-            <p className="text-2xs font-semibold text-slate-500 mt-0.5">
-              Expected Reorder Cycle
             </p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
@@ -407,79 +410,70 @@ export default function CustomerProfilePage() {
       <div className="flex items-center gap-1.5 border-b border-slate-200 bg-white p-1.5 rounded-2xl shadow-2xs overflow-x-auto">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'overview'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}>
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'overview'
+            ? 'bg-blue-600 text-white shadow-xs'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}>
           <Layers size={14} />
           Overview
         </button>
 
         <button
           onClick={() => setActiveTab('orders')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'orders'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}>
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'orders'
+            ? 'bg-blue-600 text-white shadow-xs'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}>
           <ShoppingBag size={14} />
           Orders
           <span
-            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${
-              activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-            }`}>
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
             {wonDeals.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('inquiries')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'inquiries'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}>
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'inquiries'
+            ? 'bg-blue-600 text-white shadow-xs'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}>
           <MessageSquare size={14} />
           Inquiries
           <span
-            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${
-              activeTab === 'inquiries' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-            }`}>
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${activeTab === 'inquiries' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
             {inquiries.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('complaints')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'complaints'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}>
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'complaints'
+            ? 'bg-blue-600 text-white shadow-xs'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}>
           <ShieldAlert size={14} />
           Complaints
           <span
-            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${
-              activeTab === 'complaints' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-            }`}>
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${activeTab === 'complaints' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
             {complaints.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('visits')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'visits'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}>
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'visits'
+            ? 'bg-blue-600 text-white shadow-xs'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}>
           <MapPin size={14} />
           Visits
           <span
-            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${
-              activeTab === 'visits' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-            }`}>
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${activeTab === 'visits' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
             {visits.length}
           </span>
         </button>
@@ -703,11 +697,8 @@ export default function CustomerProfilePage() {
                 <div>
                   <p className="text-2xs font-bold text-slate-400 uppercase">Assigned Salesperson</p>
                   <p className="font-black text-slate-900 mt-0.5">
-                    {getSalespersonName(customer.assigned_salesperson_phone)}
+                    {getSalespersonName(customer.assigned_salesperson_phone, customer.assigned_salesperson_name)}
                   </p>
-                  {customer.assigned_salesperson_phone && (
-                    <p className="text-2xs text-slate-500 font-mono mt-0.5">{customer.assigned_salesperson_phone}</p>
-                  )}
                 </div>
 
                 <div>

@@ -185,10 +185,23 @@ export default function CustomersPage() {
     return map;
   }, [rawEmployees]);
 
-  const getSalespersonName = (phoneStr?: string) => {
+  const formatName = (str?: string) => {
+    if (!str) return '';
+    return str
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const getSalespersonName = (phoneStr?: string, assignedName?: string) => {
+    if (assignedName && assignedName.trim()) {
+      return formatName(assignedName);
+    }
     if (!phoneStr) return null;
     const clean = phoneStr.replace(/\D/g, '').slice(-10);
-    return employeeMap.get(clean) || phoneStr;
+    const found = employeeMap.get(clean);
+    if (found) return formatName(found);
+    return null;
   };
 
   const { data: rawCustomersData = [], isLoading, refetch } = useQuery({
@@ -236,7 +249,7 @@ export default function CustomersPage() {
     const name = (c?.customer_name || '').toLowerCase();
     const phone = (c?.customer_phone || '').toLowerCase();
     const person = (c?.contact_person || '').toLowerCase();
-    const rep = (getSalespersonName(c?.assigned_salesperson_phone) || '').toLowerCase();
+    const rep = (getSalespersonName(c?.assigned_salesperson_phone, c?.assigned_salesperson_name) || '').toLowerCase();
     const matchesSearch =
       name.includes(searchTerm.toLowerCase()) ||
       phone.includes(searchTerm.toLowerCase()) ||
@@ -477,7 +490,7 @@ export default function CustomersPage() {
               ) : (
                 paginatedCustomers.map((c: any, idx: number) => {
                   const serialNum = (currentPage - 1) * pageSize + idx + 1;
-                  const salespersonName = getSalespersonName(c.assigned_salesperson_phone);
+                  const salespersonName = getSalespersonName(c.assigned_salesperson_phone, c.assigned_salesperson_name);
                   const segment = deriveSegment(c);
                   const openIssuesCount = Number(c.open_complaints || 0);
 
