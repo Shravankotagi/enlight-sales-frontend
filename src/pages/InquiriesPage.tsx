@@ -1997,8 +1997,29 @@ export default function InquiriesPage() {
     }
   };
 
+  // Helper for 100% strictly monotonic descending sort by created_at with ISO timestamp parsing and secondary stable tie-breaker
+  const parseSafeTime = (dateVal: any): number => {
+    if (!dateVal) return 0;
+    if (typeof dateVal === 'number') return isNaN(dateVal) ? 0 : dateVal;
+    const parsed = new Date(dateVal).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const sortNewestFirst = <T extends { created_at?: any; id?: any }>(list: T[]): T[] => {
+    return [...list].sort((a, b) => {
+      const timeA = parseSafeTime(a?.created_at);
+      const timeB = parseSafeTime(b?.created_at);
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+      const idA = String(a?.id || '');
+      const idB = String(b?.id || '');
+      return idB.localeCompare(idA);
+    });
+  };
+
   const filteredPipelineDeals = useMemo(() => {
-    return (rawDeals || []).filter((d: any) => {
+    const list = (rawDeals || []).filter((d: any) => {
       const st = (d.stage || 'new_inquiry').toLowerCase().trim();
       const normStage = (st === 'review' || !st) ? 'new_inquiry' : st;
       if (filterStatus !== 'all' && normStage !== filterStatus) {
@@ -2024,6 +2045,7 @@ export default function InquiriesPage() {
         dateFormatted.includes(s)
       );
     });
+    return sortNewestFirst(list);
   }, [rawDeals, searchTerm, filterStatus]);
 
   const pipelineBoard = useMemo(() => {
@@ -2040,10 +2062,26 @@ export default function InquiriesPage() {
     }, {} as Record<string, any[]>);
   }, [filteredPipelineDeals]);
 
-  // Keep ONLY actual Product Inquiries (filters out generic chat greetings, deal logs, and status questions!)
-  const rawList = Array.isArray(inquiries) && inquiries.length > 0 ? inquiries : (Array.isArray(rawInquiries) ? rawInquiries : []);
-  const productInquiries = rawList.filter(isProductInquiry);
-  const activeInquiryList = productInquiries;
+  // Single deterministic source of truth for active inquiries, always newest first
+  const activeInquiryList = useMemo(() => {
+    const serverList = Array.isArray(rawInquiries) ? rawInquiries : [];
+    const localList = Array.isArray(inquiries) ? inquiries : [];
+
+    const map = new Map<string, InquiryItem>();
+    serverList.forEach(item => {
+      if (item?.id) map.set(item.id, item);
+    });
+    localList.forEach(item => {
+      if (item?.id) {
+        const existing = map.get(item.id);
+        map.set(item.id, { ...existing, ...item });
+      }
+    });
+
+    const combined = Array.from(map.values()).filter(isProductInquiry);
+    return sortNewestFirst(combined);
+  }, [rawInquiries, inquiries]);
+
   const stageCounts = useMemo(() => {
     const counts = {
       all: activeInquiryList.length,
@@ -2064,68 +2102,68 @@ export default function InquiriesPage() {
     return counts;
   }, [activeInquiryList, rawDeals]);
 
-  const filtered = activeInquiryList.filter(i => {
-    try {
-      if (dateRange.from && dateRange.to) {
-        const parseSafeIso = (dStr?: string) => {
-          if (!dStr) return '';
-          try {
-            const trimmed = String(dStr).trim();
-            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-            const d = new Date(trimmed);
-            if (isNaN(d.getTime())) return '';
-            return d.toISOString().split('T')[0];
-          } catch {
-            return '';
+  const filtered = useMemo(() => {
+    const list = activeInquiryList.filter(i => {
+      try {
+        if (dateRange.from && dateRange.to) {
+          const parseSafeIso = (dStr?: string) => {
+            if (!dStr) return '';
+            try {
+              const trimmed = String(dStr).trim();
+              if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+              const d = new Date(trimmed);
+              if (isNaN(d.getTime())) return '';
+              return d.toISOString().split('T')[0];
+            } catch {
+              return '';
+            }
+          };
+          const inqDate = parseSafeIso(i?.created_at);
+          if (inqDate) {
+            const fromDate = dateRange.from.split('T')[0];
+            const toDate = dateRange.to.split('T')[0];
+            if (inqDate < fromDate || inqDate > toDate) return false;
           }
-        };
-        const inqDate = parseSafeIso(i?.created_at);
-        if (inqDate) {
-          const fromDate = dateRange.from.split('T')[0];
-          const toDate = dateRange.to.split('T')[0];
-          if (inqDate < fromDate || inqDate > toDate) return false;
         }
+
+        const text = i?.raw_text || '';
+        const parsed = parseInquiryText(text, i);
+        const name = (parsed.companyName || i?.customer_name || i?.sender_name || '').toLowerCase();
+        const phone = (parsed.customerPhone || i?.sender_phone || i?.customer_phone || '').toLowerCase();
+        const itemsSummary = (
+          (parsed.lineItems || []).map((li: LineItemDetail) => `${li.sku_text} ${li.dimensions || ''} ${li.quantity} ${li.unit || ''}`).join(' ') +
+          ' ' + (parsed.productType || '')
+        ).toLowerCase();
+
+        const formattedDate = i?.created_at ? new Date(i.created_at).toLocaleString('en-IN').toLowerCase() : '';
+        const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
+        const isoDate = (i?.created_at || '').toLowerCase();
+        const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
+        const dealIdStr = (linkedDealForSearch?.deal_number || (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
+
+        const s = searchTerm.toLowerCase().trim();
+        const matchesSearch =
+          !s ||
+          name.includes(s) ||
+          dealIdStr.includes(s) ||
+          itemsSummary.includes(s) ||
+          formattedDate.includes(s) ||
+          dateOnly.includes(s) ||
+          isoDate.includes(s) ||
+          phone.includes(s) ||
+          text.toLowerCase().includes(s);
+
+        const dealStage = getInquiryDealStageKey(i, parsed.companyName);
+        const matchesStatus = filterStatus === 'all' || dealStage === filterStatus;
+
+        return matchesSearch && matchesStatus;
+      } catch {
+        return true;
       }
+    });
 
-      const text = i?.raw_text || '';
-      const parsed = parseInquiryText(text, i);
-      const name = (parsed.companyName || i?.customer_name || i?.sender_name || '').toLowerCase();
-      const phone = (parsed.customerPhone || i?.sender_phone || i?.customer_phone || '').toLowerCase();
-      const itemsSummary = (
-        (parsed.lineItems || []).map((li: LineItemDetail) => `${li.sku_text} ${li.dimensions || ''} ${li.quantity} ${li.unit || ''}`).join(' ') +
-        ' ' + (parsed.productType || '')
-      ).toLowerCase();
-
-      const formattedDate = i?.created_at ? new Date(i.created_at).toLocaleString('en-IN').toLowerCase() : '';
-      const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
-      const isoDate = (i?.created_at || '').toLowerCase();
-      const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
-      const dealIdStr = (linkedDealForSearch?.deal_number || (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
-
-      const s = searchTerm.toLowerCase().trim();
-      const matchesSearch =
-        !s ||
-        name.includes(s) ||
-        dealIdStr.includes(s) ||
-        itemsSummary.includes(s) ||
-        formattedDate.includes(s) ||
-        dateOnly.includes(s) ||
-        isoDate.includes(s) ||
-        phone.includes(s) ||
-        text.toLowerCase().includes(s);
-
-      const dealStage = getInquiryDealStageKey(i, parsed.companyName);
-      const matchesStatus = filterStatus === 'all' || dealStage === filterStatus;
-
-      return matchesSearch && matchesStatus;
-    } catch {
-      return true;
-    }
-  }).sort((a, b) => {
-    const timeA = new Date(a.created_at || 0).getTime();
-    const timeB = new Date(b.created_at || 0).getTime();
-    return timeB - timeA;
-  });
+    return sortNewestFirst(list);
+  }, [activeInquiryList, dateRange, searchTerm, filterStatus, rawDeals]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const validCurrentPage = Math.min(currentPage, totalPages);
