@@ -74,21 +74,24 @@ function SegmentBadge({ segment }: { segment?: string }) {
   );
 }
 
-function formatCurrency(val?: number) {
+function formatTonnage(val?: number) {
   const amount = Number(val || 0);
-  return '₹' + amount.toLocaleString('en-IN');
+  if (isNaN(amount) || amount === 0) return '0 MT';
+  const rounded = Math.round(amount * 1000) / 1000;
+  return `${rounded.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT`;
 }
 
 function deriveSegment(c: any): string {
   if (c.segment && ['key_account', 'growth', 'new'].includes(c.segment.toLowerCase())) {
     return c.segment.toLowerCase();
   }
+  const tonnage = Number(c.total_tonnage || 0);
   const ltv = Number(c.lifetime_value || 0);
   const orders = Number(c.total_orders || 0);
-  if (ltv >= 1000000 || orders >= 5) {
+  if (tonnage >= 100 || ltv >= 1000000 || orders >= 5) {
     return 'key_account';
   }
-  if (orders >= 2 || (ltv >= 100000 && ltv < 1000000)) {
+  if (orders >= 2 || tonnage >= 20 || (ltv >= 100000 && ltv < 1000000)) {
     return 'growth';
   }
   return 'new';
@@ -468,7 +471,7 @@ export default function CustomersPage() {
                 <th className="px-4 py-3.5 min-w-[140px]">Health</th>
                 <th className="px-4 py-3.5 text-center min-w-[100px]">Orders</th>
                 <th className="px-4 py-3.5 text-center min-w-[120px]">Open Issues</th>
-                <th className="px-5 py-3.5 text-right min-w-[140px]">Lifetime Value</th>
+                <th className="px-5 py-3.5 text-right min-w-[140px]">Total Tonnage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -566,10 +569,10 @@ export default function CustomersPage() {
                         )}
                       </td>
 
-                      {/* 7. Lifetime Value Column */}
+                      {/* 7. Total Tonnage Column */}
                       <td className="px-5 py-3.5 text-right whitespace-nowrap">
                         <span className="font-bold text-slate-900 text-sm">
-                          {formatCurrency(c.lifetime_value)}
+                          {formatTonnage(c.total_tonnage)}
                         </span>
                       </td>
                     </tr>

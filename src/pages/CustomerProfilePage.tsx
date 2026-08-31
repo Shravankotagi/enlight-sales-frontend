@@ -24,10 +24,11 @@ import {
   Edit2,
   UserCheck,
   X,
-  IndianRupee,
   ArrowUpRight,
+  Scale,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 
 function safeFormatDate(dateVal?: string | Date | null): string {
   if (!dateVal) return '—';
@@ -99,6 +100,13 @@ function SegmentBadge({ segment }: { segment?: string }) {
 function formatCurrency(val?: number) {
   const amount = Number(val || 0);
   return '₹' + amount.toLocaleString('en-IN');
+}
+
+function formatTonnage(val?: number) {
+  const amount = Number(val || 0);
+  if (isNaN(amount) || amount === 0) return '0 MT';
+  const rounded = Math.round(amount * 1000) / 1000;
+  return `${rounded.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT`;
 }
 
 interface ParsedVisitRemarks {
@@ -385,16 +393,16 @@ export default function CustomerProfilePage() {
 
       {/* Top 4 Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Lifetime Value */}
+        {/* Total Tonnage */}
         <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lifetime Value</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Tonnage</p>
             <p className="text-2xl font-black text-slate-900 mt-1">
-              {formatCurrency(customer.lifetime_value)}
+              {calculateOrdersTotalTonnage(wonDeals).formattedText || formatTonnage(customer.total_tonnage)}
             </p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-            <IndianRupee size={22} />
+            <Scale size={22} />
           </div>
         </div>
 
@@ -572,7 +580,7 @@ export default function CustomerProfilePage() {
                         <th className="py-2.5 px-3">PO / Deal</th>
                         <th className="py-2.5 px-3">Date</th>
                         <th className="py-2.5 px-3">Items</th>
-                        <th className="py-2.5 px-3 text-right">Order Value</th>
+                        <th className="py-2.5 px-3 text-right">Order Tonnage</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -597,7 +605,7 @@ export default function CustomerProfilePage() {
                               )}
                             </td>
                             <td className="py-3 px-3 text-right font-black text-slate-900 whitespace-nowrap">
-                              {formatCurrency(d.total_amount)}
+                              {formatTonnage(getOrderTonnage(d))}
                             </td>
                           </tr>
                         );
@@ -734,7 +742,7 @@ export default function CustomerProfilePage() {
                     <th className="py-3 px-3">Date</th>
                     <th className="py-3 px-3">Line Items</th>
                     <th className="py-3 px-3">Payment Terms</th>
-                    <th className="py-3 px-3 text-right">Order Value</th>
+                    <th className="py-3 px-3 text-right">Order Tonnage</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -771,7 +779,7 @@ export default function CustomerProfilePage() {
                           {deal.payment_terms || 'Standard'}
                         </td>
                         <td className="py-3 px-3 text-right font-black text-slate-900 text-sm whitespace-nowrap">
-                          {formatCurrency(deal.total_amount)}
+                          {formatTonnage(getOrderTonnage(deal))}
                         </td>
                       </tr>
                     );
