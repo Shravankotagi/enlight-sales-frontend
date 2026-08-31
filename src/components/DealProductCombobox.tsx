@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { ChevronDown, X, Hash, Package, FileText } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { ChevronDown, X, Hash, Package, Check, AlertCircle } from 'lucide-react';
 
 export interface DealItem {
   sku_text?: string;
@@ -21,30 +21,45 @@ export interface DealOption {
   created_at?: string;
 }
 
+export interface SelectedDealItem {
+  dealId: string;
+  dealCode: string;
+  poNumber?: string;
+  product: string;
+  fullLabel: string;
+}
+
 interface DealProductComboboxProps {
   deals: DealOption[];
-  value: string;
-  onChange: (val: string) => void;
-  onSelectDeal: (deal: DealOption | null, specificProduct?: string) => void;
+  selectedItems: SelectedDealItem[];
+  onChange: (items: SelectedDealItem[]) => void;
   placeholder?: string;
   disabled?: boolean;
   loading?: boolean;
+  required?: boolean;
+  error?: boolean;
   className?: string;
 }
 
 export default function DealProductCombobox({
   deals = [],
-  value,
+  selectedItems = [],
   onChange,
-  onSelectDeal,
-  placeholder = 'Type or select Deal ID, PO Number, Product...',
+  placeholder = 'Type to search or select Won Deal ID, PO Number, Product...',
   disabled = false,
   loading = false,
+  error = false,
   className = '',
 }: DealProductComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Filter ONLY Won deals
+  const wonDeals = useMemo(() => {
+    return deals.filter(d => (d.stage || '').toLowerCase() === 'won');
+  }, [deals]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -59,136 +74,160 @@ export default function DealProductCombobox({
     };
   }, []);
 
-  // Flatten deals and their items into searchable selectable entries
+  // Build selectable items for won deals
   const flattenedOptions = useMemo(() => {
     const list: Array<{
       key: string;
-      deal: DealOption | null;
+      dealId: string;
       dealCode: string;
       poNumber: string;
-      productSummary: string;
+      product: string;
       fullLabel: string;
-      stage?: string;
-      isUnlinked?: boolean;
     }> = [];
 
-    // Option 1: Unlinked
-    list.push({
-      key: 'unlinked-direct',
-      deal: null,
-      dealCode: '',
-      poNumber: '',
-      productSummary: '',
-      fullLabel: '-- Unlinked / Direct Complaint (No Deal Linked) --',
-      isUnlinked: true,
-    });
-
-    deals.forEach(deal => {
-      const dealCode = `#DEAL-${deal.id.substring(0, 6).toUpperCase()}`;
+    wonDeals.forEach(deal => {
+      const cleanId = deal.id.startsWith('DEAL-') ? deal.id.replace(/^DEAL-/, '') : deal.id.substring(0, 6).toUpperCase();
+      const dealCode = `#DEAL-${cleanId}`;
       const poStr = deal.po_number ? ` (PO: ${deal.po_number})` : '';
       const items = Array.isArray(deal.deal_items) && deal.deal_items.length > 0 ? deal.deal_items : [];
 
       if (items.length === 0) {
         list.push({
-          key: `${deal.id}-deal`,
-          deal,
+          key: `${deal.id}-general`,
+          dealId: deal.id,
           dealCode,
           poNumber: deal.po_number || '',
-          productSummary: 'General Material',
+          product: 'General Material',
           fullLabel: `${dealCode}${poStr} — General Material`,
-          stage: deal.stage,
         });
       } else {
         items.forEach((it, idx) => {
-          const itemSummary = `${it.sku_text || ''} ${it.dimensions || ''} ${it.quantity ? `${it.quantity} ${it.unit || 'MT'}` : ''}`.trim();
+          const itemSummary = `${it.sku_text || ''} ${it.dimensions || ''} ${it.quantity ? `${it.quantity} ${it.unit || 'MT'}` : ''}`.trim() || 'Steel Material';
           list.push({
             key: `${deal.id}-item-${idx}`,
-            deal,
+            dealId: deal.id,
             dealCode,
             poNumber: deal.po_number || '',
-            productSummary: itemSummary || 'General Material',
-            fullLabel: `${dealCode}${poStr} — ${itemSummary || 'General Material'}`,
-            stage: deal.stage,
+            product: itemSummary,
+            fullLabel: `${dealCode}${poStr} — ${itemSummary}`,
           });
         });
       }
     });
 
     return list;
-  }, [deals]);
+  }, [wonDeals]);
 
-  const query = (value || '').trim().toLowerCase();
+  const query = searchQuery.trim().toLowerCase();
 
   const filteredOptions = useMemo(() => {
     if (!query) return flattenedOptions;
     return flattenedOptions.filter(opt => {
-      if (opt.isUnlinked) return 'unlinked direct complaint'.includes(query);
       const code = opt.dealCode.toLowerCase();
       const rawCode = opt.dealCode.replace(/[^a-z0-9]/gi, '').toLowerCase();
       const po = opt.poNumber.toLowerCase();
-      const prod = opt.productSummary.toLowerCase();
+      const prod = opt.product.toLowerCase();
       const label = opt.fullLabel.toLowerCase();
       return code.includes(query) || rawCode.includes(query) || po.includes(query) || prod.includes(query) || label.includes(query);
     });
   }, [flattenedOptions, query]);
 
-  const handleSelect = (option: typeof flattenedOptions[0]) => {
-    if (option.isUnlinked || !option.deal) {
-      onChange('');
-      onSelectDeal(null, '');
+  const isItemSelected = (key: string) => {
+    return selectedItems.some(it => {
+      const itKey = `${it.dealId}-${it.product}`;
+      return itKey === key;
+    });
+  };
+
+  const toggleItem = (opt: typeof flattenedOptions[0]) => {
+    const itKey = `${opt.dealId}-${opt.product}`;
+    const exists = selectedItems.some(it => `${it.dealId}-${it.product}` === itKey);
+
+    if (exists) {
+      onChange(selectedItems.filter(it => `${it.dealId}-${it.product}` !== itKey));
     } else {
-      onChange(option.fullLabel);
-      onSelectDeal(option.deal, option.productSummary);
+      onChange([
+        ...selectedItems,
+        {
+          dealId: opt.dealId,
+          dealCode: opt.dealCode,
+          poNumber: opt.poNumber,
+          product: opt.product,
+          fullLabel: opt.fullLabel,
+        },
+      ]);
     }
-    setIsOpen(false);
+    setSearchQuery('');
+  };
+
+  const removeItem = (dealId: string, product: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(selectedItems.filter(it => !(it.dealId === dealId && it.product === product)));
   };
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
-      <div className="relative flex items-center">
-        <Hash size={14} className="absolute left-3 text-slate-400 pointer-events-none" />
+    <div ref={containerRef} className={`relative w-full ${className}`}>
+      {/* Combobox Multi-Select Box */}
+      <div
+        onClick={() => {
+          if (!disabled && !loading) {
+            setIsOpen(true);
+            inputRef.current?.focus();
+          }
+        }}
+        className={`min-h-[38px] w-full p-1.5 pl-2.5 pr-8 border rounded-xl bg-white flex flex-wrap items-center gap-1.5 cursor-pointer transition-all ${
+          error ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/20' : isOpen ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-300 hover:border-slate-400'
+        } ${disabled ? 'bg-slate-50 opacity-60 cursor-not-allowed' : ''}`}>
+        
+        <Hash size={13} className="text-slate-400 shrink-0 mr-0.5" />
+
+        {/* Selected Chips */}
+        {selectedItems.map((item, idx) => (
+          <span
+            key={`${item.dealId}-${item.product}-${idx}`}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-[11px] font-semibold animate-in fade-in zoom-in-95">
+            <span className="font-mono text-blue-700">{item.dealCode}</span>
+            {item.poNumber && <span className="text-slate-600 font-mono text-[10px]">({item.poNumber})</span>}
+            <span className="text-slate-700 font-medium truncate max-w-[150px]">{item.product}</span>
+            {!disabled && (
+              <button
+                type="button"
+                onClick={(e) => removeItem(item.dealId, item.product, e)}
+                className="p-0.5 text-blue-600 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors cursor-pointer ml-0.5">
+                <X size={11} />
+              </button>
+            )}
+          </span>
+        ))}
+
+        {/* Search Input inside Combobox */}
         <input
           ref={inputRef}
           type="text"
           disabled={disabled || loading}
-          autoComplete="off"
-          placeholder={loading ? 'Loading deals...' : placeholder}
-          value={value}
-          onFocus={() => setIsOpen(true)}
-          onClick={() => setIsOpen(true)}
-          onChange={e => {
-            onChange(e.target.value);
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
             setIsOpen(true);
           }}
-          className={`w-full pl-8.5 pr-14 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400 bg-white transition-all ${
-            disabled ? 'bg-slate-50 opacity-60 cursor-not-allowed' : ''
-          }`}
+          onFocus={() => setIsOpen(true)}
+          placeholder={selectedItems.length === 0 ? (loading ? 'Loading won orders...' : placeholder) : ''}
+          className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs font-medium text-slate-800 placeholder:text-slate-400 py-0.5"
         />
 
-        {value && !disabled && (
-          <button
-            type="button"
-            onClick={() => {
-              onChange('');
-              onSelectDeal(null, '');
-              inputRef.current?.focus();
-            }}
-            className="absolute right-7 p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
-            <X size={13} />
-          </button>
-        )}
-
+        {/* Dropdown Chevron */}
         <button
           type="button"
           tabIndex={-1}
           disabled={disabled || loading}
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             if (!disabled && !loading) {
               setIsOpen(prev => !prev);
               inputRef.current?.focus();
             }
           }}
-          className="absolute right-2.5 p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
           <ChevronDown
             size={14}
             className={`transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600' : ''}`}
@@ -196,53 +235,64 @@ export default function DealProductCombobox({
         </button>
       </div>
 
-      {/* Dropdown Options List */}
+      {/* Dropdown Menu */}
       {isOpen && !disabled && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
-          {filteredOptions.length === 0 ? (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+          {wonDeals.length === 0 ? (
+            <div className="px-4 py-4 text-center text-xs text-slate-500">
+              <AlertCircle size={20} className="mx-auto text-amber-500 mb-1" />
+              <p className="font-semibold text-slate-700">No Won Orders Found</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Complaints can only be logged for won orders / POs.</p>
+            </div>
+          ) : filteredOptions.length === 0 ? (
             <div className="px-4 py-3 text-center text-xs text-slate-400">
-              No matching deals or products found.
+              No matching products or Deal IDs found.
             </div>
           ) : (
-            filteredOptions.map((opt) => (
-              <div
-                key={opt.key}
-                onClick={() => handleSelect(opt)}
-                className="px-3.5 py-2.5 hover:bg-blue-50/70 transition-colors cursor-pointer flex items-center justify-between gap-2 group text-xs">
-                <div className="flex items-center gap-2 truncate min-w-0">
-                  {opt.isUnlinked ? (
-                    <FileText size={14} className="text-slate-400 shrink-0" />
-                  ) : (
-                    <Package size={14} className="text-blue-500 shrink-0" />
-                  )}
-                  <div className="truncate min-w-0">
-                    {opt.isUnlinked ? (
-                      <span className="text-slate-600 font-medium">{opt.fullLabel}</span>
-                    ) : (
-                      <div className="flex items-center gap-1.5 flex-wrap truncate">
-                        <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded text-[10px]">
-                          {opt.dealCode}
-                        </span>
-                        {opt.poNumber && (
-                          <span className="font-mono text-slate-600 bg-slate-100 px-1 py-0.5 rounded text-[10px]">
-                            PO: {opt.poNumber}
-                          </span>
-                        )}
-                        <span className="font-semibold text-slate-900 truncate">
-                          {opt.productSummary}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            filteredOptions.map((opt) => {
+              const selected = isItemSelected(`${opt.dealId}-${opt.product}`);
+              return (
+                <div
+                  key={opt.key}
+                  onClick={() => toggleItem(opt)}
+                  className={`px-3.5 py-2 hover:bg-blue-50/70 transition-colors cursor-pointer flex items-center justify-between gap-2.5 text-xs ${
+                    selected ? 'bg-blue-50/50' : ''
+                  }`}>
+                  <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
+                    {/* Checkbox */}
+                    <div
+                      className={`w-4 h-4 rounded flex items-center justify-center transition-all shrink-0 ${
+                        selected
+                          ? 'bg-blue-600 border border-blue-600 text-white shadow-2xs'
+                          : 'border border-slate-300 bg-white hover:border-slate-400'
+                      }`}>
+                      {selected && <Check size={11} strokeWidth={3} />}
+                    </div>
 
-                {opt.stage && (
-                  <span className="capitalize text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                    {opt.stage}
+                    <Package size={14} className={selected ? 'text-blue-600 shrink-0' : 'text-slate-400 shrink-0'} />
+
+                    {/* Deal & Product details */}
+                    <div className="truncate min-w-0 flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded text-[10px]">
+                        {opt.dealCode}
+                      </span>
+                      {opt.poNumber && (
+                        <span className="font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded text-[10px]">
+                          PO: {opt.poNumber}
+                        </span>
+                      )}
+                      <span className={`truncate font-medium ${selected ? 'text-blue-900 font-bold' : 'text-slate-800'}`}>
+                        {opt.product}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                    Won
                   </span>
-                )}
-              </div>
-            ))
+                </div>
+              );
+            })
           )}
         </div>
       )}

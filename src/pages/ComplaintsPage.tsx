@@ -29,7 +29,7 @@ import {
   getDaysAgo,
 } from '../utils/dateUtils';
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
-import DealProductCombobox from '../components/DealProductCombobox';
+import DealProductCombobox, { type SelectedDealItem } from '../components/DealProductCombobox';
 
 interface Complaint {
   id: string;
@@ -151,10 +151,7 @@ export default function ComplaintsPage() {
   // Edit Modal
   const [editingComplaint, setEditingComplaint] = useState<Complaint | null>(null);
   const [editCustomerName, setEditCustomerName] = useState('');
-  const [editDealId, setEditDealId] = useState('');
-  const [editPoNumber, setEditPoNumber] = useState('');
-  const [editDealDisplay, setEditDealDisplay] = useState('');
-  const [editProduct, setEditProduct] = useState('');
+  const [editSelectedDeals, setEditSelectedDeals] = useState<SelectedDealItem[]>([]);
   const [editType, setEditType] = useState('Quality Defect');
   const [editDescription, setEditDescription] = useState('');
   const [editCorrectiveAction, setEditCorrectiveAction] = useState('');
@@ -165,10 +162,7 @@ export default function ComplaintsPage() {
 
   // Create Form state
   const [formCustomerName, setFormCustomerName] = useState('');
-  const [formDealId, setFormDealId] = useState('');
-  const [formPoNumber, setFormPoNumber] = useState('');
-  const [formDealDisplay, setFormDealDisplay] = useState('');
-  const [formProduct, setFormProduct] = useState('');
+  const [formSelectedDeals, setFormSelectedDeals] = useState<SelectedDealItem[]>([]);
   const [formType, setFormType] = useState('Quality Defect');
   const [formDescription, setFormDescription] = useState('');
   const [formCorrectiveAction, setFormCorrectiveAction] = useState('');
@@ -248,7 +242,7 @@ export default function ComplaintsPage() {
     );
   }, [customers, complaints]);
 
-  // Fetch active deals when customer is chosen in Create Form
+  // Fetch won deals when customer is chosen in Create Form
   useEffect(() => {
     if (!formCustomerName.trim()) {
       setCustomerDeals([]);
@@ -257,12 +251,14 @@ export default function ComplaintsPage() {
     let isMounted = true;
     setLoadingDeals(true);
     dealsApi
-      .getAll({ customer_name: formCustomerName.trim() })
+      .getAll({ customer_name: formCustomerName.trim(), stage: 'won' })
       .then(res => {
         if (!isMounted) return;
         const raw = res?.data;
         const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-        setCustomerDeals(list);
+        // Strict client-side won filter guard
+        const wonList = list.filter((d: any) => (d?.stage || '').toLowerCase() === 'won');
+        setCustomerDeals(wonList);
       })
       .catch(() => {
         if (isMounted) setCustomerDeals([]);
@@ -276,35 +272,32 @@ export default function ComplaintsPage() {
     };
   }, [formCustomerName]);
 
-  // Fetch active deals when customer is chosen in Edit Form
+  // Fetch won deals when customer is chosen in Edit Form
   useEffect(() => {
     if (!editCustomerName.trim()) {
       setEditCustomerDeals([]);
       return;
     }
     dealsApi
-      .getAll({ customer_name: editCustomerName.trim() })
+      .getAll({ customer_name: editCustomerName.trim(), stage: 'won' })
       .then(res => {
         const raw = res?.data;
         const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-        setEditCustomerDeals(list);
+        const wonList = list.filter((d: any) => (d?.stage || '').toLowerCase() === 'won');
+        setEditCustomerDeals(wonList);
       })
       .catch(() => setEditCustomerDeals([]));
   }, [editCustomerName]);
 
   const handleSelectCustomerForCreate = (cust: CustomerDirectoryItem) => {
     setFormCustomerName(cust.customer_name);
-    setFormDealId('');
-    setFormPoNumber('');
-    setFormDealDisplay('');
+    setFormSelectedDeals([]);
     if (formErrors.customerName) setFormErrors(prev => ({ ...prev, customerName: false }));
   };
 
   const handleSelectCustomerForEdit = (cust: CustomerDirectoryItem) => {
     setEditCustomerName(cust.customer_name);
-    setEditDealId('');
-    setEditPoNumber('');
-    setEditDealDisplay('');
+    setEditSelectedDeals([]);
   };
 
   const getSalespersonDisplayName = (comp: Complaint) => {
@@ -346,10 +339,7 @@ export default function ComplaintsPage() {
 
   const handleOpenAddModal = () => {
     setFormCustomerName('');
-    setFormDealId('');
-    setFormPoNumber('');
-    setFormDealDisplay('');
-    setFormProduct('');
+    setFormSelectedDeals([]);
     setFormType('Quality Defect');
     setFormDescription('');
     setFormCorrectiveAction('');
@@ -366,6 +356,7 @@ export default function ComplaintsPage() {
 
     const errors: Record<string, boolean> = {};
     if (!formCustomerName.trim()) errors.customerName = true;
+    if (formSelectedDeals.length === 0) errors.deals = true;
     if (!formType) errors.type = true;
     if (!formDescription.trim()) errors.description = true;
     if (!formStatus) errors.status = true;
@@ -375,7 +366,9 @@ export default function ComplaintsPage() {
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      if (errors.resolutionNotes) {
+      if (errors.deals) {
+        toast.error('Please select at least one Won Deal / PO & Product.');
+      } else if (errors.resolutionNotes) {
         toast.error('Resolution notes are required when status is marked as Resolved.');
       }
       return;
@@ -383,12 +376,17 @@ export default function ComplaintsPage() {
 
     try {
       setSubmitting(true);
+
+      const primaryDeal = formSelectedDeals[0];
+      const combinedProducts = formSelectedDeals.map(d => d.product).filter(Boolean).join(', ');
+      const combinedPoNumbers = Array.from(new Set(formSelectedDeals.map(d => d.poNumber).filter(Boolean))).join(', ');
+
       await complaintsApi.create({
         customer_name: formCustomerName.trim(),
-        deal_id: formDealId || null,
-        po_number: formPoNumber.trim() || null,
-        product_name: formProduct.trim() || 'General Material',
-        affected_product: formProduct.trim() || 'General Material',
+        deal_id: primaryDeal ? primaryDeal.dealId : null,
+        po_number: combinedPoNumbers || null,
+        product_name: combinedProducts || 'General Material',
+        affected_product: combinedProducts || 'General Material',
         complaint_type: formType,
         description: formDescription.trim(),
         corrective_action: formCorrectiveAction.trim() || null,
@@ -403,10 +401,7 @@ export default function ComplaintsPage() {
         setIsSavedSuccess(false);
         setShowCreateModal(false);
         setFormCustomerName('');
-        setFormDealId('');
-        setFormPoNumber('');
-        setFormDealDisplay('');
-        setFormProduct('');
+        setFormSelectedDeals([]);
         setFormType('Quality Defect');
         setFormDescription('');
         setFormCorrectiveAction('');
@@ -427,19 +422,23 @@ export default function ComplaintsPage() {
   const openEditModal = (comp: Complaint) => {
     setEditingComplaint(comp);
     setEditCustomerName(comp.customer_name || '');
-    setEditDealId(comp.deal_id || '');
-    setEditPoNumber(comp.po_number || '');
 
     if (comp.deal_id) {
-      const dealCode = `#DEAL-${comp.deal_id.startsWith('DEAL-') ? comp.deal_id.replace(/^DEAL-/, '') : comp.deal_id.substring(0, 6).toUpperCase()}`;
-      const poStr = comp.po_number ? ` (PO: ${comp.po_number})` : '';
-      const prodStr = comp.product_name || comp.affected_product ? ` — ${comp.product_name || comp.affected_product}` : '';
-      setEditDealDisplay(`${dealCode}${poStr}${prodStr}`);
+      const cleanId = comp.deal_id.startsWith('DEAL-') ? comp.deal_id.replace(/^DEAL-/, '') : comp.deal_id.substring(0, 6).toUpperCase();
+      const product = comp.product_name || comp.affected_product || 'General Material';
+      setEditSelectedDeals([
+        {
+          dealId: comp.deal_id,
+          dealCode: `#DEAL-${cleanId}`,
+          poNumber: comp.po_number || '',
+          product: product,
+          fullLabel: `#DEAL-${cleanId} — ${product}`,
+        },
+      ]);
     } else {
-      setEditDealDisplay('');
+      setEditSelectedDeals([]);
     }
 
-    setEditProduct(comp.product_name || comp.affected_product || '');
     setEditType(comp.complaint_type || 'Quality Defect');
     setEditDescription(comp.description || '');
     setEditCorrectiveAction(comp.corrective_action || '');
@@ -452,6 +451,11 @@ export default function ComplaintsPage() {
     e.preventDefault();
     if (!editingComplaint || !editCustomerName.trim()) return;
 
+    if (editSelectedDeals.length === 0) {
+      toast.error('Please select at least one Won Deal / PO & Product.');
+      return;
+    }
+
     if (editStatus === 'resolved' && !editResolutionNotes.trim()) {
       toast.error('Resolution notes are required when status is marked as Resolved.');
       return;
@@ -459,12 +463,16 @@ export default function ComplaintsPage() {
 
     try {
       setEditSaving(true);
+      const primaryDeal = editSelectedDeals[0];
+      const combinedProducts = editSelectedDeals.map(d => d.product).filter(Boolean).join(', ');
+      const combinedPoNumbers = Array.from(new Set(editSelectedDeals.map(d => d.poNumber).filter(Boolean))).join(', ');
+
       const updatedPayload: any = {
         customer_name: editCustomerName.trim(),
-        deal_id: editDealId || null,
-        po_number: editPoNumber.trim() || null,
-        product_name: editProduct.trim() || 'General Material',
-        affected_product: editProduct.trim() || 'General Material',
+        deal_id: primaryDeal ? primaryDeal.dealId : null,
+        po_number: combinedPoNumbers || null,
+        product_name: combinedProducts || 'General Material',
+        affected_product: combinedProducts || 'General Material',
         complaint_type: editType,
         description: editDescription.trim(),
         corrective_action: editCorrectiveAction.trim() || null,
@@ -627,8 +635,6 @@ export default function ComplaintsPage() {
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, filtered.length);
   const paginatedComplaints = filtered.slice(startIndex, endIndex);
-
-  const quickSteelProducts = ['HR Coil', 'CR Sheet', 'MS Plate', 'TMT Bar', 'MS Beam', 'Chequered Plate', 'GI Sheet', 'Seamless Pipe'];
 
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
@@ -967,7 +973,7 @@ export default function ComplaintsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
               {/* Linked Deal / PO */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                <p className="text-xs font-medium text-slate-400 mb-1">Linked Deal &amp; PO</p>
+                <p className="text-xs font-medium text-slate-400 mb-1">Linked Won Deal &amp; PO</p>
                 <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
                   <Hash size={14} className="text-blue-600 shrink-0" />
                   {selectedComplaint.deal_id ? (
@@ -975,7 +981,7 @@ export default function ComplaintsPage() {
                       #{selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id : `DEAL-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
                     </span>
                   ) : (
-                    <span className="text-slate-400 font-normal">Direct Complaint</span>
+                    <span className="text-slate-400 font-normal">Won Order</span>
                   )}
                   {selectedComplaint.po_number && (
                     <span className="text-xs font-mono font-semibold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
@@ -997,7 +1003,7 @@ export default function ComplaintsPage() {
               {/* Product Name */}
               {(selectedComplaint.product_name || selectedComplaint.affected_product) && (
                 <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 col-span-1 sm:col-span-2">
-                  <p className="text-xs font-medium text-slate-400 mb-1">Product Name / Specification</p>
+                  <p className="text-xs font-medium text-slate-400 mb-1">Product(s) Affected</p>
                   <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                     <Package size={14} className="text-blue-600 shrink-0" />
                     {selectedComplaint.product_name || selectedComplaint.affected_product}
@@ -1125,80 +1131,36 @@ export default function ComplaintsPage() {
                   />
                 </div>
 
-                {/* 2. Searchable Deal ID / PO Selector */}
+                {/* 2. Multi-Select Won Deal ID / PO Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number &amp; Product
+                    Linked Deal ID / PO Number &amp; Product <span className="text-rose-500">*</span>
                   </label>
                   <DealProductCombobox
                     deals={editCustomerDeals}
-                    value={editDealDisplay}
-                    onChange={setEditDealDisplay}
-                    onSelectDeal={(deal, specificProduct) => {
-                      if (!deal) {
-                        setEditDealId('');
-                        setEditPoNumber('');
-                      } else {
-                        setEditDealId(deal.id);
-                        setEditPoNumber(deal.po_number || '');
-                        if (specificProduct) {
-                          setEditProduct(specificProduct);
-                        } else if (!editProduct && Array.isArray(deal.deal_items) && deal.deal_items.length > 0) {
-                          const summaries = deal.deal_items
-                            .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''} ${i.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''}`.trim())
-                            .filter(Boolean);
-                          if (summaries.length > 0) setEditProduct(summaries[0]);
-                        }
-                      }
-                    }}
+                    selectedItems={editSelectedDeals}
+                    onChange={setEditSelectedDeals}
+                    required
                   />
                 </div>
 
-                {/* 3. Product Name & Complaint Type */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Product Name / Specification <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. HR Coil 3.15mm / CR Sheet 2mm"
-                      value={editProduct}
-                      onChange={e => setEditProduct(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                      required
-                    />
-                    {/* Quick Suggestions Chips */}
-                    <div className="flex items-center gap-1 flex-wrap mt-1.5">
-                      {quickSteelProducts.slice(0, 4).map(chip => (
-                        <button
-                          key={chip}
-                          type="button"
-                          onClick={() => setEditProduct(chip)}
-                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium transition-colors cursor-pointer">
-                          + {chip}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Complaint Type <span className="text-rose-500">*</span></label>
-                    <div className="relative flex items-center">
-                      <select
-                        value={editType}
-                        onChange={e => setEditType(e.target.value)}
-                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                        <option value="Quality Defect">Quality Defect</option>
-                        <option value="Physical Damage">Physical Damage</option>
-                        <option value="Quantity Shortage">Quantity Shortage</option>
-                        <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
-                        <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
-                        <option value="Specification Mismatch">Specification Mismatch</option>
-                        <option value="Other">Other</option>
-                      </select>
-                      <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                    </div>
+                {/* 3. Complaint Type */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Complaint Type <span className="text-rose-500">*</span></label>
+                  <div className="relative flex items-center">
+                    <select
+                      value={editType}
+                      onChange={e => setEditType(e.target.value)}
+                      className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                      <option value="Quality Defect">Quality Defect</option>
+                      <option value="Physical Damage">Physical Damage</option>
+                      <option value="Quantity Shortage">Quantity Shortage</option>
+                      <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
+                      <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
+                      <option value="Specification Mismatch">Specification Mismatch</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
@@ -1313,86 +1275,49 @@ export default function ComplaintsPage() {
                   )}
                 </div>
 
-                {/* 2. Searchable Deal ID / PO Number Selector */}
+                {/* 2. Mandatory Multi-Select Won Deal ID / PO Number Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number &amp; Product
+                    Linked Deal ID / PO Number &amp; Product <span className="text-rose-500">*</span>
                   </label>
                   <DealProductCombobox
                     deals={customerDeals}
-                    value={formDealDisplay}
-                    onChange={setFormDealDisplay}
-                    loading={loadingDeals}
-                    onSelectDeal={(deal, specificProduct) => {
-                      if (!deal) {
-                        setFormDealId('');
-                        setFormPoNumber('');
-                      } else {
-                        setFormDealId(deal.id);
-                        setFormPoNumber(deal.po_number || '');
-                        if (specificProduct) {
-                          setFormProduct(specificProduct);
-                        } else if (!formProduct && Array.isArray(deal.deal_items) && deal.deal_items.length > 0) {
-                          const summaries = deal.deal_items
-                            .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''} ${i.quantity ? `${i.quantity} ${i.unit || 'MT'}` : ''}`.trim())
-                            .filter(Boolean);
-                          if (summaries.length > 0) setFormProduct(summaries[0]);
-                        }
-                      }
+                    selectedItems={formSelectedDeals}
+                    onChange={items => {
+                      setFormSelectedDeals(items);
+                      if (formErrors.deals) setFormErrors(prev => ({ ...prev, deals: false }));
                     }}
+                    loading={loadingDeals}
+                    error={formErrors.deals}
+                    required
                   />
+                  {formErrors.deals && (
+                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select at least one Won Deal / PO &amp; Product.</p>
+                  )}
                 </div>
 
-                {/* 3. Product Name & Complaint Type */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Product Name / Specification <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. HR Coil 3.15mm / MS Plate 12mm"
-                      value={formProduct}
-                      onChange={e => setFormProduct(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                      required
-                    />
-                    {/* Quick Suggestions Chips */}
-                    <div className="flex items-center gap-1 flex-wrap mt-1.5">
-                      {quickSteelProducts.map(chip => (
-                        <button
-                          key={chip}
-                          type="button"
-                          onClick={() => setFormProduct(chip)}
-                          className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium transition-colors cursor-pointer">
-                          + {chip}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Complaint Type <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative flex items-center">
-                      <select
-                        value={formType}
-                        onChange={e => {
-                          setFormType(e.target.value);
-                          if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
-                        }}
-                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                        <option value="Quality Defect">Quality Defect</option>
-                        <option value="Physical Damage">Physical Damage</option>
-                        <option value="Quantity Shortage">Quantity Shortage</option>
-                        <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
-                        <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
-                        <option value="Specification Mismatch">Specification Mismatch</option>
-                        <option value="Other">Other</option>
-                      </select>
-                      <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                    </div>
+                {/* 3. Complaint Type */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Complaint Type <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <select
+                      value={formType}
+                      onChange={e => {
+                        setFormType(e.target.value);
+                        if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
+                      }}
+                      className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                      <option value="Quality Defect">Quality Defect</option>
+                      <option value="Physical Damage">Physical Damage</option>
+                      <option value="Quantity Shortage">Quantity Shortage</option>
+                      <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
+                      <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
+                      <option value="Specification Mismatch">Specification Mismatch</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
