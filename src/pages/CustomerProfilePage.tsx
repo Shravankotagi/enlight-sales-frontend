@@ -5,16 +5,15 @@ import { useState, useMemo } from 'react';
 import {
   ChevronLeft,
   Building2,
-  Phone,
   MapPin,
   Calendar,
-  TrendingUp,
   ShoppingBag,
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
   Clock,
   Award,
+  TrendingUp,
   Sparkles,
   Layers,
   MessageSquare,
@@ -25,9 +24,7 @@ import {
   Edit2,
   UserCheck,
   X,
-  User,
   IndianRupee,
-  Activity,
   ArrowUpRight,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -488,8 +485,8 @@ export default function CustomerProfilePage() {
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Activity size={18} className="text-blue-600" />
-                  <h2 className="text-base font-bold text-slate-900">Account Health Signals & Insights</h2>
+                  <Sparkles size={18} className="text-blue-600" />
+                  <h2 className="text-base font-bold text-slate-900">AI Account Insights</h2>
                 </div>
                 {healthSignals.sentiment === 'critical' ? (
                   <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
@@ -506,50 +503,11 @@ export default function CustomerProfilePage() {
                 )}
               </div>
 
-              {/* Executive Summary */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs text-slate-700 leading-relaxed font-medium">
-                {healthSignals.executive_summary || 'Account order velocity is on track with steady procurement history.'}
-              </div>
-
-              {/* Key Signal Items */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 rounded-xl border border-slate-200 bg-white">
-                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                    <Clock size={11} /> Cadence Health
-                  </p>
-                  <p className="font-bold text-slate-800 mt-1 leading-snug">
-                    {healthSignals.cadence_health || 'On track with expected cycle'}
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl border border-slate-200 bg-white">
-                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                    <TrendingUp size={11} /> Revenue Status
-                  </p>
-                  <p className="font-bold text-slate-800 mt-1 leading-snug">
-                    {healthSignals.revenue_signal || 'Stable account value'}
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl border border-slate-200 bg-white">
-                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                    <ShieldAlert size={11} /> Service Quality
-                  </p>
-                  <p className="font-bold text-slate-800 mt-1 leading-snug">
-                    {healthSignals.quality_signal || 'Zero open complaints'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Recommended Action */}
-              <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-start gap-2.5">
-                <Sparkles size={16} className="text-blue-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-bold text-blue-900">Recommended Action for Salesperson</p>
-                  <p className="text-xs text-blue-800 mt-0.5 leading-relaxed">
-                    {healthSignals.recommended_action || 'Maintain routine follow-up on upcoming requirements.'}
-                  </p>
-                </div>
+              {/* Enhanced AI Insights Narrative */}
+              <div className="p-4 bg-gradient-to-br from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200/90 rounded-2xl space-y-3">
+                <p className="text-xs text-slate-800 leading-relaxed font-medium">
+                  {healthSignals.executive_summary || `${customer.customer_name || 'This account'} has a steady ordering history with on-track procurement velocity.`}
+                </p>
               </div>
             </div>
 
@@ -621,101 +579,93 @@ export default function CustomerProfilePage() {
             {/* Contact & Company Details Card */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                <Building2 size={16} className="text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Company & Contact Info</h3>
+                <Building2 size={16} className="text-slate-400" />
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company & Contact Info</h3>
               </div>
 
-              <div className="space-y-3 text-xs">
+              <div className="space-y-4 text-xs">
                 <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase">Contact Person</p>
-                  <p className="font-bold text-slate-800 mt-0.5 flex items-center gap-1.5">
-                    <User size={13} className="text-slate-400" />
+                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Contact Person</p>
+                  <p className="font-bold text-black text-sm mt-0.5">
                     {customer.contact_person || 'Not specified'}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase">Phone Number</p>
+                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Phone Number</p>
                   {customer.customer_phone ? (
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <p className="mt-0.5">
                       <a
                         href={`tel:${customer.customer_phone}`}
-                        className="font-bold text-blue-600 hover:underline flex items-center gap-1">
-                        <Phone size={13} />
+                        className="font-bold text-black text-sm hover:text-blue-600 transition-colors">
                         {customer.customer_phone}
                       </a>
-                      <a
-                        href={`https://wa.me/${String(customer.customer_phone).replace(/\D/g, '')}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-2xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-bold hover:bg-emerald-100">
-                        WhatsApp
-                      </a>
-                    </div>
+                    </p>
                   ) : (
-                    <p className="font-semibold text-slate-400 mt-0.5">Not provided</p>
+                    <p className="font-bold text-black text-sm mt-0.5">Not provided</p>
                   )}
                 </div>
 
                 <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase">GSTIN Number</p>
+                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">GSTIN Number</p>
                   {customer.customer_gst ? (
                     <div className="flex items-center gap-2 mt-0.5">
-                      <code className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded text-xs">
+                      <span className="font-mono font-bold text-black text-sm">
                         {customer.customer_gst}
-                      </code>
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleCopyGst(customer.customer_gst)}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1 cursor-pointer">
+                        className="text-slate-400 hover:text-blue-600 transition-colors p-0.5 cursor-pointer">
                         {copiedGst ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                       </button>
                     </div>
                   ) : (
-                    <p className="font-semibold text-slate-400 mt-0.5">Not registered</p>
+                    <p className="font-bold text-black text-sm mt-0.5">Not registered</p>
                   )}
                 </div>
 
                 <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase">Registered Address</p>
-                  <p className="font-medium text-slate-700 mt-0.5 flex items-start gap-1.5 leading-relaxed">
-                    <MapPin size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Registered Address</p>
+                  <p className="font-bold text-black text-sm mt-0.5 leading-relaxed">
                     {customer.customer_address || 'No address registered'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Sales Ownership Card */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                <UserCheck size={16} className="text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Account Ownership</h3>
+            {/* Sales Ownership Card (Sales Manager and Admins only) */}
+            {canViewSalesperson && (
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                  <UserCheck size={16} className="text-slate-400" />
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Account Ownership</h3>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  <div>
+                    <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Assigned Salesperson</p>
+                    <p className="font-bold text-black text-sm mt-0.5">
+                      {getSalespersonName(customer.assigned_salesperson_phone, customer.assigned_salesperson_name)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Average Order Value (AOV)</p>
+                    <p className="font-bold text-black text-sm mt-0.5">
+                      {formatCurrency(customer.avg_order_value)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Trailing 12-Month Revenue</p>
+                    <p className="font-bold text-black text-sm mt-0.5">
+                      {formatCurrency(customer.t12m_revenue)}
+                    </p>
+                  </div>
+                </div>
               </div>
-
-              <div className="space-y-3 text-xs">
-                <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase">Assigned Salesperson</p>
-                  <p className="font-black text-slate-900 mt-0.5">
-                    {getSalespersonName(customer.assigned_salesperson_phone, customer.assigned_salesperson_name)}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase">Average Order Value (AOV)</p>
-                  <p className="font-black text-slate-900 mt-0.5">
-                    {formatCurrency(customer.avg_order_value)}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase">Trailing 12-Month Revenue</p>
-                  <p className="font-black text-slate-900 mt-0.5">
-                    {formatCurrency(customer.t12m_revenue)}
-                  </p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}
