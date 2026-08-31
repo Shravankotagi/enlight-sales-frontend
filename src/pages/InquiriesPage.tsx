@@ -105,11 +105,18 @@ function isProductInquiry(inq: InquiryItem): boolean {
   const textLower = rawText.toLowerCase();
   const aiJson = (inq?.ai_extraction_json as any) || {};
 
-  // 1. All official genuine inquiry channels & types
+  // 1. All official genuine inquiry channels & types (WhatsApp & Dashboard)
+  const channel = String(inq?.source_channel || '').toLowerCase();
   if (
     inq?.inquiry_type === 'inquiry' ||
     inq?.inquiry_type === 'purchase_order' ||
     inq?.inquiry_type === 'quotation_sent' ||
+    channel.includes('whatsapp') ||
+    channel.includes('dashboard') ||
+    channel === 'manual' ||
+    channel === 'form' ||
+    channel === 'upload' ||
+    inq?.source_channel === 'whatsapp' ||
     inq?.source_channel === 'whatsapp_text' ||
     inq?.source_channel === 'whatsapp_image' ||
     inq?.source_channel === 'whatsapp_po' ||
