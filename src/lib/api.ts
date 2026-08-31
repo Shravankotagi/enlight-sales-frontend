@@ -106,6 +106,7 @@ export const inquiriesApi = {
 };
 
 export const reportsApi = {
+  getOverview: (params?: any) => API.get('/reports/overview', { params }),
   getMonthly: (params?: any) => API.get('/reports/monthly', { params }),
   getFunnel: (params?: any) => API.get('/reports/funnel', { params }),
   getSalesperson: (params?: any) => API.get('/reports/salesperson', { params }),
@@ -114,6 +115,10 @@ export const reportsApi = {
 
 export const employeesApi = {
   getAll: () => API.get('/employees'),
+  getNextId: () => API.get('/employees/next-id'),
+  create: (data: any) => API.post('/employees', data),
+  update: (id: string, data: any) => API.patch(`/employees/${id}`, data),
+  deactivate: (id: string) => API.patch(`/employees/${id}/deactivate`),
 };
 
 export const chatbotApi = {

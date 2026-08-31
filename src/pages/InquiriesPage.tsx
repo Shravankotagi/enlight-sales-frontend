@@ -154,7 +154,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
     /^(visited|met with|site visit|meeting with)\b/i,
     /^new customer\b/i,
     /^(deal|we have won|won the|lost the|paid|advance)\b/i,
-    /\b(paid\s+₹?|paid\s+rs|advance\s+via|via\s+cheque|via\s+rtgs|via\s+neft)\b/i,
+    /\b(paid\s+Rs.?|paid\s+rs|advance\s+via|via\s+cheque|via\s+rtgs|via\s+neft)\b/i,
     /^#deal-\w+/i,
     /^\d+$/,
     /^this is the new inquiry$/i,
@@ -494,7 +494,7 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   // 6. Unit Price & Total Amount (Strict active rate sheet lookup)
   const rateMatch =
-    textRaw.match(/(?:rate|price|rs\.?|₹)\s*:?\s*₹?\s*(\d{4,6}|\d{2,3}(?:,\d{3})+)/i);
+    textRaw.match(/(?:rate|price|rs\.?|Rs.)\s*:?\s*Rs.?\s*(\d{4,6}|\d{2,3}(?:,\d{3})+)/i);
 
   let unitPrice = 0;
   if (aiJson.unitPrice && Number(aiJson.unitPrice) > 0) {
@@ -1284,9 +1284,22 @@ export default function InquiriesPage() {
     }
 
     // 2. Line Items validation (Rate > 0, Quantity > 0, Description required, HSN/SAC required)
-    const currentItems = editDetails.lineItems && editDetails.lineItems.length > 0
+    const rawItems = editDetails.lineItems && editDetails.lineItems.length > 0
       ? editDetails.lineItems
       : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+
+    // Filter out completely blank trailing rows added via '+' but left unfilled
+    let currentItems = rawItems.filter((item) => {
+      const hasSku = Boolean(item.sku_text && item.sku_text.trim());
+      const hasDim = Boolean(item.dimensions && item.dimensions.trim());
+      const hasQty = Number(item.quantity) > 0;
+      const hasRate = Number(item.rate) > 0;
+      return hasSku || hasDim || hasQty || hasRate;
+    });
+
+    if (currentItems.length === 0) {
+      currentItems = rawItems;
+    }
 
     if (currentItems.length === 0) {
       errors['lineItems'] = 'Please add at least one line item.';
@@ -1296,6 +1309,9 @@ export default function InquiriesPage() {
       const item = currentItems[i];
       if (!item.sku_text || !item.sku_text.trim()) {
         errors[`sku_${i}`] = 'Description is required.';
+      }
+      if (!item.dimensions || !item.dimensions.trim()) {
+        errors[`dim_${i}`] = 'Specification is required.';
       }
       if (!item.hsn_code || !item.hsn_code.trim()) {
         errors[`hsn_${i}`] = 'HSN/SAC is required.';
@@ -2534,11 +2550,21 @@ export default function InquiriesPage() {
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
                                     setDrawerError(null);
+                                    if (fieldErrors[`dim_${idx}`]) {
+                                      setFieldErrors(prev => { const n = { ...prev }; delete n[`dim_${idx}`]; return n; });
+                                    }
                                   }}
-                                  className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                                  className={`w-full px-2 py-0.5 bg-white rounded text-[11px] font-mono outline-none focus:ring-1 text-slate-700 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                                    fieldErrors[`dim_${idx}`]
+                                      ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                                      : 'border border-slate-200 focus:ring-blue-500'
+                                  }`}
                                   placeholder="e.g. 1mm or 2.50mm x 1250mm"
                                 />
                               </div>
+                              {fieldErrors[`dim_${idx}`] && (
+                                <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`dim_${idx}`]}</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">

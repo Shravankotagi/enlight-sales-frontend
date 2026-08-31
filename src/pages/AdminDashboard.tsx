@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import SalesQuotationModal from '../components/SalesQuotationModal';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
@@ -171,14 +172,9 @@ export default function AdminDashboard() {
   const wonValue = dealsWonVal > 0 ? dealsWonVal : (monthly?.summary?.won_revenue || monthly?.summary?.won_value || monthly?.summary?.total_revenue || 0);
   const conversionRate = totalDeals > 0 ? Math.round((wonDealsCount / totalDeals) * 100) : (monthly?.summary?.conversion_rate || 0);
 
-  // Delivered Tonnage (summed live from won deal items in MT)
-  const deliveredTonnage = wonDealsList.reduce((acc: number, d: any) => {
-    const itemsTonnage = (d.deal_items || []).reduce((iSum: number, item: any) => {
-      const q = Number(item.quantity || 0);
-      return iSum + (isNaN(q) ? 0 : q);
-    }, 0);
-    return acc + itemsTonnage;
-  }, 0);
+  // Delivered Tonnage (summed live from won deal items in MT via centralized pricingEngine)
+  const deliveredTonnageResult = calculateOrdersTotalTonnage(wonDealsList);
+  const deliveredTonnage = deliveredTonnageResult.totalMt;
 
   // Find selected salesperson specific KRA metrics from reports response
   const selectedKRA = spList.find((s: any) => s.salesperson_phone === selectedPhone);
@@ -322,7 +318,7 @@ export default function AdminDashboard() {
 
           <div className="mt-4">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-              ₹{Number(totalValue).toLocaleString('en-IN')}
+              {'\u20B9'}{Number(totalValue).toLocaleString('en-IN')}
             </h2>
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -348,8 +344,11 @@ export default function AdminDashboard() {
 
           <div className="mt-4">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-600">
-              {Number(deliveredTonnage.toFixed(2)).toLocaleString('en-IN')} MT
+              {Number(deliveredTonnage.toFixed(3)).toLocaleString('en-IN')} MT
             </h2>
+            {deliveredTonnageResult.hasUnconvertible && (
+              <p className="text-[10px] text-slate-400 mt-0.5">* some items excluded</p>
+            )}
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <ArrowUpRight size={12} /> +25%
@@ -442,7 +441,7 @@ export default function AdminDashboard() {
             </span>
             <div className="flex items-baseline gap-3 mt-1">
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-                ₹{Number(wonValue || totalValue).toLocaleString('en-IN')}
+                {'\u20B9'}{Number(wonValue || totalValue).toLocaleString('en-IN')}
               </h2>
               <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                 <ArrowUpRight size={13} /> +12.5%
@@ -512,7 +511,7 @@ export default function AdminDashboard() {
 
                     <div className="text-right">
                       <p className="text-sm font-bold text-slate-900">
-                        ₹{Number(deal.total_amount || 0).toLocaleString('en-IN')}
+                        {'\u20B9'}{Number(deal.total_amount || 0).toLocaleString('en-IN')}
                       </p>
                       <span className={`inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full capitalize mt-0.5 border ${
                         deal.stage === 'won'
@@ -569,7 +568,7 @@ export default function AdminDashboard() {
                         {item.unit || 'MT'}
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-slate-900 font-mono">
-                        {item.total_value ? `₹${Number(item.total_value).toLocaleString('en-IN')}` : '-'}
+                        {item.total_value ? `\u20B9${Number(item.total_value).toLocaleString('en-IN')}` : '-'}
                       </td>
                     </tr>
                   ))}

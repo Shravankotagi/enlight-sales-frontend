@@ -237,10 +237,10 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                               <td className="px-3 py-2 text-gray-800 text-xs font-semibold">{item.quantity}</td>
                               <td className="px-3 py-2 text-gray-600 text-xs">{item.unit}</td>
                               <td className="px-3 py-2 text-gray-800 text-xs">
-                                {rate > 0 ? `₹${Number(rate).toLocaleString('en-IN')}` : '-'}
+                                {rate > 0 ? `\u20B9${Number(rate).toLocaleString('en-IN')}` : '-'}
                               </td>
                               <td className="px-3 py-2 text-gray-800 text-xs font-semibold">
-                                {amount > 0 ? `₹${Number(amount).toLocaleString('en-IN')}` : '-'}
+                                {amount > 0 ? `\u20B9${Number(amount).toLocaleString('en-IN')}` : '-'}
                               </td>
                             </tr>
                           );
@@ -252,7 +252,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                             Total
                           </td>
                           <td className="px-3 py-2 text-sm font-bold text-gray-900">
-                            ₹{Number(totalAmount).toLocaleString('en-IN')}
+                            {'\u20B9'}{Number(totalAmount).toLocaleString('en-IN')}
                           </td>
                         </tr>
                       </tfoot>
@@ -273,15 +273,15 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Subtotal</span>
-                    <span className="font-medium">₹{Number(totalAmount).toLocaleString('en-IN')}</span>
+                    <span className="font-medium">{'\u20B9'}{Number(totalAmount).toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">GST (18%)</span>
-                    <span className="font-medium">₹{Number(gst).toLocaleString('en-IN')}</span>
+                    <span className="font-medium">{'\u20B9'}{Number(gst).toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between text-sm font-bold border-t border-blue-200 pt-2">
                     <span className="text-gray-800">Grand Total</span>
-                    <span className="text-blue-700">₹{Number(grandTotal).toLocaleString('en-IN')}</span>
+                    <span className="text-blue-700">{'\u20B9'}{Number(grandTotal).toLocaleString('en-IN')}</span>
                   </div>
                   {deal.overall_confidence != null && (
                     <div className="flex justify-between text-sm pt-1">
@@ -357,8 +357,8 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                               <p className="text-xs text-gray-500">{calculated.quantity} {item.unit || 'MT'}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-xs font-semibold text-gray-800">₹{calculated.rate.toLocaleString('en-IN')}/{calculated.unit || 'MT'}</p>
-                              <p className="text-xs text-gray-500">₹{calculated.amount.toLocaleString('en-IN')}</p>
+                              <p className="text-xs font-semibold text-gray-800">{'\u20B9'}{calculated.rate.toLocaleString('en-IN')}/{calculated.unit || 'MT'}</p>
+                              <p className="text-xs text-gray-500">{'\u20B9'}{calculated.amount.toLocaleString('en-IN')}</p>
                             </div>
                           </div>
                         );
@@ -376,15 +376,15 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                           <div className="border-t pt-3 space-y-1">
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Subtotal</span>
-                              <span>₹{pricing.subtotal.toLocaleString('en-IN')}</span>
+                              <span>{'\u20B9'}{pricing.subtotal.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">GST 18%</span>
-                              <span>₹{pricing.gstAmount.toLocaleString('en-IN')}</span>
+                              <span>{'\u20B9'}{pricing.gstAmount.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between text-sm font-bold">
                               <span>Grand Total</span>
-                              <span className="text-blue-700">₹{pricing.grandTotal.toLocaleString('en-IN')}</span>
+                              <span className="text-blue-700">{'\u20B9'}{pricing.grandTotal.toLocaleString('en-IN')}</span>
                             </div>
                           </div>
                         );
@@ -520,7 +520,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
               {totalAmount > 0 && (
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Deal Value:</span>
-                  <span className="font-bold text-emerald-600">₹{Number(totalAmount).toLocaleString('en-IN')}</span>
+                  <span className="font-bold text-emerald-600">{'\u20B9'}{Number(totalAmount).toLocaleString('en-IN')}</span>
                 </div>
               )}
               <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
