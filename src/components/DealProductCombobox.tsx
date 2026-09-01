@@ -169,8 +169,9 @@ export default function DealProductCombobox({
     <div ref={containerRef} className={`relative w-full ${className}`}>
       {/* Combobox Multi-Select Box */}
       <div
-        onClick={() => {
+        onClick={(e) => {
           if (!disabled && !loading) {
+            if ((e.target as HTMLElement).closest('button')) return;
             setIsOpen(true);
             inputRef.current?.focus();
           }
@@ -228,11 +229,11 @@ export default function DealProductCombobox({
           type="button"
           tabIndex={-1}
           disabled={disabled || loading}
-          onClick={(e) => {
+          onMouseDown={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             if (!disabled && !loading) {
               setIsOpen(prev => !prev);
-              inputRef.current?.focus();
             }
           }}
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 cursor-pointer">

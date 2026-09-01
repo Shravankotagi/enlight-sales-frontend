@@ -2796,7 +2796,11 @@ export default function InquiriesPage() {
                         <button
                           type="button"
                           tabIndex={-1}
-                          onClick={() => setShowEditCompanyDropdown(prev => !prev)}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowEditCompanyDropdown(prev => !prev);
+                          }}
                           className="absolute right-2 text-slate-400 hover:text-slate-600 p-1">
                           <ChevronDown size={16} className={`transition-transform ${showEditCompanyDropdown ? 'rotate-180' : ''}`} />
                         </button>
@@ -3600,7 +3604,11 @@ export default function InquiriesPage() {
                     <button
                       type="button"
                       tabIndex={-1}
-                      onClick={() => setShowCompanyDropdown(prev => !prev)}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowCompanyDropdown(prev => !prev);
+                      }}
                       className="absolute right-2 text-slate-400 hover:text-slate-600 p-1">
                       <ChevronDown size={16} className={`transition-transform ${showCompanyDropdown ? 'rotate-180' : ''}`} />
                     </button>
