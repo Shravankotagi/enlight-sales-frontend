@@ -5,7 +5,7 @@ import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2,
-  LayoutDashboard, IndianRupee, Trash2
+  LayoutDashboard, IndianRupee, Trash2, MessageSquare
 } from 'lucide-react';
 import DealDetailDrawer from '../components/DealDetailDrawer';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
@@ -1042,12 +1042,10 @@ export default function InquiriesPage() {
   };
 
   const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
-    queryKey: ['inquiries-list', effectivePhone, dateRange],
+    queryKey: ['inquiries-list', effectivePhone],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
-      if (dateRange.from) params.from = dateRange.from;
-      if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
 
       const res = await inquiriesApi.getAll(params);
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
@@ -2167,6 +2165,50 @@ export default function InquiriesPage() {
     return sortNewestFirst(list);
   }, [activeInquiryList, dateRange, searchTerm, filterStatus, rawDeals]);
 
+  // All-time KPI summary counts (not filtered by date range)
+  const totalInquiriesCount = activeInquiryList.length;
+
+  const whatsappInquiriesCount = useMemo(() => {
+    return activeInquiryList.filter(i => {
+      const ch = (i.source_channel || '').toLowerCase().trim();
+      return ch !== 'web_dashboard' && ch !== 'dashboard' && ch !== 'manual' && ch !== 'web';
+    }).length;
+  }, [activeInquiryList]);
+
+  const ocrInquiriesCount = useMemo(() => {
+    return activeInquiryList.filter(i => {
+      if (!i) return false;
+      if (i.has_media) return true;
+      if (Array.isArray(i.media_urls) && i.media_urls.length > 0 && i.media_urls.some(u => Boolean(u) && u !== 'attached_document' && u !== '')) {
+        return true;
+      }
+      const raw = (i.raw_text || '').trim();
+      if (
+        raw.startsWith('[Inquiry Attachment:') ||
+        raw.startsWith('[Inquiry Document Attached') ||
+        raw.startsWith('[PO Document Attached:') ||
+        raw.startsWith('[Attachment:') ||
+        raw.startsWith('[OCR:') ||
+        raw.startsWith('[Document:')
+      ) {
+        return true;
+      }
+      const ch = String(i.source_channel || '').toLowerCase();
+      if (ch === 'whatsapp_image' || ch === 'whatsapp_po' || ch === 'upload' || ch === 'ocr' || ch === 'document') {
+        return true;
+      }
+      const inqType = String(i.inquiry_type || '').toLowerCase();
+      if (inqType.includes('document') || inqType.includes('ai document') || inqType === 'ocr') {
+        return true;
+      }
+      const aiJson = (i.ai_extraction_json as any) || {};
+      if (aiJson.is_document || aiJson.source_type === 'document' || aiJson.ocr_extracted || aiJson.is_ocr) {
+        return true;
+      }
+      return false;
+    }).length;
+  }, [activeInquiryList]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const validCurrentPage = Math.min(currentPage, totalPages);
   const startIndex = (validCurrentPage - 1) * ITEMS_PER_PAGE;
@@ -2214,7 +2256,7 @@ export default function InquiriesPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
-      {/* Frozen Upper Section (Header, KPI / Status Filters, Search) */}
+      {/* Frozen Upper Section (Header, KPI Summary Cards, Filters, Search) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -2225,35 +2267,68 @@ export default function InquiriesPage() {
             </h1>
           </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            disabled={dealsFetching || isFetching}
-            onClick={async () => {
-              await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
-              toast.success(viewMode === 'pipeline' ? 'Pipeline refreshed' : 'Inquiries list refreshed');
-            }}
-            title={viewMode === 'pipeline' ? 'Refresh Pipeline' : 'Refresh Inquiries'}
-            className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
-            <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              disabled={dealsFetching || isFetching}
+              onClick={async () => {
+                await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+                toast.success(viewMode === 'pipeline' ? 'Pipeline refreshed' : 'Inquiries list refreshed');
+              }}
+              title={viewMode === 'pipeline' ? 'Refresh Pipeline' : 'Refresh Inquiries'}
+              className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+              <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
+            </button>
 
-          <button
-            onClick={() => navigate('/orders')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
-            <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
-          </button>
+            <button
+              onClick={() => navigate('/orders')}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
+              <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
+            </button>
 
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
-            <Plus size={15} /> Log New Inquiry
-          </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+              <Plus size={15} /> Log New Inquiry
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Filter & Search Bar - Compact Single Row */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        {/* KPI / Summary Cards: Total Inquiries, WhatsApp Inquiries, OCR / Document Inquiries */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Total Inquiries</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{totalInquiriesCount}</p>
+            </div>
+            <div className="p-3 bg-slate-100 text-slate-900 rounded-lg">
+              <FileText size={22} />
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">WhatsApp Inquiries</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{whatsappInquiriesCount}</p>
+            </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+              <MessageSquare size={22} />
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">OCR / Document Inquiries</p>
+              <p className="text-2xl font-bold text-indigo-600 mt-1">{ocrInquiriesCount}</p>
+            </div>
+            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+              <FileCheck size={22} />
+            </div>
+          </div>
+        </div>
+
+        {/* Filter & Search Bar - Compact Single Row */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           {/* 1. Compact Search Bar with Clear (X) Icon */}
           <div className="relative w-full sm:w-64">
