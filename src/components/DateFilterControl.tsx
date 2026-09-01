@@ -67,7 +67,7 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
 
     if (newPreset === 'all') {
       setShowCustom(false);
-      onChange({ preset: 'all', from: undefined, to: undefined });
+      onChange({ preset: 'all', from: '2000-01-01', to: todayStr });
     } else if (newPreset === 'today') {
       setShowCustom(false);
       onChange({ preset: 'today', from: todayStr, to: todayStr });
