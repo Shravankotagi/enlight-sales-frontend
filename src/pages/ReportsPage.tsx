@@ -2,88 +2,19 @@ import { useQuery } from '@tanstack/react-query';
 import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
-import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3, Calendar, ChevronDown } from 'lucide-react';
-import { type FilterPreset, type DateFilterRange } from '../components/DateFilterControl';
-import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3 } from 'lucide-react';
+import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 
 export default function ReportsPage() {
   const { effectivePhone } = useAuth();
 
-  const [dayPreset, setDayPreset] = useState<FilterPreset>('all');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const [showCustomDate, setShowCustomDate] = useState(false);
-
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
     from: undefined,
     to: undefined,
   });
-
-  const handleDayPresetChange = (preset: FilterPreset) => {
-    setDayPreset(preset);
-    const todayStr = formatLocalDate();
-    if (preset === 'all') {
-      setShowCustomDate(false);
-      setCustomFrom('');
-      setCustomTo('');
-      setDateRange({ preset: 'all', from: undefined, to: undefined });
-    } else if (preset === 'today') {
-      setShowCustomDate(false);
-      setDateRange({ preset: 'today', from: todayStr, to: todayStr });
-    } else if (preset === '7_days') {
-      setShowCustomDate(false);
-      setDateRange({ preset: '7_days', from: getDaysAgo(7), to: todayStr });
-    } else if (preset === '30_days') {
-      setShowCustomDate(false);
-      setDateRange({ preset: '30_days', from: getDaysAgo(30), to: todayStr });
-    } else if (preset === '90_days') {
-      setShowCustomDate(false);
-      setDateRange({ preset: '90_days', from: getDaysAgo(90), to: todayStr });
-    } else if (preset === 'custom') {
-      setShowCustomDate(true);
-      setDateRange({ preset: 'custom', from: customFrom || undefined, to: customTo || undefined });
-    }
-  };
-
-  const handleCustomFromChange = (val: string) => {
-    setCustomFrom(val);
-    let effectiveTo = customTo;
-    if (val && customTo && val > customTo) {
-      effectiveTo = val;
-      setCustomTo(val);
-    }
-    if (val && effectiveTo) {
-      setDateRange({ preset: 'custom', from: val, to: effectiveTo });
-    } else if (val) {
-      setDateRange({ preset: 'custom', from: val, to: val });
-    }
-  };
-
-  const handleCustomToChange = (val: string) => {
-    let effectiveVal = val;
-    if (val && customFrom && val < customFrom) {
-      effectiveVal = customFrom;
-    }
-    setCustomTo(effectiveVal);
-    if (customFrom && effectiveVal) {
-      setDateRange({ preset: 'custom', from: customFrom, to: effectiveVal });
-    }
-  };
-
-  const handleClearFilter = () => {
-    setDayPreset('all');
-    setShowCustomDate(false);
-    setCustomFrom('');
-    setCustomTo('');
-    setDateRange({
-      preset: 'all',
-      from: undefined,
-      to: undefined,
-    });
-  };
 
   useEffect(() => {
     document.title = 'Reports - Enlight Sales OS';
@@ -200,71 +131,16 @@ export default function ReportsPage() {
             Reports &amp; Analytics
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <DateFilterControl onChange={setDateRange} />
           <button
             onClick={refetchAll}
             title="Refresh all reports"
-            className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all text-slate-500 hover:text-blue-600 cursor-pointer"
           >
-            <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+            <RefreshCw size={16} className={isFetching ? 'animate-spin text-blue-600' : ''} />
           </button>
         </div>
-      </div>
-
-      {/* Filter Bar - Single Row matching Visits/Complaints tab layout */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          {/* 1. Date Preset Dropdown with 'All Time' default */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value as FilterPreset)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-            >
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* 2. Clear Filter Button */}
-          {dayPreset !== 'all' && (
-            <button
-              type="button"
-              onClick={handleClearFilter}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
-            >
-              Clear Filter
-            </button>
-          )}
-        </div>
-
-        {/* Custom Range Inputs */}
-        {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
-            <span className="text-slate-500 font-semibold">From:</span>
-            <input
-              type="date"
-              value={customFrom}
-              max={customTo || undefined}
-              onChange={e => handleCustomFromChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
-            />
-            <span className="text-slate-500 font-semibold">To:</span>
-            <input
-              type="date"
-              value={customTo}
-              min={customFrom || undefined}
-              onChange={e => handleCustomToChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
-            />
-          </div>
-        )}
       </div>
 
       {isLoading ? (
