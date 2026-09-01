@@ -22,8 +22,6 @@ import { complaintsApi, employeesApi, customersApi, dealsApi } from '../lib/api'
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
-  getFirstDayOfMonth,
-  getLastDayOfMonth,
   formatLocalDate,
   getDaysAgo,
 } from '../utils/dateUtils';
@@ -78,19 +76,24 @@ export default function ComplaintsPage() {
   const pageSize = 15;
 
   // Date Filter Presets
-  const [dayPreset, setDayPreset] = useState<string>('this_month');
+  const [dayPreset, setDayPreset] = useState<string>('all');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
   const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    from: undefined,
+    to: undefined,
   });
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
-    if (preset === 'today') {
+    if (preset === 'all') {
+      setDateRange({ from: undefined, to: undefined });
+      setShowCustomDate(false);
+      setCustomFrom('');
+      setCustomTo('');
+    } else if (preset === 'today') {
       const today = formatLocalDate();
       setDateRange({ from: today, to: today });
       setShowCustomDate(false);
@@ -102,9 +105,6 @@ export default function ComplaintsPage() {
       setShowCustomDate(false);
     } else if (preset === '90_days') {
       setDateRange({ from: getDaysAgo(90), to: formatLocalDate() });
-      setShowCustomDate(false);
-    } else if (preset === 'this_month') {
-      setDateRange({ from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
       setShowCustomDate(false);
     } else if (preset === 'custom') {
       setShowCustomDate(true);
@@ -134,6 +134,20 @@ export default function ComplaintsPage() {
     if (customFrom && effectiveVal) {
       setDateRange({ from: customFrom, to: effectiveVal });
     }
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setDayPreset('all');
+    setShowCustomDate(false);
+    setCustomFrom('');
+    setCustomTo('');
+    setDateRange({
+      from: undefined,
+      to: undefined,
+    });
+    setCurrentPage(1);
   };
 
   // Modals
@@ -705,10 +719,10 @@ export default function ComplaintsPage() {
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
+      {/* Filter & Search Bar - Single Row matching Visits/Inquiry tab layout */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          {/* 1. Search Input */}
+          {/* 1. Compact Search Bar with Clear (X) Icon */}
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
             <input
@@ -729,59 +743,72 @@ export default function ComplaintsPage() {
             )}
           </div>
 
-          {/* 2. Status Filter Dropdown */}
-          <div className="relative">
+          {/* 2. Date Preset Dropdown with 'All Time' default */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+            <select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
+              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
+              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
+              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
+              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
+              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 3. Status Filter Dropdown */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
             <select
               value={filterStatus}
               onChange={e => {
                 setFilterStatus(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full sm:w-auto appearance-none pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="reopened">Reopened</option>
-              <option value="resolved">Resolved</option>
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Status ({safeComplaints.length})</option>
+              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Pending ({pendingCount})</option>
+              <option value="reopened" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Reopened ({reopenedCount})</option>
+              <option value="resolved" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Resolved ({resolvedCount})</option>
             </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* 3. Preset Date Dropdown & Custom Range Pickers */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          <div className="relative">
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto appearance-none pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-              <option value="today">Today</option>
-              <option value="7_days">Last 7 Days</option>
-              <option value="30_days">Last 30 Days</option>
-              <option value="90_days">Last 90 Days</option>
-              <option value="this_month">This Month</option>
-              <option value="custom">Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
 
-          {showCustomDate && (
-            <div className="flex items-center gap-1.5 text-xs bg-slate-50 p-1 border border-slate-200 rounded-xl">
-              <input
-                type="date"
-                value={customFrom}
-                onChange={e => handleCustomFromChange(e.target.value)}
-                className="bg-white border border-slate-300 rounded-lg px-2 py-1 outline-none text-xs font-medium"
-              />
-              <span className="text-slate-400">to</span>
-              <input
-                type="date"
-                value={customTo}
-                onChange={e => handleCustomToChange(e.target.value)}
-                className="bg-white border border-slate-300 rounded-lg px-2 py-1 outline-none text-xs font-medium"
-              />
-            </div>
+          {/* 4. Clear Filter Button */}
+          {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+              Clear Filter
+            </button>
           )}
         </div>
+
+        {/* Custom Range Inputs */}
+        {showCustomDate && (
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <span className="text-slate-500 font-semibold">From:</span>
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={e => handleCustomFromChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+            <span className="text-slate-500 font-semibold">To:</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={e => handleCustomToChange(e.target.value)}
+              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+            />
+          </div>
+        )}
       </div>
 
       {/* Complaints Table Card */}
