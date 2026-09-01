@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customersApi, employeesApi } from '../lib/api';
 import { useEffect, useState, useMemo } from 'react';
 import {
@@ -99,6 +99,7 @@ function deriveSegment(c: any): string {
 
 export default function CustomersPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { effectivePhone, isSalesManager, isAdmin } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
@@ -500,6 +501,18 @@ export default function CustomersPage() {
                   return (
                     <tr
                       key={c.id || idx}
+                      onMouseEnter={() => {
+                        if (c.id) {
+                          queryClient.prefetchQuery({
+                            queryKey: ['customer-detail', c.id],
+                            queryFn: async () => {
+                              const res = await customersApi.getOne(c.id);
+                              return res?.data?.data || res?.data;
+                            },
+                            staleTime: 60 * 1000,
+                          });
+                        }
+                      }}
                       onClick={() => navigate('/customers/' + c.id)}
                       className="hover:bg-slate-50/90 transition-colors group cursor-pointer">
                       {/* # Serial Number */}
