@@ -12,7 +12,7 @@ import {
   complaintsApi,
 } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { getFirstDayOfMonth, getLastDayOfMonth, getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import {
   Package,
@@ -147,9 +147,6 @@ export default function HomePage() {
       setShowCustomDate(false);
     } else if (preset === '90_days') {
       setDateRange({ preset: '90_days', from: getDaysAgo(90), to: formatLocalDate() });
-      setShowCustomDate(false);
-    } else if (preset === 'this_month') {
-      setDateRange({ preset: 'this_month', from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
       setShowCustomDate(false);
     } else if (preset === 'custom') {
       setShowCustomDate(true);
@@ -787,7 +784,6 @@ export default function HomePage() {
               <option value="7_days">Last 7 Days</option>
               <option value="30_days">Last 30 Days</option>
               <option value="90_days">Last 90 Days</option>
-              <option value="this_month">This Month</option>
               <option value="custom">Custom Range</option>
             </select>
             <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
