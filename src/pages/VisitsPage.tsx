@@ -51,6 +51,26 @@ interface CustomerVisit {
   salesperson_name?: string;
 }
 
+export function formatCityLocality(rawLocation?: string, rawAddress?: string): string {
+  const str = (rawLocation || rawAddress || '').trim();
+  if (!str || str === '-' || str.toLowerCase() === 'null') return '-';
+
+  // Clean up pin codes, trailing states/countries
+  const cleaned = str
+    .replace(/,\s*India\b/i, '')
+    .replace(/,\s*Maharashtra\b/i, '')
+    .replace(/\b\d{6}\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[,\s]+|[,\s]+$/g, '');
+
+  const parts = cleaned.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length <= 2) {
+    return parts.join(', ');
+  }
+  return parts.slice(-2).join(', ');
+}
+
 export default function VisitsPage() {
   const { isSalesManager, isAdmin, effectivePhone } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
@@ -705,7 +725,7 @@ export default function VisitsPage() {
                 <th className="px-3 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 text-left min-w-[200px]">Customer</th>
                 <th className="px-4 py-3.5 text-left min-w-[150px]">Contact Person</th>
-                <th className="px-4 py-3.5 text-left min-w-[170px]">Date &amp; Location</th>
+                <th className="px-4 py-3.5 text-left min-w-[150px]">Location</th>
                 <th className="px-4 py-3.5 text-center min-w-[130px]">Outcome</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">Actions</th>
               </tr>
@@ -731,7 +751,6 @@ export default function VisitsPage() {
                   const globalIdx = startIndex + idx + 1;
                   const outcomeLower = getNormalizedOutcome(v);
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
-                  const loc = v.location || (v as any).city || (v as any).customer_address || '-';
                   const salespersonName = getSalespersonDisplayName(v);
 
                   return (
@@ -743,10 +762,13 @@ export default function VisitsPage() {
                         {globalIdx}
                       </td>
 
-                      {/* 1. Customer */}
-                      <td className="px-5 py-3.5">
+                      {/* 1. Customer (+ Date & Time + Sales Rep) */}
+                      <td className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {v.customer_name || 'Customer'}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 font-mono">
+                          {v.visited_at ? new Date(v.visited_at).toLocaleString('en-IN') : '-'}
                         </div>
                         {canViewSalesperson && salespersonName && (
                           <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
@@ -768,23 +790,12 @@ export default function VisitsPage() {
                         )}
                       </td>
 
-                      {/* 3. Date & Location */}
+                      {/* 3. Location */}
                       <td className="px-4 py-3.5 text-xs">
                         <div className="font-semibold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
-                          <Calendar size={12} className="text-slate-400 shrink-0" />
-                          {v.visited_at
-                            ? new Date(v.visited_at).toLocaleDateString('en-IN', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                              })
-                            : '-'}
+                          <MapIcon size={12} className="text-slate-400 shrink-0" />
+                          {formatCityLocality(v.location, v.customer_address)}
                         </div>
-                        {loc && loc !== '-' && (
-                          <div className="text-slate-500 flex items-center gap-1 mt-0.5 whitespace-nowrap">
-                            <MapIcon size={11} className="text-slate-400 shrink-0" /> {loc}
-                          </div>
-                        )}
                       </td>
 
                       {/* 4. Outcome */}

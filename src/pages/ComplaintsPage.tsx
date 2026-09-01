@@ -805,21 +805,20 @@ export default function ComplaintsPage() {
                 <th className="px-3 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 text-left min-w-[220px]">Customer</th>
                 <th className="px-4 py-3.5 text-left min-w-[190px]">Deal / PO &amp; Product</th>
-                <th className="px-4 py-3.5 text-left min-w-[160px]">Date &amp; Time</th>
                 <th className="px-4 py-3.5 text-center min-w-[120px]">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={4} className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline mr-2 text-blue-600" />
                     Loading complaints...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={4} className="px-4 py-12 text-center text-slate-400">
                     <AlertTriangle size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-slate-600 font-medium">No complaints found.</p>
                     <p className="text-xs text-slate-400 mt-1">Try adjusting the filters or log a new complaint.</p>
@@ -833,6 +832,7 @@ export default function ComplaintsPage() {
                   const cleanDealCode = comp.deal_id
                     ? (comp.deal_id.startsWith('DEAL-') ? comp.deal_id.replace(/^DEAL-/, '') : comp.deal_id.substring(0, 6).toUpperCase())
                     : '';
+                  const dateVal = comp.created_at || comp.reported_at;
 
                   return (
                     <tr
@@ -844,10 +844,13 @@ export default function ComplaintsPage() {
                         {globalIdx}
                       </td>
 
-                      {/* 1. Customer (+ Sales Rep) */}
+                      {/* 1. Customer (+ Date & Time + Sales Rep) */}
                       <td className="px-5 py-3.5">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {comp.customer_name || 'Customer'}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 font-mono">
+                          {dateVal ? new Date(dateVal).toLocaleString('en-IN') : '-'}
                         </div>
                         {canViewSalesperson && salespersonName && (
                           <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
@@ -897,15 +900,7 @@ export default function ComplaintsPage() {
                         )}
                       </td>
 
-                      {/* 3. Date & Time */}
-                      <td className="px-4 py-3.5 text-xs">
-                        <div className="font-semibold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
-                          <Calendar size={12} className="text-slate-400 shrink-0" />
-                          {formatComplaintDateTime(comp.created_at || comp.reported_at)}
-                        </div>
-                      </td>
-
-                      {/* 4. Status */}
+                      {/* 3. Status */}
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         {renderStatusBadge(comp.status)}
                       </td>
