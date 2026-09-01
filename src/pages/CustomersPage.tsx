@@ -305,9 +305,9 @@ export default function CustomersPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => refetch()}
-            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
             title="Refresh">
-            <RefreshCw size={18} className={isLoading ? 'animate-spin text-blue-600' : ''} />
+            <RefreshCw size={15} className={isLoading ? 'animate-spin text-blue-600' : ''} />
           </button>
         </div>
       </div>
@@ -355,9 +355,9 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* 3. Filter & Search Bar - Single Row matching Visits Tab pattern */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+      {/* 3. Filter & Search Bar - Single Row matching Visits & Complaints Tab pattern */}
+      <div className="flex flex-col gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Search Bar with Clear (X) Icon */}
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
@@ -459,7 +459,7 @@ export default function CustomersPage() {
       </div>
 
       {/* 4. Customer Listing Data Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
