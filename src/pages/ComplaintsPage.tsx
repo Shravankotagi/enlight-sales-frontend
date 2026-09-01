@@ -22,8 +22,6 @@ import { complaintsApi, employeesApi, customersApi, dealsApi } from '../lib/api'
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
-  getFirstDayOfMonth,
-  getLastDayOfMonth,
   formatLocalDate,
   getDaysAgo,
 } from '../utils/dateUtils';
@@ -78,14 +76,14 @@ export default function ComplaintsPage() {
   const pageSize = 15;
 
   // Date Filter Presets
-  const [dayPreset, setDayPreset] = useState<string>('this_month');
+  const [dayPreset, setDayPreset] = useState<string>('30_days');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
   const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
 
   const handleDayPresetChange = (preset: string) => {
@@ -102,9 +100,6 @@ export default function ComplaintsPage() {
       setShowCustomDate(false);
     } else if (preset === '90_days') {
       setDateRange({ from: getDaysAgo(90), to: formatLocalDate() });
-      setShowCustomDate(false);
-    } else if (preset === 'this_month') {
-      setDateRange({ from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
       setShowCustomDate(false);
     } else if (preset === 'custom') {
       setShowCustomDate(true);
@@ -758,7 +753,6 @@ export default function ComplaintsPage() {
               <option value="7_days">Last 7 Days</option>
               <option value="30_days">Last 30 Days</option>
               <option value="90_days">Last 90 Days</option>
-              <option value="this_month">This Month</option>
               <option value="custom">Custom Range</option>
             </select>
             <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />

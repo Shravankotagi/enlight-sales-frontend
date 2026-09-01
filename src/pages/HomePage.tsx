@@ -12,7 +12,7 @@ import {
   complaintsApi,
 } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { getFirstDayOfMonth, getLastDayOfMonth, getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import {
   Package,
@@ -101,7 +101,7 @@ export default function HomePage() {
   const canManageTeam = isSalesManager || isAdmin;
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
-  const [dayPreset, setDayPreset] = useState('this_month');
+  const [dayPreset, setDayPreset] = useState('30_days');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -123,9 +123,9 @@ export default function HomePage() {
   }, []);
 
   const [dateRange, setDateRange] = useState<DateRange>({
-    preset: 'this_month',
-    from: getFirstDayOfMonth(),
-    to: getLastDayOfMonth(),
+    preset: '30_days',
+    from: getDaysAgo(30),
+    to: formatLocalDate(),
   });
 
   const handleDayPresetChange = (preset: string) => {
@@ -143,20 +143,17 @@ export default function HomePage() {
     } else if (preset === '90_days') {
       setDateRange({ preset: '90_days', from: getDaysAgo(90), to: formatLocalDate() });
       setShowCustomDate(false);
-    } else if (preset === 'this_month') {
-      setDateRange({ preset: 'this_month', from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
-      setShowCustomDate(false);
     } else if (preset === 'custom') {
       setShowCustomDate(true);
     }
   };
 
   const handleClearFilter = () => {
-    setDayPreset('this_month');
+    setDayPreset('30_days');
     setShowCustomDate(false);
     setCustomFrom('');
     setCustomTo('');
-    setDateRange({ preset: 'this_month', from: getFirstDayOfMonth(), to: getLastDayOfMonth() });
+    setDateRange({ preset: '30_days', from: getDaysAgo(30), to: formatLocalDate() });
   };
 
   const [activeBarHover, setActiveBarHover] = useState<number | null>(null);
@@ -770,7 +767,6 @@ export default function HomePage() {
               <option value="7_days">Last 7 Days</option>
               <option value="30_days">Last 30 Days</option>
               <option value="90_days">Last 90 Days</option>
-              <option value="this_month">This Month</option>
               <option value="custom">Custom Range</option>
             </select>
             <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
@@ -816,7 +812,7 @@ export default function HomePage() {
           )}
 
           {/* Clear Filter */}
-          {dayPreset !== 'this_month' && (
+          {dayPreset !== '30_days' && (
             <button
               type="button"
               onClick={handleClearFilter}
