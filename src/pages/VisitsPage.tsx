@@ -559,65 +559,67 @@ export default function VisitsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12 font-sans">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <MapPin className="text-blue-600" size={28} />
-            Customer Field Visits Log
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchVisits}
-            className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
-            title="Refresh">
-            <RefreshCw size={18} className={loading ? 'animate-spin text-blue-600' : ''} />
-          </button>
-          <button
-            onClick={handleOpenAddModal}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
-            <Plus size={15} />
-            Log Customer Visit
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+      {/* Frozen Upper Section (Header, Stats, Filters) */}
+      <div className="shrink-0 space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Visits</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{totalVisits}</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <MapPin className="text-blue-600" size={28} />
+              Customer Field Visits Log
+            </h1>
           </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-            <MapPin size={22} />
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={fetchVisits}
+              className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+              title="Refresh">
+              <RefreshCw size={18} className={loading ? 'animate-spin text-blue-600' : ''} />
+            </button>
+            <button
+              onClick={handleOpenAddModal}
+              className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
+              <Plus size={15} />
+              Log Customer Visit
+            </button>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Positive</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{positiveVisits}</p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Total Visits</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{totalVisits}</p>
+            </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+              <MapPin size={22} />
+            </div>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
-            <ThumbsUp size={22} />
-          </div>
-        </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Neutral</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{neutralVisits}</p>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Positive</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1">{positiveVisits}</p>
+            </div>
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+              <ThumbsUp size={22} />
+            </div>
           </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
-            <Clock size={22} />
-          </div>
-        </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Neutral</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1">{neutralVisits}</p>
+            </div>
+            <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
+              <Clock size={22} />
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-500 font-medium">Negative</p>
             <p className="text-2xl font-bold text-rose-600 mt-1">{negativeVisits}</p>
@@ -715,12 +717,13 @@ export default function VisitsPage() {
           </div>
         )}
       </div>
+      </div>
 
-      {/* Data Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Lower Section - Scrollable Table Card */}
+      <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 text-left min-w-[200px]">Customer</th>
@@ -881,7 +884,7 @@ export default function VisitsPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div>
             Showing <span className="font-bold text-slate-900">{filtered.length === 0 ? 0 : startIndex + 1}</span> to{' '}
             <span className="font-bold text-slate-900">{endIndex}</span> of{' '}

@@ -926,160 +926,164 @@ export default function OrdersPage() {
   const paginatedOrders = filtered.slice(startIndex, endIndex);
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12 font-sans">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <ShoppingBag className="text-blue-600" size={28} />
-            Orders &amp; Delivery Management
-          </h1>
+    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+      {/* Frozen Upper Section (Header, KPI Cards, Search & Filters) */}
+      <div className="shrink-0 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <ShoppingBag className="text-blue-600" size={28} />
+              Orders &amp; Delivery Management
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                fetchOrders();
+                queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+              }}
+              title="Refresh Orders"
+              className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+              <RefreshCw size={16} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+            </button>
+
+            <button
+              onClick={() => setShowModal(true)}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-sm transition-colors cursor-pointer">
+              <Plus size={18} />
+              Create New Order
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              fetchOrders();
-              queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-            }}
-            title="Refresh Orders"
-            className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
-            <RefreshCw size={16} className={isFetching ? 'animate-spin text-blue-600' : ''} />
-          </button>
+        {/* KPI Cards: Total Orders, Total Items, Total Tonnage */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Total Orders</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{totalOrders}</p>
+            </div>
+            <div className="p-3 bg-slate-100 text-slate-900 rounded-lg">
+              <ShoppingBag size={22} />
+            </div>
+          </div>
 
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-sm transition-colors cursor-pointer">
-            <Plus size={18} />
-            Create New Order
-          </button>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Total Items</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{totalItems}</p>
+            </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+              <Layers size={22} />
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Total Tonnage (MT)</p>
+              <p className="text-2xl font-bold text-indigo-600 mt-1">
+                {totalTonnage.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
+              </p>
+              
+            </div>
+            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Truck size={22} />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            {/* 1. Search Box with Clear ( X ) Icon */}
+            <div className="relative w-full sm:w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search customer, PO number, location, product..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-2xs text-slate-800"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                  title="Clear Search">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* 2. Days Filter Dropdown (Bold closed, normal dropdown options) */}
+            <div className="relative inline-flex items-center w-full sm:w-auto">
+              <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+              <select
+                value={dayPreset}
+                onChange={e => handleDayPresetChange(e.target.value)}
+                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+                <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
+                <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
+                <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
+                <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
+                <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+            </div>
+
+            {/* 3. Tonnage Filter Dropdown (<500, 500-1000, >1000) (Bold closed, normal dropdown options) */}
+            <div className="relative inline-flex items-center w-full sm:w-auto">
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Orders ({safeOrders.length})</option>
+                <option value="under_500" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&lt; 500 MT ({under500Count})</option>
+                <option value="500_to_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>500 – 1000 MT ({mid500To1000Count})</option>
+                <option value="above_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&gt; 1000 MT ({above1000Count})</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+            </div>
+
+            {/* 4. Clear Filter Button */}
+            <button
+              type="button"
+              onClick={handleClearAllFilters}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+              Clear Filter
+            </button>
+          </div>
+
+          {/* Custom Range Picker Inputs */}
+          {showCustomDate && (
+            <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+              <span className="text-slate-500 font-medium">From:</span>
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={e => handleCustomFromChange(e.target.value)}
+                className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
+              />
+              <span className="text-slate-500 font-medium">To:</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={e => handleCustomToChange(e.target.value)}
+                className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
+              />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* KPI Cards: Total Orders, Total Items, Total Tonnage */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Total Orders</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{totalOrders}</p>
-          </div>
-          <div className="p-3 bg-slate-100 text-slate-900 rounded-lg">
-            <ShoppingBag size={22} />
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Total Items</p>
-            <p className="text-2xl font-bold text-blue-600 mt-1">{totalItems}</p>
-          </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-            <Layers size={22} />
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Total Tonnage (MT)</p>
-            <p className="text-2xl font-bold text-indigo-600 mt-1">
-              {totalTonnage.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
-            </p>
-            
-          </div>
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
-            <Truck size={22} />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 justify-between items-center">
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          {/* 1. Search Box with Clear ( X ) Icon */}
-          <div className="relative w-full sm:w-64">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search customer, PO number, location, product..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-2xs text-slate-800"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                title="Clear Search">
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
-          {/* 2. Days Filter Dropdown (Bold closed, normal dropdown options) */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* 3. Tonnage Filter Dropdown (<500, 500-1000, >1000) (Bold closed, normal dropdown options) */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Orders ({safeOrders.length})</option>
-              <option value="under_500" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&lt; 500 MT ({under500Count})</option>
-              <option value="500_to_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>500 – 1000 MT ({mid500To1000Count})</option>
-              <option value="above_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&gt; 1000 MT ({above1000Count})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* 4. Clear Filter Button */}
-          <button
-            type="button"
-            onClick={handleClearAllFilters}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
-            Clear Filter
-          </button>
-        </div>
-
-        {/* Custom Range Picker Inputs */}
-        {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
-            <span className="text-slate-500 font-medium">From:</span>
-            <input
-              type="date"
-              value={customFrom}
-              max={customTo || undefined}
-              onChange={e => handleCustomFromChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
-            />
-            <span className="text-slate-500 font-medium">To:</span>
-            <input
-              type="date"
-              value={customTo}
-              min={customFrom || undefined}
-              onChange={e => handleCustomToChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer text-slate-700 font-medium"
-            />
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Lower Section - Scrollable Table Card */}
+      <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
                 <th className="px-5 py-3 text-left w-[26%]">Customers</th>
@@ -1212,7 +1216,7 @@ export default function OrdersPage() {
 
         {/* Pagination Bar */}
         {filtered.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
+          <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
             <div className="font-medium">
               Showing <span className="font-bold text-slate-900">{startIndex + 1}</span> to{' '}
               <span className="font-bold text-slate-900">{endIndex}</span> of{' '}

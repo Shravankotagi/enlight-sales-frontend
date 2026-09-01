@@ -2213,15 +2213,17 @@ export default function InquiriesPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <FileText className="text-blue-600" size={28} />
-            {viewMode === 'pipeline' ? 'Sales Pipeline' : 'Inquiries & Quotations Management'}
-          </h1>
-        </div>
+    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+      {/* Frozen Upper Section (Header, KPI / Status Filters, Search) */}
+      <div className="shrink-0 space-y-4">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <FileText className="text-blue-600" size={28} />
+              {viewMode === 'pipeline' ? 'Sales Pipeline' : 'Inquiries & Quotations Management'}
+            </h1>
+          </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
@@ -2366,50 +2368,54 @@ export default function InquiriesPage() {
           </button>
         </div>
       </div>
+      </div>
 
       {viewMode === 'pipeline' ? (
         /* Kanban Board View */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
-            <div key={key} className={`rounded-xl border-2 ${color} p-3`}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
-                <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
-                  {pipelineBoard[key]?.length || 0}
-                </span>
+        <div className="flex-1 min-h-0 overflow-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
+              <div key={key} className={`rounded-xl border-2 ${color} p-3`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
+                  <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
+                    {pipelineBoard[key]?.length || 0}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {(pipelineBoard[key] || []).map((deal: any) => (
+                    <DealCard
+                      key={deal.id}
+                      deal={deal}
+                      onStageChange={handlePipelineStageChange}
+                      onSelect={(id) => setSelectedPipelineDealId(id)}
+                      onDelete={(d) => setConfirmDeleteDeal(d)}
+                    />
+                  ))}
+                  {(!pipelineBoard[key] || pipelineBoard[key].length === 0) && (
+                    <div className="text-center py-6 text-gray-400 text-sm">No deals</div>
+                  )}
+                </div>
               </div>
-              <div className="space-y-2">
-                {(pipelineBoard[key] || []).map((deal: any) => (
-                  <DealCard
-                    key={deal.id}
-                    deal={deal}
-                    onStageChange={handlePipelineStageChange}
-                    onSelect={(id) => setSelectedPipelineDealId(id)}
-                    onDelete={(d) => setConfirmDeleteDeal(d)}
-                  />
-                ))}
-                {(!pipelineBoard[key] || pipelineBoard[key].length === 0) && (
-                  <div className="text-center py-6 text-gray-400 text-sm">No deals</div>
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : (
         /* Standard Inquiries Table View */
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
-        <table className="w-full table-fixed text-left border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="px-3 py-3.5 text-center w-[4%]">#</th>
-              <th className="px-5 py-3.5 text-left w-[22%]">Customer</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Deal ID</th>
-              <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
-              <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
-              <th className="px-4 py-3.5 text-center w-[16%]">Deal Status</th>
-              <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
-            </tr>
-          </thead>
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-auto">
+            <table className="w-full table-fixed text-left border-collapse text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider shadow-2xs">
+                <tr>
+                  <th className="px-3 py-3.5 text-center w-[4%]">#</th>
+                  <th className="px-5 py-3.5 text-left w-[22%]">Customer</th>
+                  <th className="px-4 py-3.5 text-center w-[14%]">Deal ID</th>
+                  <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
+                  <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
+                  <th className="px-4 py-3.5 text-center w-[16%]">Deal Status</th>
+                  <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
+                </tr>
+              </thead>
           <tbody className="divide-y divide-slate-200">
             {loading ? (
               <tr>
@@ -2659,10 +2665,11 @@ export default function InquiriesPage() {
             )}
           </tbody>
         </table>
+        </div>
 
         {/* Pagination Bar */}
         {filtered.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
+          <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
             <div className="font-medium">
               Showing <span className="font-bold text-slate-900">{startIndex + 1}</span> to{' '}
               <span className="font-bold text-slate-900">{endIndex}</span> of{' '}

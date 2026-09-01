@@ -293,177 +293,186 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12 font-sans">
-      {/* 1. Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Users className="text-blue-600" size={28} />
-            Customer Health
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => refetch()}
-            className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
-            title="Refresh">
-            <RefreshCw size={15} className={isLoading ? 'animate-spin text-blue-600' : ''} />
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Top 4 Metric Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+      {/* Frozen Upper Section (Header, Metric Cards, Search & Filters) */}
+      <div className="shrink-0 space-y-4">
+        {/* 1. Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Customers</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{totalCustomers}</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Users className="text-blue-600" size={28} />
+              Customer Health
+            </h1>
           </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-            <Users size={22} />
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => refetch()}
+              className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+              title="Refresh">
+              <RefreshCw size={15} className={isLoading ? 'animate-spin text-blue-600' : ''} />
+            </button>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Active Accounts</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
+        {/* 2. Top 4 Metric Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Total Customers</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{totalCustomers}</p>
+            </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+              <Users size={22} />
+            </div>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
-            <CheckCircle2 size={22} />
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Active Accounts</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
+            </div>
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+              <CheckCircle2 size={22} />
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">At Risk (35-45d)</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1">{atRiskCount}</p>
+            </div>
+            <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
+              <Clock size={22} />
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Churning (&gt;45d)</p>
+              <p className="text-2xl font-bold text-rose-600 mt-1">{churningCount}</p>
+            </div>
+            <div className="p-3 bg-rose-50 text-rose-600 rounded-lg">
+              <AlertTriangle size={22} />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">At Risk (35-45d)</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{atRiskCount}</p>
-          </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
-            <Clock size={22} />
-          </div>
-        </div>
+        {/* 3. Filter & Search Bar - Single Row matching Visits & Complaints Tab pattern */}
+        <div className="flex flex-col gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search Bar with Clear (X) Icon */}
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+              <input
+                type="text"
+                placeholder={canViewSalesperson ? 'Search Customer, Rep...' : 'Search Customer...'}
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                  title="Clear Search">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Churning (&gt;45d)</p>
-            <p className="text-2xl font-bold text-rose-600 mt-1">{churningCount}</p>
-          </div>
-          <div className="p-3 bg-rose-50 text-rose-600 rounded-lg">
-            <AlertTriangle size={22} />
-          </div>
-        </div>
-      </div>
+            {/* Date Preset Dropdown with 'All Time' default */}
+            <div className="relative inline-flex items-center w-full sm:w-auto">
+              <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+              <select
+                value={dayPreset}
+                onChange={e => handleDayPresetChange(e.target.value)}
+                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
+                <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
+                <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
+                <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
+                <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
+                <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+            </div>
 
-      {/* 3. Filter & Search Bar - Single Row matching Visits & Complaints Tab pattern */}
-      <div className="flex flex-col gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search Bar with Clear (X) Icon */}
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
-            <input
-              type="text"
-              placeholder={canViewSalesperson ? 'Search Customer, Rep...' : 'Search Customer...'}
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
-            />
-            {searchTerm && (
+            {/* Health Filter Dropdown */}
+            <div className="relative inline-flex items-center w-full sm:w-auto">
+              <select
+                value={filterHealth}
+                onChange={e => {
+                  setFilterHealth(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Health Statuses ({totalCustomers})</option>
+                <option value="active" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Active ({activeCount})</option>
+                <option value="at_risk" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>At Risk ({atRiskCount})</option>
+                <option value="churning" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Churning ({churningCount})</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+            </div>
+
+            {/* Segment Filter Dropdown */}
+            <div className="relative inline-flex items-center w-full sm:w-auto">
+              <select
+                value={filterSegment}
+                onChange={e => {
+                  setFilterSegment(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Segments ({totalCustomers})</option>
+                <option value="key_account" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Key Accounts ({keyAccountsCount})</option>
+                <option value="growth" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Growth Accounts ({growthAccountsCount})</option>
+                <option value="new" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>New Customers ({newAccountsCount})</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+            </div>
+
+            {/* Clear Filter Button */}
+            {(searchTerm || filterHealth !== 'all' || filterSegment !== 'all' || dayPreset !== 'all') && (
               <button
                 type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                title="Clear Search">
-                <X size={14} />
+                onClick={handleClearFilters}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
+                Clear Filter
               </button>
             )}
           </div>
 
-          {/* Date Preset Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* Health Risk Filter Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterHealth}
-              onChange={e => setFilterHealth(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Health Statuses ({totalCustomers})</option>
-              <option value="active" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Active ({activeCount})</option>
-              <option value="at_risk" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>At Risk 35-45d ({atRiskCount})</option>
-              <option value="churning" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Churning &gt;45d ({churningCount})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* Segment Filter Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterSegment}
-              onChange={e => setFilterSegment(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Segments ({totalCustomers})</option>
-              <option value="key_account" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Key Account ({keyAccountsCount})</option>
-              <option value="growth" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Growth ({growthAccountsCount})</option>
-              <option value="new" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>New ({newAccountsCount})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* Clear Filter Button */}
-          {(searchTerm || filterHealth !== 'all' || filterSegment !== 'all' || dayPreset !== 'all') && (
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
-              Clear Filter
-            </button>
+          {/* Custom Range Inputs */}
+          {showCustomDate && (
+            <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+              <span className="text-slate-500 font-semibold">From:</span>
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={e => handleCustomFromChange(e.target.value)}
+                className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+              />
+              <span className="text-slate-500 font-semibold">To:</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={e => handleCustomToChange(e.target.value)}
+                className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
+              />
+            </div>
           )}
         </div>
-
-        {/* Custom Range Inputs */}
-        {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
-            <span className="text-slate-500 font-semibold">From:</span>
-            <input
-              type="date"
-              value={customFrom}
-              max={customTo || undefined}
-              onChange={e => handleCustomFromChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
-            />
-            <span className="text-slate-500 font-semibold">To:</span>
-            <input
-              type="date"
-              value={customTo}
-              min={customFrom || undefined}
-              onChange={e => handleCustomToChange(e.target.value)}
-              className="px-2 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs cursor-pointer"
-            />
-          </div>
-        )}
       </div>
 
       {/* 4. Customer Listing Data Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 min-w-[220px]">Customer</th>
@@ -597,7 +606,7 @@ export default function CustomersPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div>
             Showing <span className="font-bold text-slate-900">{filteredCustomers.length === 0 ? 0 : startIndex + 1}</span> to{' '}
             <span className="font-bold text-slate-900">{endIndex}</span> of{' '}

@@ -631,15 +631,17 @@ export default function ComplaintsPage() {
   const paginatedComplaints = filtered.slice(startIndex, endIndex);
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12 font-sans">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <AlertTriangle className="text-blue-600" size={28} />
-            Customer Complaints Log
-          </h1>
-        </div>
+    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+      {/* Frozen Upper Section (Header, Stats, Filters) */}
+      <div className="shrink-0 space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <AlertTriangle className="text-blue-600" size={28} />
+              Customer Complaints Log
+            </h1>
+          </div>
 
         <div className="flex items-center gap-3">
           <button
@@ -795,12 +797,13 @@ export default function ComplaintsPage() {
           </div>
         )}
       </div>
+      </div>
 
       {/* Complaints Table Card */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 text-left min-w-[220px]">Customer</th>
@@ -913,7 +916,7 @@ export default function ComplaintsPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div>
             Showing <span className="font-bold text-slate-900">{filtered.length === 0 ? 0 : startIndex + 1}</span> to{' '}
             <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
