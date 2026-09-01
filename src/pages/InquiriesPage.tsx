@@ -891,15 +891,15 @@ export default function InquiriesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 25;
 
-  const [dayPreset, setDayPreset] = useState<string>('30_days');
-  const [customFrom, setCustomFrom] = useState(getDaysAgo(30));
-  const [customTo, setCustomTo] = useState(formatLocalDate());
+  const [dayPreset, setDayPreset] = useState<string>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [showCustomDate, setShowCustomDate] = useState(false);
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: '30_days' as any,
-    from: getDaysAgo(30),
-    to: formatLocalDate(),
+    preset: 'all' as any,
+    from: undefined,
+    to: undefined,
   });
 
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -964,16 +964,14 @@ export default function InquiriesPage() {
   const handleClearAllFilters = () => {
     setSearchTerm('');
     setFilterStatus('all');
-    setDayPreset('30_days');
+    setDayPreset('all');
     setShowCustomDate(false);
-    const defaultFrom = getDaysAgo(30);
-    const defaultTo = formatLocalDate();
-    setCustomFrom(defaultFrom);
-    setCustomTo(defaultTo);
+    setCustomFrom('');
+    setCustomTo('');
     setDateRange({
-      preset: '30_days' as any,
-      from: defaultFrom,
-      to: defaultTo,
+      preset: 'all' as any,
+      from: undefined,
+      to: undefined,
     });
     setCurrentPage(1);
     setOpenActionMenuId(null);
@@ -982,7 +980,12 @@ export default function InquiriesPage() {
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
     const today = formatLocalDate();
-    if (preset === 'today') {
+    if (preset === 'all') {
+      setShowCustomDate(false);
+      setCustomFrom('');
+      setCustomTo('');
+      setDateRange({ preset: 'all' as any, from: undefined, to: undefined });
+    } else if (preset === 'today') {
       setShowCustomDate(false);
       setDateRange({ preset: 'today' as any, from: today, to: today });
     } else if (preset === '7_days') {
@@ -2282,6 +2285,7 @@ export default function InquiriesPage() {
               onChange={(e) => handleDayPresetChange(e.target.value)}
               className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
             >
+              <option value="all">All Time</option>
               <option value="today">Today</option>
               <option value="7_days">Last 7 Days</option>
               <option value="30_days">Last 30 Days</option>

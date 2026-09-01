@@ -6,6 +6,7 @@ import {
 } from '../utils/dateUtils';
 
 export type FilterPreset =
+  | 'all'
   | 'today'
   | '7_days'
   | '30_days'

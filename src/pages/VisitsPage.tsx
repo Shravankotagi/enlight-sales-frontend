@@ -69,19 +69,24 @@ export default function VisitsPage() {
   const pageSize = 15;
 
   // Date Filter Presets (Matching Inquiry tab pattern)
-  const [dayPreset, setDayPreset] = useState<string>('30_days');
+  const [dayPreset, setDayPreset] = useState<string>('all');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
   const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
-    from: getDaysAgo(30),
-    to: formatLocalDate(),
+    from: undefined,
+    to: undefined,
   });
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
-    if (preset === 'today') {
+    if (preset === 'all') {
+      setDateRange({ from: undefined, to: undefined });
+      setShowCustomDate(false);
+      setCustomFrom('');
+      setCustomTo('');
+    } else if (preset === 'today') {
       const today = formatLocalDate();
       setDateRange({ from: today, to: today });
       setShowCustomDate(false);
@@ -528,13 +533,13 @@ export default function VisitsPage() {
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterOutcome('all');
-    setDayPreset('30_days');
+    setDayPreset('all');
     setShowCustomDate(false);
     setCustomFrom('');
     setCustomTo('');
     setDateRange({
-      from: getDaysAgo(30),
-      to: formatLocalDate(),
+      from: undefined,
+      to: undefined,
     });
   };
 
@@ -639,6 +644,7 @@ export default function VisitsPage() {
               value={dayPreset}
               onChange={e => handleDayPresetChange(e.target.value)}
               className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
               <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
               <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
               <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
@@ -663,7 +669,7 @@ export default function VisitsPage() {
           </div>
 
           {/* 4. Clear Filter Button */}
-          {(searchTerm || filterOutcome !== 'all' || dayPreset !== '30_days') && (
+          {(searchTerm || filterOutcome !== 'all' || dayPreset !== 'all') && (
             <button
               type="button"
               onClick={handleClearFilters}
