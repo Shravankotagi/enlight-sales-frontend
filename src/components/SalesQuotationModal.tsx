@@ -72,7 +72,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
   const totalTonnage = calculateTotalTonnageMt(items);
 
   const dealRefId = deal.id ? `#${deal.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-DEAL';
-  const poNumber = deal.po_number || `PO-${new Date().getFullYear()}-AUTO`;
+  const poNumber = deal.po_number || dealRefId;
   const orderDate = deal.po_date || (deal.created_at ? new Date(deal.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
 
   const handleCopyPo = () => {

@@ -1131,9 +1131,15 @@ export default function OrdersPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
-                          {ord.po_number || 'PO-2026-AUTO'}
-                        </span>
+                        {ord.po_number ? (
+                          <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
+                            PO: {ord.po_number}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center justify-center bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold font-mono text-xs shadow-2xs">
+                            #{ord.id ? (ord.id.startsWith('DEAL-') ? ord.id : `DEAL-${ord.id.substring(0, 6).toUpperCase()}`) : '-'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                         {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
@@ -1376,7 +1382,7 @@ export default function OrdersPage() {
                         customerName: shareOrder.customer_name || 'Customer',
                         customerPhone: shareOrder.customer_phone || '',
                         salespersonName: (shareOrder as any).salesperson_name || 'Sales Representative',
-                        poNumber: shareOrder.po_number || 'PO-2026-AUTO',
+                        poNumber: shareOrder.po_number || '',
                         poDate: shareOrder.po_date || new Date().toISOString().split('T')[0],
                         deliveryLocation: shareOrder.delivery_location || '',
                         paymentTerms: shareOrder.payment_terms || '30 Days Credit',
