@@ -97,6 +97,57 @@ function SegmentBadge({ segment }: { segment?: string }) {
   );
 }
 
+function SentimentBadge({ sentiment }: { sentiment?: string }) {
+  const s = (sentiment || '').toLowerCase();
+  if (s === 'critical' || s === 'churning') {
+    return (
+      <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 shadow-2xs">
+        <AlertTriangle size={12} /> Attention Required
+      </span>
+    );
+  }
+  if (s === 'warning' || s === 'reorder_due' || s === 'at_risk') {
+    return (
+      <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 shadow-2xs">
+        <Clock size={12} /> Re-order Approaching
+      </span>
+    );
+  }
+  if (s === 'quoting') {
+    return (
+      <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1 shadow-2xs">
+        <MessageSquare size={12} /> Quoting in Progress
+      </span>
+    );
+  }
+  if (s === 'discovery') {
+    return (
+      <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1 shadow-2xs">
+        <MapPin size={12} /> Discovery / In Discussion
+      </span>
+    );
+  }
+  if (s === 'new_prospect') {
+    return (
+      <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-sky-50 text-sky-700 border border-sky-200 flex items-center gap-1 shadow-2xs">
+        <Sparkles size={12} /> New Prospect
+      </span>
+    );
+  }
+  if (s === 'dormant') {
+    return (
+      <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-300 flex items-center gap-1 shadow-2xs">
+        <Clock size={12} /> Dormant Account
+      </span>
+    );
+  }
+  return (
+    <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shadow-2xs">
+      <CheckCircle2 size={12} /> Healthy & Engaged
+    </span>
+  );
+}
+
 function formatCurrency(val?: number) {
   const amount = Number(val || 0);
   return '₹' + amount.toLocaleString('en-IN');
@@ -526,30 +577,21 @@ export default function CustomerProfilePage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Account Health Signals & AI Insights */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={18} className="text-blue-600" />
+                  <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                    <Sparkles size={16} />
+                  </div>
                   <h2 className="text-base font-bold text-slate-900">AI Account Insights</h2>
                 </div>
-                {healthSignals.sentiment === 'critical' ? (
-                  <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
-                    <AlertTriangle size={12} /> Attention Required
-                  </span>
-                ) : healthSignals.sentiment === 'warning' ? (
-                  <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
-                    <Clock size={12} /> Re-order Approaching
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                    <CheckCircle2 size={12} /> Healthy & Engaged
-                  </span>
-                )}
+                <SentimentBadge sentiment={healthSignals.sentiment} />
               </div>
 
               {/* Enhanced AI Insights Narrative */}
-              <div className="p-4 bg-gradient-to-br from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200/90 rounded-2xl space-y-3">
+              <div className="p-4 bg-gradient-to-br from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200/90 rounded-2xl">
                 <p className="text-xs text-slate-800 leading-relaxed font-medium">
-                  {healthSignals.executive_summary || `${customer.customer_name || 'This account'} has a steady ordering history with on-track procurement velocity.`}
+                  {healthSignals.executive_summary ||
+                    `${customer.customer_name || 'Customer'} account overview is being prepared.`}
                 </p>
               </div>
             </div>
