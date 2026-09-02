@@ -308,6 +308,29 @@ export default function ComplaintsPage() {
     return 'Web Admin';
   };
 
+  const getComplaintProductDisplay = (comp: Complaint): string => {
+    const p = (comp.product_name || comp.affected_product || '').trim();
+    const lower = p.toLowerCase();
+    const isGeneric = !p || lower === 'general material' || lower === 'general steel material' || lower === 'steel material' || lower === 'material' || lower === 'steel' || lower === 'null';
+
+    if (!isGeneric) return p;
+
+    // Try extracting from description / resolution notes
+    const text = `${comp.description || ''} ${comp.resolution_notes || ''}`;
+    const m1 = text.match(/(?:(\d+(?:\.\d+)?\s*(?:MT|tons?|kg|pcs?|nos?))\s+)?\b(MS\s+Plates?|MS\s+Sheets?|HR\s+Coils?|HR\s+Sheets?|CR\s+Coils?|CR\s+Sheets?|TMT\s+Bars?|GI\s+Sheets?|GI\s+Coils?|GP\s+Sheets?|GP\s+Coils?|Chequered\s+Plates?|MS\s+Pipes?|Seamless\s+Pipes?|ERW\s+Pipes?|Beams?|Channels?|Angles?|IS\s+2062(?:\s+E250)?)\b(?:\s+([0-9.]+\s*mm(?:(?:\s*x\s*[0-9.]+\s*mm)+)?))?(?:\s+(\d+(?:\.\d+)?\s*(?:MT|tons?|kg|pcs?|nos?)))?/i);
+    if (m1) {
+      const qty = (m1[1] || m1[4] || '').trim();
+      const prod = m1[2].trim();
+      const dims = (m1[3] || '').trim();
+      let res = prod;
+      if (dims) res += ` ${dims}`;
+      if (qty) res += ` (${qty})`;
+      return res;
+    }
+
+    return p || 'Steel Material';
+  };
+
   const fetchComplaints = async () => {
     try {
       setLoading(true);
@@ -831,7 +854,7 @@ export default function ComplaintsPage() {
                 paginatedComplaints.map((comp, idx) => {
                   const globalIdx = startIndex + idx + 1;
                   const salespersonName = getSalespersonDisplayName(comp);
-                  const prodDisplay = comp.product_name || comp.affected_product || '';
+                  const prodDisplay = getComplaintProductDisplay(comp);
                   const cleanDealCode = comp.deal_id
                     ? (comp.deal_id.startsWith('DEAL-') ? comp.deal_id.replace(/^DEAL-/, '') : comp.deal_id.substring(0, 6).toUpperCase())
                     : '';
