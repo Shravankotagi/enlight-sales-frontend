@@ -27,20 +27,25 @@ export default function LogsPage() {
   const { effectivePhone } = useAuth();
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [datePreset, setDatePreset] = useState<FilterPreset>('30_days');
+  const [datePreset, setDatePreset] = useState<FilterPreset>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
-  const [customFrom, setCustomFrom] = useState(getDaysAgo(30));
-  const [customTo, setCustomTo] = useState(formatLocalDate());
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
-    from: getDaysAgo(30),
-    to: formatLocalDate(),
+    from: undefined,
+    to: undefined,
   });
 
   const handleDatePresetChange = (newPreset: FilterPreset) => {
     setDatePreset(newPreset);
     const todayStr = formatLocalDate();
-    if (newPreset === 'today') {
+    if (newPreset === 'all') {
+      setShowCustomDate(false);
+      setCustomFrom('');
+      setCustomTo('');
+      setDateRange({ from: undefined, to: undefined });
+    } else if (newPreset === 'today') {
       setShowCustomDate(false);
       setDateRange({ from: todayStr, to: todayStr });
     } else if (newPreset === '7_days') {
@@ -70,11 +75,13 @@ export default function LogsPage() {
   const handleClearAllFilters = () => {
     setSearchQuery('');
     setModuleFilter('All');
-    setDatePreset('30_days');
+    setDatePreset('all');
     setShowCustomDate(false);
+    setCustomFrom('');
+    setCustomTo('');
     setDateRange({
-      from: getDaysAgo(30),
-      to: formatLocalDate(),
+      from: undefined,
+      to: undefined,
     });
   };
 
@@ -261,15 +268,17 @@ export default function LogsPage() {
   }, [activityLogsData]);
 
   const presetLabel =
-    datePreset === 'today'
-      ? 'today'
-      : datePreset === '7_days'
-        ? 'last 7 days'
-        : datePreset === '90_days'
-          ? 'last 90 days'
-          : datePreset === 'custom'
-            ? 'custom range'
-            : 'last 30 days';
+    datePreset === 'all'
+      ? 'all time'
+      : datePreset === 'today'
+        ? 'today'
+        : datePreset === '7_days'
+          ? 'last 7 days'
+          : datePreset === '90_days'
+            ? 'last 90 days'
+            : datePreset === 'custom'
+              ? 'custom range'
+              : 'last 30 days';
 
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
@@ -324,6 +333,7 @@ export default function LogsPage() {
               onChange={(e) => handleDatePresetChange(e.target.value as FilterPreset)}
               className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
             >
+              <option value="all">All Time</option>
               <option value="today">Today</option>
               <option value="7_days">Last 7 Days</option>
               <option value="30_days">Last 30 Days</option>
@@ -350,13 +360,15 @@ export default function LogsPage() {
           </div>
 
           {/* 4. Clear Filter Button (4th Position) */}
-          <button
-            type="button"
-            onClick={handleClearAllFilters}
-            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
-          >
-            Clear Filter
-          </button>
+          {(searchQuery || moduleFilter !== 'All' || datePreset !== 'all') && (
+            <button
+              type="button"
+              onClick={handleClearAllFilters}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+            >
+              Clear Filter
+            </button>
+          )}
         </div>
 
         {/* 5. Refresh Button Right-Aligned */}

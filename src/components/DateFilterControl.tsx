@@ -6,6 +6,7 @@ import {
 } from '../utils/dateUtils';
 
 export type FilterPreset =
+  | 'all'
   | 'today'
   | '7_days'
   | '30_days'
@@ -33,27 +34,27 @@ interface DateFilterControlProps {
   resetKey?: number | string;
 }
 
-export default function DateFilterControl({ onChange, initialPreset = '30_days', value, resetKey }: DateFilterControlProps) {
-  const effectivePreset = (initialPreset === 'this_month' || initialPreset === 'this_quarter' || initialPreset === 'this_year') ? '30_days' : initialPreset;
+export default function DateFilterControl({ onChange, initialPreset = 'all', value, resetKey }: DateFilterControlProps) {
+  const effectivePreset = (initialPreset === 'this_month' || initialPreset === 'this_quarter' || initialPreset === 'this_year') ? 'all' : initialPreset;
   const [preset, setPreset] = useState<FilterPreset>(value?.preset || effectivePreset);
   const [showCustom, setShowCustom] = useState((value?.preset || effectivePreset) === 'custom');
   const todayStr = formatLocalDate();
 
-  const [customFrom, setCustomFrom] = useState(value?.from || getDaysAgo(30));
-  const [customTo, setCustomTo] = useState(value?.to || todayStr);
+  const [customFrom, setCustomFrom] = useState(value?.from || '');
+  const [customTo, setCustomTo] = useState(value?.to || '');
 
   useEffect(() => {
     if (resetKey !== undefined) {
       setPreset(effectivePreset);
       setShowCustom(effectivePreset === 'custom');
-      setCustomFrom(getDaysAgo(30));
-      setCustomTo(todayStr);
+      setCustomFrom('');
+      setCustomTo('');
     }
   }, [resetKey, effectivePreset, todayStr]);
 
   useEffect(() => {
     if (value && value.preset !== preset) {
-      const p = (value.preset === 'this_month' || value.preset === 'this_quarter' || value.preset === 'this_year') ? '30_days' : value.preset;
+      const p = (value.preset === 'this_month' || value.preset === 'this_quarter' || value.preset === 'this_year') ? 'all' : value.preset;
       setPreset(p);
       setShowCustom(p === 'custom');
       if (value.from) setCustomFrom(value.from);
@@ -64,7 +65,10 @@ export default function DateFilterControl({ onChange, initialPreset = '30_days',
   const handleSelectPreset = (newPreset: FilterPreset) => {
     setPreset(newPreset);
 
-    if (newPreset === 'today') {
+    if (newPreset === 'all') {
+      setShowCustom(false);
+      onChange({ preset: 'all', from: '2000-01-01', to: todayStr });
+    } else if (newPreset === 'today') {
       setShowCustom(false);
       onChange({ preset: 'today', from: todayStr, to: todayStr });
     } else if (newPreset === '7_days') {
@@ -81,7 +85,7 @@ export default function DateFilterControl({ onChange, initialPreset = '30_days',
       onChange({ preset: '90_days', from: fromStr, to: todayStr });
     } else if (newPreset === 'custom') {
       setShowCustom(true);
-      onChange({ preset: 'custom', from: customFrom, to: customTo });
+      onChange({ preset: 'custom', from: customFrom || undefined, to: customTo || undefined });
     }
   };
 
@@ -123,10 +127,11 @@ export default function DateFilterControl({ onChange, initialPreset = '30_days',
       <div className="relative inline-flex items-center">
         <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
         <select
-          value={preset === 'this_month' || preset === 'this_quarter' || preset === 'this_year' ? '30_days' : preset}
+          value={preset === 'this_month' || preset === 'this_quarter' || preset === 'this_year' ? 'all' : preset}
           onChange={(e) => handleSelectPreset(e.target.value as FilterPreset)}
           className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs appearance-none cursor-pointer transition-all"
         >
+          <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
           <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
           <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
           <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
@@ -161,6 +166,17 @@ export default function DateFilterControl({ onChange, initialPreset = '30_days',
             <Check size={12} /> Apply
           </button>
         </div>
+      )}
+
+      {/* Clear Filter Button */}
+      {preset !== 'all' && (
+        <button
+          type="button"
+          onClick={() => handleSelectPreset('all')}
+          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+        >
+          Clear Filter
+        </button>
       )}
     </div>
   );

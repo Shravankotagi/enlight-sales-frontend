@@ -101,7 +101,7 @@ export default function HomePage() {
   const canManageTeam = isSalesManager || isAdmin;
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
-  const [dayPreset, setDayPreset] = useState('30_days');
+  const [dayPreset, setDayPreset] = useState('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -123,14 +123,19 @@ export default function HomePage() {
   }, []);
 
   const [dateRange, setDateRange] = useState<DateRange>({
-    preset: '30_days',
-    from: getDaysAgo(30),
-    to: formatLocalDate(),
+    preset: 'all',
+    from: undefined,
+    to: undefined,
   });
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
-    if (preset === 'today') {
+    if (preset === 'all') {
+      setDateRange({ preset: 'all', from: undefined, to: undefined });
+      setShowCustomDate(false);
+      setCustomFrom('');
+      setCustomTo('');
+    } else if (preset === 'today') {
       const today = formatLocalDate();
       setDateRange({ preset: 'today', from: today, to: today });
       setShowCustomDate(false);
@@ -149,11 +154,11 @@ export default function HomePage() {
   };
 
   const handleClearFilter = () => {
-    setDayPreset('30_days');
+    setDayPreset('all');
     setShowCustomDate(false);
     setCustomFrom('');
     setCustomTo('');
-    setDateRange({ preset: '30_days', from: getDaysAgo(30), to: formatLocalDate() });
+    setDateRange({ preset: 'all', from: undefined, to: undefined });
   };
 
   const [activeBarHover, setActiveBarHover] = useState<number | null>(null);
@@ -170,6 +175,7 @@ export default function HomePage() {
         .getActionQueue({
           from: dateRange.from,
           to: dateRange.to,
+          all_time: dateRange.preset === 'all' ? 'true' : undefined,
           salesperson_phone: effectivePhone,
         })
         .then(r => r.data?.data || r.data),
@@ -184,6 +190,7 @@ export default function HomePage() {
         .getDashboard({
           from: dateRange.from,
           to: dateRange.to,
+          all_time: dateRange.preset === 'all' ? 'true' : undefined,
           salesperson_phone: effectivePhone,
         })
         .then(r => r.data?.data || r.data),
@@ -255,10 +262,16 @@ export default function HomePage() {
   const { data: visitsData, refetch: refetchVisits } = useQuery({
     queryKey: ['home-visits-list', effectivePhone, dateRange],
     queryFn: () =>
-      visitsApi.getAll({ from: dateRange.from, to: dateRange.to }).then(r => {
-        const raw = r?.data;
-        return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-      }),
+      visitsApi
+        .getAll({
+          from: dateRange.from,
+          to: dateRange.to,
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+        })
+        .then(r => {
+          const raw = r?.data;
+          return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+        }),
   });
 
   // 9. Complaints Query
@@ -266,7 +279,10 @@ export default function HomePage() {
     queryKey: ['home-complaints-list', dateRange],
     queryFn: () =>
       complaintsApi
-        .getAll()
+        .getAll({
+          from: dateRange.from,
+          to: dateRange.to,
+        })
         .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -763,6 +779,7 @@ export default function HomePage() {
               value={dayPreset}
               onChange={e => handleDayPresetChange(e.target.value)}
               className="pl-7 pr-7 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all">All Time</option>
               <option value="today">Today</option>
               <option value="7_days">Last 7 Days</option>
               <option value="30_days">Last 30 Days</option>
@@ -812,7 +829,7 @@ export default function HomePage() {
           )}
 
           {/* Clear Filter */}
-          {dayPreset !== '30_days' && (
+          {dayPreset !== 'all' && (
             <button
               type="button"
               onClick={handleClearFilter}

@@ -76,19 +76,24 @@ export default function ComplaintsPage() {
   const pageSize = 15;
 
   // Date Filter Presets
-  const [dayPreset, setDayPreset] = useState<string>('30_days');
+  const [dayPreset, setDayPreset] = useState<string>('all');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
   const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
-    from: getDaysAgo(30),
-    to: formatLocalDate(),
+    from: undefined,
+    to: undefined,
   });
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
-    if (preset === 'today') {
+    if (preset === 'all') {
+      setDateRange({ from: undefined, to: undefined });
+      setShowCustomDate(false);
+      setCustomFrom('');
+      setCustomTo('');
+    } else if (preset === 'today') {
       const today = formatLocalDate();
       setDateRange({ from: today, to: today });
       setShowCustomDate(false);
@@ -129,6 +134,20 @@ export default function ComplaintsPage() {
     if (customFrom && effectiveVal) {
       setDateRange({ from: customFrom, to: effectiveVal });
     }
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setDayPreset('all');
+    setShowCustomDate(false);
+    setCustomFrom('');
+    setCustomTo('');
+    setDateRange({
+      from: undefined,
+      to: undefined,
+    });
+    setCurrentPage(1);
   };
 
   // Modals
@@ -725,10 +744,10 @@ export default function ComplaintsPage() {
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="flex flex-col gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* 1. Search Input */}
+      {/* Filter & Search Bar - Single Row matching Visits/Inquiry tab layout */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* 1. Compact Search Bar with Clear (X) Icon */}
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
             <input
@@ -749,13 +768,14 @@ export default function ComplaintsPage() {
             )}
           </div>
 
-          {/* 2. Date Preset Dropdown with 'Last 30 Days' default */}
+          {/* 2. Date Preset Dropdown with 'All Time' default */}
           <div className="relative inline-flex items-center w-full sm:w-auto">
             <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
             <select
               value={dayPreset}
               onChange={e => handleDayPresetChange(e.target.value)}
               className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
               <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
               <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
               <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
@@ -783,15 +803,10 @@ export default function ComplaintsPage() {
           </div>
 
           {/* 4. Clear Filter Button */}
-          {(searchTerm || filterStatus !== 'all' || dayPreset !== '30_days') && (
+          {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
             <button
               type="button"
-              onClick={() => {
-                setSearchTerm('');
-                setFilterStatus('all');
-                handleDayPresetChange('30_days');
-                setCurrentPage(1);
-              }}
+              onClick={handleClearFilters}
               className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer">
               Clear Filter
             </button>

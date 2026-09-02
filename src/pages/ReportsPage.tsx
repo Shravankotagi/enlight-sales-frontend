@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3 } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 
@@ -12,8 +12,8 @@ export default function ReportsPage() {
   const { effectivePhone } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: '30_days',
-    from: getDaysAgo(30),
+    preset: 'all',
+    from: '2000-01-01',
     to: formatLocalDate(),
   });
 
@@ -24,7 +24,11 @@ export default function ReportsPage() {
   const getParams = () => {
     const params: any = {};
     if (effectivePhone) params.salesperson_phone = effectivePhone;
-    if (dateRange.preset === 'monthly') {
+    if (dateRange.preset === 'all') {
+      params.all_time = 'true';
+      params.from = dateRange.from || '2000-01-01';
+      params.to = dateRange.to || formatLocalDate();
+    } else if (dateRange.preset === 'monthly') {
       params.month = dateRange.month;
       params.year = dateRange.year;
     } else {

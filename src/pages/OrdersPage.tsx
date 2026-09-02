@@ -296,23 +296,28 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
 
-  const [dayPreset, setDayPreset] = useState<'today' | '7_days' | '30_days' | '90_days' | 'custom'>('30_days');
+  const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
-  const [customFrom, setCustomFrom] = useState(getDaysAgo(7));
-  const [customTo, setCustomTo] = useState(formatLocalDate());
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: '30_days',
-    from: getDaysAgo(30),
-    to: formatLocalDate(),
+    preset: 'all',
+    from: undefined,
+    to: undefined,
   });
 
   const handleDayPresetChange = (preset: string) => {
     const todayStr = formatLocalDate();
     setDayPreset(preset as any);
 
-    if (preset === 'today') {
+    if (preset === 'all') {
+      setShowCustomDate(false);
+      setCustomFrom('');
+      setCustomTo('');
+      setDateRange({ preset: 'all', from: undefined, to: undefined });
+    } else if (preset === 'today') {
       setShowCustomDate(false);
       setDateRange({ preset: 'today', from: todayStr, to: todayStr });
     } else if (preset === '7_days') {
@@ -356,17 +361,15 @@ export default function OrdersPage() {
   const handleClearAllFilters = () => {
     setSearchTerm('');
     setFilterStatus('all');
-    setDayPreset('30_days');
-    const todayStr = formatLocalDate();
-    const fromStr = getDaysAgo(30);
+    setDayPreset('all');
     setDateRange({
-      preset: '30_days',
-      from: fromStr,
-      to: todayStr,
+      preset: 'all',
+      from: undefined,
+      to: undefined,
     });
     setShowCustomDate(false);
-    setCustomFrom(getDaysAgo(7));
-    setCustomTo(todayStr);
+    setCustomFrom('');
+    setCustomTo('');
     setCurrentPage(1);
   };
 
@@ -1023,6 +1026,7 @@ export default function OrdersPage() {
                 value={dayPreset}
                 onChange={e => handleDayPresetChange(e.target.value)}
                 className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
                 <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
                 <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
                 <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
