@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Plus,
@@ -17,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Save,
+  ArrowLeft,
 } from 'lucide-react';
 import { complaintsApi, employeesApi, customersApi, dealsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -63,6 +65,11 @@ export function formatComplaintDateTime(dateStr?: string | null): string {
 }
 
 export default function ComplaintsPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetComplaintId = searchParams.get('complaintId') || searchParams.get('id');
+  const returnTo = searchParams.get('returnTo');
+
   const { isSalesManager, isAdmin, effectivePhone } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
@@ -540,6 +547,29 @@ export default function ComplaintsPage() {
     setModalResolutionNotes(comp.resolution_notes || '');
   };
 
+  // Auto-open requested complaint modal if navigated with ?complaintId=... or ?id=...
+  useEffect(() => {
+    if (!targetComplaintId) return;
+    const found = complaints.find(
+      (c) => String(c.id) === targetComplaintId || String(c.id).includes(targetComplaintId),
+    );
+    if (found) {
+      openComplaintDetails(found);
+    } else if (complaints.length > 0) {
+      complaintsApi
+        .getAll()
+        .then((res) => {
+          const raw = res?.data;
+          const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+          const match = list.find((c: any) => String(c.id) === targetComplaintId || String(c.id).includes(targetComplaintId));
+          if (match) openComplaintDetails(match);
+        })
+        .catch((err) => {
+          console.warn('Could not auto-open requested complaint:', err);
+        });
+    }
+  }, [targetComplaintId, complaints]);
+
   // Resolve inside Details Modal
   const handleResolveInModal = async () => {
     if (!selectedComplaint) return;
@@ -1000,19 +1030,29 @@ export default function ComplaintsPage() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto space-y-4">
             {/* Modal Header */}
-            <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">{selectedComplaint.customer_name}</h2>
-                <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
-                  <span className="flex items-center gap-1">
-                    <Calendar size={12} className="text-slate-400" />
-                    {formatComplaintDateTime(selectedComplaint.created_at || selectedComplaint.reported_at)}
-                  </span>
-                  {canViewSalesperson && (
-                    <span>
-                      • Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedComplaint)}</strong>
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {returnTo && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(returnTo)}
+                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs border border-blue-200">
+                    <ArrowLeft size={14} /> Back to Customer Profile
+                  </button>
+                )}
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">{selectedComplaint.customer_name}</h2>
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                    <span className="flex items-center gap-1">
+                      <Calendar size={12} className="text-slate-400" />
+                      {formatComplaintDateTime(selectedComplaint.created_at || selectedComplaint.reported_at)}
                     </span>
-                  )}
+                    {canViewSalesperson && (
+                      <span>
+                        • Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedComplaint)}</strong>
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 

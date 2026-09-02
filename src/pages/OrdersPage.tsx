@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag,
@@ -23,6 +24,7 @@ import {
   RefreshCw,
   Calendar,
   Layers,
+  ArrowLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
@@ -293,6 +295,11 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
 }
 
 export default function OrdersPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetOrderId = searchParams.get('orderId') || searchParams.get('id');
+  const returnTo = searchParams.get('returnTo');
+
   const queryClient = useQueryClient();
   const { effectivePhone } = useAuth();
 
@@ -922,6 +929,29 @@ export default function OrdersPage() {
     setPoImageViewerUrl(`extracted_preview://${ord.id}`);
   };
 
+  // Auto-open requested PO if navigated with ?orderId=... or ?id=...
+  useEffect(() => {
+    if (!targetOrderId) return;
+    const found = rawOrders.find(
+      (o: any) => o.id === targetOrderId || o.po_number === targetOrderId,
+    );
+    if (found) {
+      handleViewPoDocument(found);
+    } else if (rawOrders.length > 0) {
+      dealsApi
+        .getOne(targetOrderId)
+        .then(res => {
+          const fullDeal = res?.data?.data || res?.data;
+          if (fullDeal) {
+            handleViewPoDocument(fullDeal);
+          }
+        })
+        .catch(err => {
+          console.warn('Could not load order for modal auto-open:', err);
+        });
+    }
+  }, [targetOrderId, rawOrders]);
+
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
   const startIndex = (validCurrentPage - 1) * pageSize;
@@ -1441,15 +1471,25 @@ export default function OrdersPage() {
               poImageViewerUrl.startsWith('extracted_preview://') ? 'max-w-3xl' : 'max-w-5xl'
             }`}
             onClick={e => e.stopPropagation()}>
-            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
-              <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <FileText size={18} className="text-blue-600" />
-                {poImageViewerUrl === 'loading://preview'
-                  ? 'Purchase Order (PO) Document'
-                  : poImageViewerUrl.startsWith('extracted_preview://')
-                    ? 'Original Customer Inquiry Message'
-                    : 'Original Purchase Order (PO) Document / WhatsApp Image'}
-              </span>
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4 flex-wrap gap-2">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {returnTo && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(returnTo)}
+                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                    <ArrowLeft size={14} /> Back to Customer Profile
+                  </button>
+                )}
+                <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <FileText size={18} className="text-blue-600" />
+                  {poImageViewerUrl === 'loading://preview'
+                    ? 'Purchase Order (PO) Document'
+                    : poImageViewerUrl.startsWith('extracted_preview://')
+                      ? 'Original Customer Inquiry Message'
+                      : 'Original Purchase Order (PO) Document / WhatsApp Image'}
+                </span>
+              </div>
               <button
                 onClick={() => {
                   setPoImageViewerUrl(null);

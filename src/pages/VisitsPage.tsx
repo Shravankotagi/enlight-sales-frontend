@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   MapPin,
   Plus,
@@ -20,6 +21,7 @@ import {
   ChevronRight,
   ChevronDown,
   Save,
+  ArrowLeft,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -72,6 +74,11 @@ export function formatCityLocality(rawLocation?: string, rawAddress?: string): s
 }
 
 export default function VisitsPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetVisitId = searchParams.get('visitId') || searchParams.get('id');
+  const returnTo = searchParams.get('returnTo');
+
   const { isSalesManager, isAdmin, effectivePhone } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
@@ -300,6 +307,33 @@ export default function VisitsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Auto-open requested visit modal if navigated with ?visitId=... or ?id=...
+  useEffect(() => {
+    if (!targetVisitId) return;
+    const found = visits.find(
+      (v) => String(v.id) === targetVisitId || String(v.id).includes(targetVisitId),
+    );
+    if (found) {
+      setSelectedVisit(found);
+      setIsEditing(false);
+    } else if (visits.length > 0) {
+      visitsApi
+        .getAll()
+        .then((res) => {
+          const raw = res?.data;
+          const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+          const match = list.find((v: any) => String(v.id) === targetVisitId || String(v.id).includes(targetVisitId));
+          if (match) {
+            setSelectedVisit(match);
+            setIsEditing(false);
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not auto-open requested visit:', err);
+        });
+    }
+  }, [targetVisitId, visits]);
 
   // Create Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -1144,8 +1178,16 @@ export default function VisitsPage() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
             {/* Modal Header */}
-            <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2.5">
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {returnTo && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(returnTo)}
+                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs border border-blue-200">
+                    <ArrowLeft size={14} /> Back to Customer Profile
+                  </button>
+                )}
                 <span className="p-2 bg-blue-50 text-blue-600 rounded-xl shrink-0">
                   <MapPin size={20} />
                 </span>

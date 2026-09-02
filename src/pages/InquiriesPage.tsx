@@ -5,7 +5,7 @@ import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2,
-  LayoutDashboard, IndianRupee, Trash2, MessageSquare
+  LayoutDashboard, IndianRupee, Trash2, MessageSquare, ArrowLeft
 } from 'lucide-react';
 import DealDetailDrawer from '../components/DealDetailDrawer';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
@@ -1485,19 +1485,27 @@ export default function InquiriesPage() {
     fetchMonthlyInquiries();
   }, [dateRange]);
 
-  // Auto-open drawer if URL contains ?id=... or ?inquiry_id=...
+  // Auto-open drawer if URL contains ?inquiryId=... or ?id=... or ?inquiry_id=...
   useEffect(() => {
-    if (inquiries.length > 0) {
-      const params = new URLSearchParams(window.location.search);
-      const targetId = params.get('id') || params.get('inquiry_id');
-      if (targetId) {
-        const found = inquiries.find((i) => String(i.id) === targetId || String(i.id).includes(targetId));
-        if (found) {
-          handleOpenDrawer(found);
-        }
+    const params = new URLSearchParams(location.search);
+    const targetId = params.get('inquiryId') || params.get('id') || params.get('inquiry_id');
+    if (targetId) {
+      const found = inquiries.find((i) => String(i.id) === targetId || String(i.id).includes(targetId));
+      if (found) {
+        handleOpenDrawer(found);
+      } else if (inquiries.length > 0) {
+        inquiriesApi
+          .getOne(targetId)
+          .then((res) => {
+            const item = res?.data?.data || res?.data;
+            if (item) handleOpenDrawer(item);
+          })
+          .catch((err) => {
+            console.warn('Could not auto-open requested inquiry:', err);
+          });
       }
     }
-  }, [inquiries]);
+  }, [inquiries, location.search]);
 
   const handleSaveDrawerDetails = async () => {
     if (!selectedInquiry || !editDetails) return;
@@ -2825,7 +2833,19 @@ export default function InquiriesPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {new URLSearchParams(location.search).get('returnTo') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ret = new URLSearchParams(location.search).get('returnTo');
+                      if (ret) navigate(ret);
+                    }}
+                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs border border-blue-200">
+                    <ArrowLeft size={14} /> Back to Customer Profile
+                  </button>
+                )}
+
                 <button
                   type="button"
                   disabled={viewingDocLoading}

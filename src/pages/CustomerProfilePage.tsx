@@ -629,9 +629,13 @@ export default function CustomerProfilePage() {
                       {wonDeals.slice(0, 5).map((d: any) => {
                         const items = d.deal_items || [];
                         return (
-                          <tr key={d.id} className="hover:bg-slate-50/80 transition-colors">
+                          <tr
+                            key={d.id}
+                            onClick={() => navigate(`/orders?orderId=${encodeURIComponent(d.id)}&returnTo=${encodeURIComponent(`/customers/${customer?.id || id}`)}`)}
+                            className="hover:bg-blue-50/60 transition-colors cursor-pointer group"
+                            title="Click to view order details in Orders module">
                             <td className="py-3 px-3">
-                              <p className="font-bold text-slate-900">{d.po_number || d.customer_name || 'Confirmed Order'}</p>
+                              <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{d.po_number || d.customer_name || 'Confirmed Order'}</p>
                               {d.delivery_location && (
                                 <p className="text-2xs text-slate-500 truncate max-w-xs">{d.delivery_location}</p>
                               )}
@@ -791,10 +795,14 @@ export default function CustomerProfilePage() {
                   {wonDeals.map((deal: any, idx: number) => {
                     const items = deal.deal_items || [];
                     return (
-                      <tr key={deal.id} className="hover:bg-slate-50/80 transition-colors">
+                      <tr
+                        key={deal.id}
+                        onClick={() => navigate(`/orders?orderId=${encodeURIComponent(deal.id)}&returnTo=${encodeURIComponent(`/customers/${customer?.id || id}`)}`)}
+                        className="hover:bg-blue-50/60 transition-colors cursor-pointer group"
+                        title="Click to view order details in Orders module">
                         <td className="py-3 px-3 text-slate-400 font-medium">{idx + 1}</td>
                         <td className="py-3 px-3">
-                          <p className="font-bold text-slate-900">{deal.po_number || deal.customer_name || 'Confirmed Order'}</p>
+                          <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{deal.po_number || deal.customer_name || 'Confirmed Order'}</p>
                           {deal.delivery_location && (
                             <p className="text-2xs text-slate-500">{deal.delivery_location}</p>
                           )}
@@ -866,7 +874,11 @@ export default function CustomerProfilePage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {inquiries.map((inq: any, idx: number) => (
-                    <tr key={inq.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={inq.id}
+                      onClick={() => navigate(`/inquiries?inquiryId=${encodeURIComponent(inq.id)}&returnTo=${encodeURIComponent(`/customers/${customer?.id || id}`)}`)}
+                      className="hover:bg-blue-50/60 transition-colors cursor-pointer group"
+                      title="Click to view inquiry & quotation drawer">
                       <td className="py-3 px-3 text-slate-400 font-medium">{idx + 1}</td>
                       <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
                         {safeFormatDate(inq.created_at)}
@@ -875,7 +887,7 @@ export default function CustomerProfilePage() {
                         {inq.source_channel || 'WhatsApp'}
                       </td>
                       <td className="py-3 px-3 text-slate-800 max-w-md">
-                        <p className="line-clamp-2">{inq.raw_text || inq.sender_name || 'Material Requirement'}</p>
+                        <p className="line-clamp-2 group-hover:text-blue-600 transition-colors">{inq.raw_text || inq.sender_name || 'Material Requirement'}</p>
                       </td>
                       <td className="py-3 px-3">
                         <span className="px-2 py-0.5 rounded-full text-2xs font-bold bg-slate-100 text-slate-700 capitalize">
@@ -928,9 +940,13 @@ export default function CustomerProfilePage() {
                     const st = (c.status || '').toLowerCase();
                     const isOpen = st !== 'resolved' && st !== 'closed';
                     return (
-                      <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
+                      <tr
+                        key={c.id}
+                        onClick={() => navigate(`/complaints?complaintId=${encodeURIComponent(c.id)}&returnTo=${encodeURIComponent(`/customers/${customer?.id || id}`)}`)}
+                        className="hover:bg-blue-50/60 transition-colors cursor-pointer group"
+                        title="Click to view complaint details modal">
                         <td className="py-3 px-3 text-slate-400 font-medium">{idx + 1}</td>
-                        <td className="py-3 px-3 font-bold text-slate-900 capitalize">
+                        <td className="py-3 px-3 font-bold text-slate-900 group-hover:text-blue-600 transition-colors capitalize">
                           {c.complaint_type || 'Quality'}
                         </td>
                         <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
@@ -996,12 +1012,16 @@ export default function CustomerProfilePage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {visits.map((v: any, idx: number) => (
-                    <tr key={v.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={v.id}
+                      onClick={() => navigate(`/visits?visitId=${encodeURIComponent(v.id)}&returnTo=${encodeURIComponent(`/customers/${customer?.id || id}`)}`)}
+                      className="hover:bg-blue-50/60 transition-colors cursor-pointer group"
+                      title="Click to view visit details modal">
                       <td className="py-3 px-3 text-slate-400 font-medium">{idx + 1}</td>
                       <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
                         {safeFormatDate(v.visited_at)}
                       </td>
-                      <td className="py-3 px-3 font-bold text-slate-900">
+                      <td className="py-3 px-3 font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
                         {getSalespersonName(v.salesperson_phone)}
                       </td>
                       <td className="py-3 px-3 text-slate-800">
