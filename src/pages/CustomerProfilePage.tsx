@@ -199,7 +199,7 @@ export default function CustomerProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { isSalesManager, isAdmin } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits'>('overview');
@@ -221,8 +221,8 @@ export default function CustomerProfilePage() {
 
   const employeeMap = useMemo(() => {
     const map = new Map<string, string>();
-    safeEmployees.forEach(emp => {
-      if (emp && emp.phone && emp.name) {
+    safeEmployees.forEach((emp: any) => {
+      if (emp.phone && emp.name) {
         const clean = String(emp.phone).replace(/\D/g, '').slice(-10);
         map.set(clean, emp.name);
       }
@@ -231,7 +231,7 @@ export default function CustomerProfilePage() {
   }, [safeEmployees]);
 
   const formatName = (str?: string) => {
-    if (!str) return '';
+    if (!str) return 'Unassigned';
     return str
       .split(' ')
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
@@ -257,7 +257,7 @@ export default function CustomerProfilePage() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['customer-detail', id],
+    queryKey: ['customer-detail', id, effectivePhone],
     queryFn: async () => {
       if (!id) throw new Error('No customer ID provided');
       const res = await customersApi.getOne(id);
