@@ -253,8 +253,11 @@ export default function HomePage() {
 
   // 7. Employees Query (for Sales Manager Leaderboard)
   const { data: employeesData } = useQuery({
-    queryKey: ['team-employees-list'],
-    queryFn: () => employeesApi.getAll().then(r => r.data?.data || r.data || []),
+    queryKey: ['team-employees-list', effectivePhone],
+    queryFn: () =>
+      employeesApi
+        .getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined)
+        .then(r => r.data?.data || r.data || []),
     enabled: canManageTeam,
   });
 
@@ -276,12 +279,13 @@ export default function HomePage() {
 
   // 9. Complaints Query
   const { data: complaintsData, refetch: refetchComplaints } = useQuery({
-    queryKey: ['home-complaints-list', dateRange],
+    queryKey: ['home-complaints-list', effectivePhone, dateRange],
     queryFn: () =>
       complaintsApi
         .getAll({
           from: dateRange.from,
           to: dateRange.to,
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
         })
         .then(r => {
           const raw = r?.data;
@@ -438,12 +442,8 @@ export default function HomePage() {
 
   // 4. Customer Visits count
   const totalVisitsCount = useMemo(() => {
-    if (effectivePhone) {
-      const cleanTarget = effectivePhone.replace(/\D/g, '').slice(-10);
-      return safeVisits.filter(v => (v.salesperson_phone || '').replace(/\D/g, '').slice(-10) === cleanTarget).length;
-    }
     return safeVisits.length;
-  }, [safeVisits, effectivePhone]);
+  }, [safeVisits]);
 
   // 5. Open (Pending) Complaints
   const openComplaints = useMemo(() => {

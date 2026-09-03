@@ -120,7 +120,8 @@ export const reportsApi = {
 };
 
 export const employeesApi = {
-  getAll: () => API.get('/employees'),
+  getAll: (params?: { salesperson_phone?: string }) =>
+    API.get('/employees', { params }),
   getNextId: () => API.get('/employees/next-id'),
   create: (data: any) => API.post('/employees', data),
   update: (id: string, data: any) => API.patch(`/employees/${id}`, data),

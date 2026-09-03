@@ -72,18 +72,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setViewingAsState(null);
   };
 
-  const isAdmin = employee?.role === 'admin';
+  const activeEmployee = viewingAs || employee;
+  const isAdmin = activeEmployee?.role === 'admin';
   const isSalesManager =
-    employee?.role === 'sales_manager' || employee?.role === 'manager';
+    activeEmployee?.role === 'sales_manager' ||
+    activeEmployee?.role === 'manager';
   const isSalesperson = !isAdmin && !isSalesManager;
 
   // effectivePhone:
-  // - Salesperson: their own phone
-  // - Admin / Sales Manager: if viewing someone specifically -> that person's phone; if not -> null (views all / team aggregate)
-  const effectivePhone =
-    isAdmin || isSalesManager
-      ? viewingAs?.phone || null
-      : employee?.phone || null;
+  // - If viewing someone specifically -> that person's phone
+  // - If Salesperson -> their own phone
+  // - If Admin / Sales Manager viewing their own account -> null (all / team aggregate)
+  const effectivePhone = viewingAs
+    ? viewingAs.phone || null
+    : isSalesperson
+      ? employee?.phone || null
+      : null;
 
   return (
     <AuthContext.Provider
