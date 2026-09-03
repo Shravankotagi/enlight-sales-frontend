@@ -107,7 +107,11 @@ export default function HomePage() {
   const isSalesManagerUser =
     employee?.role === 'sales_manager' ||
     employee?.role === 'manager' ||
-    ((viewingAs?.role === 'sales_manager' || viewingAs?.role === 'manager') && isAdmin);
+    ((viewingAs?.role === 'sales_manager' ||
+      viewingAs?.role === 'manager' ||
+      viewingAs?.original_role === 'sales_manager' ||
+      viewingAs?.original_role === 'manager') &&
+      isAdmin);
 
   const handleSwitchToPersonal = () => {
     const target = viewingAs || employee;
@@ -115,6 +119,8 @@ export default function HomePage() {
     setViewingAs({
       ...target,
       role: 'salesperson',
+      original_role: target.original_role || target.role,
+      mode: 'personal',
     });
   };
 
@@ -123,6 +129,8 @@ export default function HomePage() {
       setViewingAs({
         ...viewingAs,
         role: 'sales_manager',
+        original_role: 'sales_manager',
+        mode: 'manager',
       });
     } else {
       clearViewingAs();

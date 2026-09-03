@@ -6,6 +6,8 @@ export interface Employee {
   name: string;
   phone: string;
   role: string;
+  original_role?: string;
+  mode?: string;
   email?: string;
   is_active?: boolean;
   manager_id?: string | null;

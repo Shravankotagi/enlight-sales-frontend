@@ -23,7 +23,15 @@ API.interceptors.request.use((config) => {
   const viewingAs = sessionStorage.getItem('enlight_viewing_as');
   if (viewingAs) {
     const emp = JSON.parse(viewingAs);
-    config.params = { ...config.params, salesperson_phone: emp.phone };
+    const isPersonalMode =
+      emp.mode === 'personal' ||
+      emp.role === 'salesperson' ||
+      emp.is_personal === true;
+    config.params = {
+      ...config.params,
+      salesperson_phone: emp.phone,
+      ...(isPersonalMode ? { mode: 'personal' } : {}),
+    };
   }
   return config;
 });

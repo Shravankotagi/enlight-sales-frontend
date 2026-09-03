@@ -28,6 +28,8 @@ interface Employee {
   phone: string;
   email?: string;
   role: string;
+  original_role?: string;
+  mode?: string;
   is_active: boolean;
   manager_id?: string | null;
   manager_phone?: string | null;
