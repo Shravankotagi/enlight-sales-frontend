@@ -88,12 +88,28 @@ function deriveSegment(c: any): string {
   const tonnage = Number(c.total_tonnage || 0);
   const ltv = Number(c.lifetime_value || 0);
   const orders = Number(c.total_orders || 0);
-  if (tonnage >= 100 || ltv >= 1000000 || orders >= 5) {
+  const inquiries = Number(c.total_inquiries || 0);
+  const visits = Number(c.total_visits || 0);
+
+  // Key Account: Bulk Volume (>=100 MT or >=50L) OR Consistent Core (>=4 orders and (>=20L or >=30 MT))
+  if (
+    tonnage >= 100 ||
+    ltv >= 5000000 ||
+    (orders >= 4 && (ltv >= 2000000 || tonnage >= 30))
+  ) {
     return 'key_account';
   }
-  if (orders >= 2 || tonnage >= 20 || (ltv >= 100000 && ltv < 1000000)) {
+
+  // Growth: Repeat Buyer (>=2 orders and (>=5L or >=10 MT)) OR Full Truckload (>=25 MT or >=15L) OR High Engagement (>=1 order and (>=3 inquiries or >=2 visits))
+  if (
+    (orders >= 2 && (ltv >= 500000 || tonnage >= 10)) ||
+    tonnage >= 25 ||
+    ltv >= 1500000 ||
+    (orders >= 1 && (inquiries >= 3 || visits >= 2))
+  ) {
     return 'growth';
   }
+
   return 'new';
 }
 
@@ -107,7 +123,7 @@ export default function CustomersPage() {
   const [filterHealth, setFilterHealth] = useState<string>('all');
   const [filterSegment, setFilterSegment] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 15;
+  const pageSize = 25;
 
   // Date Filter Presets (Matching Visits tab pattern)
   const [dayPreset, setDayPreset] = useState<string>('all');
