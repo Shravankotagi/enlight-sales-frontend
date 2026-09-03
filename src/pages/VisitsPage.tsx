@@ -93,7 +93,7 @@ export default function VisitsPage() {
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 15;
+  const pageSize = 25;
 
   // Date Filter Presets (Matching Inquiry tab pattern)
   const [dayPreset, setDayPreset] = useState<string>('all');

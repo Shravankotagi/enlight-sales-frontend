@@ -80,7 +80,7 @@ export default function ComplaintsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 15;
+  const pageSize = 25;
 
   // Date Filter Presets
   const [dayPreset, setDayPreset] = useState<string>('all');
