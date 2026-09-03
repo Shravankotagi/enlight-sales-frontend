@@ -97,8 +97,11 @@ function getSmoothSvgPath(points: { x: number; y: number }[]): string {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, effectivePhone, isAdmin, isSalesManager, setViewingAs } = useAuth();
-  const canManageTeam = isSalesManager || isAdmin;
+  const { employee, viewingAs, effectivePhone, setViewingAs } = useAuth();
+  const activeRole = viewingAs ? viewingAs.role : employee?.role;
+  const isViewingManager = activeRole === 'sales_manager' || activeRole === 'manager';
+  const isViewingAdmin = activeRole === 'admin';
+  const canManageTeam = isViewingManager || isViewingAdmin;
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
   const [dayPreset, setDayPreset] = useState('all');
@@ -646,7 +649,7 @@ export default function HomePage() {
 
       {/* ── Greeting ────────────────────────────────────────────────── */}
       <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-        {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}
+        {greeting}, {(viewingAs ? viewingAs.name : employee?.name)?.split(' ')[0] || 'Sales Executive'}
       </h1>
 
       {/* ── Nav Bar ─────────────────────────────────────────────────── */}

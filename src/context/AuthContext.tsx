@@ -72,11 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setViewingAsState(null);
   };
 
-  const activeEmployee = viewingAs || employee;
-  const isAdmin = activeEmployee?.role === 'admin';
+  const isAdmin = employee?.role === 'admin';
   const isSalesManager =
-    activeEmployee?.role === 'sales_manager' ||
-    activeEmployee?.role === 'manager';
+    employee?.role === 'sales_manager' || employee?.role === 'manager';
   const isSalesperson = !isAdmin && !isSalesManager;
 
   // effectivePhone:
