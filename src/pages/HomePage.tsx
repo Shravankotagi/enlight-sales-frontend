@@ -31,6 +31,7 @@ import {
   Calendar,
   Search,
   X,
+  UserCheck,
 } from 'lucide-react';
 
 interface CarouselItem {
@@ -97,11 +98,36 @@ function getSmoothSvgPath(points: { x: number; y: number }[]): string {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, viewingAs, effectivePhone, setViewingAs } = useAuth();
+  const { employee, viewingAs, effectivePhone, setViewingAs, clearViewingAs, isAdmin } = useAuth();
   const activeRole = viewingAs ? viewingAs.role : employee?.role;
   const isViewingManager = activeRole === 'sales_manager' || activeRole === 'manager';
   const isViewingAdmin = activeRole === 'admin';
   const canManageTeam = isViewingManager || isViewingAdmin;
+
+  const isSalesManagerUser =
+    employee?.role === 'sales_manager' ||
+    employee?.role === 'manager' ||
+    ((viewingAs?.role === 'sales_manager' || viewingAs?.role === 'manager') && isAdmin);
+
+  const handleSwitchToPersonal = () => {
+    const target = viewingAs || employee;
+    if (!target) return;
+    setViewingAs({
+      ...target,
+      role: 'salesperson',
+    });
+  };
+
+  const handleSwitchToTeamManager = () => {
+    if (isAdmin && viewingAs) {
+      setViewingAs({
+        ...viewingAs,
+        role: 'sales_manager',
+      });
+    } else {
+      clearViewingAs();
+    }
+  };
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
   const [dayPreset, setDayPreset] = useState('all');
@@ -647,10 +673,36 @@ export default function HomePage() {
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
 
-      {/* ── Greeting ────────────────────────────────────────────────── */}
-      <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-        {greeting}, {(viewingAs ? viewingAs.name : employee?.name)?.split(' ')[0] || 'Sales Executive'}
-      </h1>
+      {/* ── Greeting & Dual-Role Switcher ─────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          {greeting}, {(viewingAs ? viewingAs.name : employee?.name)?.split(' ')[0] || 'Sales Executive'}
+        </h1>
+
+        {isSalesManagerUser && (
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {isViewingManager ? (
+              <button
+                onClick={handleSwitchToPersonal}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Switch to My Personal Salesperson Dashboard"
+              >
+                <UserCheck size={14} />
+                Salesperson
+              </button>
+            ) : (
+              <button
+                onClick={handleSwitchToTeamManager}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Switch to Sales Manager Team Dashboard"
+              >
+                <Users size={14} />
+                Sales Manager
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── Nav Bar ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
