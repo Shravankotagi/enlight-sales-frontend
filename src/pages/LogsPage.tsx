@@ -115,11 +115,10 @@ export default function LogsPage() {
         })
         .then((r) => {
           const raw = r?.data;
-          return Array.isArray(raw)
-            ? raw
-            : raw?.data && Array.isArray(raw.data)
-              ? raw.data
-              : [];
+          if (Array.isArray(raw)) return raw;
+          if (Array.isArray(raw?.data)) return raw.data;
+          if (Array.isArray(raw?.data?.data)) return raw.data.data;
+          return [];
         }),
   });
 
@@ -136,11 +135,10 @@ export default function LogsPage() {
         })
         .then((r) => {
           const raw = r?.data;
-          return Array.isArray(raw)
-            ? raw
-            : raw?.data && Array.isArray(raw.data)
-              ? raw.data
-              : [];
+          if (Array.isArray(raw)) return raw;
+          if (Array.isArray(raw?.data)) return raw.data;
+          if (Array.isArray(raw?.data?.data)) return raw.data.data;
+          return [];
         }),
   });
 
