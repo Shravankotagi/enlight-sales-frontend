@@ -71,7 +71,9 @@ function EmployeeFooter() {
         >
           <Users size={14} />
           {viewingAs
-            ? `Viewing: ${viewingAs.name}`
+            ? viewingAs.phone === employee?.phone
+              ? `Viewing: ${viewingAs.name} (My Sales)`
+              : `Viewing: ${viewingAs.name}`
             : isAdmin
               ? 'Salesperson Selection'
               : 'Team Members'}
