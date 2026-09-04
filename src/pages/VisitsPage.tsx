@@ -371,9 +371,10 @@ export default function VisitsPage() {
   const [editFollowup, setEditFollowup] = useState('');
   const [editVisitDate, setEditVisitDate] = useState(formatLocalDate());
 
-  const fetchVisits = async () => {
+  const fetchVisits = async (isBackground?: boolean | any) => {
+    const silent = isBackground === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to;
@@ -385,23 +386,21 @@ export default function VisitsPage() {
       setVisits(list);
     } catch (err) {
       console.error('Error fetching visits:', err);
-      setVisits([]);
+      if (!silent) setVisits([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchVisits();
-    const interval = setInterval(fetchVisits, 5000);
-    return () => clearInterval(interval);
+    fetchVisits(false);
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   useEffect(() => {
     const handleDbChange = (e: any) => {
       const { table } = e.detail || {};
       if (table === 'customer_visits') {
-        fetchVisits();
+        fetchVisits(true);
       }
     };
     window.addEventListener('enlight-db-change', handleDbChange);

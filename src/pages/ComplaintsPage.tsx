@@ -366,9 +366,10 @@ export default function ComplaintsPage() {
     return p || 'Steel Material';
   };
 
-  const fetchComplaints = async () => {
+  const fetchComplaints = async (isBackground?: boolean | any) => {
+    const silent = isBackground === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to;
@@ -380,23 +381,21 @@ export default function ComplaintsPage() {
       setComplaints(list);
     } catch (err) {
       console.error('Error fetching complaints:', err);
-      setComplaints([]);
+      if (!silent) setComplaints([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchComplaints();
-    const interval = setInterval(fetchComplaints, 5000);
-    return () => clearInterval(interval);
+    fetchComplaints(false);
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   useEffect(() => {
     const handleDbChange = (e: any) => {
       const { table } = e.detail || {};
       if (table === 'complaints') {
-        fetchComplaints();
+        fetchComplaints(true);
       }
     };
     window.addEventListener('enlight-db-change', handleDbChange);

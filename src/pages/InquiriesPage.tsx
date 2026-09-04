@@ -1055,7 +1055,6 @@ export default function InquiriesPage() {
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
-    refetchInterval: 5000,
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({

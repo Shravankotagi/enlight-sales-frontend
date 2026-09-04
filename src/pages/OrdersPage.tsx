@@ -393,7 +393,6 @@ export default function OrdersPage() {
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
-    refetchInterval: 5000,
   });
 
   useEffect(() => {

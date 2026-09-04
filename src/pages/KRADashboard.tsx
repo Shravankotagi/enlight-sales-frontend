@@ -375,7 +375,6 @@ export default function KRADashboard() {
           salesperson_phone: effectivePhone,
         })
         .then((r) => r.data.data),
-    refetchInterval: 5000,
   });
 
   const { data: sheetsData, isLoading: isSheetsLoading, refetch: refetchSheets } = useQuery({
@@ -390,7 +389,6 @@ export default function KRADashboard() {
           salesperson_phone: effectivePhone,
         })
         .then((r) => r.data.data || r.data),
-    refetchInterval: 5000,
   });
 
   useEffect(() => {

@@ -55,7 +55,6 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
     queryKey: ['deal', dealId],
     queryFn: () => dealsApi.getOne(dealId!).then(r => r.data.data),
     enabled: !!dealId,
-    refetchInterval: 3000,
   });
 
   useEffect(() => {
