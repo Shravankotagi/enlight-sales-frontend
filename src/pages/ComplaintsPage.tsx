@@ -477,15 +477,15 @@ export default function ComplaintsPage() {
     setEditCustomerName(comp.customer_name || '');
 
     if (comp.deal_id) {
-      const cleanId = comp.deal_id.startsWith('DEAL-') ? comp.deal_id.replace(/^DEAL-/, '') : comp.deal_id.substring(0, 6).toUpperCase();
+      const cleanId = (comp.deal_id.startsWith('DEAL-') || comp.deal_id.startsWith('INQ-')) ? comp.deal_id.replace(/^(?:DEAL|INQ)-/, '') : comp.deal_id.substring(0, 6).toUpperCase();
       const product = comp.product_name || comp.affected_product || 'General Material';
       setEditSelectedDeals([
         {
           dealId: comp.deal_id,
-          dealCode: `#DEAL-${cleanId}`,
+          dealCode: `#INQ-${cleanId}`,
           poNumber: comp.po_number || '',
           product: product,
-          fullLabel: `#DEAL-${cleanId} — ${product}`,
+          fullLabel: `#INQ-${cleanId} — ${product}`,
         },
       ]);
     } else {
@@ -950,7 +950,7 @@ export default function ComplaintsPage() {
                               </span>
                               {cleanDealCode && (
                                 <span className="font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
-                                  #{`DEAL-${cleanDealCode}`}
+                                  #{`INQ-${cleanDealCode}`}
                                 </span>
                               )}
                             </div>
@@ -964,7 +964,7 @@ export default function ComplaintsPage() {
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[11px]">
-                                #{`DEAL-${cleanDealCode}`}
+                                #{`INQ-${cleanDealCode}`}
                               </span>
                             </div>
                             {prodDisplay && (
@@ -1090,7 +1090,7 @@ export default function ComplaintsPage() {
                   )}
                   {selectedComplaint.deal_id && (
                     <span className="font-mono text-blue-700 text-xs bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                      #{selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id : `DEAL-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
+                      #{selectedComplaint.deal_id.startsWith('INQ-') || selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id.replace(/^DEAL-/, 'INQ-') : `INQ-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
                     </span>
                   )}
                   {!selectedComplaint.po_number && !selectedComplaint.deal_id && (
@@ -1239,10 +1239,10 @@ export default function ComplaintsPage() {
                   />
                 </div>
 
-                {/* 2. Multi-Select Won Deal ID / PO Selector */}
+                {/* 2. Multi-Select Won Inquiry ID / PO Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number &amp; Product <span className="text-rose-500">*</span>
+                    Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
                   </label>
                   <DealProductCombobox
                     deals={editCustomerDeals}
@@ -1383,10 +1383,10 @@ export default function ComplaintsPage() {
                   )}
                 </div>
 
-                {/* 2. Mandatory Multi-Select Won Deal ID / PO Number Selector */}
+                {/* 2. Mandatory Multi-Select Won Inquiry ID / PO Number Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number &amp; Product <span className="text-rose-500">*</span>
+                    Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
                   </label>
                   <DealProductCombobox
                     deals={customerDeals}
@@ -1400,7 +1400,7 @@ export default function ComplaintsPage() {
                     required
                   />
                   {formErrors.deals && (
-                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select at least one Won Deal / PO &amp; Product.</p>
+                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select at least one Won Inquiry / PO &amp; Product.</p>
                   )}
                 </div>
 

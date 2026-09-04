@@ -734,7 +734,7 @@ export default function IntelligencePage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                   <tr>
-                    <th className="px-6 py-3">Deal ID</th>
+                    <th className="px-6 py-3">Inquiry ID</th>
                     <th className="px-6 py-3">Customer Account</th>
                     <th className="px-6 py-3">Lost Reason</th>
                     <th className="px-6 py-3 text-right">Lost Value</th>
@@ -753,7 +753,7 @@ export default function IntelligencePage() {
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/60 transition-colors">
                         <td className="px-6 py-3.5 font-mono text-slate-700 font-medium">
-                          {item.deal_number || (item.id ? `DEAL-${item.id.substring(0, 6).toUpperCase()}` : '—')}
+                          {item.deal_number ? item.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (item.id ? `INQ-${item.id.substring(0, 6).toUpperCase()}` : '—')}
                         </td>
                         <td className="px-6 py-3.5 font-bold text-slate-900">
                           {item.customer_name}

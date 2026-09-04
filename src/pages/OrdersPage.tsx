@@ -1176,7 +1176,7 @@ export default function OrdersPage() {
                           </span>
                         ) : (
                           <span className="inline-flex items-center justify-center bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold font-mono text-xs shadow-2xs">
-                            #{ord.id ? (ord.id.startsWith('DEAL-') ? ord.id : `DEAL-${ord.id.substring(0, 6).toUpperCase()}`) : '-'}
+                            #{ord.id ? (ord.id.startsWith('INQ-') || ord.id.startsWith('DEAL-') ? ord.id.replace(/^DEAL-/, 'INQ-') : `INQ-${ord.id.substring(0, 6).toUpperCase()}`) : '-'}
                           </span>
                         )}
                       </td>

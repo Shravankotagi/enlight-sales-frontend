@@ -821,7 +821,7 @@ function DealCard({ deal, onStageChange, onSelect, onDelete }: {
         </span>
         <div className="flex items-center gap-1.5">
           <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded tracking-wide uppercase">
-            #{deal.deal_number || (deal.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+            #{deal.deal_number ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (deal.id ? `INQ-${deal.id.substring(0, 6).toUpperCase()}` : 'INQ')}
           </span>
         </div>
       </div>
@@ -2045,7 +2045,8 @@ export default function InquiriesPage() {
       const s = searchTerm.toLowerCase().trim();
       const cName = (d.customer_name || '').toLowerCase();
       const poNum = (d.po_number || '').toLowerCase();
-      const dealNum = (d.deal_number || (d.id ? `deal-${d.id.substring(0, 6)}` : '')).toLowerCase();
+      const dealNum = (d.deal_number ? d.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'inq-') : (d.id ? `inq-${d.id.substring(0, 6)}` : '')).toLowerCase();
+      const dealLegacyNum = (d.deal_number ? d.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'deal-') : (d.id ? `deal-${d.id.substring(0, 6)}` : '')).toLowerCase();
       const phone = (d.customer_phone || '').toLowerCase();
       const items = (d.deal_items || [])
         .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''}`)
@@ -2056,6 +2057,7 @@ export default function InquiriesPage() {
         cName.includes(s) ||
         poNum.includes(s) ||
         dealNum.includes(s) ||
+        dealLegacyNum.includes(s) ||
         phone.includes(s) ||
         items.includes(s) ||
         dateFormatted.includes(s)
@@ -2155,13 +2157,15 @@ export default function InquiriesPage() {
         const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
         const isoDate = (i?.created_at || '').toLowerCase();
         const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
-        const dealIdStr = (linkedDealForSearch?.deal_number || (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
+        const dealIdStr = (linkedDealForSearch?.deal_number ? linkedDealForSearch.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'inq-') : (linkedDealForSearch?.id ? `inq-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `inq-${i.id.substring(0, 6)}` : ''))).toLowerCase();
+        const dealLegacyIdStr = (linkedDealForSearch?.deal_number ? linkedDealForSearch.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'deal-') : (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
 
         const s = searchTerm.toLowerCase().trim();
         const matchesSearch =
           !s ||
           name.includes(s) ||
           dealIdStr.includes(s) ||
+          dealLegacyIdStr.includes(s) ||
           itemsSummary.includes(s) ||
           formattedDate.includes(s) ||
           dateOnly.includes(s) ||
@@ -2501,10 +2505,10 @@ export default function InquiriesPage() {
                 <tr>
                   <th className="px-3 py-3.5 text-center w-[4%]">#</th>
                   <th className="px-5 py-3.5 text-left w-[22%]">Customer</th>
-                  <th className="px-4 py-3.5 text-center w-[14%]">Deal ID</th>
+                  <th className="px-4 py-3.5 text-center w-[14%]">Inquiry ID</th>
                   <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
                   <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
-                  <th className="px-4 py-3.5 text-center w-[16%]">Deal Status</th>
+                  <th className="px-4 py-3.5 text-center w-[16%]">Inquiry Status</th>
                   <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
                 </tr>
               </thead>
@@ -2586,7 +2590,7 @@ export default function InquiriesPage() {
                 const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
                 const dealStageInfo = getDealStageDisplay(dealStageKey);
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
-                const dealIdDisplay = linkedDeal?.deal_number || (linkedDeal?.id ? `DEAL-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `DEAL-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
+                const dealIdDisplay = linkedDeal?.deal_number ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
 
                 const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
                 const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
@@ -3901,9 +3905,9 @@ export default function InquiriesPage() {
                 <span className="font-bold text-slate-900">{confirmDeleteDeal.customer_name || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Deal Ref:</span>
+                <span className="text-slate-500 font-medium">Inquiry Ref:</span>
                 <span className="font-mono font-bold text-indigo-600">
-                  #{confirmDeleteDeal.deal_number || (confirmDeleteDeal.id ? `DEAL-${confirmDeleteDeal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+                  #{confirmDeleteDeal.deal_number ? confirmDeleteDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (confirmDeleteDeal.id ? `INQ-${confirmDeleteDeal.id.substring(0, 6).toUpperCase()}` : 'INQ')}
                 </span>
               </div>
               {confirmDeleteDeal.total_amount > 0 && (
