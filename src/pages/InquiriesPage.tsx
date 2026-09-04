@@ -1220,6 +1220,9 @@ export default function InquiriesPage() {
     const isQuoted = (st === 'quoted' || st === 'quotation_sent') && (hasRates || inq.inquiry_type === 'quotation_sent');
     const isConfirmed = (st === 'confirmed' || st === 'saved' || st === 'processed' || st === 'quotation_ready') && hasRates;
 
+    if (st === 'negotiation') {
+      return 'negotiation';
+    }
     if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
       return 'quoted';
     }
