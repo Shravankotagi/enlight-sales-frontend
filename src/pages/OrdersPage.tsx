@@ -393,8 +393,19 @@ export default function OrdersPage() {
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
-    refetchInterval: 15000,
+    refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'deals' || table === 'deal_items') {
+        fetchOrders();
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+  }, [fetchOrders]);
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
     queryKey: ['customer-names-list-orders'],

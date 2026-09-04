@@ -1055,7 +1055,7 @@ export default function InquiriesPage() {
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
-    refetchInterval: 15000,
+    refetchInterval: 5000,
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
@@ -1365,23 +1365,73 @@ export default function InquiriesPage() {
 
   useEffect(() => {
     if (Array.isArray(rawInquiries)) {
-      setInquiries(prev => {
-        const localList = Array.isArray(prev) ? prev : [];
-        const localItemMap = new Map(localList.map(i => [i.id, i]));
-        const mergedList = rawInquiries.map((item: InquiryItem) => {
-          const localItem = localItemMap.get(item.id);
-          if (!localItem) return item;
-          const isConfirmed = ['confirmed', 'quoted', 'won'].includes((localItem.status || '').toLowerCase());
-          return {
-            ...item,
-            ...(isConfirmed ? localItem : {}),
-            ai_extraction_json: localItem.ai_extraction_json || item.ai_extraction_json,
-          };
-        });
-        return mergedList;
-      });
+      setInquiries(rawInquiries);
+
+      // If drawer is currently open for an inquiry, sync fresh data live into drawer
+      if (selectedInquiry) {
+        const freshItem = rawInquiries.find((i: InquiryItem) => i.id === selectedInquiry.id);
+        if (freshItem) {
+          setSelectedInquiry(freshItem);
+          const ai = (freshItem.ai_extraction_json as any) || {};
+          const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
+          if (lineItemsSrc.length > 0) {
+            const frozenLineItems = lineItemsSrc.map((item: any) => {
+              const skuText = item.sku_text || item.description || '';
+              const itemDim = item.dimensions || '';
+              return {
+                sku_text: skuText,
+                dimensions: itemDim,
+                hsn_code:
+                  (item.hsn_code && item.hsn_code.trim()) ||
+                  item.hsn ||
+                  detectHsnCode(skuText, itemDim) ||
+                  '72083840',
+                quantity: Number(item.quantity) || 0,
+                unit: item.unit || 'MT',
+                rate: Number(item.rate) || 0,
+                amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+              };
+            });
+            const frozenTotal = ai.total_amount || ai.totalAmount ||
+              (frozenLineItems.length > 0
+                ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
+                : 0);
+            const resolvedSp = getSalespersonName(freshItem);
+            const parsed = parseInquiryText(freshItem.raw_text || '', freshItem);
+
+            setEditDetails(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                companyName: parsed.companyName || prev.companyName || '',
+                customerPhone: parsed.customerPhone || prev.customerPhone || '',
+                salespersonName: resolvedSp,
+                totalAmount: frozenTotal,
+                lineItems: frozenLineItems,
+                paymentTerms: ai.payment_terms || ai.paymentTerms || prev.paymentTerms || '',
+                deliveryLocation: ai.delivery_location || ai.deliveryLocation || prev.deliveryLocation || '',
+              };
+            });
+
+            const hasValidRates = frozenLineItems.length > 0 && frozenLineItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
+            const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((freshItem.status || '').toLowerCase()) && hasValidRates;
+            setSaveSuccess(isConfirmedState);
+          }
+        }
+      }
     }
   }, [rawInquiries]);
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'inquiries' || table === 'deals' || table === 'deal_items') {
+        fetchMonthlyInquiries();
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+  }, [fetchMonthlyInquiries]);
 
   useEffect(() => {
     if (Array.isArray(rawCustomers) && rawCustomers.length > 0) {

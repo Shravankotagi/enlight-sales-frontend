@@ -388,6 +388,19 @@ export default function ComplaintsPage() {
 
   useEffect(() => {
     fetchComplaints();
+    const interval = setInterval(fetchComplaints, 5000);
+    return () => clearInterval(interval);
+  }, [dateRange, effectivePhone, activeRole, activeMode]);
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'complaints') {
+        fetchComplaints();
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   const handleOpenAddModal = () => {

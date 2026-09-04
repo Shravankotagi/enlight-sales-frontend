@@ -10,9 +10,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes in-memory freshness
-      gcTime: 15 * 60 * 1000, // 15 minutes garbage collection
-      refetchOnWindowFocus: false, // Prevents unwanted re-fetching on window focus
+      staleTime: 0, // Zero stale time so invalidations and updates refetch immediately
+      gcTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: true, // Auto-refetch when user focuses or returns to the browser tab
+      refetchOnReconnect: true,
     },
   },
 })

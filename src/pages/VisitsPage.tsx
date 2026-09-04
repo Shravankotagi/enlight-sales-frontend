@@ -393,6 +393,19 @@ export default function VisitsPage() {
 
   useEffect(() => {
     fetchVisits();
+    const interval = setInterval(fetchVisits, 5000);
+    return () => clearInterval(interval);
+  }, [dateRange, effectivePhone, activeRole, activeMode]);
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'customer_visits') {
+        fetchVisits();
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   const handleCreateVisit = async (e: React.FormEvent) => {

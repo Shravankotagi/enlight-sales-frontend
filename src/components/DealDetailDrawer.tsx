@@ -51,11 +51,23 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   const [lostReason, setLostReason] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const { data: dealData, isLoading } = useQuery({
+  const { data: dealData, isLoading, refetch } = useQuery({
     queryKey: ['deal', dealId],
     queryFn: () => dealsApi.getOne(dealId!).then(r => r.data.data),
     enabled: !!dealId,
+    refetchInterval: 3000,
   });
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'deals' || table === 'deal_items') {
+        refetch();
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+  }, [refetch]);
 
   const deal = dealData;
 

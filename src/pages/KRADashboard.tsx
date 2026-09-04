@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { kraApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -363,7 +363,7 @@ export default function KRADashboard() {
   });
   const [activeKraModal, setActiveKraModal] = useState<number | null>(null);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch: refetchDashboard } = useQuery({
     queryKey: ['kra-dashboard', dateRange, effectivePhone],
     queryFn: () =>
       kraApi
@@ -375,10 +375,10 @@ export default function KRADashboard() {
           salesperson_phone: effectivePhone,
         })
         .then((r) => r.data.data),
-    refetchInterval: 60000,
+    refetchInterval: 5000,
   });
 
-  const { data: sheetsData, isLoading: isSheetsLoading } = useQuery({
+  const { data: sheetsData, isLoading: isSheetsLoading, refetch: refetchSheets } = useQuery({
     queryKey: ['kra-sheets', dateRange, effectivePhone],
     queryFn: () =>
       kraApi
@@ -390,8 +390,17 @@ export default function KRADashboard() {
           salesperson_phone: effectivePhone,
         })
         .then((r) => r.data.data || r.data),
-    refetchInterval: 60000,
+    refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    const handleDbChange = () => {
+      refetchDashboard();
+      refetchSheets();
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+  }, [refetchDashboard, refetchSheets]);
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64">
