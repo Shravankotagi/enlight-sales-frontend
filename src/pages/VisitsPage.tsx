@@ -79,7 +79,7 @@ export default function VisitsPage() {
   const targetVisitId = searchParams.get('visitId') || searchParams.get('id');
   const returnTo = searchParams.get('returnTo');
 
-  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
@@ -219,8 +219,8 @@ export default function VisitsPage() {
         if (match && match[1]) contactPerson = match[1].trim();
       }
 
-      const phone = (c?.customer_phone || c?.phone || c?.contact_no || '').trim();
-      const loc = (c?.customer_address || c?.address || c?.city || '').trim();
+      const phone = (c?.contact_phone || c?.phone || '').trim();
+      const loc = (c?.location || c?.address || '').trim();
 
       dirMap.set(key, {
         id: c.id,
@@ -371,28 +371,41 @@ export default function VisitsPage() {
   const [editFollowup, setEditFollowup] = useState('');
   const [editVisitDate, setEditVisitDate] = useState(formatLocalDate());
 
-  const fetchVisits = async () => {
+  const fetchVisits = async (isBackground?: boolean | any) => {
+    const silent = isBackground === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to;
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
       const res = await visitsApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
       setVisits(list);
     } catch (err) {
       console.error('Error fetching visits:', err);
-      setVisits([]);
+      if (!silent) setVisits([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchVisits();
-  }, [dateRange, effectivePhone]);
+    fetchVisits(false);
+  }, [dateRange, effectivePhone, activeRole, activeMode]);
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'customer_visits') {
+        fetchVisits(true);
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+  }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();

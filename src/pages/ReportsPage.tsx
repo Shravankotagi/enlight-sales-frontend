@@ -9,7 +9,7 @@ import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 
 export default function ReportsPage() {
-  const { effectivePhone } = useAuth();
+  const { effectivePhone, activeRole, activeMode } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
@@ -24,6 +24,7 @@ export default function ReportsPage() {
   const getParams = () => {
     const params: any = {};
     if (effectivePhone) params.salesperson_phone = effectivePhone;
+    if (activeMode) params.mode = activeMode;
     if (dateRange.preset === 'all') {
       params.all_time = 'true';
       params.from = dateRange.from || '2000-01-01';
@@ -45,7 +46,7 @@ export default function ReportsPage() {
     isFetching,
     refetch: refetchOverview,
   } = useQuery({
-    queryKey: ['reports-overview-data', dateRange, effectivePhone],
+    queryKey: ['reports-overview-data', dateRange, effectivePhone, activeRole, activeMode],
     queryFn: async () => {
       const params = getParams();
 

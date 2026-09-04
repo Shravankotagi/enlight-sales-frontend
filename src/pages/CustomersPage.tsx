@@ -116,7 +116,7 @@ function deriveSegment(c: any): string {
 export default function CustomersPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { effectivePhone, isSalesManager, isAdmin } = useAuth();
+  const { effectivePhone, isSalesManager, isAdmin, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -225,12 +225,17 @@ export default function CustomersPage() {
   };
 
   const { data: rawCustomersData = [], isLoading, refetch } = useQuery({
-    queryKey: ['customers-churn', effectivePhone],
+    queryKey: ['customers-churn', effectivePhone, activeRole, activeMode],
     queryFn: () =>
-      customersApi.getChurnRisk({ salesperson_phone: effectivePhone }).then(r => {
-        const raw = r?.data;
-        return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
-      }),
+      customersApi
+        .getChurnRisk({
+          salesperson_phone: effectivePhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
+        .then(r => {
+          const raw = r?.data;
+          return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+        }),
   });
 
   const safeCustomers: any[] = Array.isArray(rawCustomersData) ? rawCustomersData : [];

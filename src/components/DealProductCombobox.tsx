@@ -45,7 +45,7 @@ export default function DealProductCombobox({
   deals = [],
   selectedItems = [],
   onChange,
-  placeholder = 'Type to search or select Won Deal ID, PO Number, Product...',
+  placeholder = 'Type to search or select Won Inquiry ID, PO Number, Product...',
   disabled = false,
   loading = false,
   error = false,
@@ -86,8 +86,8 @@ export default function DealProductCombobox({
     }> = [];
 
     wonDeals.forEach(deal => {
-      const cleanId = deal.id.startsWith('DEAL-') ? deal.id.replace(/^DEAL-/, '') : deal.id.substring(0, 6).toUpperCase();
-      const dealCode = `#DEAL-${cleanId}`;
+      const cleanId = (deal.deal_number ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, '') : (deal.id.startsWith('DEAL-') || deal.id.startsWith('INQ-') ? deal.id.replace(/^(?:DEAL|INQ)-/, '') : deal.id.substring(0, 6))).toUpperCase();
+      const dealCode = `#INQ-${cleanId}`;
       const poStr = deal.po_number ? ` (PO: ${deal.po_number})` : '';
       const items = Array.isArray(deal.deal_items) && deal.deal_items.length > 0 ? deal.deal_items : [];
 
@@ -255,7 +255,7 @@ export default function DealProductCombobox({
             </div>
           ) : filteredOptions.length === 0 ? (
             <div className="px-4 py-3 text-center text-xs text-slate-400">
-              No matching products or Deal IDs found.
+              No matching products or Inquiry IDs found.
             </div>
           ) : (
             filteredOptions.map((opt) => {

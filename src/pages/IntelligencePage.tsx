@@ -13,8 +13,8 @@ import {
 } from 'lucide-react';
 
 export default function IntelligencePage() {
-  const auth = useAuth();
-  const salespersonPhone = auth?.effectivePhone || undefined;
+  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const salespersonPhone = effectivePhone || undefined;
 
   useEffect(() => {
     document.title = 'Intelligence Center - Enlight Sales OS';
@@ -26,10 +26,13 @@ export default function IntelligencePage() {
     refetch: refetchChurn,
     isFetching: fetchingChurn,
   } = useQuery({
-    queryKey: ['churn-risk', salespersonPhone],
+    queryKey: ['churn-risk', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getChurnRisk({ salesperson_phone: salespersonPhone })
+        .getChurnRisk({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => r.data?.data || r.data || []),
   });
 
@@ -38,10 +41,13 @@ export default function IntelligencePage() {
     refetch: refetchReorder,
     isFetching: fetchingReorder,
   } = useQuery({
-    queryKey: ['reorder-queue', salespersonPhone],
+    queryKey: ['reorder-queue', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getReorderQueue({ salesperson_phone: salespersonPhone })
+        .getReorderQueue({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => r.data?.data || r.data || []),
   });
 
@@ -50,10 +56,13 @@ export default function IntelligencePage() {
     refetch: refetchLoss,
     isFetching: fetchingLoss,
   } = useQuery({
-    queryKey: ['loss-analytics', salespersonPhone],
+    queryKey: ['loss-analytics', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getLossAnalytics({ salesperson_phone: salespersonPhone })
+        .getLossAnalytics({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => r.data?.data || r.data || {}),
   });
 
@@ -62,10 +71,13 @@ export default function IntelligencePage() {
     refetch: refetchCustomers,
     isFetching: fetchingCustomers,
   } = useQuery({
-    queryKey: ['recurring-customers-list', salespersonPhone],
+    queryKey: ['recurring-customers-list', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getAll({ salesperson_phone: salespersonPhone })
+        .getAll({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => {
           const raw = r.data?.data || r.data;
           return Array.isArray(raw) ? raw : [];
@@ -77,10 +89,13 @@ export default function IntelligencePage() {
     refetch: refetchDeals,
     isFetching: fetchingDeals,
   } = useQuery({
-    queryKey: ['intelligence-deals', salespersonPhone],
+    queryKey: ['intelligence-deals', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       dealsApi
-        .getAll({ salesperson_phone: salespersonPhone })
+        .getAll({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => {
           const raw = r.data?.data || r.data;
           return Array.isArray(raw) ? raw : [];
@@ -719,7 +734,7 @@ export default function IntelligencePage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                   <tr>
-                    <th className="px-6 py-3">Deal ID</th>
+                    <th className="px-6 py-3">Inquiry ID</th>
                     <th className="px-6 py-3">Customer Account</th>
                     <th className="px-6 py-3">Lost Reason</th>
                     <th className="px-6 py-3 text-right">Lost Value</th>
@@ -738,7 +753,7 @@ export default function IntelligencePage() {
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/60 transition-colors">
                         <td className="px-6 py-3.5 font-mono text-slate-700 font-medium">
-                          {item.deal_number || (item.id ? `DEAL-${item.id.substring(0, 6).toUpperCase()}` : '—')}
+                          {item.deal_number ? item.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (item.id ? `INQ-${item.id.substring(0, 6).toUpperCase()}` : '—')}
                         </td>
                         <td className="px-6 py-3.5 font-bold text-slate-900">
                           {item.customer_name}

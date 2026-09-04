@@ -821,7 +821,7 @@ function DealCard({ deal, onStageChange, onSelect, onDelete }: {
         </span>
         <div className="flex items-center gap-1.5">
           <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded tracking-wide uppercase">
-            #{deal.deal_number || (deal.id ? `DEAL-${deal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+            #{deal.deal_number ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (deal.id ? `INQ-${deal.id.substring(0, 6).toUpperCase()}` : 'INQ')}
           </span>
         </div>
       </div>
@@ -833,7 +833,7 @@ export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs } = useAuth();
+  const { effectivePhone, employee, viewingAs, activeRole, activeMode } = useAuth();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1045,16 +1045,16 @@ export default function InquiriesPage() {
   };
 
   const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
-    queryKey: ['inquiries-list', effectivePhone],
+    queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
 
       const res = await inquiriesApi.getAll(params);
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
-    refetchInterval: 15000,
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
@@ -1098,10 +1098,11 @@ export default function InquiriesPage() {
   });
 
   const { data: rawDeals = [], isFetching: dealsFetching, refetch: fetchDeals } = useQuery<any[]>({
-    queryKey: ['deals', effectivePhone, dateRange],
+    queryKey: ['deals', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
       if (dateRange.from) params.from = dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
       const res = await dealsApi.getAll(params).catch(() => null);
@@ -1218,6 +1219,9 @@ export default function InquiriesPage() {
     const isQuoted = (st === 'quoted' || st === 'quotation_sent') && (hasRates || inq.inquiry_type === 'quotation_sent');
     const isConfirmed = (st === 'confirmed' || st === 'saved' || st === 'processed' || st === 'quotation_ready') && hasRates;
 
+    if (st === 'negotiation') {
+      return 'negotiation';
+    }
     if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
       return 'quoted';
     }
@@ -1360,23 +1364,73 @@ export default function InquiriesPage() {
 
   useEffect(() => {
     if (Array.isArray(rawInquiries)) {
-      setInquiries(prev => {
-        const localList = Array.isArray(prev) ? prev : [];
-        const localItemMap = new Map(localList.map(i => [i.id, i]));
-        const mergedList = rawInquiries.map((item: InquiryItem) => {
-          const localItem = localItemMap.get(item.id);
-          if (!localItem) return item;
-          const isConfirmed = ['confirmed', 'quoted', 'won'].includes((localItem.status || '').toLowerCase());
-          return {
-            ...item,
-            ...(isConfirmed ? localItem : {}),
-            ai_extraction_json: localItem.ai_extraction_json || item.ai_extraction_json,
-          };
-        });
-        return mergedList;
-      });
+      setInquiries(rawInquiries);
+
+      // If drawer is currently open for an inquiry, sync fresh data live into drawer
+      if (selectedInquiry) {
+        const freshItem = rawInquiries.find((i: InquiryItem) => i.id === selectedInquiry.id);
+        if (freshItem) {
+          setSelectedInquiry(freshItem);
+          const ai = (freshItem.ai_extraction_json as any) || {};
+          const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
+          if (lineItemsSrc.length > 0) {
+            const frozenLineItems = lineItemsSrc.map((item: any) => {
+              const skuText = item.sku_text || item.description || '';
+              const itemDim = item.dimensions || '';
+              return {
+                sku_text: skuText,
+                dimensions: itemDim,
+                hsn_code:
+                  (item.hsn_code && item.hsn_code.trim()) ||
+                  item.hsn ||
+                  detectHsnCode(skuText, itemDim) ||
+                  '72083840',
+                quantity: Number(item.quantity) || 0,
+                unit: item.unit || 'MT',
+                rate: Number(item.rate) || 0,
+                amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+              };
+            });
+            const frozenTotal = ai.total_amount || ai.totalAmount ||
+              (frozenLineItems.length > 0
+                ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
+                : 0);
+            const resolvedSp = getSalespersonName(freshItem);
+            const parsed = parseInquiryText(freshItem.raw_text || '', freshItem);
+
+            setEditDetails(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                companyName: parsed.companyName || prev.companyName || '',
+                customerPhone: parsed.customerPhone || prev.customerPhone || '',
+                salespersonName: resolvedSp,
+                totalAmount: frozenTotal,
+                lineItems: frozenLineItems,
+                paymentTerms: ai.payment_terms || ai.paymentTerms || prev.paymentTerms || '',
+                deliveryLocation: ai.delivery_location || ai.deliveryLocation || prev.deliveryLocation || '',
+              };
+            });
+
+            const hasValidRates = frozenLineItems.length > 0 && frozenLineItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
+            const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((freshItem.status || '').toLowerCase()) && hasValidRates;
+            setSaveSuccess(isConfirmedState);
+          }
+        }
+      }
     }
   }, [rawInquiries]);
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'inquiries' || table === 'deals' || table === 'deal_items') {
+        fetchMonthlyInquiries();
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+  }, [fetchMonthlyInquiries]);
 
   useEffect(() => {
     if (Array.isArray(rawCustomers) && rawCustomers.length > 0) {
@@ -2040,7 +2094,8 @@ export default function InquiriesPage() {
       const s = searchTerm.toLowerCase().trim();
       const cName = (d.customer_name || '').toLowerCase();
       const poNum = (d.po_number || '').toLowerCase();
-      const dealNum = (d.deal_number || (d.id ? `deal-${d.id.substring(0, 6)}` : '')).toLowerCase();
+      const dealNum = (d.deal_number ? d.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'inq-') : (d.id ? `inq-${d.id.substring(0, 6)}` : '')).toLowerCase();
+      const dealLegacyNum = (d.deal_number ? d.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'deal-') : (d.id ? `deal-${d.id.substring(0, 6)}` : '')).toLowerCase();
       const phone = (d.customer_phone || '').toLowerCase();
       const items = (d.deal_items || [])
         .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''}`)
@@ -2051,6 +2106,7 @@ export default function InquiriesPage() {
         cName.includes(s) ||
         poNum.includes(s) ||
         dealNum.includes(s) ||
+        dealLegacyNum.includes(s) ||
         phone.includes(s) ||
         items.includes(s) ||
         dateFormatted.includes(s)
@@ -2150,13 +2206,15 @@ export default function InquiriesPage() {
         const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
         const isoDate = (i?.created_at || '').toLowerCase();
         const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
-        const dealIdStr = (linkedDealForSearch?.deal_number || (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
+        const dealIdStr = (linkedDealForSearch?.deal_number ? linkedDealForSearch.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'inq-') : (linkedDealForSearch?.id ? `inq-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `inq-${i.id.substring(0, 6)}` : ''))).toLowerCase();
+        const dealLegacyIdStr = (linkedDealForSearch?.deal_number ? linkedDealForSearch.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'deal-') : (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
 
         const s = searchTerm.toLowerCase().trim();
         const matchesSearch =
           !s ||
           name.includes(s) ||
           dealIdStr.includes(s) ||
+          dealLegacyIdStr.includes(s) ||
           itemsSummary.includes(s) ||
           formattedDate.includes(s) ||
           dateOnly.includes(s) ||
@@ -2496,10 +2554,10 @@ export default function InquiriesPage() {
                 <tr>
                   <th className="px-3 py-3.5 text-center w-[4%]">#</th>
                   <th className="px-5 py-3.5 text-left w-[22%]">Customer</th>
-                  <th className="px-4 py-3.5 text-center w-[14%]">Deal ID</th>
+                  <th className="px-4 py-3.5 text-center w-[14%]">Inquiry ID</th>
                   <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
                   <th className="px-4 py-3.5 text-center w-[14%]">Source Channel</th>
-                  <th className="px-4 py-3.5 text-center w-[16%]">Deal Status</th>
+                  <th className="px-4 py-3.5 text-center w-[16%]">Inquiry Status</th>
                   <th className="px-4 py-3.5 text-center w-[12%]">Actions</th>
                 </tr>
               </thead>
@@ -2581,7 +2639,7 @@ export default function InquiriesPage() {
                 const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
                 const dealStageInfo = getDealStageDisplay(dealStageKey);
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
-                const dealIdDisplay = linkedDeal?.deal_number || (linkedDeal?.id ? `DEAL-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `DEAL-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
+                const dealIdDisplay = linkedDeal?.deal_number ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
 
                 const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
                 const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
@@ -2828,7 +2886,17 @@ export default function InquiriesPage() {
                     Inquiry &amp; Audit
                   </h2>
                   <p className="text-xs text-slate-500 font-mono mt-0.5">
-                    ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()}
+                    {(() => {
+                      const linkedDeal = getLinkedDeal(selectedInquiry, editDetails?.companyName);
+                      const inqIdDisplay = linkedDeal?.deal_number
+                        ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-')
+                        : (linkedDeal?.id
+                          ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}`
+                          : (selectedInquiry.id
+                            ? `INQ-${selectedInquiry.id.substring(0, 6).toUpperCase()}`
+                            : '-'));
+                      return `ID: #${inqIdDisplay.replace(/^#/, '')}`;
+                    })()}
                   </p>
                 </div>
               </div>
@@ -3896,9 +3964,9 @@ export default function InquiriesPage() {
                 <span className="font-bold text-slate-900">{confirmDeleteDeal.customer_name || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Deal Ref:</span>
+                <span className="text-slate-500 font-medium">Inquiry Ref:</span>
                 <span className="font-mono font-bold text-indigo-600">
-                  #{confirmDeleteDeal.deal_number || (confirmDeleteDeal.id ? `DEAL-${confirmDeleteDeal.id.substring(0, 6).toUpperCase()}` : 'DEAL')}
+                  #{confirmDeleteDeal.deal_number ? confirmDeleteDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (confirmDeleteDeal.id ? `INQ-${confirmDeleteDeal.id.substring(0, 6).toUpperCase()}` : 'INQ')}
                 </span>
               </div>
               {confirmDeleteDeal.total_amount > 0 && (

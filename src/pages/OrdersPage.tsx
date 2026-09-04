@@ -301,7 +301,7 @@ export default function OrdersPage() {
   const returnTo = searchParams.get('returnTo');
 
   const queryClient = useQueryClient();
-  const { effectivePhone } = useAuth();
+  const { effectivePhone, activeRole, activeMode } = useAuth();
 
   const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -381,10 +381,11 @@ export default function OrdersPage() {
   };
 
   const { data: rawOrders = [], isLoading: loading, isFetching, refetch: fetchOrders } = useQuery<Order[]>({
-    queryKey: ['orders-list', effectivePhone, dateRange],
+    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
 
@@ -392,8 +393,18 @@ export default function OrdersPage() {
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
-    refetchInterval: 15000,
   });
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'deals' || table === 'deal_items') {
+        fetchOrders();
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+  }, [fetchOrders]);
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
     queryKey: ['customer-names-list-orders'],
@@ -1175,7 +1186,7 @@ export default function OrdersPage() {
                           </span>
                         ) : (
                           <span className="inline-flex items-center justify-center bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold font-mono text-xs shadow-2xs">
-                            #{ord.id ? (ord.id.startsWith('DEAL-') ? ord.id : `DEAL-${ord.id.substring(0, 6).toUpperCase()}`) : '-'}
+                            #{ord.id ? (ord.id.startsWith('INQ-') || ord.id.startsWith('DEAL-') ? ord.id.replace(/^DEAL-/, 'INQ-') : `INQ-${ord.id.substring(0, 6).toUpperCase()}`) : '-'}
                           </span>
                         )}
                       </td>

@@ -57,6 +57,14 @@ function EmployeeFooter() {
       ? 'Sales Manager'
       : 'Salesperson';
 
+  const viewingRoleLabel = viewingAs
+    ? viewingAs.role === 'sales_manager' || viewingAs.role === 'manager'
+      ? 'Sales Manager'
+      : viewingAs.role === 'admin'
+        ? 'Admin'
+        : 'Salesperson'
+    : '';
+
   return (
     <div className="space-y-2">
       {(isAdmin || isSalesManager) && (
@@ -71,7 +79,7 @@ function EmployeeFooter() {
         >
           <Users size={14} />
           {viewingAs
-            ? `Viewing: ${viewingAs.name}`
+            ? `Viewing: ${viewingAs.name} (${viewingRoleLabel})`
             : isAdmin
               ? 'Salesperson Selection'
               : 'Team Members'}

@@ -70,7 +70,7 @@ export default function ComplaintsPage() {
   const targetComplaintId = searchParams.get('complaintId') || searchParams.get('id');
   const returnTo = searchParams.get('returnTo');
 
-  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -81,6 +81,7 @@ export default function ComplaintsPage() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Date Filter Presets
   const [dayPreset, setDayPreset] = useState<string>('all');
@@ -142,6 +143,14 @@ export default function ComplaintsPage() {
       setDateRange({ from: customFrom, to: effectiveVal });
     }
   };
+
+  // Close active dropdowns on click outside
+  useEffect(() => {
+    if (!activeActionMenuId) return;
+    const handleClickOutside = () => setActiveActionMenuId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeActionMenuId]);
 
   const handleClearFilters = () => {
     setSearchTerm('');
@@ -357,28 +366,41 @@ export default function ComplaintsPage() {
     return p || 'Steel Material';
   };
 
-  const fetchComplaints = async () => {
+  const fetchComplaints = async (isBackground?: boolean | any) => {
+    const silent = isBackground === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params: any = {};
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to;
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
       const res = await complaintsApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
       setComplaints(list);
     } catch (err) {
       console.error('Error fetching complaints:', err);
-      setComplaints([]);
+      if (!silent) setComplaints([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchComplaints();
-  }, [dateRange, effectivePhone]);
+    fetchComplaints(false);
+  }, [dateRange, effectivePhone, activeRole, activeMode]);
+
+  useEffect(() => {
+    const handleDbChange = (e: any) => {
+      const { table } = e.detail || {};
+      if (table === 'complaints') {
+        fetchComplaints(true);
+      }
+    };
+    window.addEventListener('enlight-db-change', handleDbChange);
+    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+  }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   const handleOpenAddModal = () => {
     setFormCustomerName('');
@@ -467,15 +489,15 @@ export default function ComplaintsPage() {
     setEditCustomerName(comp.customer_name || '');
 
     if (comp.deal_id) {
-      const cleanId = comp.deal_id.startsWith('DEAL-') ? comp.deal_id.replace(/^DEAL-/, '') : comp.deal_id.substring(0, 6).toUpperCase();
+      const cleanId = (comp.deal_id.startsWith('DEAL-') || comp.deal_id.startsWith('INQ-')) ? comp.deal_id.replace(/^(?:DEAL|INQ)-/, '') : comp.deal_id.substring(0, 6).toUpperCase();
       const product = comp.product_name || comp.affected_product || 'General Material';
       setEditSelectedDeals([
         {
           dealId: comp.deal_id,
-          dealCode: `#DEAL-${cleanId}`,
+          dealCode: `#INQ-${cleanId}`,
           poNumber: comp.po_number || '',
           product: product,
-          fullLabel: `#DEAL-${cleanId} — ${product}`,
+          fullLabel: `#INQ-${cleanId} — ${product}`,
         },
       ]);
     } else {
@@ -940,7 +962,7 @@ export default function ComplaintsPage() {
                               </span>
                               {cleanDealCode && (
                                 <span className="font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
-                                  #{`DEAL-${cleanDealCode}`}
+                                  #{`INQ-${cleanDealCode}`}
                                 </span>
                               )}
                             </div>
@@ -954,7 +976,7 @@ export default function ComplaintsPage() {
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[11px]">
-                                #{`DEAL-${cleanDealCode}`}
+                                #{`INQ-${cleanDealCode}`}
                               </span>
                             </div>
                             {prodDisplay && (
@@ -1080,7 +1102,7 @@ export default function ComplaintsPage() {
                   )}
                   {selectedComplaint.deal_id && (
                     <span className="font-mono text-blue-700 text-xs bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                      #{selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id : `DEAL-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
+                      #{selectedComplaint.deal_id.startsWith('INQ-') || selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id.replace(/^DEAL-/, 'INQ-') : `INQ-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
                     </span>
                   )}
                   {!selectedComplaint.po_number && !selectedComplaint.deal_id && (
@@ -1229,10 +1251,10 @@ export default function ComplaintsPage() {
                   />
                 </div>
 
-                {/* 2. Multi-Select Won Deal ID / PO Selector */}
+                {/* 2. Multi-Select Won Inquiry ID / PO Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number &amp; Product <span className="text-rose-500">*</span>
+                    Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
                   </label>
                   <DealProductCombobox
                     deals={editCustomerDeals}
@@ -1373,10 +1395,10 @@ export default function ComplaintsPage() {
                   )}
                 </div>
 
-                {/* 2. Mandatory Multi-Select Won Deal ID / PO Number Selector */}
+                {/* 2. Mandatory Multi-Select Won Inquiry ID / PO Number Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Deal ID / PO Number &amp; Product <span className="text-rose-500">*</span>
+                    Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
                   </label>
                   <DealProductCombobox
                     deals={customerDeals}
@@ -1390,7 +1412,7 @@ export default function ComplaintsPage() {
                     required
                   />
                   {formErrors.deals && (
-                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select at least one Won Deal / PO &amp; Product.</p>
+                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select at least one Won Inquiry / PO &amp; Product.</p>
                   )}
                 </div>
 

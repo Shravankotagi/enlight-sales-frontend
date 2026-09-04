@@ -28,6 +28,8 @@ interface Employee {
   phone: string;
   email?: string;
   role: string;
+  original_role?: string;
+  mode?: string;
   is_active: boolean;
   manager_id?: string | null;
   manager_phone?: string | null;
@@ -288,6 +290,15 @@ export default function AdminSelectionPage() {
     navigate('/home');
   };
 
+  const handleViewPersonalDashboard = () => {
+    if (!employee) return;
+    setViewingAs({
+      ...employee,
+      role: 'salesperson',
+    });
+    navigate('/home');
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -385,13 +396,22 @@ export default function AdminSelectionPage() {
 
             <div className="flex items-center gap-2.5 flex-wrap">
               {isSalesManager && (
-                <button
-                  onClick={handleViewTeamAggregate}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
-                >
-                  <LayoutDashboard size={15} />
-                  View Team Aggregate Dashboard
-                </button>
+                <>
+                  <button
+                    onClick={handleViewPersonalDashboard}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <UserCheck size={15} />
+                    My Dashboard
+                  </button>
+                  <button
+                    onClick={handleViewTeamAggregate}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <LayoutDashboard size={15} />
+                    View Team Aggregate Dashboard
+                  </button>
+                </>
               )}
 
               {isAdmin && (

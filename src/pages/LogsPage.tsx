@@ -24,7 +24,7 @@ import { type FilterPreset } from '../components/DateFilterControl';
 type ModuleFilter = 'All' | 'Inquiries' | 'Orders' | 'Visits' | 'Complaints';
 
 export default function LogsPage() {
-  const { effectivePhone } = useAuth();
+  const { effectivePhone, activeRole, activeMode } = useAuth();
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [datePreset, setDatePreset] = useState<FilterPreset>('all');
@@ -102,11 +102,12 @@ export default function LogsPage() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['activity-logs', effectivePhone, dateRange, moduleFilter, searchQuery],
+    queryKey: ['activity-logs', effectivePhone, dateRange, moduleFilter, searchQuery, activeRole, activeMode],
     queryFn: () =>
       activityLogsApi
         .getAll({
           salesperson_phone: effectivePhone || undefined,
+          mode: activeMode,
           from: fromDate,
           to: toDate,
           module: moduleFilter === 'All' ? undefined : moduleFilter,
@@ -115,11 +116,10 @@ export default function LogsPage() {
         })
         .then((r) => {
           const raw = r?.data;
-          return Array.isArray(raw)
-            ? raw
-            : raw?.data && Array.isArray(raw.data)
-              ? raw.data
-              : [];
+          if (Array.isArray(raw)) return raw;
+          if (Array.isArray(raw?.data)) return raw.data;
+          if (Array.isArray(raw?.data?.data)) return raw.data.data;
+          return [];
         }),
   });
 
@@ -136,11 +136,10 @@ export default function LogsPage() {
         })
         .then((r) => {
           const raw = r?.data;
-          return Array.isArray(raw)
-            ? raw
-            : raw?.data && Array.isArray(raw.data)
-              ? raw.data
-              : [];
+          if (Array.isArray(raw)) return raw;
+          if (Array.isArray(raw?.data)) return raw.data;
+          if (Array.isArray(raw?.data?.data)) return raw.data.data;
+          return [];
         }),
   });
 

@@ -31,6 +31,7 @@ import {
   Calendar,
   Search,
   X,
+  UserCheck,
 } from 'lucide-react';
 
 interface CarouselItem {
@@ -97,8 +98,53 @@ function getSmoothSvgPath(points: { x: number; y: number }[]): string {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, effectivePhone, isAdmin, isSalesManager, setViewingAs } = useAuth();
-  const canManageTeam = isSalesManager || isAdmin;
+  const {
+    employee,
+    viewingAs,
+    effectivePhone,
+    setViewingAs,
+    clearViewingAs,
+    isAdmin,
+    activeRole,
+    activeMode,
+  } = useAuth();
+
+  const isViewingManager = activeRole === 'sales_manager' || activeRole === 'manager';
+  const isViewingAdmin = !viewingAs && isAdmin;
+  const canManageTeam = isViewingManager || isViewingAdmin;
+
+  const isSalesManagerUser =
+    employee?.role === 'sales_manager' ||
+    employee?.role === 'manager' ||
+    ((viewingAs?.role === 'sales_manager' ||
+      viewingAs?.role === 'manager' ||
+      viewingAs?.original_role === 'sales_manager' ||
+      viewingAs?.original_role === 'manager') &&
+      isAdmin);
+
+  const handleSwitchToPersonal = () => {
+    const target = viewingAs || employee;
+    if (!target) return;
+    setViewingAs({
+      ...target,
+      role: 'salesperson',
+      original_role: target.original_role || target.role,
+      mode: 'personal',
+    });
+  };
+
+  const handleSwitchToTeamManager = () => {
+    if (isAdmin && viewingAs) {
+      setViewingAs({
+        ...viewingAs,
+        role: 'sales_manager',
+        original_role: 'sales_manager',
+        mode: 'manager',
+      });
+    } else {
+      clearViewingAs();
+    }
+  };
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
   const [dayPreset, setDayPreset] = useState('all');
@@ -169,7 +215,7 @@ export default function HomePage() {
 
   // 1. KRA Action Queue Query
   const { isLoading: actionLoading, refetch: refetchActions } = useQuery({
-    queryKey: ['action-queue', dateRange, effectivePhone],
+    queryKey: ['action-queue', dateRange, effectivePhone, activeRole, activeMode],
     queryFn: () =>
       kraApi
         .getActionQueue({
@@ -177,6 +223,7 @@ export default function HomePage() {
           to: dateRange.to,
           all_time: dateRange.preset === 'all' ? 'true' : undefined,
           salesperson_phone: effectivePhone,
+          mode: activeMode,
         })
         .then(r => r.data?.data || r.data),
     refetchInterval: 5 * 60 * 1000,
@@ -184,7 +231,7 @@ export default function HomePage() {
 
   // 2. Dashboard Summary Metrics Query
   const { data: dashboardData, isLoading: dashLoading, refetch: refetchDash } = useQuery({
-    queryKey: ['kra-dashboard', dateRange, effectivePhone],
+    queryKey: ['kra-dashboard', dateRange, effectivePhone, activeRole, activeMode],
     queryFn: () =>
       kraApi
         .getDashboard({
@@ -192,6 +239,7 @@ export default function HomePage() {
           to: dateRange.to,
           all_time: dateRange.preset === 'all' ? 'true' : undefined,
           salesperson_phone: effectivePhone,
+          mode: activeMode,
         })
         .then(r => r.data?.data || r.data),
     refetchInterval: 30000,
@@ -199,11 +247,12 @@ export default function HomePage() {
 
   // 3. Won Orders Query (for Delivered Tonnage) - date range filter applied for RBAC + date accuracy
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
-    queryKey: ['orders-list', effectivePhone, dateRange],
+    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: () =>
       ordersApi
         .getAll({
           ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
           from: dateRange.from,
           to: dateRange.to,
         })
@@ -215,10 +264,13 @@ export default function HomePage() {
 
   // 4. All Deals Query (for Pipeline & Quotes)
   const { data: dealsData, refetch: refetchDeals } = useQuery({
-    queryKey: ['all-deals-list', effectivePhone],
+    queryKey: ['all-deals-list', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       dealsApi
-        .getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined)
+        .getAll({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -227,10 +279,13 @@ export default function HomePage() {
 
   // 5. Inquiries Review Queue Query (AI Extractions)
   const { data: reviewQueueData, refetch: refetchReviewQueue } = useQuery({
-    queryKey: ['inquiries-review-queue'],
+    queryKey: ['inquiries-review-queue', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       inquiriesApi
-        .getReviewQueue()
+        .getReviewQueue({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -240,10 +295,13 @@ export default function HomePage() {
 
   // 6. Customers Churn / Reorder Query
   const { data: churnData, refetch: refetchChurn } = useQuery({
-    queryKey: ['customers-churn-home', effectivePhone],
+    queryKey: ['customers-churn-home', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getChurnRisk()
+        .getChurnRisk({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -253,20 +311,27 @@ export default function HomePage() {
 
   // 7. Employees Query (for Sales Manager Leaderboard)
   const { data: employeesData } = useQuery({
-    queryKey: ['team-employees-list'],
-    queryFn: () => employeesApi.getAll().then(r => r.data?.data || r.data || []),
+    queryKey: ['team-employees-list', effectivePhone, activeRole, activeMode],
+    queryFn: () =>
+      employeesApi
+        .getAll({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
+        .then(r => r.data?.data || r.data || []),
     enabled: canManageTeam,
   });
 
   // 8. Visits Query
   const { data: visitsData, refetch: refetchVisits } = useQuery({
-    queryKey: ['home-visits-list', effectivePhone, dateRange],
+    queryKey: ['home-visits-list', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: () =>
       visitsApi
         .getAll({
           from: dateRange.from,
           to: dateRange.to,
           ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
         })
         .then(r => {
           const raw = r?.data;
@@ -276,12 +341,14 @@ export default function HomePage() {
 
   // 9. Complaints Query
   const { data: complaintsData, refetch: refetchComplaints } = useQuery({
-    queryKey: ['home-complaints-list', dateRange],
+    queryKey: ['home-complaints-list', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: () =>
       complaintsApi
         .getAll({
           from: dateRange.from,
           to: dateRange.to,
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
         })
         .then(r => {
           const raw = r?.data;
@@ -438,12 +505,8 @@ export default function HomePage() {
 
   // 4. Customer Visits count
   const totalVisitsCount = useMemo(() => {
-    if (effectivePhone) {
-      const cleanTarget = effectivePhone.replace(/\D/g, '').slice(-10);
-      return safeVisits.filter(v => (v.salesperson_phone || '').replace(/\D/g, '').slice(-10) === cleanTarget).length;
-    }
     return safeVisits.length;
-  }, [safeVisits, effectivePhone]);
+  }, [safeVisits]);
 
   // 5. Open (Pending) Complaints
   const openComplaints = useMemo(() => {
@@ -644,10 +707,36 @@ export default function HomePage() {
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
 
-      {/* ── Greeting ────────────────────────────────────────────────── */}
-      <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-        {greeting}, {employee?.name?.split(' ')[0] || 'Sales Executive'}
-      </h1>
+      {/* ── Greeting & Dual-Role Switcher ─────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          {greeting}, {(viewingAs ? viewingAs.name : employee?.name)?.split(' ')[0] || 'Sales Executive'}
+        </h1>
+
+        {isSalesManagerUser && (
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {isViewingManager ? (
+              <button
+                onClick={handleSwitchToPersonal}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Switch to My Personal Salesperson Dashboard"
+              >
+                <UserCheck size={14} />
+                Salesperson
+              </button>
+            ) : (
+              <button
+                onClick={handleSwitchToTeamManager}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Switch to Sales Manager Team Dashboard"
+              >
+                <Users size={14} />
+                Sales Manager
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── Nav Bar ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">

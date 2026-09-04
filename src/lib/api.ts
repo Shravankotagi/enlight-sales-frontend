@@ -23,7 +23,15 @@ API.interceptors.request.use((config) => {
   const viewingAs = sessionStorage.getItem('enlight_viewing_as');
   if (viewingAs) {
     const emp = JSON.parse(viewingAs);
-    config.params = { ...config.params, salesperson_phone: emp.phone };
+    const isPersonalMode =
+      emp.mode === 'personal' ||
+      emp.role === 'salesperson' ||
+      emp.is_personal === true;
+    config.params = {
+      ...config.params,
+      salesperson_phone: config.params?.salesperson_phone || emp.phone,
+      mode: config.params?.mode || (isPersonalMode ? 'personal' : 'manager'),
+    };
   }
   return config;
 });
@@ -120,7 +128,8 @@ export const reportsApi = {
 };
 
 export const employeesApi = {
-  getAll: () => API.get('/employees'),
+  getAll: (params?: { salesperson_phone?: string }) =>
+    API.get('/employees', { params }),
   getNextId: () => API.get('/employees/next-id'),
   create: (data: any) => API.post('/employees', data),
   update: (id: string, data: any) => API.patch(`/employees/${id}`, data),
@@ -153,6 +162,7 @@ export const activityLogsApi = {
     module?: string;
     search?: string;
     salesperson_phone?: string;
+    mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
 };

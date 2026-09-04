@@ -71,7 +71,9 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
   const totalTonnage = calculateTotalTonnageMt(items);
 
-  const dealRefId = deal.id ? `#${deal.id.substring(0, 8).toUpperCase()}` : '#ENLIGHT-DEAL';
+  const dealRefId = deal.deal_number
+    ? (deal.deal_number.startsWith('#') ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, '#INQ-') : `#${deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-')}`)
+    : (deal.id ? `#INQ-${deal.id.substring(0, 6).toUpperCase()}` : '#ENLIGHT-INQ');
   const poNumber = deal.po_number || dealRefId;
   const orderDate = deal.po_date || (deal.created_at ? new Date(deal.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
 

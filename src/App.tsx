@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
@@ -17,6 +19,7 @@ import OrdersPage from './pages/OrdersPage';
 import NotFoundPage from './pages/NotFoundPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AssistantPage from './pages/AssistantPage';
+import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
   const { isAuthenticated, employee } = useAuth();
@@ -57,6 +60,15 @@ function AppRoutes() {
 }
 
 function App() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const cleanup = setupRealtimeSubscriptions(queryClient);
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [queryClient]);
+
   return (
     <AuthProvider>
       <AppRoutes />
