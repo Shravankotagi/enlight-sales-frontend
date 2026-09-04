@@ -2837,7 +2837,17 @@ export default function InquiriesPage() {
                     Inquiry &amp; Audit
                   </h2>
                   <p className="text-xs text-slate-500 font-mono mt-0.5">
-                    ID: #INQ-{selectedInquiry.id.substring(0, 8).toUpperCase()}
+                    {(() => {
+                      const linkedDeal = getLinkedDeal(selectedInquiry, editDetails?.companyName);
+                      const inqIdDisplay = linkedDeal?.deal_number
+                        ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-')
+                        : (linkedDeal?.id
+                          ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}`
+                          : (selectedInquiry.id
+                            ? `INQ-${selectedInquiry.id.substring(0, 6).toUpperCase()}`
+                            : '-'));
+                      return `ID: #${inqIdDisplay.replace(/^#/, '')}`;
+                    })()}
                   </p>
                 </div>
               </div>
