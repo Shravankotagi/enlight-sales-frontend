@@ -29,8 +29,8 @@ API.interceptors.request.use((config) => {
       emp.is_personal === true;
     config.params = {
       ...config.params,
-      salesperson_phone: emp.phone,
-      ...(isPersonalMode ? { mode: 'personal' } : {}),
+      salesperson_phone: config.params?.salesperson_phone || emp.phone,
+      mode: config.params?.mode || (isPersonalMode ? 'personal' : 'manager'),
     };
   }
   return config;
@@ -162,6 +162,7 @@ export const activityLogsApi = {
     module?: string;
     search?: string;
     salesperson_phone?: string;
+    mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
 };

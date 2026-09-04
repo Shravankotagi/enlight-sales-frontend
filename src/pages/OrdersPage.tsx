@@ -301,7 +301,7 @@ export default function OrdersPage() {
   const returnTo = searchParams.get('returnTo');
 
   const queryClient = useQueryClient();
-  const { effectivePhone } = useAuth();
+  const { effectivePhone, activeRole, activeMode } = useAuth();
 
   const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -381,10 +381,11 @@ export default function OrdersPage() {
   };
 
   const { data: rawOrders = [], isLoading: loading, isFetching, refetch: fetchOrders } = useQuery<Order[]>({
-    queryKey: ['orders-list', effectivePhone, dateRange],
+    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
 

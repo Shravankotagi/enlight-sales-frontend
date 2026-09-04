@@ -70,7 +70,7 @@ export default function ComplaintsPage() {
   const targetComplaintId = searchParams.get('complaintId') || searchParams.get('id');
   const returnTo = searchParams.get('returnTo');
 
-  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -81,6 +81,7 @@ export default function ComplaintsPage() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Date Filter Presets
   const [dayPreset, setDayPreset] = useState<string>('all');
@@ -142,6 +143,14 @@ export default function ComplaintsPage() {
       setDateRange({ from: customFrom, to: effectiveVal });
     }
   };
+
+  // Close active dropdowns on click outside
+  useEffect(() => {
+    if (!activeActionMenuId) return;
+    const handleClickOutside = () => setActiveActionMenuId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeActionMenuId]);
 
   const handleClearFilters = () => {
     setSearchTerm('');
@@ -364,6 +373,7 @@ export default function ComplaintsPage() {
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to;
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
       const res = await complaintsApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -378,7 +388,7 @@ export default function ComplaintsPage() {
 
   useEffect(() => {
     fetchComplaints();
-  }, [dateRange, effectivePhone]);
+  }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   const handleOpenAddModal = () => {
     setFormCustomerName('');

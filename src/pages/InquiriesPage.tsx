@@ -833,7 +833,7 @@ export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs } = useAuth();
+  const { effectivePhone, employee, viewingAs, activeRole, activeMode } = useAuth();
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1045,10 +1045,11 @@ export default function InquiriesPage() {
   };
 
   const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
-    queryKey: ['inquiries-list', effectivePhone],
+    queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
 
       const res = await inquiriesApi.getAll(params);
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
@@ -1098,10 +1099,11 @@ export default function InquiriesPage() {
   });
 
   const { data: rawDeals = [], isFetching: dealsFetching, refetch: fetchDeals } = useQuery<any[]>({
-    queryKey: ['deals', effectivePhone, dateRange],
+    queryKey: ['deals', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: async () => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
       if (dateRange.from) params.from = dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
       const res = await dealsApi.getAll(params).catch(() => null);

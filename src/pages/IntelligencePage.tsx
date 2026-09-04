@@ -13,8 +13,8 @@ import {
 } from 'lucide-react';
 
 export default function IntelligencePage() {
-  const auth = useAuth();
-  const salespersonPhone = auth?.effectivePhone || undefined;
+  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const salespersonPhone = effectivePhone || undefined;
 
   useEffect(() => {
     document.title = 'Intelligence Center - Enlight Sales OS';
@@ -26,10 +26,13 @@ export default function IntelligencePage() {
     refetch: refetchChurn,
     isFetching: fetchingChurn,
   } = useQuery({
-    queryKey: ['churn-risk', salespersonPhone],
+    queryKey: ['churn-risk', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getChurnRisk({ salesperson_phone: salespersonPhone })
+        .getChurnRisk({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => r.data?.data || r.data || []),
   });
 
@@ -38,10 +41,13 @@ export default function IntelligencePage() {
     refetch: refetchReorder,
     isFetching: fetchingReorder,
   } = useQuery({
-    queryKey: ['reorder-queue', salespersonPhone],
+    queryKey: ['reorder-queue', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getReorderQueue({ salesperson_phone: salespersonPhone })
+        .getReorderQueue({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => r.data?.data || r.data || []),
   });
 
@@ -50,10 +56,13 @@ export default function IntelligencePage() {
     refetch: refetchLoss,
     isFetching: fetchingLoss,
   } = useQuery({
-    queryKey: ['loss-analytics', salespersonPhone],
+    queryKey: ['loss-analytics', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getLossAnalytics({ salesperson_phone: salespersonPhone })
+        .getLossAnalytics({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => r.data?.data || r.data || {}),
   });
 
@@ -62,10 +71,13 @@ export default function IntelligencePage() {
     refetch: refetchCustomers,
     isFetching: fetchingCustomers,
   } = useQuery({
-    queryKey: ['recurring-customers-list', salespersonPhone],
+    queryKey: ['recurring-customers-list', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getAll({ salesperson_phone: salespersonPhone })
+        .getAll({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => {
           const raw = r.data?.data || r.data;
           return Array.isArray(raw) ? raw : [];
@@ -77,10 +89,13 @@ export default function IntelligencePage() {
     refetch: refetchDeals,
     isFetching: fetchingDeals,
   } = useQuery({
-    queryKey: ['intelligence-deals', salespersonPhone],
+    queryKey: ['intelligence-deals', salespersonPhone, activeRole, activeMode],
     queryFn: () =>
       dealsApi
-        .getAll({ salesperson_phone: salespersonPhone })
+        .getAll({
+          salesperson_phone: salespersonPhone,
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then((r) => {
           const raw = r.data?.data || r.data;
           return Array.isArray(raw) ? raw : [];

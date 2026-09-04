@@ -27,6 +27,8 @@ interface AuthContextType {
   isSalesperson: boolean;
   isAuthenticated: boolean;
   effectivePhone: string | null;
+  activeRole: string;
+  activeMode?: string;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -48,8 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('enlight_token', newToken);
     sessionStorage.setItem('enlight_employee', JSON.stringify(newEmployee));
     sessionStorage.removeItem('enlight_active_chat_session_id');
+    sessionStorage.removeItem('enlight_viewing_as');
     setToken(newToken);
     setEmployee(newEmployee);
+    setViewingAsState(null);
   };
 
   const logout = () => {
@@ -89,6 +93,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? employee?.phone || null
       : null;
 
+  const activeRole = viewingAs ? viewingAs.role : (employee?.role || 'salesperson');
+  const activeMode =
+    viewingAs?.mode ||
+    (activeRole === 'salesperson' &&
+    (viewingAs?.original_role === 'sales_manager' ||
+      viewingAs?.original_role === 'manager')
+      ? 'personal'
+      : activeRole === 'sales_manager' || activeRole === 'manager'
+        ? 'manager'
+        : undefined);
+
   return (
     <AuthContext.Provider
       value={{
@@ -104,6 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSalesperson,
         isAuthenticated: !!token && !!employee,
         effectivePhone,
+        activeRole,
+        activeMode,
       }}
     >
       {children}

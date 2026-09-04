@@ -98,10 +98,19 @@ function getSmoothSvgPath(points: { x: number; y: number }[]): string {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { employee, viewingAs, effectivePhone, setViewingAs, clearViewingAs, isAdmin } = useAuth();
-  const activeRole = viewingAs ? viewingAs.role : employee?.role;
+  const {
+    employee,
+    viewingAs,
+    effectivePhone,
+    setViewingAs,
+    clearViewingAs,
+    isAdmin,
+    activeRole,
+    activeMode,
+  } = useAuth();
+
   const isViewingManager = activeRole === 'sales_manager' || activeRole === 'manager';
-  const isViewingAdmin = activeRole === 'admin';
+  const isViewingAdmin = !viewingAs && isAdmin;
   const canManageTeam = isViewingManager || isViewingAdmin;
 
   const isSalesManagerUser =
@@ -206,7 +215,7 @@ export default function HomePage() {
 
   // 1. KRA Action Queue Query
   const { isLoading: actionLoading, refetch: refetchActions } = useQuery({
-    queryKey: ['action-queue', dateRange, effectivePhone],
+    queryKey: ['action-queue', dateRange, effectivePhone, activeRole, activeMode],
     queryFn: () =>
       kraApi
         .getActionQueue({
@@ -214,6 +223,7 @@ export default function HomePage() {
           to: dateRange.to,
           all_time: dateRange.preset === 'all' ? 'true' : undefined,
           salesperson_phone: effectivePhone,
+          mode: activeMode,
         })
         .then(r => r.data?.data || r.data),
     refetchInterval: 5 * 60 * 1000,
@@ -221,7 +231,7 @@ export default function HomePage() {
 
   // 2. Dashboard Summary Metrics Query
   const { data: dashboardData, isLoading: dashLoading, refetch: refetchDash } = useQuery({
-    queryKey: ['kra-dashboard', dateRange, effectivePhone],
+    queryKey: ['kra-dashboard', dateRange, effectivePhone, activeRole, activeMode],
     queryFn: () =>
       kraApi
         .getDashboard({
@@ -229,6 +239,7 @@ export default function HomePage() {
           to: dateRange.to,
           all_time: dateRange.preset === 'all' ? 'true' : undefined,
           salesperson_phone: effectivePhone,
+          mode: activeMode,
         })
         .then(r => r.data?.data || r.data),
     refetchInterval: 30000,
@@ -236,11 +247,12 @@ export default function HomePage() {
 
   // 3. Won Orders Query (for Delivered Tonnage) - date range filter applied for RBAC + date accuracy
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
-    queryKey: ['orders-list', effectivePhone, dateRange],
+    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: () =>
       ordersApi
         .getAll({
           ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
           from: dateRange.from,
           to: dateRange.to,
         })
@@ -252,10 +264,13 @@ export default function HomePage() {
 
   // 4. All Deals Query (for Pipeline & Quotes)
   const { data: dealsData, refetch: refetchDeals } = useQuery({
-    queryKey: ['all-deals-list', effectivePhone],
+    queryKey: ['all-deals-list', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       dealsApi
-        .getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined)
+        .getAll({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -264,10 +279,13 @@ export default function HomePage() {
 
   // 5. Inquiries Review Queue Query (AI Extractions)
   const { data: reviewQueueData, refetch: refetchReviewQueue } = useQuery({
-    queryKey: ['inquiries-review-queue'],
+    queryKey: ['inquiries-review-queue', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       inquiriesApi
-        .getReviewQueue()
+        .getReviewQueue({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -277,10 +295,13 @@ export default function HomePage() {
 
   // 6. Customers Churn / Reorder Query
   const { data: churnData, refetch: refetchChurn } = useQuery({
-    queryKey: ['customers-churn-home', effectivePhone],
+    queryKey: ['customers-churn-home', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
-        .getChurnRisk()
+        .getChurnRisk({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then(r => {
           const raw = r?.data;
           return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -290,23 +311,27 @@ export default function HomePage() {
 
   // 7. Employees Query (for Sales Manager Leaderboard)
   const { data: employeesData } = useQuery({
-    queryKey: ['team-employees-list', effectivePhone],
+    queryKey: ['team-employees-list', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       employeesApi
-        .getAll(effectivePhone ? { salesperson_phone: effectivePhone } : undefined)
+        .getAll({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+        })
         .then(r => r.data?.data || r.data || []),
     enabled: canManageTeam,
   });
 
   // 8. Visits Query
   const { data: visitsData, refetch: refetchVisits } = useQuery({
-    queryKey: ['home-visits-list', effectivePhone, dateRange],
+    queryKey: ['home-visits-list', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: () =>
       visitsApi
         .getAll({
           from: dateRange.from,
           to: dateRange.to,
           ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
         })
         .then(r => {
           const raw = r?.data;
@@ -316,13 +341,14 @@ export default function HomePage() {
 
   // 9. Complaints Query
   const { data: complaintsData, refetch: refetchComplaints } = useQuery({
-    queryKey: ['home-complaints-list', effectivePhone, dateRange],
+    queryKey: ['home-complaints-list', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: () =>
       complaintsApi
         .getAll({
           from: dateRange.from,
           to: dateRange.to,
           ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
         })
         .then(r => {
           const raw = r?.data;

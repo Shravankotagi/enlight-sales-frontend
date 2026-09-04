@@ -79,7 +79,7 @@ export default function VisitsPage() {
   const targetVisitId = searchParams.get('visitId') || searchParams.get('id');
   const returnTo = searchParams.get('returnTo');
 
-  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
@@ -219,8 +219,8 @@ export default function VisitsPage() {
         if (match && match[1]) contactPerson = match[1].trim();
       }
 
-      const phone = (c?.customer_phone || c?.phone || c?.contact_no || '').trim();
-      const loc = (c?.customer_address || c?.address || c?.city || '').trim();
+      const phone = (c?.contact_phone || c?.phone || '').trim();
+      const loc = (c?.location || c?.address || '').trim();
 
       dirMap.set(key, {
         id: c.id,
@@ -378,6 +378,7 @@ export default function VisitsPage() {
       if (dateRange.from) params.from = dateRange.from;
       if (dateRange.to) params.to = dateRange.to;
       if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
       const res = await visitsApi.getAll(params);
       const raw = res?.data;
       const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -392,7 +393,7 @@ export default function VisitsPage() {
 
   useEffect(() => {
     fetchVisits();
-  }, [dateRange, effectivePhone]);
+  }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
