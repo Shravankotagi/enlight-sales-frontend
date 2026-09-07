@@ -226,7 +226,6 @@ export default function HomePage() {
           mode: activeMode,
         })
         .then(r => r.data?.data || r.data),
-    refetchInterval: 5 * 60 * 1000,
   });
 
   // 2. Dashboard Summary Metrics Query
@@ -242,7 +241,6 @@ export default function HomePage() {
           mode: activeMode,
         })
         .then(r => r.data?.data || r.data),
-    refetchInterval: 30000,
   });
 
   // 3. Won Orders Query (for Delivered Tonnage) - date range filter applied for RBAC + date accuracy
