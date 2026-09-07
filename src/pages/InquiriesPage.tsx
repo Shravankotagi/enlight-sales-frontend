@@ -7,7 +7,6 @@ import {
   ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, MessageSquare, ArrowLeft
 } from 'lucide-react';
-import DealDetailDrawer from '../components/DealDetailDrawer';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
@@ -708,16 +707,14 @@ const DEFAULT_PIPELINE_STAGES = [
   { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
 ];
 
-function DealCard({ deal, onStageChange, onSelect, onDelete }: {
+function DealCard({ deal, onStageChange, onDelete }: {
   deal: any;
   onStageChange: (id: string, stage: string, reason?: string) => void;
-  onSelect: (id: string) => void;
   onDelete: (deal: any) => void;
 }) {
   return (
     <div
-      onClick={() => onSelect(deal.id)}
-      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
+      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow relative group"
     >
       <div className="flex items-start justify-between mb-2 gap-1">
         <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
@@ -839,7 +836,6 @@ export default function InquiriesPage() {
     const params = new URLSearchParams(window.location.search);
     return params.get('view') === 'pipeline' ? 'pipeline' : 'table';
   });
-  const [selectedPipelineDealId, setSelectedPipelineDealId] = useState<string | null>(null);
   const [pipelineLostModal, setPipelineLostModal] = useState<{ dealId: string; reason: string } | null>(null);
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1138,7 +1134,6 @@ export default function InquiriesPage() {
       queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
       toast.success('Deal and all associated records deleted successfully');
       setConfirmDeleteDeal(null);
-      setSelectedPipelineDealId(null);
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || 'Failed to delete deal');
@@ -2532,7 +2527,6 @@ export default function InquiriesPage() {
                       key={deal.id}
                       deal={deal}
                       onStageChange={handlePipelineStageChange}
-                      onSelect={(id) => setSelectedPipelineDealId(id)}
                       onDelete={(d) => setConfirmDeleteDeal(d)}
                     />
                   ))}
@@ -3903,12 +3897,6 @@ export default function InquiriesPage() {
           </div>
         </div>
       )}
-
-            {/* Pipeline Deal Detail Drawer */}
-      <DealDetailDrawer
-        dealId={selectedPipelineDealId}
-        onClose={() => setSelectedPipelineDealId(null)}
-      />
 
       {/* Pipeline Mark as Lost Modal */}
       {pipelineLostModal && (
