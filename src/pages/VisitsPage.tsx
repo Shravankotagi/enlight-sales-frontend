@@ -623,16 +623,16 @@ export default function VisitsPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 shrink-0">
             <button
               onClick={fetchVisits}
-              className="p-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+              className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
               title="Refresh">
-              <RefreshCw size={18} className={loading ? 'animate-spin text-blue-600' : ''} />
+              <RefreshCw size={15} className={loading ? 'animate-spin text-blue-600' : ''} />
             </button>
             <button
               onClick={handleOpenAddModal}
-              className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer">
+              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
               <Plus size={15} />
               Log Customer Visit
             </button>

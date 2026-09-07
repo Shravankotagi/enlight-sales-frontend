@@ -129,7 +129,7 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
         <select
           value={preset === 'this_month' || preset === 'this_quarter' || preset === 'this_year' ? 'all' : preset}
           onChange={(e) => handleSelectPreset(e.target.value as FilterPreset)}
-          className="pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs appearance-none cursor-pointer transition-all"
+          className="h-9 pl-8 pr-8 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs appearance-none cursor-pointer transition-all"
         >
           <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
           <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
@@ -143,13 +143,13 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
 
       {/* Custom Date Range Pickers */}
       {showCustom && (
-        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm text-xs animate-in fade-in slide-in-from-left-2 duration-150">
+        <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm text-xs animate-in fade-in slide-in-from-left-2 duration-150">
           <input
             type="date"
             value={customFrom}
             max={customTo || undefined}
             onChange={e => handleCustomFromChange(e.target.value)}
-            className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+            className="h-7 px-2 border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono"
           />
           <span className="text-slate-400 font-medium">to</span>
           <input
@@ -157,12 +157,12 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
             value={customTo}
             min={customFrom || undefined}
             onChange={e => handleCustomToChange(e.target.value)}
-            className="px-2 py-1 border border-slate-300 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+            className="h-7 px-2 border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 font-mono"
           />
           <button
             type="button"
             onClick={handleApplyCustom}
-            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded transition-colors flex items-center gap-1 shadow-2xs">
+            className="h-7 px-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-1 shadow-2xs">
             <Check size={12} /> Apply
           </button>
         </div>
@@ -173,7 +173,7 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
         <button
           type="button"
           onClick={() => handleSelectPreset('all')}
-          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+          className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer flex items-center"
         >
           Clear Filter
         </button>

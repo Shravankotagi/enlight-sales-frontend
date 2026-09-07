@@ -2330,7 +2330,7 @@ export default function InquiriesPage() {
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-2.5 shrink-0">
             <button
               type="button"
               disabled={dealsFetching || isFetching}
@@ -2339,19 +2339,19 @@ export default function InquiriesPage() {
                 toast.success(viewMode === 'pipeline' ? 'Pipeline refreshed' : 'Inquiries list refreshed');
               }}
               title={viewMode === 'pipeline' ? 'Refresh Pipeline' : 'Refresh Inquiries'}
-              className="p-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
+              className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0">
               <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
             </button>
 
             <button
               onClick={() => navigate('/orders')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-[11px] font-bold transition-all shadow-2xs">
+              className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0">
               <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
             </button>
 
             <button
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
               <Plus size={15} /> Log New Inquiry
             </button>
           </div>

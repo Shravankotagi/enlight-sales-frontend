@@ -851,10 +851,10 @@ export default function HomePage() {
           {/* Refresh */}
           <button
             onClick={handleRefreshAll}
-            className="px-2 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
             title="Refresh Dashboard">
             <RefreshCw
-              size={17}
+              size={15}
               className={dashLoading || actionLoading || ordersLoading ? 'animate-spin text-blue-600' : ''}
             />
           </button>
@@ -865,7 +865,7 @@ export default function HomePage() {
             <select
               value={dayPreset}
               onChange={e => handleDayPresetChange(e.target.value)}
-              className="pl-7 pr-7 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              className="h-9 pl-7 pr-7 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
               <option value="all">All Time</option>
               <option value="today">Today</option>
               <option value="7_days">Last 7 Days</option>

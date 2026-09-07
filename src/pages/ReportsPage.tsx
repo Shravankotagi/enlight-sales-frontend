@@ -135,14 +135,14 @@ export default function ReportsPage() {
             Reports &amp; Analytics
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 shrink-0">
           <DateFilterControl onChange={setDateRange} />
           <button
             onClick={refetchAll}
             title="Refresh all reports"
-            className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all text-slate-500 hover:text-blue-600 cursor-pointer"
+            className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
           >
-            <RefreshCw size={16} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+            <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
           </button>
         </div>
       </div>

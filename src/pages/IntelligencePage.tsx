@@ -201,7 +201,7 @@ export default function IntelligencePage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={async () => {
               await Promise.all([
@@ -213,10 +213,10 @@ export default function IntelligencePage() {
               ]);
             }}
             title="Refresh Intelligence Data"
-            className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60"
+            className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
           >
             <RefreshCw
-              size={16}
+              size={15}
               className={isRefreshing ? 'animate-spin text-blue-600' : ''}
             />
           </button>

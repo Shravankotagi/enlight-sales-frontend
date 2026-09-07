@@ -981,21 +981,21 @@ export default function OrdersPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5 shrink-0">
             <button
               onClick={() => {
                 fetchOrders();
                 queryClient.invalidateQueries({ queryKey: ['orders-list'] });
               }}
               title="Refresh Orders"
-              className="p-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60">
-              <RefreshCw size={16} className={isFetching ? 'animate-spin text-blue-600' : ''} />
+              className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0">
+              <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
             </button>
 
             <button
               onClick={() => setShowModal(true)}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-sm transition-colors cursor-pointer">
-              <Plus size={18} />
+              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
+              <Plus size={15} />
               Create New Order
             </button>
           </div>

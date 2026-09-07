@@ -386,24 +386,24 @@ export default function CustomerProfilePage() {
         <div className="flex items-center justify-between gap-3">
           <button
             onClick={() => navigate('/customers')}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white hover:bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 transition-colors cursor-pointer shadow-2xs">
+            className="h-9 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white hover:bg-slate-50 px-3.5 rounded-xl border border-slate-200 transition-colors cursor-pointer shadow-2xs">
             <ChevronLeft size={16} />
             Back to Customer Health
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5 shrink-0">
             {!String(customer.id || '').startsWith('virtual-') && (
               <button
                 onClick={handleOpenEdit}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-300 transition-colors cursor-pointer shadow-2xs">
+                className="h-9 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 px-3.5 rounded-xl border border-slate-300 transition-colors cursor-pointer shadow-2xs">
                 <Edit2 size={13} className="text-slate-500" />
                 Edit Profile
               </button>
             )}
             <button
               onClick={() => navigate('/orders')}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer shadow-md">
-              <ShoppingBag size={13} />
+              className="h-9 inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 rounded-xl transition-colors cursor-pointer shadow-sm">
+              <ShoppingBag size={14} />
               View Orders
             </button>
           </div>
