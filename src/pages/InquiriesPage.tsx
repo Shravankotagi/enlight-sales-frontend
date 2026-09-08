@@ -1271,8 +1271,13 @@ export default function InquiriesPage() {
     }
 
     const currentDealStage = (linked.stage || '').toLowerCase().trim();
-    if ((currentDealStage === 'new_inquiry' || currentDealStage === 'review' || !linked.stage) && (targetStage === 'won' || targetStage === 'lost')) {
-      toast.error(`Cannot mark deal as ${targetStage.toUpperCase()} from New Inquiry stage. The deal must first be Qualified or Quoted.`);
+    if ((currentDealStage === 'new_inquiry' || currentDealStage === 'review' || !linked.stage) && (targetStage === 'won' || targetStage === 'lost' || targetStage === 'on_hold' || targetStage === 'negotiation')) {
+      toast.error(`Cannot move inquiry to ${targetStage.toUpperCase().replace('_', ' ')} from New Inquiry stage. Unit rates must be quoted first.`);
+      return;
+    }
+
+    if (targetStage === 'on_hold' && currentDealStage !== 'quoted' && currentDealStage !== 'qualified') {
+      toast.error('Cannot put deal on hold. Deal must be in Price Quote stage before it can be placed on hold.');
       return;
     }
 
