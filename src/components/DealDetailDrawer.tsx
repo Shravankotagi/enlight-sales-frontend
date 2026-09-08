@@ -22,11 +22,12 @@ interface DealDetailDrawerProps {
 
 const STAGE_COLORS: Record<string, string> = {
   new_inquiry: 'bg-amber-100 text-amber-800',
-  qualified: 'bg-emerald-100 text-emerald-800',
   quoted: 'bg-blue-100 text-blue-800',
   negotiation: 'bg-orange-100 text-orange-800',
+  on_hold: 'bg-purple-100 text-purple-800',
   won: 'bg-green-100 text-green-800',
   lost: 'bg-rose-100 text-rose-800',
+  qualified: 'bg-emerald-100 text-emerald-800',
 };
 
 const LOST_REASONS = [
@@ -419,27 +420,81 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Quick Actions</p>
             <div className="flex flex-wrap gap-2">
               {deal.stage === 'new_inquiry' && (
-                <button
-                  onClick={() => handleStageChange('qualified')}
-                  className="px-3 py-1.5 text-xs font-medium border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors"
-                >
-                  → Qualified
-                </button>
+                <>
+                  <button
+                    onClick={() => handleStageChange('quoted')}
+                    className="px-3 py-1.5 text-xs font-medium border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+                  >
+                    → Proposal / Quote
+                  </button>
+                  <button
+                    onClick={() => handleStageChange('negotiation')}
+                    className="px-3 py-1.5 text-xs font-medium border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 transition-colors"
+                  >
+                    → Negotiation
+                  </button>
+                  <button
+                    onClick={() => handleStageChange('on_hold')}
+                    className="px-3 py-1.5 text-xs font-medium border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 transition-colors"
+                  >
+                    → On Hold
+                  </button>
+                </>
+              )}
+              {deal.stage === 'quoted' && (
+                <>
+                  <button
+                    onClick={() => handleStageChange('negotiation')}
+                    className="px-3 py-1.5 text-xs font-medium border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 transition-colors"
+                  >
+                    → Negotiation
+                  </button>
+                  <button
+                    onClick={() => handleStageChange('on_hold')}
+                    className="px-3 py-1.5 text-xs font-medium border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 transition-colors"
+                  >
+                    → On Hold
+                  </button>
+                </>
+              )}
+              {deal.stage === 'negotiation' && (
+                <>
+                  <button
+                    onClick={() => handleStageChange('quoted')}
+                    className="px-3 py-1.5 text-xs font-medium border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+                  >
+                    → Proposal / Quote
+                  </button>
+                  <button
+                    onClick={() => handleStageChange('on_hold')}
+                    className="px-3 py-1.5 text-xs font-medium border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 transition-colors"
+                  >
+                    → On Hold
+                  </button>
+                </>
+              )}
+              {deal.stage === 'on_hold' && (
+                <>
+                  <button
+                    onClick={() => handleStageChange('quoted')}
+                    className="px-3 py-1.5 text-xs font-medium border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+                  >
+                    → Resume Quote
+                  </button>
+                  <button
+                    onClick={() => handleStageChange('negotiation')}
+                    className="px-3 py-1.5 text-xs font-medium border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 transition-colors"
+                  >
+                    → Resume Negotiation
+                  </button>
+                </>
               )}
               {deal.stage === 'qualified' && (
                 <button
                   onClick={() => handleStageChange('quoted')}
                   className="px-3 py-1.5 text-xs font-medium border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
                 >
-                  → Quoted
-                </button>
-              )}
-              {deal.stage === 'quoted' && (
-                <button
-                  onClick={() => handleStageChange('negotiation')}
-                  className="px-3 py-1.5 text-xs font-medium border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 transition-colors"
-                >
-                  → Negotiation
+                  → Proposal / Quote
                 </button>
               )}
               {deal.stage !== 'new_inquiry' && deal.stage !== 'review' && (
@@ -448,13 +503,13 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                     onClick={() => handleStageChange('won')}
                     className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                   >
-                     Won
+                    ✓ Won
                   </button>
                   <button
                     onClick={() => setShowLostModal(true)}
                     className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                   >
-                     Lost
+                    ✗ Lost
                   </button>
                 </>
               )}

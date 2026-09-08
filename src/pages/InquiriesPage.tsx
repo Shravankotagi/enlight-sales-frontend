@@ -702,9 +702,9 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
 const DEFAULT_PIPELINE_STAGES = [
   { key: 'new_inquiry', label: 'New Deals', color: 'bg-amber-50 border-amber-200' },
-  { key: 'qualified', label: 'Qualified', color: 'bg-emerald-50 border-emerald-200' },
-  { key: 'quoted', label: 'Quoted', color: 'bg-blue-50 border-blue-200' },
+  { key: 'quoted', label: 'Proposal / Quote', color: 'bg-blue-50 border-blue-200' },
   { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
+  { key: 'on_hold', label: 'On Hold', color: 'bg-purple-50 border-purple-200' },
 ];
 
 function DealCard({ deal, onStageChange, onDelete }: {
@@ -728,54 +728,31 @@ function DealCard({ deal, onStageChange, onDelete }: {
             {deal.stage === 'won' ? 'WON' : deal.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
           </span>
           <button
-            type="button"
-            title="Delete this deal and all records"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(deal);
             }}
-            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+            title="Delete deal"
+            className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all ml-1"
           >
             <Trash2 size={13} />
           </button>
         </div>
       </div>
 
-      {deal.po_number && (
-        <p className="text-xs text-gray-500 mb-1">PO: {deal.po_number}</p>
-      )}
+      <p className="text-xs text-gray-500 mb-1">
+        {deal.deal_items?.map((i: any) => i.sku_text || i.product_name).filter(Boolean).join(', ') || 'General Requirement'}
+      </p>
 
-      {deal.deal_items && deal.deal_items.length > 0 && (
-        <div className="mb-2">
-          {deal.deal_items.slice(0, 2).map((item: any, i: number) => (
-            <p key={i} className="text-xs text-gray-600">
-              • {item.sku_text} - {item.quantity} {item.unit}
-            </p>
-          ))}
-          {deal.deal_items.length > 2 && (
-            <p className="text-xs text-gray-400">+{deal.deal_items.length - 2} more</p>
-          )}
-        </div>
-      )}
-
+      {/* Pricing Summary */}
       {(() => {
-        let computedTotal = Number(deal.total_amount) || 0;
-        if (
-          computedTotal <= 0 &&
-          Array.isArray(deal.deal_items) &&
-          deal.deal_items.length > 0
-        ) {
-          const subtotal = deal.deal_items.reduce((sum: number, item: any) => {
-            const amt =
-              Number(item.amount) ||
-              (Number(item.quantity) || 0) *
-                (Number(item.rate || item.quoted_price || item.price_per_mt) || 0);
-            return sum + amt;
+        const computedTotal = Number(deal.total_amount) ||
+          (deal.deal_items || []).reduce((sum: number, item: any) => {
+            const itemQty = Number(item.quantity) || 0;
+            const itemRate = Number(item.rate) || 0;
+            const itemAmount = Number(item.amount) || (itemQty * itemRate);
+            return sum + itemAmount;
           }, 0);
-          if (subtotal > 0) {
-            computedTotal = subtotal + Math.round(subtotal * 0.18);
-          }
-        }
 
         if (computedTotal > 0) {
           return (
@@ -789,7 +766,7 @@ function DealCard({ deal, onStageChange, onDelete }: {
       })()}
 
       <div className="mt-3 flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
-        {['qualified', 'quoted', 'negotiation', 'won', 'lost']
+        {['quoted', 'negotiation', 'on_hold', 'won', 'lost']
           .filter(stage => {
             const currentStage = (deal.stage || 'new_inquiry').toLowerCase().trim();
             if ((currentStage === 'new_inquiry' || currentStage === 'review') && (stage === 'won' || stage === 'lost')) {
@@ -805,9 +782,11 @@ function DealCard({ deal, onStageChange, onDelete }: {
                   ? 'border-green-300 text-green-700 hover:bg-green-50'
                   : stage === 'lost'
                   ? 'border-red-300 text-red-700 hover:bg-red-50'
+                  : stage === 'on_hold'
+                  ? 'border-purple-300 text-purple-700 hover:bg-purple-50'
                   : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                 }`}>
-              → {stage.charAt(0).toUpperCase() + stage.slice(1)}
+              → {stage === 'on_hold' ? 'On Hold' : (stage.charAt(0).toUpperCase() + stage.slice(1))}
             </button>
           ))}
       </div>
@@ -1172,14 +1151,17 @@ export default function InquiriesPage() {
     if (s === 'new_inquiry' || s === 'new' || s === 'new inquiry' || s === 'review') {
       return { label: 'New Inquiry', className: 'bg-amber-100 text-amber-800 border-amber-200' };
     }
-    if (s === 'qualified' || s === 'saved' || s === 'confirmed') {
-      return { label: 'Qualified', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
-    }
-    if (s === 'quoted' || s === 'quotation_sent') {
-      return { label: 'Quoted', className: 'bg-blue-100 text-blue-800 border-blue-200' };
+    if (s === 'quoted' || s === 'quotation_sent' || s === 'proposal') {
+      return { label: 'Proposal / Quote', className: 'bg-blue-100 text-blue-800 border-blue-200' };
     }
     if (s === 'negotiation') {
       return { label: 'Negotiation', className: 'bg-orange-100 text-orange-800 border-orange-200' };
+    }
+    if (s === 'on_hold' || s === 'hold' || s === 'on hold') {
+      return { label: 'On Hold', className: 'bg-purple-100 text-purple-800 border-purple-200' };
+    }
+    if (s === 'qualified' || s === 'saved' || s === 'confirmed') {
+      return { label: 'Qualified', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
     }
     if (s === 'won') {
       return { label: 'Won', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
@@ -1194,8 +1176,8 @@ export default function InquiriesPage() {
     const linkedDeal = getLinkedDeal(inq, companyName);
     if (linkedDeal) {
       const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
-      if (['won', 'lost', 'negotiation', 'quoted', 'qualified', 'new_inquiry'].includes(dealStage)) {
-        return dealStage === 'review' ? 'new_inquiry' : dealStage;
+      if (['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry'].includes(dealStage)) {
+        return dealStage === 'review' ? 'new_inquiry' : (dealStage === 'hold' ? 'on_hold' : dealStage);
       }
     }
 
@@ -2110,12 +2092,15 @@ export default function InquiriesPage() {
   }, [rawDeals, searchTerm, filterStatus]);
 
   const pipelineBoard = useMemo(() => {
-    const stages = ['new_inquiry', 'qualified', 'quoted', 'negotiation'];
+    const stages = ['new_inquiry', 'quoted', 'negotiation', 'on_hold'];
     return stages.reduce((acc, st) => {
       acc[st] = filteredPipelineDeals.filter((d: any) => {
         const dealStage = (d.stage || 'new_inquiry').toLowerCase().trim();
         if (st === 'new_inquiry') {
           return dealStage === 'new_inquiry' || dealStage === 'review' || !dealStage;
+        }
+        if (st === 'quoted') {
+          return dealStage === 'quoted' || dealStage === 'qualified';
         }
         return dealStage === st;
       });
@@ -2147,11 +2132,12 @@ export default function InquiriesPage() {
     const counts = {
       all: activeInquiryList.length,
       new_inquiry: 0,
-      qualified: 0,
       quoted: 0,
       negotiation: 0,
+      on_hold: 0,
       won: 0,
       lost: 0,
+      qualified: 0,
     };
     activeInquiryList.forEach(inq => {
       const parsed = parseInquiryText(inq.raw_text || '', inq);
@@ -2441,9 +2427,9 @@ export default function InquiriesPage() {
             >
               <option value="all">All ({stageCounts.all})</option>
               <option value="new_inquiry">New Inquiry ({stageCounts.new_inquiry})</option>
-              <option value="qualified">Qualified ({stageCounts.qualified})</option>
-              <option value="quoted">Quoted ({stageCounts.quoted})</option>
+              <option value="quoted">Proposal / Quote ({stageCounts.quoted})</option>
               <option value="negotiation">Negotiation ({stageCounts.negotiation})</option>
+              <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
               <option value="won">Won ({stageCounts.won})</option>
               <option value="lost">Lost ({stageCounts.lost})</option>
             </select>
