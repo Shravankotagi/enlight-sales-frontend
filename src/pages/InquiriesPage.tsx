@@ -702,8 +702,8 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
 const DEFAULT_PIPELINE_STAGES = [
   { key: 'new_inquiry', label: 'New Inquiry', color: 'bg-amber-50 border-amber-200' },
-  { key: 'quoted', label: 'Proposal/Price Quote', color: 'bg-blue-50 border-blue-200' },
-  { key: 'negotiation', label: 'Negotiation/Review', color: 'bg-orange-50 border-orange-200' },
+  { key: 'quoted', label: 'Price Quote', color: 'bg-blue-50 border-blue-200' },
+  { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
   { key: 'on_hold', label: 'On Hold', color: 'bg-purple-50 border-purple-200' },
 ];
 
@@ -1177,11 +1177,11 @@ export default function InquiriesPage() {
     if (s === 'new_inquiry' || s === 'new' || s === 'new inquiry' || s === 'review') {
       return { label: 'New Inquiry', className: 'bg-amber-100 text-amber-800 border-amber-200' };
     }
-    if (s === 'quoted' || s === 'quotation_sent' || s === 'proposal' || s === 'qualified' || s === 'saved' || s === 'confirmed') {
-      return { label: 'Proposal/Price Quote', className: 'bg-blue-100 text-blue-800 border-blue-200' };
+    if (s === 'quoted' || s === 'quotation_sent' || s === 'proposal' || s === 'qualified' || s === 'saved' || s === 'confirmed' || s === 'price quote' || s === 'proposal/price quote') {
+      return { label: 'Price Quote', className: 'bg-blue-100 text-blue-800 border-blue-200' };
     }
-    if (s === 'negotiation') {
-      return { label: 'Negotiation/Review', className: 'bg-orange-100 text-orange-800 border-orange-200' };
+    if (s === 'negotiation' || s === 'negotiation/review') {
+      return { label: 'Negotiation', className: 'bg-orange-100 text-orange-800 border-orange-200' };
     }
     if (s === 'on_hold' || s === 'hold' || s === 'on hold') {
       return { label: 'On Hold', className: 'bg-purple-100 text-purple-800 border-purple-200' };
@@ -2456,8 +2456,8 @@ export default function InquiriesPage() {
             >
               <option value="all">All ({stageCounts.all})</option>
               <option value="new_inquiry">New Inquiry ({stageCounts.new_inquiry})</option>
-              <option value="quoted">Proposal/Price Quote ({stageCounts.quoted})</option>
-              <option value="negotiation">Negotiation/Review ({stageCounts.negotiation})</option>
+              <option value="quoted">Price Quote ({stageCounts.quoted})</option>
+              <option value="negotiation">Negotiation ({stageCounts.negotiation})</option>
               <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
               <option value="won">Won ({stageCounts.won})</option>
               <option value="lost">Lost ({stageCounts.lost})</option>
@@ -2767,6 +2767,18 @@ export default function InquiriesPage() {
                                         className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
                                         <span className="w-2 h-2 rounded-full bg-orange-500"></span>
                                         <span>Negotiation</span>
+                                      </button>
+                                    )}
+                                    {(dealStageKey === 'quoted' || dealStageKey === 'qualified') && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateDealStage(inq, details, 'on_hold');
+                                        }}
+                                        className="w-full px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                        <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                        <span>On Hold</span>
                                       </button>
                                     )}
                                   </div>
