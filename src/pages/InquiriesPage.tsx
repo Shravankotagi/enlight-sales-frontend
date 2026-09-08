@@ -2654,8 +2654,8 @@ export default function InquiriesPage() {
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
                 const dealIdDisplay = linkedDeal?.deal_number ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
 
-                const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
-                const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation';
+                const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation' || dealStageKey === 'on_hold';
+                const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted';
 
                 return (
                   <tr
@@ -2718,7 +2718,7 @@ export default function InquiriesPage() {
                                 ? 'bottom-full mb-1'
                                 : 'top-full mt-1'
                             } w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left`}>
-                            {/* 1. Update Status Button & Sub-Menu (Qualified, Quoted, or Negotiation) */}
+                            {/* 1. Update Status Button & Sub-Menu (Price Quote, Negotiation, or On Hold) */}
                             {showUpdateStatus && (
                               <div>
                                 <button
@@ -2762,29 +2762,29 @@ export default function InquiriesPage() {
                                       <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                                       <span>Lost</span>
                                     </button>
-                                    {dealStageKey !== 'negotiation' && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleUpdateDealStage(inq, details, 'negotiation');
-                                        }}
-                                        className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                        <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                                        <span>Negotiation</span>
-                                      </button>
-                                    )}
                                     {(dealStageKey === 'quoted' || dealStageKey === 'qualified') && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleUpdateDealStage(inq, details, 'on_hold');
-                                        }}
-                                        className="w-full px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
-                                        <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                                        <span>On Hold</span>
-                                      </button>
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleUpdateDealStage(inq, details, 'negotiation');
+                                          }}
+                                          className="w-full px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                          <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                          <span>Negotiation</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleUpdateDealStage(inq, details, 'on_hold');
+                                          }}
+                                          className="w-full px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100/60 rounded-lg flex items-center gap-2 transition-colors cursor-pointer">
+                                          <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                          <span>On Hold</span>
+                                        </button>
+                                      </>
                                     )}
                                   </div>
                                 )}
@@ -3461,31 +3461,37 @@ export default function InquiriesPage() {
                 )}
               </button>
 
-              {(saveSuccess || ['confirmed', 'processed', 'saved', 'won', 'quotation_ready', 'quoted'].includes((selectedInquiry.status || '').toLowerCase())) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShareInquiry(selectedInquiry);
-                    setShareDetails(editDetails);
-                    setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || 'shravankotagi314@gmail.com');
-                    setShowQuotationModal(true);
-                  }}
-                  className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                    ['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent
-                      ? 'bg-emerald-600 hover:bg-emerald-700'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  }`}>
-                  {['quoted', 'won'].includes((selectedInquiry.status || '').toLowerCase()) || isQuotationSent ? (
-                    <>
-                      <Check size={15} /> Quotation Sent 
-                    </>
-                  ) : (
-                    <>
-                      <Send size={15} /> Share Quotation 
-                    </>
-                  )}
-                </button>
-              )}
+              {(() => {
+                const currentDrawerDealStage = selectedInquiry ? getInquiryDealStageKey(selectedInquiry, editDetails?.companyName) : '';
+                const isQuotedDrawerStage = currentDrawerDealStage === 'quoted' || currentDrawerDealStage === 'qualified';
+                if (!isQuotedDrawerStage) return null;
+
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShareInquiry(selectedInquiry);
+                      setShareDetails(editDetails);
+                      setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || 'shravankotagi314@gmail.com');
+                      setShowQuotationModal(true);
+                    }}
+                    className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                      ['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) || isQuotationSent
+                        ? 'bg-emerald-600 hover:bg-emerald-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                    }`}>
+                    {['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) || isQuotationSent ? (
+                      <>
+                        <Check size={15} /> Quotation Sent 
+                      </>
+                    ) : (
+                      <>
+                        <Send size={15} /> Share Quotation 
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
