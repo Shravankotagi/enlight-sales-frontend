@@ -701,10 +701,10 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
 }
 
 const DEFAULT_PIPELINE_STAGES = [
-  { key: 'new_inquiry', label: 'New Deals', color: 'bg-amber-50 border-amber-200' },
-  { key: 'qualified', label: 'Qualified', color: 'bg-emerald-50 border-emerald-200' },
-  { key: 'quoted', label: 'Quoted', color: 'bg-blue-50 border-blue-200' },
-  { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
+  { key: 'new_inquiry', label: 'New Inquiry', color: 'bg-amber-50 border-amber-200' },
+  { key: 'quoted', label: 'Proposal/Price Quote', color: 'bg-blue-50 border-blue-200' },
+  { key: 'negotiation', label: 'Negotiation/Review', color: 'bg-orange-50 border-orange-200' },
+  { key: 'on_hold', label: 'On Hold', color: 'bg-purple-50 border-purple-200' },
 ];
 
 function DealCard({ deal, onStageChange, onDelete }: {
@@ -789,10 +789,13 @@ function DealCard({ deal, onStageChange, onDelete }: {
       })()}
 
       <div className="mt-3 flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
-        {['qualified', 'quoted', 'negotiation', 'won', 'lost']
+        {['quoted', 'negotiation', 'on_hold', 'won', 'lost']
           .filter(stage => {
             const currentStage = (deal.stage || 'new_inquiry').toLowerCase().trim();
             if ((currentStage === 'new_inquiry' || currentStage === 'review') && (stage === 'won' || stage === 'lost')) {
+              return false;
+            }
+            if (stage === currentStage || (stage === 'quoted' && currentStage === 'qualified')) {
               return false;
             }
             return true;
@@ -805,9 +808,11 @@ function DealCard({ deal, onStageChange, onDelete }: {
                   ? 'border-green-300 text-green-700 hover:bg-green-50'
                   : stage === 'lost'
                   ? 'border-red-300 text-red-700 hover:bg-red-50'
+                  : stage === 'on_hold'
+                  ? 'border-purple-300 text-purple-700 hover:bg-purple-50'
                   : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                 }`}>
-              → {stage.charAt(0).toUpperCase() + stage.slice(1)}
+              {stage === 'quoted' ? '→ Quote' : stage === 'negotiation' ? '→ Negotiation' : stage === 'on_hold' ? '→ On Hold' : stage === 'won' ? '✓ Won' : '✗ Lost'}
             </button>
           ))}
       </div>
@@ -1172,14 +1177,14 @@ export default function InquiriesPage() {
     if (s === 'new_inquiry' || s === 'new' || s === 'new inquiry' || s === 'review') {
       return { label: 'New Inquiry', className: 'bg-amber-100 text-amber-800 border-amber-200' };
     }
-    if (s === 'qualified' || s === 'saved' || s === 'confirmed') {
-      return { label: 'Qualified', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
-    }
-    if (s === 'quoted' || s === 'quotation_sent') {
-      return { label: 'Quoted', className: 'bg-blue-100 text-blue-800 border-blue-200' };
+    if (s === 'quoted' || s === 'quotation_sent' || s === 'proposal' || s === 'qualified' || s === 'saved' || s === 'confirmed') {
+      return { label: 'Proposal/Price Quote', className: 'bg-blue-100 text-blue-800 border-blue-200' };
     }
     if (s === 'negotiation') {
-      return { label: 'Negotiation', className: 'bg-orange-100 text-orange-800 border-orange-200' };
+      return { label: 'Negotiation/Review', className: 'bg-orange-100 text-orange-800 border-orange-200' };
+    }
+    if (s === 'on_hold' || s === 'hold' || s === 'on hold') {
+      return { label: 'On Hold', className: 'bg-purple-100 text-purple-800 border-purple-200' };
     }
     if (s === 'won') {
       return { label: 'Won', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
@@ -1194,8 +1199,11 @@ export default function InquiriesPage() {
     const linkedDeal = getLinkedDeal(inq, companyName);
     if (linkedDeal) {
       const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
-      if (['won', 'lost', 'negotiation', 'quoted', 'qualified', 'new_inquiry'].includes(dealStage)) {
-        return dealStage === 'review' ? 'new_inquiry' : dealStage;
+      if (['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry'].includes(dealStage)) {
+        if (dealStage === 'review') return 'new_inquiry';
+        if (dealStage === 'qualified') return 'quoted';
+        if (dealStage === 'hold') return 'on_hold';
+        return dealStage;
       }
     }
 
@@ -1216,11 +1224,11 @@ export default function InquiriesPage() {
     if (st === 'negotiation') {
       return 'negotiation';
     }
-    if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent') {
+    if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent' || isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed') {
       return 'quoted';
     }
-    if (isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed') {
-      return 'qualified';
+    if (st === 'on_hold' || st === 'hold') {
+      return 'on_hold';
     }
     if (st === 'review' || st === 'needs_review' || st === 'pending' || !st || st === 'new' || st === 'draft') {
       return 'new_inquiry';
@@ -2080,7 +2088,7 @@ export default function InquiriesPage() {
   const filteredPipelineDeals = useMemo(() => {
     const list = (rawDeals || []).filter((d: any) => {
       const st = (d.stage || 'new_inquiry').toLowerCase().trim();
-      const normStage = (st === 'review' || !st) ? 'new_inquiry' : st;
+      const normStage = (st === 'review' || !st) ? 'new_inquiry' : (st === 'qualified' ? 'quoted' : (st === 'hold' ? 'on_hold' : st));
       if (filterStatus !== 'all' && normStage !== filterStatus) {
         return false;
       }
@@ -2110,12 +2118,18 @@ export default function InquiriesPage() {
   }, [rawDeals, searchTerm, filterStatus]);
 
   const pipelineBoard = useMemo(() => {
-    const stages = ['new_inquiry', 'qualified', 'quoted', 'negotiation'];
+    const stages = ['new_inquiry', 'quoted', 'negotiation', 'on_hold'];
     return stages.reduce((acc, st) => {
       acc[st] = filteredPipelineDeals.filter((d: any) => {
         const dealStage = (d.stage || 'new_inquiry').toLowerCase().trim();
         if (st === 'new_inquiry') {
           return dealStage === 'new_inquiry' || dealStage === 'review' || !dealStage;
+        }
+        if (st === 'quoted') {
+          return dealStage === 'quoted' || dealStage === 'qualified';
+        }
+        if (st === 'on_hold') {
+          return dealStage === 'on_hold' || dealStage === 'hold';
         }
         return dealStage === st;
       });
@@ -2147,17 +2161,18 @@ export default function InquiriesPage() {
     const counts = {
       all: activeInquiryList.length,
       new_inquiry: 0,
-      qualified: 0,
       quoted: 0,
       negotiation: 0,
+      on_hold: 0,
       won: 0,
       lost: 0,
     };
     activeInquiryList.forEach(inq => {
       const parsed = parseInquiryText(inq.raw_text || '', inq);
       const stageKey = getInquiryDealStageKey(inq, parsed.companyName);
-      if (counts[stageKey as keyof typeof counts] !== undefined) {
-        counts[stageKey as keyof typeof counts]++;
+      const normKey = (stageKey === 'qualified' || stageKey === 'saved' || stageKey === 'confirmed') ? 'quoted' : (stageKey === 'hold' ? 'on_hold' : stageKey);
+      if (counts[normKey as keyof typeof counts] !== undefined) {
+        counts[normKey as keyof typeof counts]++;
       }
     });
     return counts;
@@ -2441,9 +2456,9 @@ export default function InquiriesPage() {
             >
               <option value="all">All ({stageCounts.all})</option>
               <option value="new_inquiry">New Inquiry ({stageCounts.new_inquiry})</option>
-              <option value="qualified">Qualified ({stageCounts.qualified})</option>
-              <option value="quoted">Quoted ({stageCounts.quoted})</option>
-              <option value="negotiation">Negotiation ({stageCounts.negotiation})</option>
+              <option value="quoted">Proposal/Price Quote ({stageCounts.quoted})</option>
+              <option value="negotiation">Negotiation/Review ({stageCounts.negotiation})</option>
+              <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
               <option value="won">Won ({stageCounts.won})</option>
               <option value="lost">Lost ({stageCounts.lost})</option>
             </select>
