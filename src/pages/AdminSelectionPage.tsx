@@ -102,12 +102,13 @@ export default function AdminSelectionPage() {
 
         // If Sales Manager: show only non-admin team members assigned to them
         if (isSalesManager) {
+          const myPhone10 = employee?.phone?.replace(/\D/g, '').slice(-10);
           const team = activeList.filter(
             (e: Employee) =>
               e.role !== 'admin' &&
               (e.manager_id === employee?.id ||
-                e.manager_phone?.replace(/\D/g, '').slice(-10) ===
-                  employee?.phone?.replace(/\D/g, '').slice(-10)),
+                (myPhone10 &&
+                  e.manager_phone?.replace(/\D/g, '').slice(-10) === myPhone10)),
           );
           setEmployees(team);
         } else {
@@ -166,6 +167,17 @@ export default function AdminSelectionPage() {
     setIsEditMode(true);
     setFormError('');
     setFormSuccess('');
+
+    const matchedMgrId =
+      emp.manager_id ||
+      allManagers.find(
+        (m) =>
+          emp.manager_phone &&
+          m.phone.replace(/\D/g, '').slice(-10) ===
+            emp.manager_phone.replace(/\D/g, '').slice(-10),
+      )?.id ||
+      '';
+
     setForm({
       id: emp.id,
       name: emp.name,
@@ -173,7 +185,7 @@ export default function AdminSelectionPage() {
       email: emp.email || '',
       role: emp.role,
       employee_id: emp.employee_id,
-      manager_id: emp.manager_id || '',
+      manager_id: matchedMgrId,
       manager_phone: emp.manager_phone || '',
     });
     setShowModal(true);

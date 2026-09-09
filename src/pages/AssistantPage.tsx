@@ -52,7 +52,8 @@ export default function AssistantPage() {
 
   const activeEmployee = viewingAs || employee;
   const role = (activeEmployee?.role || 'salesperson').toLowerCase();
-  const isManagerOrAdmin = role === 'manager' || role === 'admin';
+  const isManagerOrAdmin =
+    role === 'manager' || role === 'sales_manager' || role === 'admin';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
