@@ -1429,7 +1429,10 @@ export default function VisitsPage() {
                 <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
                   <button
                     type="button"
-                    onClick={() => setIsEditing(false)}
+                    onClick={() => {
+                      setSelectedVisit(null);
+                      setIsEditing(false);
+                    }}
                     className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
                     Cancel
                   </button>

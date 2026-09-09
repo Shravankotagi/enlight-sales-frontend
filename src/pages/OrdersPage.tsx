@@ -32,6 +32,7 @@ import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import {
+  calculateLineItem,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   calculateOrdersTotalTonnage,
@@ -1803,7 +1804,9 @@ export default function OrdersPage() {
                                   finalHsn = newAutoHsn;
                                 }
 
-                                updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
+                                const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                updated[idx] = { ...currentItem, amount: calc.amount };
                                 setFormLineItems(updated);
                               }}
                               className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
@@ -1828,7 +1831,9 @@ export default function OrdersPage() {
                                     finalHsn = newAutoHsn;
                                   }
 
-                                  updated[idx] = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
+                                  const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  updated[idx] = { ...currentItem, amount: calc.amount };
                                   setFormLineItems(updated);
                                 }}
                                 className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
@@ -1866,8 +1871,9 @@ export default function OrdersPage() {
                                 const rawQ = val === '' ? 0 : parseFloat(val);
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
-                                const amt = Math.max(0, Math.round(safeQ * (updated[idx]?.rate || 0)));
-                                updated[idx] = { ...updated[idx], quantity: safeQ, amount: amt };
+                                const currentItem = { ...updated[idx], quantity: safeQ };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                updated[idx] = { ...currentItem, amount: calc.amount };
                                 setFormLineItems(updated);
                               }}
                               placeholder="0"
@@ -1877,7 +1883,9 @@ export default function OrdersPage() {
                               value={normalizeUnit(item.unit) || 'MT'}
                               onChange={(e) => {
                                 const updated = [...formLineItems];
-                                updated[idx] = { ...updated[idx], unit: e.target.value };
+                                const currentItem = { ...updated[idx], unit: e.target.value };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                updated[idx] = { ...currentItem, amount: calc.amount };
                                 setFormLineItems(updated);
                               }}
                               className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
@@ -1902,8 +1910,9 @@ export default function OrdersPage() {
                               const rawR = val === '' ? 0 : parseFloat(val);
                               const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
                               const updated = [...formLineItems];
-                              const amt = Math.max(0, Math.round((updated[idx]?.quantity || 0) * safeR));
-                              updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
+                              const currentItem = { ...updated[idx], rate: safeR };
+                              const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                              updated[idx] = { ...currentItem, amount: calc.amount };
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
