@@ -446,8 +446,10 @@ export function calculateLineItem(item: LineItemInput): CalculatedLineItem {
   
   let amount = item.amount && Number(item.amount) > 0 ? Number(item.amount) : 0;
   if (!amount && quantity > 0 && rate > 0) {
-    if (unit === 'KG' && rate > 1000) {
-      // Rate is stated per MT (e.g. Rs.52,000/MT) but quantity is in KG
+    const conv = convertLineItemToMt(item);
+    if (conv.canConvert && conv.mt !== null && conv.mt > 0 && (rate > 1000 || unit === 'MT')) {
+      amount = Math.round(conv.mt * rate);
+    } else if (unit === 'KG' && rate > 1000) {
       amount = Math.round((quantity / 1000) * rate);
     } else {
       amount = Math.round(quantity * rate);
