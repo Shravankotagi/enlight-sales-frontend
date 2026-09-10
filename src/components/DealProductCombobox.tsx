@@ -86,7 +86,8 @@ export default function DealProductCombobox({
     }> = [];
 
     wonDeals.forEach(deal => {
-      const cleanId = (deal.deal_number ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, '') : (deal.id.startsWith('DEAL-') || deal.id.startsWith('INQ-') ? deal.id.replace(/^(?:DEAL|INQ)-/, '') : deal.id.substring(0, 6))).toUpperCase();
+      const targetId = deal.inquiry_id || deal.id;
+      const cleanId = (targetId.startsWith('DEAL-') || targetId.startsWith('INQ-') ? targetId.replace(/^(?:DEAL|INQ)-/, '') : targetId.substring(0, 6)).toUpperCase();
       const dealCode = `#INQ-${cleanId}`;
       const poStr = deal.po_number ? ` (PO: ${deal.po_number})` : '';
       const items = Array.isArray(deal.deal_items) && deal.deal_items.length > 0 ? deal.deal_items : [];

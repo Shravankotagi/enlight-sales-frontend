@@ -2220,8 +2220,8 @@ export default function InquiriesPage() {
         const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
         const isoDate = (i?.created_at || '').toLowerCase();
         const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
-        const dealIdStr = (linkedDealForSearch?.deal_number ? linkedDealForSearch.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'inq-') : (linkedDealForSearch?.id ? `inq-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `inq-${i.id.substring(0, 6)}` : ''))).toLowerCase();
-        const dealLegacyIdStr = (linkedDealForSearch?.deal_number ? linkedDealForSearch.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'deal-') : (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : ''))).toLowerCase();
+        const dealIdStr = (i.id ? `inq-${i.id.substring(0, 6)}` : (linkedDealForSearch?.id ? `inq-${linkedDealForSearch.id.substring(0, 6)}` : '')).toLowerCase();
+        const dealLegacyIdStr = (i.id ? `deal-${i.id.substring(0, 6)}` : (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : '')).toLowerCase();
 
         const s = searchTerm.toLowerCase().trim();
         const matchesSearch =
@@ -2652,7 +2652,7 @@ export default function InquiriesPage() {
                 const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
                 const dealStageInfo = getDealStageDisplay(dealStageKey);
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
-                const dealIdDisplay = linkedDeal?.deal_number ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : '-'));
+                const dealIdDisplay = inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : (linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : '-');
 
                 const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation' || dealStageKey === 'on_hold';
                 const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted';
@@ -2913,13 +2913,11 @@ export default function InquiriesPage() {
                   <p className="text-xs text-slate-500 font-mono mt-0.5">
                     {(() => {
                       const linkedDeal = getLinkedDeal(selectedInquiry, editDetails?.companyName);
-                      const inqIdDisplay = linkedDeal?.deal_number
-                        ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-')
+                      const inqIdDisplay = selectedInquiry.id
+                        ? `INQ-${selectedInquiry.id.substring(0, 6).toUpperCase()}`
                         : (linkedDeal?.id
                           ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}`
-                          : (selectedInquiry.id
-                            ? `INQ-${selectedInquiry.id.substring(0, 6).toUpperCase()}`
-                            : '-'));
+                          : '-');
                       return `ID: #${inqIdDisplay.replace(/^#/, '')}`;
                     })()}
                   </p>

@@ -156,7 +156,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 </h2>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-bold uppercase">
-                    #{deal?.deal_number ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (deal?.id ? `INQ-${deal.id.substring(0, 6).toUpperCase()}` : 'INQ')}
+                    #{deal?.inquiry_id ? `INQ-${deal.inquiry_id.substring(0, 6).toUpperCase()}` : (deal?.id ? `INQ-${deal.id.substring(0, 6).toUpperCase()}` : 'INQ')}
                   </span>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STAGE_COLORS[deal?.stage] || 'bg-gray-100 text-gray-600'}`}>
                     {deal?.stage?.replace('_', ' ').toUpperCase()}
@@ -572,7 +572,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Inquiry Ref:</span>
                 <span className="font-mono font-bold text-indigo-600">
-                  #{deal.deal_number ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-') : (deal.id ? `INQ-${deal.id.substring(0, 6).toUpperCase()}` : 'INQ')}
+                  #{deal.inquiry_id ? `INQ-${deal.inquiry_id.substring(0, 6).toUpperCase()}` : (deal.id ? `INQ-${deal.id.substring(0, 6).toUpperCase()}` : 'INQ')}
                 </span>
               </div>
               {totalAmount > 0 && (
