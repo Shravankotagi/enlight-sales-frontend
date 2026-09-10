@@ -348,11 +348,9 @@ export default function ComplaintsPage() {
     const lower = p.toLowerCase();
     const isGeneric = !p || lower === 'general material' || lower === 'general steel material' || lower === 'steel material' || lower === 'material' || lower === 'steel' || lower === 'null';
 
-    if (!isGeneric) return p;
-
     // Try extracting from description / resolution notes
     const text = `${comp.description || ''} ${comp.resolution_notes || ''}`;
-    const m1 = text.match(/(?:(\d+(?:\.\d+)?\s*(?:MT|tons?|kg|pcs?|nos?))\s+)?\b(MS\s+Plates?|MS\s+Sheets?|HR\s+Coils?|HR\s+Sheets?|CR\s+Coils?|CR\s+Sheets?|TMT\s+Bars?|GI\s+Sheets?|GI\s+Coils?|GP\s+Sheets?|GP\s+Coils?|Chequered\s+Plates?|MS\s+Pipes?|Seamless\s+Pipes?|ERW\s+Pipes?|Beams?|Channels?|Angles?|IS\s+2062(?:\s+E250)?)\b(?:\s+([0-9.]+\s*mm(?:(?:\s*x\s*[0-9.]+\s*mm)+)?))?(?:\s+(\d+(?:\.\d+)?\s*(?:MT|tons?|kg|pcs?|nos?)))?/i);
+    const m1 = text.match(/(?:(\d+(?:\.\d+)?\s*(?:MT|tons?|kg|pcs?|nos?|bundle|bundles))\s+)?\b(MS\s+Plates?|MS\s+Sheets?|HR\s+Coils?|HR\s+Sheets?|CR\s+Coils?|CR\s+Sheets?|TMT\s+Bars?|GI\s+Sheets?|GI\s+Coils?|GP\s+Sheets?|GP\s+Coils?|Chequered\s+Plates?|MS\s+Pipes?|Seamless\s+Pipes?|ERW\s+Pipes?|MS\s+Angles?|MS\s+Channels?|MS\s+Beams?|MS\s+Flats?|MS\s+Rounds?|Square\s+Bars?|Beams?|Channels?|Angles?|Flats?|Rounds?|IS\s+2062(?:\s+E250)?)\b(?:\s+([0-9.]+\s*mm(?:(?:\s*x\s*[0-9.]+\s*mm)+)?))?(?:\s+(\d+(?:\.\d+)?\s*(?:MT|tons?|kg|pcs?|nos?)))?/i);
     if (m1) {
       const qty = (m1[1] || m1[4] || '').trim();
       const prod = m1[2].trim();
@@ -363,7 +361,8 @@ export default function ComplaintsPage() {
       return res;
     }
 
-    return p || 'Steel Material';
+    if (!isGeneric) return p;
+    return 'Steel Material';
   };
 
   const fetchComplaints = async (isBackground?: boolean | any) => {
@@ -1121,15 +1120,13 @@ export default function ComplaintsPage() {
               </div>
 
               {/* Product Name */}
-              {(selectedComplaint.product_name || selectedComplaint.affected_product) && (
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 col-span-1 sm:col-span-2">
-                  <p className="text-xs font-medium text-slate-400 mb-1">Product(s) Affected</p>
-                  <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                    <Package size={14} className="text-blue-600 shrink-0" />
-                    {selectedComplaint.product_name || selectedComplaint.affected_product}
-                  </div>
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 col-span-1 sm:col-span-2">
+                <p className="text-xs font-medium text-slate-400 mb-1">Product(s) Affected</p>
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                  <Package size={14} className="text-blue-600 shrink-0" />
+                  {getComplaintProductDisplay(selectedComplaint)}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Complaint Description Block */}
