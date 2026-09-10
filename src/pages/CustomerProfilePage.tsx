@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { customersApi, employeesApi } from '../lib/api';
 import { useState, useMemo } from 'react';
 import {
@@ -269,12 +270,38 @@ export default function CustomerProfilePage() {
 
   // Edit customer mutation
   const updateMutation = useMutation({
-    mutationFn: (data: any) => customersApi.update(id!, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-detail', id] });
+    mutationFn: (data: any) => {
+      const targetId = customer?.id || id;
+      return customersApi.update(targetId!, data);
+    },
+    onSuccess: (res: any) => {
+      const updatedCust = res?.data?.data || res?.data;
+      toast.success('Customer details updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['customer-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['customer'] });
       queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-reorder'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       setIsEditing(false);
       refetch();
+      if (
+        updatedCust?.id &&
+        updatedCust.id !== id &&
+        id &&
+        !id.match(/^[0-9a-f-]{36}$/i)
+      ) {
+        navigate(`/customers/${encodeURIComponent(updatedCust.id)}`, {
+          replace: true,
+        });
+      }
+    },
+    onError: (err: any) => {
+      console.error('Error updating customer:', err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to update customer profile';
+      toast.error(errMsg);
     },
   });
 
@@ -282,6 +309,7 @@ export default function CustomerProfilePage() {
     if (!gst) return;
     navigator.clipboard.writeText(gst);
     setCopiedGst(true);
+    toast.success('GSTIN copied to clipboard');
     setTimeout(() => setCopiedGst(false), 2000);
   };
 
@@ -292,7 +320,7 @@ export default function CustomerProfilePage() {
       contact_person: customer.contact_person || '',
       customer_phone: customer.customer_phone || '',
       customer_gst: customer.customer_gst || '',
-      customer_address: customer.customer_address || '',
+      customer_address: customer.customer_address || customer.address || '',
       assigned_salesperson_phone: customer.assigned_salesperson_phone || '',
       avg_order_frequency_days: customer.avg_order_frequency_days || 30,
       segment: customer.segment || 'new',
@@ -302,6 +330,10 @@ export default function CustomerProfilePage() {
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editForm.customer_name || !editForm.customer_name.trim()) {
+      toast.error('Customer name is required');
+      return;
+    }
     updateMutation.mutate(editForm);
   };
 
@@ -1089,79 +1121,124 @@ export default function CustomerProfilePage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="space-y-4 py-4 overflow-y-auto flex-1 text-xs">
+            <form
+              onSubmit={handleSaveEdit}
+              className="space-y-4 py-4 px-1.5 overflow-y-auto flex-1 text-xs">
               <div>
-                <label className="block text-slate-600 font-semibold mb-1">Company / Customer Name *</label>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Company / Customer Name *
+                </label>
                 <input
                   type="text"
                   required
                   value={editForm.customer_name}
-                  onChange={e => setEditForm({ ...editForm, customer_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                  onChange={e =>
+                    setEditForm({ ...editForm, customer_name: e.target.value })
+                  }
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Contact Person</label>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Contact Person
+                  </label>
                   <input
                     type="text"
                     value={editForm.contact_person}
-                    onChange={e => setEditForm({ ...editForm, contact_person: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        contact_person: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Contact Phone</label>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Contact Phone
+                  </label>
                   <input
                     type="text"
                     value={editForm.customer_phone}
-                    onChange={e => setEditForm({ ...editForm, customer_phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        customer_phone: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">GSTIN Number</label>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    GSTIN Number
+                  </label>
                   <input
                     type="text"
                     value={editForm.customer_gst}
-                    onChange={e => setEditForm({ ...editForm, customer_gst: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                    onChange={e =>
+                      setEditForm({ ...editForm, customer_gst: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono transition-all shadow-2xs"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Order Frequency (Days)</label>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Order Frequency (Days)
+                  </label>
                   <input
                     type="number"
                     value={editForm.avg_order_frequency_days}
-                    onChange={e => setEditForm({ ...editForm, avg_order_frequency_days: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        avg_order_frequency_days: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-600 font-semibold mb-1">Registered Address</label>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Registered Address
+                </label>
                 <input
                   type="text"
                   value={editForm.customer_address}
-                  onChange={e => setEditForm({ ...editForm, customer_address: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                  onChange={e =>
+                    setEditForm({
+                      ...editForm,
+                      customer_address: e.target.value,
+                    })
+                  }
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Assigned Salesperson</label>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Assigned Salesperson
+                  </label>
                   <select
                     value={editForm.assigned_salesperson_phone}
-                    onChange={e => setEditForm({ ...editForm, assigned_salesperson_phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        assigned_salesperson_phone: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
                     <option value="">Unassigned</option>
                     {safeEmployees.map(emp => (
                       <option key={emp.id} value={emp.phone}>
@@ -1172,11 +1249,15 @@ export default function CustomerProfilePage() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Customer Segment</label>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Customer Segment
+                  </label>
                   <select
                     value={editForm.segment}
-                    onChange={e => setEditForm({ ...editForm, segment: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    onChange={e =>
+                      setEditForm({ ...editForm, segment: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
                     <option value="key_account">Key Account</option>
                     <option value="growth">Growth</option>
                     <option value="new">New</option>
@@ -1188,14 +1269,18 @@ export default function CustomerProfilePage() {
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl cursor-pointer">
+                  className="px-4 py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl cursor-pointer transition-colors">
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updateMutation.isPending}
-                  className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs cursor-pointer flex items-center gap-1">
-                  {updateMutation.isPending ? <RefreshCw size={14} className="animate-spin" /> : 'Save Changes'}
+                  className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors">
+                  {updateMutation.isPending ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    'Save Changes'
+                  )}
                 </button>
               </div>
             </form>
