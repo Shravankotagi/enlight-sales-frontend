@@ -1218,7 +1218,7 @@ export default function VisitsPage() {
                             year: 'numeric',
                           })
                         : 'Recent Visit'}
-                      {selectedVisit.location && <span>• 📍 {selectedVisit.location}</span>}
+                      {selectedVisit.location && <span>• {selectedVisit.location}</span>}
                       {canViewSalesperson && getSalespersonDisplayName(selectedVisit) && (
                         <span>• Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedVisit)}</strong></span>
                       )}
@@ -1233,15 +1233,15 @@ export default function VisitsPage() {
                   <div>
                     {getNormalizedOutcome(selectedVisit) === 'positive' ? (
                       <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1 shadow-2xs">
-                        <ThumbsUp size={12} /> Positive 🟢
+                        <ThumbsUp size={12} /> Positive
                       </span>
                     ) : getNormalizedOutcome(selectedVisit) === 'neutral' ? (
                       <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 inline-flex items-center gap-1 shadow-2xs">
-                        <Clock size={12} /> Neutral 🟡
+                        <Clock size={12} /> Neutral
                       </span>
                     ) : (
                       <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-800 inline-flex items-center gap-1 shadow-2xs">
-                        <CheckCircle2 size={12} /> Negative 🔴
+                        <CheckCircle2 size={12} /> Negative
                       </span>
                     )}
                   </div>

@@ -1045,7 +1045,7 @@ export default function HomePage() {
           <div className="p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-3 text-center">
             <CheckCircle2 size={22} className="text-blue-600 shrink-0" />
             <span className="text-xs sm:text-sm font-bold text-slate-700">
-              All caught up! 🎉 No pending quote follow-ups, overdue customer reorders, or open complaint actions right now.
+              All caught up! No pending quote follow-ups, overdue customer reorders, or open complaint actions right now.
             </span>
           </div>
         ) : (
