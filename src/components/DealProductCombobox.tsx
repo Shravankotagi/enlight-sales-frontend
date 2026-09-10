@@ -12,6 +12,7 @@ export interface DealItem {
 
 export interface DealOption {
   id: string;
+  inquiry_id?: string;
   deal_number?: string;
   po_number?: string | null;
   stage?: string;
