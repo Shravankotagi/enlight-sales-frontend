@@ -14,6 +14,7 @@ import InquiryPdfModal from '../components/InquiryPdfModal';
 import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import {
+  calculateLineItem,
   calculateLineItems,
   calculateSubtotal,
   calculateQuotationBreakdown,
@@ -610,6 +611,8 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => {
     const skuText = item.sku_text || item.description || '';
     const itemDim = item.dimensions || '';
+    const rawQty = Number((item as any).original_quantity ?? item.quantity ?? (item as any).qty) || 0;
+    const rawUnit = normalizeUnit((item as any).original_unit || item.unit) || 'MT';
     return {
       sku_text: skuText,
       dimensions: itemDim,
@@ -618,8 +621,8 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
         (item as any).hsn ||
         detectHsnCode(skuText, itemDim) ||
         '72083840',
-      quantity: item.quantity,
-      unit: normalizeUnit(item.unit) || 'MT',
+      quantity: rawQty,
+      unit: rawUnit,
       rate: item.rate,
       amount: item.amount,
     };
@@ -1473,6 +1476,19 @@ export default function InquiriesPage() {
       const frozenLineItems = lineItemsSrc.map((item: any) => {
         const skuText = item.sku_text || item.description || '';
         const itemDim = item.dimensions || '';
+        const rawQty = Number(item.original_quantity ?? item.quantity ?? item.qty) || 0;
+        const rawUnit = normalizeUnit(item.original_unit || item.unit) || 'MT';
+        const rate = Number(item.rate ?? item.unitPrice ?? item.price_per_mt) || 0;
+        const calc = calculateLineItem({
+          ...item,
+          quantity: rawQty,
+          unit: rawUnit,
+          rate: rate,
+          dimensions: itemDim,
+          sku_text: skuText,
+          amount: item.amount,
+        });
+
         return {
           sku_text: skuText,
           dimensions: itemDim,
@@ -1481,10 +1497,10 @@ export default function InquiriesPage() {
             item.hsn ||
             detectHsnCode(skuText, itemDim) ||
             '72083840',
-          quantity: Number(item.quantity) || 0,
-          unit: item.unit || 'MT',
-          rate: Number(item.rate) || 0,
-          amount: Number(item.amount) || Math.round(Number(item.quantity) * Number(item.rate)),
+          quantity: rawQty,
+          unit: rawUnit,
+          rate: rate,
+          amount: calc.amount,
         };
       });
       activeItems = frozenLineItems;
@@ -1504,7 +1520,7 @@ export default function InquiriesPage() {
         width: ai.width || '',
         length: ai.length || '',
         productForm: ai.productForm || 'Coil',
-        quantityTons: frozenLineItems.reduce((s: number, i: any) => s + (i.unit === 'MT' ? i.quantity : 0), 0) || ai.quantityTons || 0,
+        quantityTons: calculateTotalTonnageMt(frozenLineItems).totalMt || ai.quantityTons || 0,
         quantityUnits: ai.quantityUnits || 0,
         unitPrice: frozenLineItems[0]?.rate || ai.unitPrice || 0,
         totalAmount: frozenTotal,
@@ -3094,8 +3110,12 @@ export default function InquiriesPage() {
                                     finalHsn = newAutoHsn || '72083840';
                                   }
 
-                                  updated[idx] = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
-                                  setEditDetails({ ...editDetails, lineItems: updated });
+                                  const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                  const totalTons = calculateTotalTonnageMt(updated).totalMt;
+                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                   if (fieldErrors[`sku_${idx}`]) {
                                     setFieldErrors(prev => { const n = { ...prev }; delete n[`sku_${idx}`]; return n; });
@@ -3131,8 +3151,12 @@ export default function InquiriesPage() {
                                       finalHsn = newAutoHsn || '72083840';
                                     }
 
-                                    updated[idx] = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
-                                    setEditDetails({ ...editDetails, lineItems: updated });
+                                    const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
+                                    const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                    updated[idx] = { ...currentItem, amount: calc.amount };
+                                    const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                    const totalTons = calculateTotalTonnageMt(updated).totalMt;
+                                    setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                     setSaveSuccess(false);
                                     if (fieldErrors[`dim_${idx}`]) {
                                       setFieldErrors(prev => { const n = { ...prev }; delete n[`dim_${idx}`]; return n; });
@@ -3191,10 +3215,11 @@ export default function InquiriesPage() {
                                   const rawQ = val === '' ? 0 : parseFloat(val);
                                   const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  const amt = Math.max(0, Math.round(safeQ * (updated[idx]?.rate || 0)));
-                                  updated[idx] = { ...updated[idx], quantity: safeQ, amount: amt };
+                                  const currentItem = { ...updated[idx], quantity: safeQ };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  updated[idx] = { ...currentItem, amount: calc.amount };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                  const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
+                                  const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                   if (fieldErrors[`qty_${idx}`]) {
@@ -3212,8 +3237,12 @@ export default function InquiriesPage() {
                                 value={normalizeUnit(item.unit) || 'MT'}
                                 onChange={(e) => {
                                   const updated = [...(editDetails.lineItems || [])];
-                                  updated[idx] = { ...updated[idx], unit: e.target.value };
-                                  setEditDetails({ ...editDetails, lineItems: updated });
+                                  const currentItem = { ...updated[idx], unit: e.target.value };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                  const totalTons = calculateTotalTonnageMt(updated).totalMt;
+                                  setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                 }}
                                 className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
@@ -3238,10 +3267,12 @@ export default function InquiriesPage() {
                                 const rawR = val === '' ? 0 : parseFloat(val);
                                 const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
                                 const updated = [...(editDetails.lineItems || [])];
-                                const amt = Math.max(0, Math.round((updated[idx]?.quantity || 0) * safeR));
-                                updated[idx] = { ...updated[idx], rate: safeR, amount: amt };
+                                const currentItem = { ...updated[idx], rate: safeR };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                updated[idx] = { ...currentItem, amount: calc.amount };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, unitPrice: updated[0]?.rate || 0 });
+                                const totalTons = calculateTotalTonnageMt(updated).totalMt;
+                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons, unitPrice: updated[0]?.rate || 0 });
                                 setSaveSuccess(false);
                                 if (fieldErrors[`rate_${idx}`]) {
                                   setFieldErrors(prev => { const n = { ...prev }; delete n[`rate_${idx}`]; return n; });
@@ -3285,7 +3316,7 @@ export default function InquiriesPage() {
                                   onClick={() => {
                                     const updated = (editDetails.lineItems || []).filter((_, i) => i !== idx);
                                     const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                    const totalTons = updated.reduce((s, i) => s + (i.unit === 'MT' ? i.quantity : 0), 0);
+                                    const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                     setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                     setSaveSuccess(false);
                                   }}
