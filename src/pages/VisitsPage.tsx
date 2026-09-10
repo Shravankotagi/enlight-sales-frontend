@@ -465,11 +465,47 @@ export default function VisitsPage() {
   };
 
   const getNormalizedOutcome = (v: any) => {
-    const o = (v?.outcome || '').toLowerCase();
-    const r = (v?.remarks || '').toLowerCase();
-    if (o === 'neutral' || r.includes('neutral')) return 'neutral';
-    if (o === 'negative' || o === 'closed' || r.includes('negative') || r.includes('closed')) return 'negative';
-    return 'positive';
+    // 1. Explicit outcome field if valid
+    const o = (v?.outcome || '').toLowerCase().trim();
+    if (o === 'positive') return 'positive';
+    if (o === 'neutral') return 'neutral';
+    if (o === 'negative' || o === 'closed') return 'negative';
+
+    // 2. Check [Outcome: ...] meta tag in remarks
+    const raw = v?.remarks || v?.raw_remarks || '';
+    const match = raw.match(/\[Outcome:\s*([^\]]+)\]/i);
+    if (match) {
+      const tagOutcome = match[1].toLowerCase().trim();
+      if (tagOutcome === 'positive') return 'positive';
+      if (tagOutcome === 'neutral') return 'neutral';
+      if (tagOutcome === 'negative' || tagOutcome === 'closed') return 'negative';
+    }
+
+    // 3. Fallback sentiment analysis on raw remarks
+    const lowerRem = raw.toLowerCase();
+    if (
+      /\b(?:negative|bad|rejected|rejection|unsuccessful|declined|not\s+(?:at\s+all\s+)?inter(?:e)?sted|uninterested|no\s+interest|not\s+buying|not\s+interested|no\s+(?:immediate\s+)?need|no\s+requirement|refused|unfavorable|dissatisfied|cancelled|lost)\b/i.test(
+        lowerRem,
+      ) ||
+      /\b(?:nahi\s+chahiye|interest\s+nahi|mana\s+kar\s+diya|reject\s+hua)\b/i.test(
+        lowerRem,
+      )
+    ) {
+      return 'negative';
+    }
+    if (
+      /\b(?:positive|went\s+well|good|great|successful|favorable|interested|keen|promising|order\s+confirmed|deal\s+done)\b/i.test(
+        lowerRem,
+      ) &&
+      !/\b(?:not\s+|no\s+|nahi\s+)(?:positive|good|great|interested|keen|promising)\b/i.test(
+        lowerRem,
+      )
+    ) {
+      return 'positive';
+    }
+
+    // 4. Default fallback: Neutral (NEVER positive)
+    return 'neutral';
   };
 
   const openVisitDetails = (v: CustomerVisit, editMode = false) => {
@@ -578,7 +614,9 @@ export default function VisitsPage() {
       (v?.follow_up_action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       repName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesOutcome = filterOutcome === 'all' || (v?.outcome || '').toLowerCase() === filterOutcome.toLowerCase();
+    const matchesOutcome =
+      filterOutcome === 'all' ||
+      getNormalizedOutcome(v) === filterOutcome.toLowerCase();
     return matchesSearch && matchesOutcome;
   });
 
