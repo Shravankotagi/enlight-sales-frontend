@@ -169,25 +169,58 @@ interface ParsedVisitRemarks {
   location?: string;
 }
 
-function parseVisitRemarks(raw?: string): ParsedVisitRemarks {
-  if (!raw || !raw.trim()) {
-    return { cleanNotes: 'No notes recorded for this visit.' };
-  }
-
+function parseVisitRemarks(raw?: string, directOutcome?: string): ParsedVisitRemarks {
   const tags: Record<string, string> = {};
-  const tagRegex = /\[([a-zA-Z0-9_\s]+):\s*([^\]]+)\]/g;
-  let match;
-  while ((match = tagRegex.exec(raw)) !== null) {
-    const key = match[1].trim().toLowerCase();
-    const val = match[2].trim();
-    tags[key] = val;
+  if (raw && raw.trim()) {
+    const tagRegex = /\[([a-zA-Z0-9_\s]+):\s*([^\]]+)\]/g;
+    let match;
+    while ((match = tagRegex.exec(raw)) !== null) {
+      const key = match[1].trim().toLowerCase();
+      const val = match[2].trim();
+      tags[key] = val;
+    }
   }
 
-  const cleanNotes = raw.replace(tagRegex, '').trim();
+  const cleanNotes = raw
+    ? raw.replace(/\[([a-zA-Z0-9_\s]+):\s*([^\]]+)\]/g, '').trim()
+    : '';
+
+  let outcome = tags.outcome;
+  if (!outcome && directOutcome && directOutcome !== 'unknown') {
+    outcome = directOutcome.charAt(0).toUpperCase() + directOutcome.slice(1);
+  }
+  if (!outcome && raw) {
+    const lowerRem = raw.toLowerCase();
+    if (
+      /\b(?:negative|bad|rejected|rejection|unsuccessful|declined|not\s+(?:at\s+all\s+)?inter(?:e)?sted|uninterested|no\s+interest|not\s+buying|not\s+interested|no\s+(?:immediate\s+)?need|no\s+requirement|refused|unfavorable|dissatisfied|cancelled|lost)\b/i.test(
+        lowerRem,
+      ) ||
+      /\b(?:nahi\s+chahiye|interest\s+nahi|mana\s+kar\s+diya|reject\s+hua)\b/i.test(
+        lowerRem,
+      )
+    ) {
+      outcome = 'Negative';
+    } else if (
+      /\b(?:positive|went\s+well|good|great|successful|favorable|interested|keen|promising|order\s+confirmed|deal\s+done)\b/i.test(
+        lowerRem,
+      ) &&
+      !/\b(?:not\s+|no\s+|nahi\s+)(?:positive|good|great|interested|keen|promising)\b/i.test(
+        lowerRem,
+      )
+    ) {
+      outcome = 'Positive';
+    } else if (
+      /\b(?:neutral|routine|okay|ok|normal|general\s+visit|courtesy\s+visit|check-?in|introductory|introduction)\b/i.test(
+        lowerRem,
+      )
+    ) {
+      outcome = 'Neutral';
+    }
+  }
 
   return {
     cleanNotes: cleanNotes || 'Meeting conducted.',
-    outcome: tags.outcome,
+    outcome,
     followUp: tags.followup || tags['follow up'] || tags['follow-up'],
     requirement: tags.requirement || tags.requirements,
     interests: tags.interests || tags.interest,
@@ -1030,7 +1063,7 @@ export default function CustomerProfilePage() {
                       </td>
                       <td className="py-3.5 px-3 text-slate-900 max-w-lg min-w-[280px]">
                         {(() => {
-                          const parsed = parseVisitRemarks(v.remarks);
+                          const parsed = parseVisitRemarks(v.remarks, v.outcome);
                           return (
                             <div className="space-y-1 text-xs text-slate-900">
                               <p className="leading-relaxed font-normal text-slate-900">
