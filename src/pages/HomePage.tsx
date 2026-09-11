@@ -32,6 +32,7 @@ import {
   Search,
   X,
   UserCheck,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface CarouselItem {
@@ -109,7 +110,16 @@ export default function HomePage() {
     activeMode,
   } = useAuth();
 
-  const isViewingManager = activeRole === 'sales_manager' || activeRole === 'manager';
+  const isViewingPersonal =
+    viewingAs?.role === 'salesperson' &&
+    (viewingAs?.original_role === 'sales_manager' ||
+      viewingAs?.original_role === 'manager' ||
+      viewingAs?.original_role === 'admin' ||
+      employee?.role === 'sales_manager' ||
+      employee?.role === 'manager' ||
+      employee?.role === 'admin');
+
+  const isViewingManager = (activeRole === 'sales_manager' || activeRole === 'manager') && !isViewingPersonal;
   const isViewingAdmin = !viewingAs && isAdmin;
   const canManageTeam = isViewingManager || isViewingAdmin;
 
@@ -122,6 +132,12 @@ export default function HomePage() {
       viewingAs?.original_role === 'manager') &&
       isAdmin);
 
+  const isAdminUser =
+    employee?.role === 'admin' ||
+    viewingAs?.original_role === 'admin';
+
+  const canSwitchRole = isSalesManagerUser || isAdminUser;
+
   const handleSwitchToPersonal = () => {
     const target = viewingAs || employee;
     if (!target) return;
@@ -133,8 +149,8 @@ export default function HomePage() {
     });
   };
 
-  const handleSwitchToTeamManager = () => {
-    if (isAdmin && viewingAs) {
+  const handleSwitchToExecutive = () => {
+    if (isAdmin && viewingAs?.original_role === 'sales_manager') {
       setViewingAs({
         ...viewingAs,
         role: 'sales_manager',
@@ -711,9 +727,28 @@ export default function HomePage() {
           {greeting}, {(viewingAs ? viewingAs.name : employee?.name)?.split(' ')[0] || 'Sales Executive'}
         </h1>
 
-        {isSalesManagerUser && (
+        {canSwitchRole && (
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            {isViewingManager ? (
+            {isViewingPersonal ? (
+              <button
+                onClick={handleSwitchToExecutive}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title={
+                  (viewingAs?.original_role || employee?.role) === 'admin'
+                    ? 'Switch to Company-Wide Admin Dashboard'
+                    : 'Switch to Sales Manager Team Dashboard'
+                }
+              >
+                {(viewingAs?.original_role || employee?.role) === 'admin' ? (
+                  <ShieldAlert size={14} />
+                ) : (
+                  <Users size={14} />
+                )}
+                {(viewingAs?.original_role || employee?.role) === 'admin'
+                  ? 'Admin'
+                  : 'Sales Manager'}
+              </button>
+            ) : (
               <button
                 onClick={handleSwitchToPersonal}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
@@ -721,15 +756,6 @@ export default function HomePage() {
               >
                 <UserCheck size={14} />
                 Salesperson
-              </button>
-            ) : (
-              <button
-                onClick={handleSwitchToTeamManager}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
-                title="Switch to Sales Manager Team Dashboard"
-              >
-                <Users size={14} />
-                Sales Manager
               </button>
             )}
           </div>
