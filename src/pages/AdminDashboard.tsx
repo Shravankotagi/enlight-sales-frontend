@@ -201,60 +201,105 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
       
-      {/* Top Header & Navigation Banner (Identical to Home Page UI) */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-md">
-            <ShieldAlert size={26} />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
-                Admin Overview Dashboard
-              </h1>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
-                <Users size={12} /> {selectedSalesperson ? selectedSalesperson.name : 'Company-Wide (All Salespersons)'}
-              </span>
+      {/* Top Header Card */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        {/* Row 1: Title, Meta Info & Action Buttons */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-md shrink-0">
+              <ShieldAlert size={26} />
             </div>
-            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1 font-medium">
-              <Calendar size={13} className="text-slate-400" /> {todayStr}
-            </p>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
+                  Admin Overview Dashboard
+                </h1>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
+                  <Users size={12} /> {selectedSalesperson ? selectedSalesperson.name : 'Company-Wide (All Salespersons)'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1 font-medium">
+                <Calendar size={13} className="text-slate-400" /> {todayStr}
+              </p>
+            </div>
+          </div>
+
+          {/* Top Actions: CRM Sync Pills, Refresh, Create Order */}
+          <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+            {/* Both Zoho Bigin Sync Action Buttons */}
+            <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+              <button
+                onClick={handlePushToBigin}
+                disabled={isPushing || isPulling}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
+                title="Push all database contacts and live ongoing deals to Zoho Bigin CRM"
+              >
+                <Upload size={13} className={isPushing ? 'animate-spin' : ''} />
+                {isPushing ? 'Pushing...' : 'Push DB → Bigin'}
+              </button>
+
+              <button
+                onClick={handlePullFromBigin}
+                disabled={isPushing || isPulling}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
+                title="Pull all customer contacts and active deals from Zoho Bigin CRM into database"
+              >
+                <Download size={13} className={isPulling ? 'animate-spin' : ''} />
+                {isPulling ? 'Pulling...' : 'Pull Bigin → DB'}
+              </button>
+            </div>
+
+            <button
+              onClick={handleRefreshAll}
+              title="Refresh All Dashboard Metrics"
+              className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
+            >
+              <RefreshCw size={15} />
+            </button>
+
+            <button
+              onClick={() => navigate('/orders')}
+              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+            >
+              <Plus size={15} /> Create Order
+            </button>
           </div>
         </div>
 
-        {/* Dynamic Filters & Refresh Action Controls */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Quick Date Range Filter (This Month, Last 7 Days, Last 15 Days, Custom Date Range) */}
-          <DateFilterControl onChange={setDateRange} initialPreset={dateRange.preset} />
+        {/* Row 2: Filter Toolbar (Date range, Month/Year, Salesperson Filter) */}
+        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <DateFilterControl onChange={setDateRange} initialPreset={dateRange.preset} />
 
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {months.map((m, idx) => (
-                <option key={m} value={idx}>{m}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                {months.map((m, idx) => (
+                  <option key={m} value={idx}>{m}</option>
+                ))}
+              </select>
 
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {years.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                {years.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 self-start sm:self-auto">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">Filter:</span>
             <select
               value={selectedPhone}
               onChange={(e) => setSelectedPhone(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[200px] truncate"
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px] max-w-[280px] truncate cursor-pointer"
             >
               <option value="">All Salespeople (Global)</option>
               {salespeople.map((sp: any) => (
@@ -264,44 +309,6 @@ export default function AdminDashboard() {
               ))}
             </select>
           </div>
-
-          {/* Both Zoho Bigin Sync Action Buttons */}
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-            <button
-              onClick={handlePushToBigin}
-              disabled={isPushing || isPulling}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
-              title="Push all database contacts and live ongoing deals to Zoho Bigin CRM"
-            >
-              <Upload size={13} className={isPushing ? 'animate-spin' : ''} />
-              {isPushing ? 'Pushing...' : 'Push DB → Bigin'}
-            </button>
-
-            <button
-              onClick={handlePullFromBigin}
-              disabled={isPushing || isPulling}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
-              title="Pull all customer contacts and active deals from Zoho Bigin CRM into database"
-            >
-              <Download size={13} className={isPulling ? 'animate-spin' : ''} />
-              {isPulling ? 'Pulling...' : 'Pull Bigin → DB'}
-            </button>
-          </div>
-
-          <button
-            onClick={handleRefreshAll}
-            title="Refresh All Dashboard Metrics"
-            className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
-          >
-            <RefreshCw size={15} />
-          </button>
-
-          <button
-            onClick={() => navigate('/orders')}
-            className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
-          >
-            <Plus size={15} /> Create Order
-          </button>
         </div>
       </div>
 
