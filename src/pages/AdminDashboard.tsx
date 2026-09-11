@@ -3,13 +3,14 @@ import { reportsApi, inquiriesApi, dealsApi, employeesApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import SalesQuotationModal from '../components/SalesQuotationModal';
-import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
   ArrowUpRight, Award, AlertCircle, Layers,
-  Plus, Upload, Download, Truck, Sparkles
+  Plus, Upload, Download, Truck, Sparkles,
+  Activity, CheckCircle2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -21,8 +22,8 @@ export default function AdminDashboard() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: '30_days',
-    from: getDaysAgo(30),
+    preset: 'all',
+    from: '2000-01-01',
     to: formatLocalDate(),
   });
 
@@ -32,8 +33,8 @@ export default function AdminDashboard() {
   ];
   const years = [2025, 2026, 2027];
 
-  const fromDate = dateRange.from || new Date(Date.UTC(selectedYear, selectedMonth, 1, 0, 0, 0)).toISOString();
-  const toDate = dateRange.to || new Date(Date.UTC(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)).toISOString();
+  const fromDate = dateRange.from || '2000-01-01';
+  const toDate = dateRange.to || formatLocalDate();
 
   useEffect(() => {
     document.title = 'Admin Overview - Enlight Sales OS';
@@ -161,6 +162,7 @@ export default function AdminDashboard() {
 
   const wonDealsList = rawDeals.filter((d: any) => d.stage === 'won');
   const activeDealsList = rawDeals.filter((d: any) => !['won', 'lost'].includes(d.stage));
+  const lostDealsList = rawDeals.filter((d: any) => d.stage === 'lost');
 
   const dealsTotalPipelineVal = activeDealsList.reduce((sum: number, d: any) => sum + (Number(d.total_amount) || 0), 0);
   const dealsWonVal = wonDealsList.reduce((sum: number, d: any) => sum + (Number(d.total_amount) || 0), 0);
@@ -168,6 +170,8 @@ export default function AdminDashboard() {
   const totalDeals = rawDeals.length > 0 ? rawDeals.length : (monthly?.summary?.total_deals || 0);
   const activeDealsCount = activeDealsList.length > 0 ? activeDealsList.length : (monthly?.summary?.deals_pending || 0);
   const wonDealsCount = wonDealsList.length > 0 ? wonDealsList.length : (monthly?.summary?.deals_won || monthly?.summary?.won || 0);
+  const lostDealsCount = lostDealsList.length;
+
   const totalValue = dealsTotalPipelineVal > 0 ? dealsTotalPipelineVal : (monthly?.summary?.pipeline_value || monthly?.summary?.total_revenue || monthly?.summary?.total_value || 0);
   const wonValue = dealsWonVal > 0 ? dealsWonVal : (monthly?.summary?.won_revenue || monthly?.summary?.won_value || monthly?.summary?.total_revenue || 0);
   const conversionRate = totalDeals > 0 ? Math.round((wonDealsCount / totalDeals) * 100) : (monthly?.summary?.conversion_rate || 0);
@@ -175,6 +179,17 @@ export default function AdminDashboard() {
   // Delivered Tonnage (summed live from won deal items in MT via centralized pricingEngine)
   const deliveredTonnageResult = calculateOrdersTotalTonnage(wonDealsList);
   const deliveredTonnage = deliveredTonnageResult.totalMt;
+
+  // Pipeline / Active Tonnage (summed live from active deals)
+  const activeTonnageResult = calculateOrdersTotalTonnage(activeDealsList);
+  const activeTonnage = activeTonnageResult.totalMt;
+  const totalTonnage = deliveredTonnage + activeTonnage;
+
+  // Real data-driven percentages & metrics
+  const activeDealsPct = totalDeals > 0 ? Math.round((activeDealsCount / totalDeals) * 100) : 0;
+  const deliveredTonnagePct = totalTonnage > 0 ? Math.round((deliveredTonnage / totalTonnage) * 100) : (deliveredTonnage > 0 ? 100 : 0);
+  const totalCombinedValue = wonValue + totalValue;
+  const wonValueSharePct = totalCombinedValue > 0 ? Math.round((wonValue / totalCombinedValue) * 100) : 0;
 
   // Find selected salesperson specific KRA metrics from reports response
   const selectedKRA = spList.find((s: any) => s.salesperson_phone === selectedPhone);
@@ -321,11 +336,15 @@ export default function AdminDashboard() {
               {'\u20B9'}{Number(totalValue).toLocaleString('en-IN')}
             </h2>
             <div className="flex items-center gap-2 mt-2">
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <ArrowUpRight size={12} /> +15.2%
+              <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full border ${
+                activeDealsCount > 0
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-slate-50 text-slate-600 border-slate-200'
+              }`}>
+                <Activity size={12} /> {activeDealsPct}% in pipeline
               </span>
               <span className="text-xs text-slate-500 font-medium">
-                {activeDealsCount || totalDeals} active deals
+                {activeDealsCount} of {totalDeals} active
               </span>
             </div>
           </div>
@@ -348,11 +367,27 @@ export default function AdminDashboard() {
             </h2>
             
             <div className="flex items-center gap-2 mt-2">
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <ArrowUpRight size={12} /> +25%
+              <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full border ${
+                deliveredTonnage > 0
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : activeTonnage > 0
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-slate-50 text-slate-600 border-slate-200'
+              }`}>
+                {deliveredTonnage > 0 ? (
+                  <>
+                    <ArrowUpRight size={12} /> {deliveredTonnagePct}% fulfilled
+                  </>
+                ) : activeTonnage > 0 ? (
+                  <>
+                    <Activity size={12} /> {activeTonnage.toFixed(2)} MT active
+                  </>
+                ) : (
+                  <>0 MT tracked</>
+                )}
               </span>
               <span className="text-xs text-slate-500 font-medium">
-                From last month
+                {activeTonnage > 0 ? `${activeTonnage.toFixed(2)} MT pipeline` : `${wonDealsCount} delivered orders`}
               </span>
             </div>
           </div>
@@ -374,11 +409,25 @@ export default function AdminDashboard() {
               {conversionRate}%
             </h2>
             <div className="flex items-center gap-2 mt-2">
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                Target: 70%
+              <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full border ${
+                conversionRate >= 50
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : conversionRate > 0
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}>
+                {conversionRate > 0 ? (
+                  <>
+                    <TrendingUp size={12} /> {wonDealsCount} Won / {totalDeals}
+                  </>
+                ) : (
+                  <>
+                    <Activity size={12} /> {wonDealsCount} of {totalDeals} won
+                  </>
+                )}
               </span>
               <span className="text-xs text-slate-500 font-medium">
-                Pipeline efficiency
+                {lostDealsCount > 0 ? `${lostDealsCount} lost` : `${activeDealsCount} in progress`}
               </span>
             </div>
           </div>
@@ -399,14 +448,14 @@ export default function AdminDashboard() {
             {selectedKRA ? (
               <>
                 <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-indigo-600">
-                  {selectedKRA.kra_score}/100
+                  {Math.round(Number(selectedKRA.kra_score) || 0)}/100
                 </h2>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    Visits: {selectedKRA.visits?.total || 0}/40
+                    <Award size={12} /> {selectedKRA.deals?.won || 0} won / {selectedKRA.deals?.total || 0} deals
                   </span>
                   <span className="text-xs text-slate-500 font-medium">
-                    Monthly Target
+                    {selectedKRA.visits?.total || 0} visits
                   </span>
                 </div>
               </>
@@ -416,11 +465,23 @@ export default function AdminDashboard() {
                   {reviewQueue.length}
                 </h2>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                    Needs Review
+                  <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full border ${
+                    reviewQueue.length > 0
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    {reviewQueue.length > 0 ? (
+                      <>
+                        <AlertCircle size={12} /> Needs Review
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={12} /> All Clear
+                      </>
+                    )}
                   </span>
                   <span className="text-xs text-slate-500 font-medium">
-                    Low AI extraction
+                    {reviewQueue.length > 0 ? `${reviewQueue.length} pending inquiries` : '0 pending AI inquiries'}
                   </span>
                 </div>
               </>
@@ -430,7 +491,7 @@ export default function AdminDashboard() {
 
       </div>
 
-      {/* Featured Total Sales Overview Value Banner (Matching img1) */}
+      {/* Featured Total Sales Overview Value Banner */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -441,13 +502,40 @@ export default function AdminDashboard() {
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
                 {'\u20B9'}{Number(wonValue || totalValue).toLocaleString('en-IN')}
               </h2>
-              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                <ArrowUpRight size={13} /> +12.5%
+              <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                wonValue > 0
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : totalValue > 0
+                  ? 'bg-blue-100 text-blue-800 border-blue-300'
+                  : 'bg-slate-100 text-slate-700 border-slate-300'
+              }`}>
+                {wonValue > 0 ? (
+                  <>
+                    <ArrowUpRight size={13} /> {wonValueSharePct}% Won Revenue
+                  </>
+                ) : totalValue > 0 ? (
+                  <>
+                    <Activity size={13} /> 100% Pipeline Active
+                  </>
+                ) : (
+                  <>No Deals Tracked</>
+                )}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
               <Sparkles size={14} className="text-amber-500" />
-              Yay! Company sales have surged this month across all metal product categories!
+              {wonValue > 0 ? (
+                <span>
+                  Company closed <strong>{'\u20B9'}{Number(wonValue).toLocaleString('en-IN')}</strong> across {wonDealsCount} order(s) ({deliveredTonnage.toFixed(2)} MT)
+                  {totalValue > 0 ? ` with \u20B9${Number(totalValue).toLocaleString('en-IN')} (${activeTonnage.toFixed(2)} MT) in active negotiation.` : '.'}
+                </span>
+              ) : totalValue > 0 ? (
+                <span>
+                  Active pipeline tracking <strong>{'\u20B9'}{Number(totalValue).toLocaleString('en-IN')}</strong> across {activeDealsCount} deal(s) ({activeTonnage.toFixed(2)} MT) in quotation and negotiation.
+                </span>
+              ) : (
+                <span>No active deals or closed orders found in the selected date range.</span>
+              )}
             </p>
           </div>
 
