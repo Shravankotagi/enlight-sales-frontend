@@ -938,29 +938,68 @@ export default function CustomerProfilePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {inquiries.map((inq: any, idx: number) => (
-                    <tr
-                      key={inq.id}
-                      onClick={() => navigate(`/inquiries?inquiryId=${encodeURIComponent(inq.id)}&returnTo=${encodeURIComponent(`/customers/${customer?.id || id}`)}`)}
-                      className="hover:bg-blue-50/60 transition-colors cursor-pointer group"
-                      title="Click to view inquiry & quotation drawer">
-                      <td className="py-3 px-3 text-slate-400 font-medium">{idx + 1}</td>
-                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                        {safeFormatDate(inq.created_at)}
-                      </td>
-                      <td className="py-3 px-3 text-slate-700 font-semibold uppercase text-2xs">
-                        {inq.source_channel || 'WhatsApp'}
-                      </td>
-                      <td className="py-3 px-3 text-slate-800 max-w-md">
-                        <p className="line-clamp-2 group-hover:text-blue-600 transition-colors">{inq.raw_text || inq.sender_name || 'Material Requirement'}</p>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="px-2 py-0.5 rounded-full text-2xs font-bold bg-slate-100 text-slate-700 capitalize">
-                          {inq.status || 'Received'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {inquiries.map((inq: any, idx: number) => {
+                    const rawStatus = (inq.status || '').toLowerCase();
+                    const isNewInquiry = rawStatus === 'auto_created' || rawStatus === 'new_inquiry' || rawStatus === 'new';
+                    const isWon = rawStatus === 'won' || rawStatus === 'order';
+                    const isLost = rawStatus === 'lost';
+                    const isQuoted = rawStatus === 'quotation_sent' || rawStatus === 'quoted';
+
+                    const statusBadgeClass = isNewInquiry
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : isWon
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : isLost
+                          ? 'bg-rose-50 text-rose-800 border-rose-200'
+                          : isQuoted
+                            ? 'bg-blue-50 text-blue-800 border-blue-200'
+                            : 'bg-slate-100 text-slate-700 border-slate-200';
+
+                    const statusLabel = isNewInquiry
+                      ? 'New Inquiry'
+                      : isWon
+                        ? 'Won / Converted'
+                        : isLost
+                          ? 'Lost'
+                          : isQuoted
+                            ? 'Quotation Sent'
+                            : inq.status || 'Received';
+
+                    const reqText =
+                      inq.raw_text ||
+                      inq.ai_extraction_json?.product_requirement ||
+                      (inq.ai_extraction_json?.line_items && inq.ai_extraction_json.line_items.length > 0
+                        ? inq.ai_extraction_json.line_items
+                            .map((it: any) => `${it.sku_text || it.description || 'Item'} (${it.quantity} ${it.unit || 'MT'})`)
+                            .join(', ')
+                        : null) ||
+                      inq.sender_name ||
+                      'Material Requirement';
+
+                    return (
+                      <tr
+                        key={inq.id || idx}
+                        onClick={() => navigate(`/inquiries?inquiryId=${encodeURIComponent(inq.id)}&returnTo=${encodeURIComponent(`/customers/${customer?.id || id}`)}`)}
+                        className="hover:bg-blue-50/60 transition-colors cursor-pointer group"
+                        title="Click to view inquiry & quotation drawer">
+                        <td className="py-3 px-3 text-slate-400 font-medium">{idx + 1}</td>
+                        <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                          {safeFormatDate(inq.created_at)}
+                        </td>
+                        <td className="py-3 px-3 text-slate-700 font-semibold uppercase text-2xs">
+                          {inq.source_channel || 'WhatsApp'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-800 max-w-md">
+                          <p className="line-clamp-2 group-hover:text-blue-600 transition-colors font-medium whitespace-pre-wrap">{reqText}</p>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-2xs font-bold border capitalize ${statusBadgeClass}`}>
+                            {statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
