@@ -172,18 +172,50 @@ interface ParsedVisitRemarks {
 function parseVisitRemarks(raw?: string, directOutcome?: string): ParsedVisitRemarks {
   const tags: Record<string, string> = {};
   if (raw && raw.trim()) {
-    const tagRegex = /\[([a-zA-Z0-9_\s]+):\s*([^\]]+)\]/g;
+    const tagRegex = /\[([a-zA-Z0-9_\s-]+):\s*([^\]]+)\]/g;
     let match;
     while ((match = tagRegex.exec(raw)) !== null) {
-      const key = match[1].trim().toLowerCase();
+      const key = match[1].trim().toLowerCase().replace(/[\s_-]+/g, '');
       const val = match[2].trim();
       tags[key] = val;
     }
   }
 
-  const cleanNotes = raw
-    ? raw.replace(/\[([a-zA-Z0-9_\s]+):\s*([^\]]+)\]/g, '').trim()
+  let cleanNotes = raw
+    ? raw.replace(/\[([a-zA-Z0-9_\s-]+):\s*([^\]]+)\]/g, '').trim()
     : '';
+
+  let followUp = tags.followup || tags.followupaction;
+  if (!followUp && cleanNotes) {
+    const pipeFuMatch = cleanNotes.match(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*([^|\n]+)/i);
+    if (pipeFuMatch) {
+      const fuVal = pipeFuMatch[1].trim();
+      const lowerFu = fuVal.toLowerCase();
+      if (
+        fuVal &&
+        lowerFu !== 'none' &&
+        lowerFu !== '-' &&
+        lowerFu !== 'nil' &&
+        lowerFu !== 'n/a' &&
+        lowerFu !== 'na' &&
+        lowerFu !== 'null' &&
+        !lowerFu.startsWith('no remarks') &&
+        !lowerFu.startsWith('no follow')
+      ) {
+        followUp = fuVal;
+      }
+    }
+  }
+
+  if (cleanNotes) {
+    cleanNotes = cleanNotes
+      .replace(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*[^|\n]+/gi, '')
+      .replace(/(?:^|\||\n)\s*(?:Material )?Requirement:\s*[^|\n]+/gi, '')
+      .replace(/(?:^|\||\n)\s*Location:\s*[^|\n]+/gi, '')
+      .replace(/(?:^|\||\n)\s*Interests?:\s*[^|\n]+/gi, '')
+      .replace(/^[\s|]+|[\s|]+$/g, '')
+      .trim();
+  }
 
   let outcome = tags.outcome;
   if (!outcome && directOutcome && directOutcome !== 'unknown') {
@@ -221,7 +253,7 @@ function parseVisitRemarks(raw?: string, directOutcome?: string): ParsedVisitRem
   return {
     cleanNotes: cleanNotes || 'Meeting conducted.',
     outcome,
-    followUp: tags.followup || tags['follow up'] || tags['follow-up'],
+    followUp,
     requirement: tags.requirement || tags.requirements,
     interests: tags.interests || tags.interest,
     location: tags.location,

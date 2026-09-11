@@ -1325,9 +1325,14 @@ export default function VisitsPage() {
                     <div className="max-h-36 overflow-y-auto pr-1 text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap font-normal">
                       {(selectedVisit.remarks || selectedVisit.raw_remarks || '')
                         .replace(
-                          /\[(Outcome|Requirement|FollowUp|Follow-up|Interests|Location):\s*[^\]]+\]\s*/gi,
+                          /\[(?:Outcome|Location|Follow-?Up|Follow-?up\s*Action|Requirement|Requirements|Interests?):[^\]]*\]\s*/gi,
                           '',
                         )
+                        .replace(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*[^|\n]+/gi, '')
+                        .replace(/(?:^|\||\n)\s*(?:Material )?Requirement:\s*[^|\n]+/gi, '')
+                        .replace(/(?:^|\||\n)\s*Location:\s*[^|\n]+/gi, '')
+                        .replace(/(?:^|\||\n)\s*Interests?:\s*[^|\n]+/gi, '')
+                        .replace(/^[\s|]+|[\s|]+$/g, '')
                         .trim() || 'No detailed remarks recorded for this visit.'}
                     </div>
                   </div>
@@ -1336,9 +1341,24 @@ export default function VisitsPage() {
                   <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-2xs">
                     <p className="text-xs font-semibold text-slate-500">Follow-up Action</p>
                     <div className="max-h-24 overflow-y-auto pr-1 text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap font-medium">
-                      {selectedVisit.follow_up_action && selectedVisit.follow_up_action.trim() && selectedVisit.follow_up_action !== '-'
-                        ? selectedVisit.follow_up_action.trim()
-                        : 'None'}
+                      {(() => {
+                        const rawFu =
+                          selectedVisit.follow_up_action ||
+                          (selectedVisit as any).followup ||
+                          (selectedVisit as any).follow_up ||
+                          (selectedVisit.remarks || selectedVisit.raw_remarks || '').match(/\[(?:Follow-?Up|Follow-?up\s*Action):\s*([^\]]+)\]/i)?.[1] ||
+                          (selectedVisit.remarks || selectedVisit.raw_remarks || '').match(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*([^|\]\n]+)/i)?.[1];
+                        const cleanFu = rawFu ? String(rawFu).trim() : '';
+                        const isNon =
+                          !cleanFu ||
+                          cleanFu === '-' ||
+                          cleanFu.toLowerCase() === 'none' ||
+                          cleanFu.toLowerCase() === 'nil' ||
+                          cleanFu.toLowerCase() === 'n/a' ||
+                          cleanFu.toLowerCase().startsWith('no remarks') ||
+                          cleanFu.toLowerCase().startsWith('no follow');
+                        return !isNon ? cleanFu : 'None';
+                      })()}
                     </div>
                   </div>
                 </div>
