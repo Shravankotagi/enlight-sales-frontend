@@ -55,12 +55,16 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         debounceInvalidate([
           ['inquiries-list'],
           ['inquiries'],
+          ['inquiries-review-queue'],
+          ['admin-inquiries-queue'],
           ['pipeline'],
           ['kanban'],
           ['kra-dashboard'],
           ['kra-sheets'],
           ['home-inquiries'],
           ['action-queue'],
+          ['reports-overview-data'],
+          ['customer-names-list'],
         ]);
       }
     )
@@ -73,6 +77,7 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         debounceInvalidate([
           ['deals'],
           ['deal'],
+          ['all-deals-list'],
           ['orders-list'],
           ['pipeline'],
           ['kanban'],
@@ -81,6 +86,15 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
           ['home-summary-deals'],
           ['home-won-deals'],
           ['action-queue'],
+          ['admin-recent-deals'],
+          ['admin-monthly'],
+          ['admin-funnel'],
+          ['admin-sku'],
+          ['admin-salesperson'],
+          ['intelligence-deals'],
+          ['loss-analytics'],
+          ['reports-overview-data'],
+          ['customer-names-list-orders'],
         ]);
       }
     )
@@ -93,9 +107,15 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         debounceInvalidate([
           ['deal'],
           ['deals'],
+          ['all-deals-list'],
           ['orders-list'],
           ['inquiries-list'],
           ['pipeline'],
+          ['kanban'],
+          ['kra-dashboard'],
+          ['kra-sheets'],
+          ['admin-sku'],
+          ['reports-overview-data'],
         ]);
       }
     )
@@ -108,10 +128,12 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         debounceInvalidate([
           ['visits'],
           ['customer-visits'],
+          ['home-visits-list'],
+          ['home-visits'],
           ['kra-dashboard'],
           ['kra-sheets'],
-          ['home-visits'],
           ['action-queue'],
+          ['reports-overview-data'],
         ]);
       }
     )
@@ -123,10 +145,12 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         notifyChange('complaints', payload.eventType, payload);
         debounceInvalidate([
           ['complaints'],
+          ['home-complaints-list'],
+          ['home-complaints'],
           ['kra-dashboard'],
           ['kra-sheets'],
-          ['home-complaints'],
           ['action-queue'],
+          ['reports-overview-data'],
         ]);
       }
     )
@@ -139,10 +163,15 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         debounceInvalidate([
           ['customers'],
           ['customer'],
+          ['customer-detail'],
+          ['customers-churn'],
+          ['customers-churn-home'],
+          ['customers-reorder'],
           ['customer-names-list'],
           ['customer-names-list-orders'],
           ['reorder-queue'],
           ['churn-risk'],
+          ['recurring-customers-list'],
         ]);
       }
     )
@@ -154,8 +183,12 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         notifyChange('recurring_customers', payload.eventType, payload);
         debounceInvalidate([
           ['customers'],
+          ['customer'],
+          ['customers-churn'],
+          ['customers-churn-home'],
           ['reorder-queue'],
           ['churn-risk'],
+          ['recurring-customers-list'],
         ]);
       }
     )
@@ -169,6 +202,8 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
           ['kra-dashboard'],
           ['kra-sheets'],
           ['action-queue'],
+          ['admin-monthly'],
+          ['admin-salesperson'],
         ]);
       }
     )
@@ -180,6 +215,7 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         notifyChange('activity_logs', payload.eventType, payload);
         debounceInvalidate([
           ['activity-logs'],
+          ['activity-logs-counts'],
           ['action-queue'],
         ]);
       }

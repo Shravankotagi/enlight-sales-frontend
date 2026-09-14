@@ -404,7 +404,24 @@ export default function VisitsPage() {
       }
     };
     window.addEventListener('enlight-db-change', handleDbChange);
-    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+
+    // 15s silent background polling fail-safe
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchVisits(true);
+      }
+    }, 15000);
+
+    const handleFocus = () => {
+      fetchVisits(true);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('enlight-db-change', handleDbChange);
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   const handleCreateVisit = async (e: React.FormEvent) => {

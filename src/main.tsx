@@ -10,9 +10,11 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 30 * 1000, // 30s cache prevents refetching on every tab switch while Realtime handles live updates
+      staleTime: 10 * 1000,
       gcTime: 10 * 60 * 1000,
-      refetchOnWindowFocus: false, // Prevent bursts of network queries on window focus (Realtime keeps data fresh)
+      refetchInterval: 15 * 1000, // 15s background polling ensures guaranteed live updates across all modules
+      refetchIntervalInBackground: false, // Pauses when tab is hidden, auto-resumes on focus
+      refetchOnWindowFocus: true, // Instant sync when user switches back to the tab
       refetchOnReconnect: true,
     },
   },

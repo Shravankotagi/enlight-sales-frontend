@@ -398,7 +398,24 @@ export default function ComplaintsPage() {
       }
     };
     window.addEventListener('enlight-db-change', handleDbChange);
-    return () => window.removeEventListener('enlight-db-change', handleDbChange);
+
+    // 15s silent background polling fail-safe
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchComplaints(true);
+      }
+    }, 15000);
+
+    const handleFocus = () => {
+      fetchComplaints(true);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('enlight-db-change', handleDbChange);
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
   const handleOpenAddModal = () => {
