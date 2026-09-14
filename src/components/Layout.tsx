@@ -51,11 +51,17 @@ function EmployeeFooter() {
     navigate('/admin');
   };
 
-  const roleLabel = isAdmin
-    ? 'Admin'
-    : isSalesManager
+  const roleLabel = viewingAs
+    ? viewingAs.role === 'sales_manager' || viewingAs.role === 'manager'
       ? 'Sales Manager'
-      : 'Salesperson';
+      : viewingAs.role === 'admin'
+        ? 'Admin'
+        : 'Salesperson'
+    : isAdmin
+      ? 'Admin'
+      : isSalesManager
+        ? 'Sales Manager'
+        : 'Salesperson';
 
   const viewingRoleLabel = viewingAs
     ? viewingAs.role === 'sales_manager' || viewingAs.role === 'manager'

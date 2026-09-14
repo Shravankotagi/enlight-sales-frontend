@@ -307,6 +307,8 @@ export default function AdminSelectionPage() {
     setViewingAs({
       ...employee,
       role: 'salesperson',
+      original_role: employee.role,
+      mode: 'personal',
     });
     navigate('/home');
   };
@@ -428,6 +430,14 @@ export default function AdminSelectionPage() {
 
               {isAdmin && (
                 <>
+                  <button
+                    onClick={handleViewPersonalDashboard}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    title="Switch to My Personal Salesperson Dashboard"
+                  >
+                    <UserCheck size={15} />
+                    My Salesperson Dashboard
+                  </button>
                   <button
                     onClick={() => navigate('/admin-dashboard')}
                     className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-2xs cursor-pointer"

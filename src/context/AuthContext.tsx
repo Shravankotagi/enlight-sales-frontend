@@ -98,7 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     viewingAs?.mode ||
     (activeRole === 'salesperson' &&
     (viewingAs?.original_role === 'sales_manager' ||
-      viewingAs?.original_role === 'manager')
+      viewingAs?.original_role === 'manager' ||
+      viewingAs?.original_role === 'admin' ||
+      employee?.role === 'sales_manager' ||
+      employee?.role === 'manager' ||
+      employee?.role === 'admin')
       ? 'personal'
       : activeRole === 'sales_manager' || activeRole === 'manager'
         ? 'manager'
