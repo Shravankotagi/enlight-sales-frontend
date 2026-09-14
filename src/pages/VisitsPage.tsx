@@ -930,7 +930,7 @@ export default function VisitsPage() {
                                 idx >= paginatedVisits.length - 2 && paginatedVisits.length >= 3
                                   ? 'bottom-full mb-1'
                                   : 'top-full mt-1'
-                              } w-36 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 text-left animate-in fade-in-50 duration-100`}>
+                              } w-32 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 text-left animate-in fade-in-50 duration-100`}>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -950,17 +950,6 @@ export default function VisitsPage() {
                                 className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors cursor-pointer">
                                 <Edit2 size={14} className="text-slate-400" />
                                 Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveActionMenuId(null);
-                                  setSelectedVisit(v);
-                                  setShowDeleteModal(true);
-                                }}
-                                className="w-full px-3.5 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors border-t border-slate-100 cursor-pointer">
-                                <Trash2 size={14} className="text-rose-500" />
-                                Delete
                               </button>
                             </div>
                           )}

@@ -1735,7 +1735,7 @@ export default function InquiriesPage() {
       setInquiries(prev => (Array.isArray(prev) ? prev.map(item => item.id === selectedInquiry.id ? updatedObj : item) : []));
     } catch (err) {
       console.error('Error saving inquiry details:', err);
-      alert('Failed to save inquiry changes.');
+      toast.error('Failed to save inquiry changes.');
     } finally {
       setSubmitting(false);
     }
@@ -2079,7 +2079,7 @@ export default function InquiriesPage() {
     } catch (err: any) {
       console.error('Error logging inquiry:', err);
       const errMsg = err?.response?.data?.message || err?.message || 'Failed to log inquiry. Please try again.';
-      alert(errMsg);
+      toast.error(errMsg);
     } finally {
       setSubmitting(false);
     }

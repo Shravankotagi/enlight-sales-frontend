@@ -15,6 +15,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { kbApi } from '../lib/api';
+import toast from 'react-hot-toast';
 
 interface KbDocument {
   id: string;
@@ -160,8 +161,9 @@ export default function KnowledgeBaseModal({
       await kbApi.deleteDocument(docId);
       setDocuments((prev) => prev.filter((d) => d.id !== docId));
       setDeleteConfirmId(null);
+      toast.success('Document deleted successfully');
     } catch (err: any) {
-      alert(
+      toast.error(
         'Failed to delete document: ' +
           (err.response?.data?.message || err.message)
       );
