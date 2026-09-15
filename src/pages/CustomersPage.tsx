@@ -224,7 +224,9 @@ export default function CustomersPage() {
     return null;
   };
 
-  const { data: rawCustomersData = [], isLoading, refetch } = useQuery({
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+
+  const { data: rawCustomersData = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['customers-churn', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       customersApi
@@ -237,6 +239,19 @@ export default function CustomersPage() {
           return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
         }),
   });
+
+  const handleRefresh = async () => {
+    setManualRefreshing(true);
+    try {
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: ['customers-churn'] }),
+        queryClient.invalidateQueries({ queryKey: ['employees-list-customers'] }),
+      ]);
+    } finally {
+      setTimeout(() => setManualRefreshing(false), 500);
+    }
+  };
 
   const safeCustomers: any[] = Array.isArray(rawCustomersData) ? rawCustomersData : [];
 
@@ -328,10 +343,11 @@ export default function CustomersPage() {
 
           <div className="flex items-center gap-2.5 shrink-0">
             <button
-              onClick={() => refetch()}
+              onClick={handleRefresh}
+              disabled={isFetching || manualRefreshing}
               className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
               title="Refresh">
-              <RefreshCw size={15} className={isLoading ? 'animate-spin text-blue-600' : ''} />
+              <RefreshCw size={15} className={isFetching || manualRefreshing || isLoading ? 'animate-spin text-blue-600' : ''} />
             </button>
           </div>
         </div>
