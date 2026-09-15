@@ -77,19 +77,37 @@ const cleanProductType = (pt: string): string => {
   const str = String(pt).trim();
   const strLower = str.toLowerCase();
 
+  if (/\bgp\s*sheets?\b/i.test(strLower) || /\bgalvanized\s*(?:plain\s*)?sheets?\b/i.test(strLower)) return 'GP Sheet';
+  if (/\bgp\s*coils?\b/i.test(strLower) || /\bgalvanized\s*(?:plain\s*)?coils?\b/i.test(strLower)) return 'GP Coil';
+  if (/\bgalvalume\s*sheets?\b/i.test(strLower) || /\bgl\s*sheets?\b/i.test(strLower)) return 'Galvalume Sheet';
+  if (/\bgalvalume\s*coils?\b/i.test(strLower) || /\bgl\s*coils?\b/i.test(strLower)) return 'Galvalume Coil';
+  if (/\b(hr\s*pickled|hrpo\s*sheet|pickled\s*sheet)\b/i.test(strLower)) return 'HRPO Sheet';
+  if (/\b(hrpo\s*coil|hrpo|pickled\s*coil|pickled)\b/i.test(strLower)) return 'HRPO Coil';
   if (/\bhr\s*coils?\b/i.test(strLower)) return 'HR Coil';
   if (/\bcr\s*coils?\b/i.test(strLower)) return 'CR Coil';
   if (/\bhr\s*sheets?\b/i.test(strLower)) return 'HR Sheet';
   if (/\bcr\s*sheets?\b/i.test(strLower)) return 'CR Sheet';
-  if (/\b(hr\s*pickled|hrpo|pickled)\b/i.test(strLower)) return 'Hot Rolled Pickled & Oiled';
-  if (/\b(chequered\s*plate|chequered\s*sheets?|chequered)\b/i.test(strLower)) return 'Chequered Steel Plates';
-  if (/\b(ms\s*plate|plates?)\b/i.test(strLower)) return 'MS Plate';
+  if (/\b(chequered\s*coil|checkered\s*coil)\b/i.test(strLower)) return 'Chequered Coil';
+  if (/\b(chequered\s*plate|chequered\s*sheets?|chequered)\b/i.test(strLower)) return 'Chequered Sheet';
+  if (/\b(ms\s*plate|plates?)\b/i.test(strLower)) return 'HR Plate';
   if (/\b(gi\s*corrugated|gc\s*sheet)\b/i.test(strLower)) return 'GI Corrugated Sheets (IS 277)';
   if (/\b(gi\s*coil|galvanized\s*coil)\b/i.test(strLower)) return 'GI Coil';
   if (/\b(gi\s*sheet|galvanized\s*sheet|gi|spangled|is\s*277)\b/i.test(strLower)) return 'GI Sheet (IS 277)';
-  if (/\b(tmt|rebar|rebars)\b/i.test(strLower)) return 'TMT Rebar';
-  if (/\b(flat\s*bars?|ms\s*flat)\b/i.test(strLower)) return 'MS Flat Bars (IS 2062)';
-  if (/\b(pipe|pipes|tube|tubes)\b/i.test(strLower)) return 'Steel Pipe';
+  if (/\b(tmt|rebar|rebars)\b/i.test(strLower)) return 'TMT Bar';
+  if (/\b(flat\s*bars?|ms\s*flat)\b/i.test(strLower)) return 'MS Flat Bar';
+  if (/\b(round\s*bars?|ms\s*round)\b/i.test(strLower)) return 'MS Round Bar';
+  if (/\b(square\s*bars?|ms\s*square\s*bar)\b/i.test(strLower)) return 'MS Square Bar';
+  if (/\b(ms\s*angles?|angle|angles)\b/i.test(strLower)) return 'MS Angle';
+  if (/\b(ms\s*channels?|channel|channels)\b/i.test(strLower)) return 'MS Channel';
+  if (/\b(ms\s*beams?|beam|beams|ismb)\b/i.test(strLower)) return 'MS Beam';
+  if (/\b(square\s*pipe|box\s*pipe)\b/i.test(strLower)) return 'MS Square Pipe';
+  if (/\b(rectangular\s*tube|rhs)\b/i.test(strLower)) return 'MS Rectangular Tube';
+  if (/\b(pipe|pipes|tube|tubes|round\s*pipe)\b/i.test(strLower)) return 'MS Round Pipe';
+  if (/\b(slotted\s*angle)\b/i.test(strLower)) return 'Slotted Angle';
+  if (/\b(solar\s*mounting\s*structure)\b/i.test(strLower)) return 'Solar Mounting Structure';
+  if (/\b(cable\s*tray.*perforated)\b/i.test(strLower)) return 'Cable Tray – Perforated';
+  if (/\b(cable\s*tray.*ladder)\b/i.test(strLower)) return 'Cable Tray – Ladder';
+  if (/\b(gi\s*earthing\s*strip|earthing\s*strip)\b/i.test(strLower)) return 'GI Earthing Strip';
   if (/\b(hr|hot\s*rolled)\b/i.test(strLower)) return 'HR Coil';
   if (/\b(cr|cold\s*rolled)\b/i.test(strLower)) return 'CR Coil';
   return str;
@@ -249,7 +267,7 @@ function isProductOrGenericName(name?: string | null): boolean {
 
 function extractMultiItemsFromText(raw: string): LineItemDetail[] {
   if (!raw || !raw.trim()) return [];
-  const steelPattern = /\b(CR\s*\d+(?:\.\d+)?\s*mm|HR\s*\d+(?:\.\d+)?\s*mm|MS\s*Plate|SS\s*\d{3}\s*Pipe|SS\s*Pipe|TMT\s*Rebar|TMT\s*Bar|HR\s*Coil|HR\s*Sheet|CR\s*Coil|CR\s*Sheet|GI\s*Coil|GI\s*Sheet|CR|HR|GI|Chequered\s*Plate|Steel\s*Pipe|Seamless\s*Pipe|MS\s*Flat|MS\s*Beam|ISMB|ISA|MS\s*Angle|MS\s*Channel)\b/gi;
+  const steelPattern = /\b(CR\s*\d+(?:\.\d+)?\s*mm|HR\s*\d+(?:\.\d+)?\s*mm|MS\s*Plate|SS\s*\d{3}\s*Pipe|SS\s*Pipe|TMT\s*Rebar|TMT\s*Bar|HR\s*Coil|HR\s*Sheet|CR\s*Coil|CR\s*Sheet|GP\s*Sheet|GP\s*Coil|GI\s*Coil|GI\s*Sheet|Galvalume\s*Sheet|Galvalume\s*Coil|GL\s*Sheet|GL\s*Coil|HRPO\s*Sheet|HRPO\s*Coil|HRPO|Chequered\s*Plate|Chequered\s*Sheet|Chequered\s*Coil|Steel\s*Pipe|Seamless\s*Pipe|MS\s*Flat\s*Bar|MS\s*Flat|MS\s*Round\s*Bar|MS\s*Square\s*Bar|MS\s*Square\s*Pipe|MS\s*Rectangular\s*Tube|MS\s*Beam|ISMB|ISMC|ISA|MS\s*Angle|MS\s*Channel|Slotted\s*Angle|GI\s*Earthing\s*Strip|Cable\s*Tray|CR|HR|GI|GP)\b/gi;
   const indices: { index: number; product: string }[] = [];
   let match;
   while ((match = steelPattern.exec(raw)) !== null) {
@@ -264,7 +282,7 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
     let chunk = raw.slice(start, end).trim();
     chunk = chunk.replace(/(?:Please send|Thank you|Please quote|Kindly provide|Please provide|Payment terms|Payment:)[\s\S]*$/i, '').trim();
 
-    const qtyMatch = chunk.match(/(\d+(?:\.\d+)?)\s*(Metric\s*Tons?|MT|Tons?|Pieces?|Pcs|Nos|Sheets?|Coils?|KG)/i);
+    const qtyMatch = chunk.match(/(\d+(?:\.\d+)?)\s*(Metric\s*Tons?|MT|Tons?|Pieces?|Pcs|Nos|Sheets?|Coils?|KG|KGS|Kilograms?)/i);
     const qty = qtyMatch ? parseFloat(qtyMatch[1]) : 0;
 
     let unit = 'MT';
@@ -289,23 +307,21 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
     }
 
     const gradeMatch = chunk.match(/([A-Za-z0-9\s]+?(?:\([^)]+\))?)\s*[-:]\s*(\d+.*)/);
-    let sku = indices[i].product.trim();
+    let sku = cleanProductType(indices[i].product.trim());
     let dims = '';
 
     const thkMatch = sku.match(/(\d+(?:\.\d+)?\s*mm)/i);
     if (thkMatch) {
       dims = thkMatch[1];
       sku = sku.replace(thkMatch[0], '').trim();
-      if (/^CR$/i.test(sku)) sku = 'CR Sheet';
-      if (/^HR$/i.test(sku)) sku = 'HR Sheet';
-      if (/^GI$/i.test(sku)) sku = 'GI Sheet';
+      sku = cleanProductType(sku);
     } else if (gradeMatch) {
-      sku = gradeMatch[1].trim();
+      sku = cleanProductType(gradeMatch[1].trim());
       dims = gradeMatch[2].replace(qtyMatch ? qtyMatch[0] : '', '').replace(/^[-,\s]+|[-,\s]+$/g, '').trim();
     } else {
       const parts = chunk.split(/\s*-\s*|\s*:\s*/);
-      sku = parts[0]?.trim() || indices[i].product.trim();
-      dims = chunk.replace(sku, '').replace(qtyMatch ? qtyMatch[0] : '', '').replace(/^[-,\s]+|[-,\s]+$/g, '').trim();
+      sku = cleanProductType(parts[0]?.trim() || indices[i].product.trim());
+      dims = chunk.replace(indices[i].product, '').replace(qtyMatch ? qtyMatch[0] : '', '').replace(/^[-,\s]+|[-,\s]+$/g, '').trim();
     }
     dims = dims.replace(/\s*-\s*\(/g, ' (').replace(/\s*-\s*$/g, '').trim();
 
@@ -414,8 +430,16 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
   // 3. Product Type
   let rawPt = aiJson?.productType || aiJson?.sku_text || aiJson?.line_items?.[0]?.sku_text || '';
   if (!rawPt) {
-    if (/\b(hr\s*pickled|hrpo|pickled)\b/i.test(textLower)) {
-      rawPt = 'Hot Rolled Pickled & Oiled';
+    if (/\b(gp\s*sheet|galvanized\s*(?:plain\s*)?sheet)\b/i.test(textLower)) {
+      rawPt = 'GP Sheet';
+    } else if (/\b(gp\s*coil|galvanized\s*(?:plain\s*)?coil)\b/i.test(textLower)) {
+      rawPt = 'GP Coil';
+    } else if (/\b(galvalume\s*sheet|gl\s*sheet)\b/i.test(textLower)) {
+      rawPt = 'Galvalume Sheet';
+    } else if (/\b(galvalume\s*coil|gl\s*coil)\b/i.test(textLower)) {
+      rawPt = 'Galvalume Coil';
+    } else if (/\b(hr\s*pickled|hrpo|pickled)\b/i.test(textLower)) {
+      rawPt = 'HRPO Coil';
     } else if (/\b(hr\s*coil|hot\s*rolled\s*coil)\b/i.test(textLower)) {
       rawPt = 'HR Coil';
     } else if (/\b(hr\s*sheet|hot\s*rolled\s*sheet)\b/i.test(textLower)) {
@@ -424,10 +448,12 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
       rawPt = 'CR Coil';
     } else if (/\b(cr\s*sheet|cold\s*rolled\s*sheet)\b/i.test(textLower)) {
       rawPt = 'CR Sheet';
+    } else if (/\b(chequered\s*coil|checkered\s*coil)\b/i.test(textLower)) {
+      rawPt = 'Chequered Coil';
     } else if (/\b(chequered\s*plate|chequered\s*sheets?|chequered)\b/i.test(textLower)) {
-      rawPt = 'Chequered Steel Plates';
+      rawPt = 'Chequered Sheet';
     } else if (/\b(ms\s*plate|plates?)\b/i.test(textLower)) {
-      rawPt = 'MS Plate';
+      rawPt = 'HR Plate';
     } else if (/\b(gi\s*corrugated|gc\s*sheet)\b/i.test(textLower)) {
       rawPt = 'GI Corrugated Sheets (IS 277)';
     } else if (/\b(gi\s*coil|galvanized\s*coil)\b/i.test(textLower)) {
@@ -435,11 +461,35 @@ function parseInquiryText(text: string, inq: any): ExtractedDetails {
     } else if (/\b(gi\s*sheet|galvanized\s*sheet|gi|spangled|is\s*277)\b/i.test(textLower)) {
       rawPt = 'GI Sheet (IS 277)';
     } else if (/\b(tmt|rebar|rebars)\b/i.test(textLower)) {
-      rawPt = 'TMT Rebar';
+      rawPt = 'TMT Bar';
     } else if (/\b(flat\s*bars?|ms\s*flat)\b/i.test(textLower)) {
-      rawPt = 'MS Flat Bars (IS 2062)';
-    } else if (/\b(pipes?|tubes?)\b/i.test(textLower)) {
-      rawPt = 'Steel Pipe';
+      rawPt = 'MS Flat Bar';
+    } else if (/\b(round\s*bars?|ms\s*round)\b/i.test(textLower)) {
+      rawPt = 'MS Round Bar';
+    } else if (/\b(square\s*bars?|ms\s*square\s*bar)\b/i.test(textLower)) {
+      rawPt = 'MS Square Bar';
+    } else if (/\b(ms\s*angles?|angle|angles)\b/i.test(textLower)) {
+      rawPt = 'MS Angle';
+    } else if (/\b(ms\s*channels?|channel|channels)\b/i.test(textLower)) {
+      rawPt = 'MS Channel';
+    } else if (/\b(ms\s*beams?|beam|beams|ismb)\b/i.test(textLower)) {
+      rawPt = 'MS Beam';
+    } else if (/\b(square\s*pipe|box\s*pipe)\b/i.test(textLower)) {
+      rawPt = 'MS Square Pipe';
+    } else if (/\b(rectangular\s*tube|rhs)\b/i.test(textLower)) {
+      rawPt = 'MS Rectangular Tube';
+    } else if (/\b(pipes?|tubes?|round\s*pipe)\b/i.test(textLower)) {
+      rawPt = 'MS Round Pipe';
+    } else if (/\b(slotted\s*angle)\b/i.test(textLower)) {
+      rawPt = 'Slotted Angle';
+    } else if (/\b(solar\s*mounting\s*structure)\b/i.test(textLower)) {
+      rawPt = 'Solar Mounting Structure';
+    } else if (/\b(cable\s*tray.*perforated)\b/i.test(textLower)) {
+      rawPt = 'Cable Tray – Perforated';
+    } else if (/\b(cable\s*tray.*ladder)\b/i.test(textLower)) {
+      rawPt = 'Cable Tray – Ladder';
+    } else if (/\b(gi\s*earthing\s*strip|earthing\s*strip)\b/i.test(textLower)) {
+      rawPt = 'GI Earthing Strip';
     } else if (/\b(hr|hot\s*rolled)\b/i.test(textLower)) {
       rawPt = 'HR Coil';
     } else if (/\b(cr|cold\s*rolled)\b/i.test(textLower)) {
