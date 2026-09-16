@@ -34,176 +34,9 @@ import {
 } from '../utils/dateUtils';
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 
-interface CustomerVisit {
-  id: string;
-  customer_name: string;
-  person_met?: string | null;
-  contact_phone?: string | null;
-  contact_no?: string | null;
-  location?: string | null;
-  customer_address?: string | null;
-  outcome?: 'positive' | 'neutral' | 'negative' | string | null;
-  remarks?: string | null;
-  raw_remarks?: string | null;
-  material_requirement?: string | null;
-  requirement?: string | null;
-  follow_up_action?: string | null;
-  follow_up?: string | null;
-  followup?: string | null;
-  follow_up_date?: string | null;
-  follow_up_status?: 'pending' | 'completed' | string | null;
-  follow_up_completed_at?: string | null;
-  visited_at: string;
-  salesperson_phone?: string | null;
-  salesperson_name?: string | null;
-}
-
-export function getFollowUpStatusInfo(v: CustomerVisit): {
-  hasFollowUp: boolean;
-  action: string;
-  dueDateStr: string | null;
-  status: 'pending' | 'completed';
-  urgency: 'completed' | 'overdue' | 'today' | 'upcoming' | 'no_date';
-  diffDays: number | null;
-  relativeText: string;
-  badgeLabel: string;
-  badgeClass: string;
-} {
-  const rawAction =
-    v.follow_up_action ||
-    (v as any).followup ||
-    (v as any).follow_up ||
-    (v.remarks || '').match(/\[(?:Follow-?Up|Follow-?up\s*Action):\s*([^\]]+)\]/i)?.[1] ||
-    (v.remarks || '').match(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*([^|\]\n]+)/i)?.[1];
-
-  const action = rawAction ? String(rawAction).trim() : '';
-  const isNonAction =
-    !action ||
-    action === '-' ||
-    action.toLowerCase() === 'none' ||
-    action.toLowerCase() === 'nil' ||
-    action.toLowerCase() === 'n/a' ||
-    action.toLowerCase().startsWith('no remarks') ||
-    action.toLowerCase().startsWith('no follow');
-
-  if (isNonAction) {
-    return {
-      hasFollowUp: false,
-      action: '',
-      dueDateStr: null,
-      status: 'pending',
-      urgency: 'no_date',
-      diffDays: null,
-      relativeText: '',
-      badgeLabel: '',
-      badgeClass: '',
-    };
-  }
-
-  const status: 'pending' | 'completed' =
-    v.follow_up_status === 'completed' ? 'completed' : 'pending';
-
-  const dueDate = v.follow_up_date
-    ? new Date(v.follow_up_date).toISOString().split('T')[0]
-    : null;
-
-  if (status === 'completed') {
-    return {
-      hasFollowUp: true,
-      action,
-      dueDateStr: dueDate,
-      status: 'completed',
-      urgency: 'completed',
-      diffDays: null,
-      relativeText: 'Done',
-      badgeLabel: 'Done',
-      badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
-    };
-  }
-
-  if (!dueDate) {
-    return {
-      hasFollowUp: true,
-      action,
-      dueDateStr: null,
-      status: 'pending',
-      urgency: 'no_date',
-      diffDays: null,
-      relativeText: 'Pending',
-      badgeLabel: 'Pending',
-      badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
-    };
-  }
-
-  const todayStr = formatLocalDate();
-  const [tY, tM, tD] = todayStr.split('-').map(Number);
-  const [dY, dM, dD] = dueDate.split('-').map(Number);
-  const todayDate = new Date(Date.UTC(tY, tM - 1, tD));
-  const targetDate = new Date(Date.UTC(dY, dM - 1, dD));
-  const diffDays = Math.round((targetDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
-
-  const formattedDate = targetDate.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-
-  if (diffDays < 0) {
-    const absDays = Math.abs(diffDays);
-    const dayLabel = absDays === 1 ? '1 day overdue' : `${absDays} days overdue`;
-    return {
-      hasFollowUp: true,
-      action,
-      dueDateStr: dueDate,
-      status: 'pending',
-      urgency: 'overdue',
-      diffDays,
-      relativeText: `${dayLabel} (${formattedDate})`,
-      badgeLabel: 'Overdue',
-      badgeClass: 'bg-rose-100 text-rose-800 border border-rose-200',
-    };
-  }
-
-  if (diffDays === 0) {
-    return {
-      hasFollowUp: true,
-      action,
-      dueDateStr: dueDate,
-      status: 'pending',
-      urgency: 'today',
-      diffDays: 0,
-      relativeText: 'Due today',
-      badgeLabel: 'Due Today',
-      badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
-    };
-  }
-
-  if (diffDays === 1) {
-    return {
-      hasFollowUp: true,
-      action,
-      dueDateStr: dueDate,
-      status: 'pending',
-      urgency: 'upcoming',
-      diffDays: 1,
-      relativeText: `Due tomorrow (${formattedDate})`,
-      badgeLabel: 'Tomorrow',
-      badgeClass: 'bg-blue-100 text-blue-800 border border-blue-200',
-    };
-  }
-
-  return {
-    hasFollowUp: true,
-    action,
-    dueDateStr: dueDate,
-    status: 'pending',
-    urgency: 'upcoming',
-    diffDays,
-    relativeText: `In ${diffDays} days (${formattedDate})`,
-    badgeLabel: `In ${diffDays}d`,
-    badgeClass: 'bg-blue-100 text-blue-800 border border-blue-200',
-  };
-}
+import { type CustomerVisit, getFollowUpStatusInfo } from '../utils/visitUtils';
+export type { CustomerVisit };
+export { getFollowUpStatusInfo };
 
 export function formatCityLocality(rawLocation?: string | null, rawAddress?: string | null): string {
   const str = (rawLocation || rawAddress || '').trim();
@@ -860,7 +693,9 @@ export default function VisitsPage() {
 
     const fuInfo = getFollowUpStatusInfo(v);
     let matchesFollowup = true;
-    if (filterFollowup === 'pending') {
+    if (filterFollowup === 'due') {
+      matchesFollowup = fuInfo.hasFollowUp && (fuInfo.urgency === 'overdue' || fuInfo.urgency === 'today');
+    } else if (filterFollowup === 'pending') {
       matchesFollowup = fuInfo.hasFollowUp && fuInfo.status === 'pending';
     } else if (filterFollowup === 'overdue') {
       matchesFollowup = fuInfo.hasFollowUp && fuInfo.urgency === 'overdue';
@@ -879,6 +714,11 @@ export default function VisitsPage() {
   const positiveVisits = visits.filter(v => getNormalizedOutcome(v) === 'positive').length;
   const neutralVisits = visits.filter(v => getNormalizedOutcome(v) === 'neutral').length;
   const negativeVisits = visits.filter(v => getNormalizedOutcome(v) === 'negative').length;
+
+  const dueFollowupsCount = visits.filter(v => {
+    const fu = getFollowUpStatusInfo(v);
+    return fu.hasFollowUp && (fu.urgency === 'overdue' || fu.urgency === 'today');
+  }).length;
 
   const pendingFollowupsCount = visits.filter(v => {
     const fu = getFollowUpStatusInfo(v);
@@ -985,14 +825,21 @@ export default function VisitsPage() {
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div
+            onClick={() => setFilterFollowup(filterFollowup === 'due' ? 'all' : 'due')}
+            className={`bg-white p-4 rounded-xl border ${filterFollowup === 'due' ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'} shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 transition-all`}>
             <div>
               <p className="text-xs text-slate-500 font-medium">Follow-ups Due</p>
               <div className="flex items-baseline gap-2 mt-1">
-                <p className="text-2xl font-bold text-blue-600">{pendingFollowupsCount}</p>
+                <p className="text-2xl font-bold text-blue-600">{dueFollowupsCount}</p>
                 {overdueFollowupsCount > 0 && (
                   <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200">
                     {overdueFollowupsCount} overdue
+                  </span>
+                )}
+                {dueTodayFollowupsCount > 0 && (
+                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
+                    {dueTodayFollowupsCount} today
                   </span>
                 )}
               </div>
@@ -1065,9 +912,10 @@ export default function VisitsPage() {
               onChange={e => setFilterFollowup(e.target.value)}
               className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
               <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Follow-ups ({visits.length})</option>
-              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Pending ({pendingFollowupsCount})</option>
+              <option value="due" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due / Overdue ({dueFollowupsCount})</option>
               <option value="overdue" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Overdue ({overdueFollowupsCount})</option>
               <option value="due_today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due Today ({dueTodayFollowupsCount})</option>
+              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Pending ({pendingFollowupsCount})</option>
               <option value="completed" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Completed ({completedFollowupsCount})</option>
               <option value="none" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>No Follow-up</option>
             </select>

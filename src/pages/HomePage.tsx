@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
+import { getFollowUpStatusInfo } from '../utils/visitUtils';
 import {
   Package,
   ShoppingBag,
@@ -690,77 +691,36 @@ export default function HomePage() {
       });
     }
 
-    // 4. Visit Follow-ups (Overdue / Due Today / Pending)
-    const todayStr = formatLocalDate();
-    const pendingVisitsWithFollowup = safeVisits.filter(v => {
-      const action = (v.follow_up_action || v.follow_up || v.followup || '').trim();
-      if (!action) return false;
-      const lower = action.toLowerCase();
-      if (
-        action === '-' ||
-        lower === 'none' ||
-        lower === 'nil' ||
-        lower === 'n/a' ||
-        lower.startsWith('no remarks') ||
-        lower.startsWith('no follow')
-      ) {
-        return false;
+    // 4. Visit Follow-ups Due (Overdue + Due Today ONLY)
+    const dueOrOverdueVisits = safeVisits.filter(v => {
+      const fu = getFollowUpStatusInfo(v);
+      return fu.hasFollowUp && (fu.urgency === 'overdue' || fu.urgency === 'today');
+    });
+
+    if (dueOrOverdueVisits.length > 0) {
+      const overdueCount = dueOrOverdueVisits.filter(
+        v => getFollowUpStatusInfo(v).urgency === 'overdue',
+      ).length;
+      const todayCount = dueOrOverdueVisits.filter(
+        v => getFollowUpStatusInfo(v).urgency === 'today',
+      ).length;
+      const totalCount = dueOrOverdueVisits.length;
+
+      let titleText = '';
+      if (overdueCount > 0 && todayCount > 0) {
+        titleText = `${totalCount} visit follow-up${totalCount > 1 ? 's' : ''} due (${overdueCount} overdue, ${todayCount} today)`;
+      } else if (overdueCount > 0) {
+        titleText = `${overdueCount} visit follow-up${overdueCount > 1 ? 's are' : ' is'} overdue`;
+      } else {
+        titleText = `${todayCount} visit follow-up${todayCount > 1 ? 's' : ''} due today`;
       }
-      return v.follow_up_status !== 'completed';
-    });
 
-    const overdueVisitFollowups = pendingVisitsWithFollowup.filter(v => {
-      if (!v.follow_up_date) return false;
-      const dStr = new Date(v.follow_up_date).toISOString().split('T')[0];
-      return dStr < todayStr;
-    });
-
-    const todayVisitFollowups = pendingVisitsWithFollowup.filter(v => {
-      if (!v.follow_up_date) return false;
-      const dStr = new Date(v.follow_up_date).toISOString().split('T')[0];
-      return dStr === todayStr;
-    });
-
-    if (overdueVisitFollowups.length > 0) {
       items.push({
-        id: 'action-visit-followups-overdue',
-        category: 'Overdue Visit Follow-ups',
-        title:
-          overdueVisitFollowups.length === 1
-            ? '1 visit follow-up is overdue'
-            : `${overdueVisitFollowups.length} visit follow-ups are overdue`,
-        link: '/visits?followup=overdue',
-        icon: AlertTriangle,
-      });
-    }
-
-    if (todayVisitFollowups.length > 0) {
-      items.push({
-        id: 'action-visit-followups-today',
-        category: 'Visit Follow-ups Due Today',
-        title:
-          todayVisitFollowups.length === 1
-            ? '1 visit follow-up due today'
-            : `${todayVisitFollowups.length} visit follow-ups due today`,
-        link: '/visits?followup=due_today',
-        icon: MapPin,
-      });
-    }
-
-    const otherPending = pendingVisitsWithFollowup.filter(
-      v => !overdueVisitFollowups.includes(v) && !todayVisitFollowups.includes(v),
-    );
-
-    if (overdueVisitFollowups.length === 0 && todayVisitFollowups.length === 0 && otherPending.length > 0) {
-      items.push({
-        id: 'action-visit-followups-pending',
+        id: 'action-visit-followups-due',
         category: 'Visit Follow-ups Due',
-        title:
-          otherPending.length === 1
-            ? '1 visit follow-up pending'
-            : `${otherPending.length} visit follow-ups pending`,
-        link: '/visits?followup=pending',
-        icon: MapPin,
+        title: titleText,
+        link: '/visits?followup=due',
+        icon: overdueCount > 0 ? AlertTriangle : Clock,
       });
     }
 
