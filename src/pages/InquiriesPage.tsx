@@ -991,6 +991,14 @@ export default function InquiriesPage() {
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [subMenuInqId, setSubMenuInqId] = useState<string | null>(null);
   const [lostModal, setLostModal] = useState<{ dealId: string; inqId: string; reason: string } | null>(null);
+  const [wonModal, setWonModal] = useState<{
+    dealId: string;
+    inqId: string;
+    companyName: string;
+    dealCode: string;
+    poNumber: string;
+    poDate: string;
+  } | null>(null);
 
   const LOST_REASONS = [
     'Price',
@@ -1020,7 +1028,7 @@ export default function InquiriesPage() {
 
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
-    const isAnyModalOpen = showModal || showEditDrawer || showPdfModal || showQuotationModal || !!imageViewerUrl || !!lostModal;
+    const isAnyModalOpen = showModal || showEditDrawer || showPdfModal || showQuotationModal || !!imageViewerUrl || !!lostModal || !!wonModal;
     const body = document.body;
     const docEl = document.documentElement;
     const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
@@ -1198,8 +1206,8 @@ export default function InquiriesPage() {
   });
 
   const stageMutation = useMutation({
-    mutationFn: ({ id, stage, reason }: { id: string; stage: string; reason?: string }) =>
-      dealsApi.updateStage(id, stage, reason),
+    mutationFn: ({ id, stage, reason, po_number, po_date }: { id: string; stage: string; reason?: string; po_number?: string; po_date?: string }) =>
+      dealsApi.updateStage(id, stage, reason, po_number, po_date),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['kanban'] });
@@ -1209,8 +1217,9 @@ export default function InquiriesPage() {
       queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
       toast.success('Deal stage updated');
       setPipelineLostModal(null);
+      setWonModal(null);
     },
-    onError: () => toast.error('Failed to update deal'),
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to update deal'),
   });
 
   const deleteDealMutation = useMutation({
@@ -1233,6 +1242,18 @@ export default function InquiriesPage() {
   const handlePipelineStageChange = (id: string, stage: string) => {
     if (stage === 'lost') {
       setPipelineLostModal({ dealId: id, reason: '' });
+    } else if (stage === 'won') {
+      const targetDeal = rawDeals?.find((d: any) => d.id === id);
+      const targetId = targetDeal?.inquiry_id || id;
+      const cleanId = (targetId.startsWith('DEAL-') || targetId.startsWith('INQ-') ? targetId.replace(/^(?:DEAL|INQ)-/, '') : targetId.substring(0, 6)).toUpperCase();
+      setWonModal({
+        dealId: id,
+        inqId: targetDeal?.inquiry_id || id,
+        companyName: targetDeal?.customer_name || 'Customer',
+        dealCode: `#INQ-${cleanId}`,
+        poNumber: targetDeal?.po_number || '',
+        poDate: new Date().toISOString().split('T')[0],
+      });
     } else {
       stageMutation.mutate({ id, stage });
     }
@@ -1356,7 +1377,7 @@ export default function InquiriesPage() {
     }
 
     const currentDealStage = (linked.stage || '').toLowerCase().trim();
-    if ((currentDealStage === 'new_inquiry' || currentDealStage === 'review' || !linked.stage) && (targetStage === 'won' || targetStage === 'lost' || targetStage === 'on_hold' || targetStage === 'negotiation')) {
+    if ((currentDealStage === 'new_inquiry' || currentDealStage === 'review' || !linked.stage) && (targetStage === 'lost' || targetStage === 'on_hold' || targetStage === 'negotiation')) {
       toast.error(`Cannot move inquiry to ${targetStage.toUpperCase().replace('_', ' ')} from New Inquiry stage. Unit rates must be quoted first.`);
       return;
     }
@@ -1368,6 +1389,20 @@ export default function InquiriesPage() {
 
     if (targetStage === 'lost') {
       setLostModal({ dealId: linked.id, inqId: inq.id, reason: '' });
+      return;
+    }
+
+    if (targetStage === 'won') {
+      const targetId = linked.inquiry_id || linked.id;
+      const cleanId = (targetId.startsWith('DEAL-') || targetId.startsWith('INQ-') ? targetId.replace(/^(?:DEAL|INQ)-/, '') : targetId.substring(0, 6)).toUpperCase();
+      setWonModal({
+        dealId: linked.id,
+        inqId: inq.id,
+        companyName: details.companyName || inq.sender_name || 'Customer',
+        dealCode: `#INQ-${cleanId}`,
+        poNumber: linked.po_number || '',
+        poDate: new Date().toISOString().split('T')[0],
+      });
       return;
     }
 
@@ -1386,6 +1421,33 @@ export default function InquiriesPage() {
       fetchMonthlyInquiries();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to update deal status.');
+    }
+  };
+
+  const handleConfirmWon = async () => {
+    if (!wonModal || !wonModal.dealId) return;
+    const cleanPo = (wonModal.poNumber || '').trim();
+    if (!cleanPo) {
+      toast.error('Purchase Order (PO) number is required.');
+      return;
+    }
+
+    try {
+      const toastId = toast.loading('Marking deal as Won and adding to Orders...');
+      await dealsApi.updateStage(wonModal.dealId, 'won', undefined, cleanPo, wonModal.poDate);
+      toast.dismiss(toastId);
+      toast.success(`Inquiry marked as Won and added to Orders module (PO: ${cleanPo})!`);
+      setWonModal(null);
+
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      fetchMonthlyInquiries();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to mark deal as won.');
     }
   };
 
@@ -4175,6 +4237,83 @@ export default function InquiriesPage() {
                 Confirm Lost
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Won Modal - Prompt for PO Number before converting to confirmed order */}
+      {wonModal && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-[420px] max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <CheckCircle size={22} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Mark Inquiry as Won</h3>
+                <p className="text-xs text-slate-500">Enter PO details to convert this to an active Order</p>
+              </div>
+            </div>
+
+            {/* Context Details Card */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Customer:</span>
+                <span className="font-bold text-slate-900 truncate max-w-[200px]">{wonModal.companyName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Inquiry Reference:</span>
+                <span className="font-mono font-bold text-blue-600">{wonModal.dealCode}</span>
+              </div>
+            </div>
+
+            {/* Form Inputs */}
+            <form onSubmit={(e) => { e.preventDefault(); handleConfirmWon(); }} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Purchase Order (PO) Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  required
+                  placeholder="e.g. PO-9842 or PO/2026/041"
+                  value={wonModal.poNumber}
+                  onChange={(e) => setWonModal(prev => prev ? { ...prev, poNumber: e.target.value } : null)}
+                  className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  PO Date
+                </label>
+                <input
+                  type="date"
+                  value={wonModal.poDate}
+                  onChange={(e) => setWonModal(prev => prev ? { ...prev, poDate: e.target.value } : null)}
+                  className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setWonModal(null)}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!wonModal.poNumber.trim()}
+                  className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+                  <CheckCircle size={14} />
+                  Confirm &amp; Create Order
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -55,8 +55,8 @@ export const dealsApi = {
   getPipeline: (params?: any) => API.get('/deals/pipeline', { params }),
   getAll: (params?: any) => API.get('/deals', { params }),
   getOne: (id: string) => API.get(`/deals/${id}`),
-  updateStage: (id: string, stage: string, lost_reason?: string) =>
-    API.patch(`/deals/${id}/stage`, { stage, lost_reason }),
+  updateStage: (id: string, stage: string, lost_reason?: string, po_number?: string, po_date?: string) =>
+    API.patch(`/deals/${id}/stage`, { stage, lost_reason, po_number, po_date }),
   processPo: (data: any) => API.post('/deals/process-po', data),
   delete: (id: string) => API.delete(`/deals/${id}`),
 };

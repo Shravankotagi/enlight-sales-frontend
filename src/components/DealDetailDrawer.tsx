@@ -50,6 +50,9 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   const queryClient = useQueryClient();
   const [showLostModal, setShowLostModal] = useState(false);
   const [lostReason, setLostReason] = useState('');
+  const [showWonModal, setShowWonModal] = useState(false);
+  const [wonPoNumber, setWonPoNumber] = useState('');
+  const [wonPoDate, setWonPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: dealData, isLoading, refetch } = useQuery({
@@ -71,6 +74,16 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
 
   const deal = dealData;
 
+  // Initialize PO details if deal already has them
+  useEffect(() => {
+    if (deal?.po_number) {
+      setWonPoNumber(deal.po_number);
+    }
+    if (deal?.po_date) {
+      setWonPoDate(deal.po_date);
+    }
+  }, [deal]);
+
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -81,15 +94,18 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   }, [onClose]);
 
   const stageMutation = useMutation({
-    mutationFn: ({ stage, reason }: { stage: string; reason?: string }) =>
-      dealsApi.updateStage(dealId!, stage, reason),
+    mutationFn: ({ stage, reason, po_number, po_date }: { stage: string; reason?: string; po_number?: string; po_date?: string }) =>
+      dealsApi.updateStage(dealId!, stage, reason, po_number, po_date),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['deal', dealId] });
       queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
       toast.success('Deal stage updated');
       setShowLostModal(false);
       setLostReason('');
+      setShowWonModal(false);
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || 'Failed to update stage');
@@ -114,6 +130,8 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   const handleStageChange = (stage: string) => {
     if (stage === 'lost') {
       setShowLostModal(true);
+    } else if (stage === 'won') {
+      setShowWonModal(true);
     } else {
       stageMutation.mutate({ stage });
     }
@@ -546,6 +564,72 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 Confirm Lost
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Won Modal - Ask for PO Number */}
+      {showWonModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl p-6 w-96 max-w-sm shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-base font-bold text-slate-900 mb-1">Mark as Won</h3>
+            <p className="text-xs text-slate-500 mb-4">Enter Purchase Order (PO) details to confirm this order</p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!wonPoNumber.trim()) {
+                  toast.error('PO Number is required');
+                  return;
+                }
+                stageMutation.mutate({ stage: 'won', po_number: wonPoNumber.trim(), po_date: wonPoDate });
+              }}
+              className="space-y-3.5"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  PO Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  required
+                  placeholder="e.g. PO-9842"
+                  value={wonPoNumber}
+                  onChange={(e) => setWonPoNumber(e.target.value)}
+                  className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  PO Date
+                </label>
+                <input
+                  type="date"
+                  value={wonPoDate}
+                  onChange={(e) => setWonPoDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowWonModal(false)}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!wonPoNumber.trim() || stageMutation.isPending}
+                  className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50"
+                >
+                  {stageMutation.isPending ? 'Updating...' : 'Confirm Won'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
