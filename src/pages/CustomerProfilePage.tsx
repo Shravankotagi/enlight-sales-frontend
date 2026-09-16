@@ -27,11 +27,20 @@ import {
   X,
   ArrowUpRight,
   Scale,
+  Phone,
+  Users,
+  User,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 
-function safeFormatDate(dateVal?: string | Date | null): string {
+function safeStr(val: any): string {
+  if (val === null || val === undefined) return '';
+  return String(val).trim();
+}
+
+function safeFormatDate(dateVal?: any): string {
   if (!dateVal) return '—';
   try {
     const d = new Date(dateVal);
@@ -46,8 +55,8 @@ function safeFormatDate(dateVal?: string | Date | null): string {
   }
 }
 
-function HealthBadge({ risk }: { risk?: string }) {
-  const r = (risk || '').toLowerCase();
+function HealthBadge({ risk }: { risk?: any }) {
+  const r = safeStr(risk).toLowerCase();
   if (r === 'churning' || r === 'high') {
     return (
       <span className="px-3 py-1 text-xs font-bold rounded-full bg-rose-50 text-rose-700 inline-flex items-center gap-1.5 border border-rose-200 shadow-2xs">
@@ -72,8 +81,8 @@ function HealthBadge({ risk }: { risk?: string }) {
   );
 }
 
-function SegmentBadge({ segment }: { segment?: string }) {
-  const s = (segment || 'new').toLowerCase();
+function SegmentBadge({ segment }: { segment?: any }) {
+  const s = safeStr(segment).toLowerCase() || 'new';
   if (s === 'key_account' || s === 'key account') {
     return (
       <span className="px-3 py-1 text-xs font-bold rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 inline-flex items-center gap-1.5 shadow-2xs">
@@ -98,8 +107,8 @@ function SegmentBadge({ segment }: { segment?: string }) {
   );
 }
 
-function SentimentBadge({ sentiment }: { sentiment?: string }) {
-  const s = (sentiment || '').toLowerCase();
+function SentimentBadge({ sentiment }: { sentiment?: any }) {
+  const s = safeStr(sentiment).toLowerCase();
   if (s === 'critical' || s === 'churning') {
     return (
       <span className="px-2.5 py-1 text-2xs font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 shadow-2xs">
@@ -149,12 +158,13 @@ function SentimentBadge({ sentiment }: { sentiment?: string }) {
   );
 }
 
-function formatCurrency(val?: number) {
+function formatCurrency(val?: any) {
   const amount = Number(val || 0);
+  if (isNaN(amount)) return '₹0';
   return '₹' + amount.toLocaleString('en-IN');
 }
 
-function formatTonnage(val?: number) {
+function formatTonnage(val?: any) {
   const amount = Number(val || 0);
   if (isNaN(amount) || amount === 0) return '0 MT';
   const rounded = Math.round(amount * 1000) / 1000;
@@ -170,27 +180,29 @@ interface ParsedVisitRemarks {
   location?: string;
 }
 
-function parseVisitRemarks(raw?: string, directOutcome?: string): ParsedVisitRemarks {
+function parseVisitRemarks(raw?: any, directOutcome?: any): ParsedVisitRemarks {
+  const rawStr = safeStr(raw);
+  const directOutcomeStr = safeStr(directOutcome);
   const tags: Record<string, string> = {};
-  if (raw && raw.trim()) {
+  if (rawStr) {
     const tagRegex = /\[([a-zA-Z0-9_\s-]+):\s*([^\]]+)\]/g;
     let match;
-    while ((match = tagRegex.exec(raw)) !== null) {
-      const key = match[1].trim().toLowerCase().replace(/[\s_-]+/g, '');
-      const val = match[2].trim();
+    while ((match = tagRegex.exec(rawStr)) !== null) {
+      const key = safeStr(match[1]).toLowerCase().replace(/[\s_-]+/g, '');
+      const val = safeStr(match[2]);
       tags[key] = val;
     }
   }
 
-  let cleanNotes = raw
-    ? raw.replace(/\[([a-zA-Z0-9_\s-]+):\s*([^\]]+)\]/g, '').trim()
+  let cleanNotes = rawStr
+    ? rawStr.replace(/\[([a-zA-Z0-9_\s-]+):\s*([^\]]+)\]/g, '').trim()
     : '';
 
   let followUp = tags.followup || tags.followupaction;
   if (!followUp && cleanNotes) {
     const pipeFuMatch = cleanNotes.match(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*([^|\n]+)/i);
-    if (pipeFuMatch) {
-      const fuVal = pipeFuMatch[1].trim();
+    if (pipeFuMatch && pipeFuMatch[1]) {
+      const fuVal = safeStr(pipeFuMatch[1]);
       const lowerFu = fuVal.toLowerCase();
       if (
         fuVal &&
@@ -210,8 +222,8 @@ function parseVisitRemarks(raw?: string, directOutcome?: string): ParsedVisitRem
 
   if (cleanNotes) {
     cleanNotes = cleanNotes
-      .replace(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*[^|\n]+/gi, '')
-      .replace(/(?:^|\||\n)\s*(?:Material )?Requirement:\s*[^|\n]+/gi, '')
+      .replace(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*([^|\n]+)/gi, '')
+      .replace(/(?:^|\||\n)\s*(?:Material )?Requirement:\s*([^|\n]+)/gi, '')
       .replace(/(?:^|\||\n)\s*Location:\s*[^|\n]+/gi, '')
       .replace(/(?:^|\||\n)\s*Interests?:\s*[^|\n]+/gi, '')
       .replace(/^[\s|]+|[\s|]+$/g, '')
@@ -219,11 +231,11 @@ function parseVisitRemarks(raw?: string, directOutcome?: string): ParsedVisitRem
   }
 
   let outcome = tags.outcome;
-  if (!outcome && directOutcome && directOutcome !== 'unknown') {
-    outcome = directOutcome.charAt(0).toUpperCase() + directOutcome.slice(1);
+  if (!outcome && directOutcomeStr && directOutcomeStr !== 'unknown') {
+    outcome = directOutcomeStr.charAt(0).toUpperCase() + directOutcomeStr.slice(1);
   }
-  if (!outcome && raw) {
-    const lowerRem = raw.toLowerCase();
+  if (!outcome && rawStr) {
+    const lowerRem = rawStr.toLowerCase();
     if (
       /\b(?:negative|bad|rejected|rejection|unsuccessful|declined|not\s+(?:at\s+all\s+)?inter(?:e)?sted|uninterested|no\s+interest|not\s+buying|not\s+interested|no\s+(?:immediate\s+)?need|no\s+requirement|refused|unfavorable|dissatisfied|cancelled|lost)\b/i.test(
         lowerRem,
@@ -261,7 +273,7 @@ function parseVisitRemarks(raw?: string, directOutcome?: string): ParsedVisitRem
   };
 }
 
-export default function CustomerProfilePage() {
+function CustomerProfilePageContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -270,6 +282,7 @@ export default function CustomerProfilePage() {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits'>('overview');
   const [copiedGst, setCopiedGst] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
 
@@ -288,7 +301,7 @@ export default function CustomerProfilePage() {
   const employeeMap = useMemo(() => {
     const map = new Map<string, string>();
     safeEmployees.forEach((emp: any) => {
-      if (emp.phone && emp.name) {
+      if (emp && emp.phone && emp.name) {
         const clean = String(emp.phone).replace(/\D/g, '').slice(-10);
         map.set(clean, emp.name);
       }
@@ -296,20 +309,24 @@ export default function CustomerProfilePage() {
     return map;
   }, [safeEmployees]);
 
-  const formatName = (str?: string) => {
-    if (!str) return 'Unassigned';
-    return str
+  const formatName = (str?: any) => {
+    const s = safeStr(str);
+    if (!s) return 'Unassigned';
+    return s
       .split(' ')
+      .filter(Boolean)
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
   };
 
-  const getSalespersonName = (phoneStr?: string, assignedName?: string) => {
-    if (assignedName && assignedName.trim()) {
-      return formatName(assignedName);
+  const getSalespersonName = (phoneStr?: any, assignedName?: any) => {
+    const aName = safeStr(assignedName);
+    if (aName) {
+      return formatName(aName);
     }
-    if (!phoneStr) return 'Unassigned';
-    const clean = String(phoneStr).replace(/\D/g, '').slice(-10);
+    const pStr = safeStr(phoneStr);
+    if (!pStr) return 'Unassigned';
+    const clean = pStr.replace(/\D/g, '').slice(-10);
     const found = employeeMap.get(clean);
     if (found) return formatName(found);
     return 'Unassigned';
@@ -370,12 +387,38 @@ export default function CustomerProfilePage() {
     },
   });
 
-  const handleCopyGst = (gst?: string) => {
-    if (!gst) return;
-    navigator.clipboard.writeText(gst);
-    setCopiedGst(true);
-    toast.success('GSTIN copied to clipboard');
-    setTimeout(() => setCopiedGst(false), 2000);
+  const handleCopyGst = (gst?: any) => {
+    const g = safeStr(gst);
+    if (!g) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(g);
+        setCopiedGst(true);
+        toast.success('GSTIN copied to clipboard');
+        setTimeout(() => setCopiedGst(false), 2000);
+      } else {
+        toast.error('Clipboard access not supported');
+      }
+    } catch {
+      toast.error('Failed to copy GSTIN');
+    }
+  };
+
+  const handleCopyPhone = (phone?: any) => {
+    const p = safeStr(phone);
+    if (!p) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(p);
+        setCopiedPhone(p);
+        toast.success('Phone number copied to clipboard');
+        setTimeout(() => setCopiedPhone(null), 2000);
+      } else {
+        toast.error('Clipboard access not supported');
+      }
+    } catch {
+      toast.error('Failed to copy phone number');
+    }
   };
 
   const handleOpenEdit = () => {
@@ -468,9 +511,108 @@ export default function CustomerProfilePage() {
         d.inquiry_type === 'purchase_order')
   );
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
-  const complaints = Array.isArray(customer.complaints) ? customer.complaints : [];
   const inquiries = Array.isArray(customer.inquiries) ? customer.inquiries : [];
+  const complaints = Array.isArray(customer.complaints) ? customer.complaints : [];
   const healthSignals = customer.health_signals || {};
+
+  // Aggregate all unique contacts and POCs for this customer across master data and site visits
+  const stakeholdersList = useMemo(() => {
+    try {
+      const list: Array<{
+        id: string;
+        name: string;
+        phone?: string;
+        roleLabel: string;
+        isPrimary: boolean;
+        meta?: string;
+      }> = [];
+
+      const seenKeys = new Set<string>();
+
+      // 1. Primary Account Contact
+      const custContactPerson = safeStr(customer?.contact_person);
+      const custPhone = safeStr(customer?.customer_phone);
+      if (custContactPerson || custPhone) {
+        const name = custContactPerson || 'Primary Contact';
+        const phone = custPhone;
+        const key = `${name.toLowerCase()}::${phone.replace(/\D/g, '')}`;
+        seenKeys.add(key);
+        list.push({
+          id: 'primary-poc',
+          name,
+          phone: phone || undefined,
+          roleLabel: 'Primary POC',
+          isPrimary: true,
+          meta: 'Customer Master Record',
+        });
+      }
+
+      // 2. Contacts Met via Site Visits (distinct by name/phone)
+      if (Array.isArray(visits)) {
+        visits.forEach((v: any, idx: number) => {
+          if (!v) return;
+          const rawName = safeStr(v.person_met);
+          if (
+            !rawName ||
+            rawName === '-' ||
+            rawName.toLowerCase() === 'null' ||
+            rawName.toLowerCase() === 'contact person'
+          ) {
+            return;
+          }
+          const rawPhone = safeStr(v.contact_phone || v.contact_no);
+          const key = `${rawName.toLowerCase()}::${rawPhone.replace(/\D/g, '')}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            const visitDateStr = safeFormatDate(v.visited_at);
+            const rep = getSalespersonName(v.salesperson_phone, v.salesperson_name);
+            list.push({
+              id: `visit-poc-${idx}-${rawName}`,
+              name: rawName,
+              phone: rawPhone || undefined,
+              roleLabel: 'Site Visit POC',
+              isPrimary: false,
+              meta:
+                visitDateStr !== '—'
+                  ? `Met on ${visitDateStr}${rep !== 'Unassigned' ? ` by ${rep}` : ''}`
+                  : 'Met via Site Visit',
+            });
+          }
+        });
+      }
+
+      // 3. Contacts parsed from customer notes
+      if (customer?.notes && typeof customer.notes === 'string') {
+        const contactRegex = /Contact:\s*([^|\n]+)(?:\|\s*([0-9+\s-]+))?/gi;
+        let match;
+        let nIdx = 0;
+        while ((match = contactRegex.exec(customer.notes)) !== null) {
+          nIdx++;
+          const cName = safeStr(match[1]);
+          const cPhone = safeStr(match[2]);
+          if (cName) {
+            const key = `${cName.toLowerCase()}::${cPhone.replace(/\D/g, '')}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              list.push({
+                id: `notes-poc-${nIdx}`,
+                name: cName,
+                phone: cPhone || undefined,
+                roleLabel: 'Key Contact',
+                isPrimary: false,
+                meta: 'Customer Notes Directory',
+              });
+            }
+          }
+        }
+      }
+
+      return list;
+    } catch (e) {
+      console.error('Error generating stakeholders list:', e);
+      return [];
+    }
+  }, [customer, visits, employeeMap]);
 
   const lastOrderDateStr = customer.last_order_date
     ? safeFormatDate(customer.last_order_date)
@@ -762,36 +904,95 @@ export default function CustomerProfilePage() {
 
           {/* Right Column (1/3 width) */}
           <div className="space-y-6">
-            {/* Contact & Company Details Card */}
+            {/* Key Contacts & People Met Card */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Users size={16} className="text-blue-600" />
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Key Contacts &amp; People Met
+                  </h3>
+                </div>
+                <span className="px-2 py-0.5 text-2xs font-bold rounded-full bg-slate-100 text-slate-600">
+                  {stakeholdersList.length} contact{stakeholdersList.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {stakeholdersList.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-2">No contact persons recorded yet.</p>
+                ) : (
+                  stakeholdersList.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="p-3 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-1.5 hover:border-slate-300 transition-all">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                              contact.isPrimary ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'
+                            }`}>
+                            <User size={12} />
+                          </div>
+                          <span className="font-bold text-slate-900 text-xs truncate">
+                            {contact.name}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded-full shrink-0 ${
+                            contact.isPrimary
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          }`}>
+                          {contact.roleLabel}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-0.5">
+                        {contact.phone ? (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Phone size={11} className="text-slate-400 shrink-0" />
+                            <a
+                              href={`tel:${contact.phone}`}
+                              className="font-semibold text-slate-800 hover:text-blue-600 transition-colors">
+                              {contact.phone}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyPhone(contact.phone)}
+                              className="text-slate-400 hover:text-blue-600 transition-colors p-0.5 cursor-pointer ml-0.5"
+                              title="Copy phone number">
+                              {copiedPhone === contact.phone ? (
+                                <Check size={12} className="text-emerald-600" />
+                              ) : (
+                                <Copy size={12} />
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">Phone not recorded</span>
+                        )}
+
+                        {contact.meta && (
+                          <span className="text-[10px] text-slate-400 font-medium truncate">
+                            {contact.meta}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Company Details Card */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
                 <Building2 size={16} className="text-slate-400" />
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company & Contact Info</h3>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Details</h3>
               </div>
 
               <div className="space-y-4 text-xs">
-                <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Contact Person</p>
-                  <p className="font-bold text-black text-sm mt-0.5">
-                    {customer.contact_person || 'Not specified'}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Phone Number</p>
-                  {customer.customer_phone ? (
-                    <p className="mt-0.5">
-                      <a
-                        href={`tel:${customer.customer_phone}`}
-                        className="font-bold text-black text-sm hover:text-blue-600 transition-colors">
-                        {customer.customer_phone}
-                      </a>
-                    </p>
-                  ) : (
-                    <p className="font-bold text-black text-sm mt-0.5">Not provided</p>
-                  )}
-                </div>
-
                 <div>
                   <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">GSTIN Number</p>
                   {customer.customer_gst ? (
@@ -1399,3 +1600,12 @@ export default function CustomerProfilePage() {
     </div>
   );
 }
+
+export default function CustomerProfilePage() {
+  return (
+    <ErrorBoundary>
+      <CustomerProfilePageContent />
+    </ErrorBoundary>
+  );
+}
+
