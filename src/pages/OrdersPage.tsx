@@ -87,6 +87,18 @@ export function getOrderSourceChannel(ord?: Order | null): string {
     ''
   ).toLowerCase().trim();
 
+  // AI Assistant signals
+  if (
+    channel === 'ai_assistant' ||
+    channel === 'chatbot' ||
+    channel === 'assistant' ||
+    channel === 'ai' ||
+    channel === 'rag_assistant' ||
+    channel === 'base_rag_assistant'
+  ) {
+    return 'AI Assistant';
+  }
+
   // Explicit WhatsApp signals
   if (
     channel.startsWith('whatsapp') ||
@@ -102,13 +114,14 @@ export function getOrderSourceChannel(ord?: Order | null): string {
     channel === 'dashboard' ||
     channel === 'purchase_order' ||
     channel === 'manual' ||
+    channel === 'form' ||
     channel === 'web' ||
     !channel
   ) {
     return 'Dashboard';
   }
 
-  return channel.includes('whatsapp') ? 'WhatsApp' : 'Dashboard';
+  return channel.includes('whatsapp') ? 'WhatsApp' : (channel.includes('assistant') || channel.includes('ai') ? 'AI Assistant' : 'Dashboard');
 }
 
 interface LineItemDetail {

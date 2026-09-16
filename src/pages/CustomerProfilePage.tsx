@@ -1018,8 +1018,13 @@ export default function CustomerProfilePage() {
                         <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
                           {safeFormatDate(inq.created_at)}
                         </td>
-                        <td className="py-3 px-3 text-slate-700 font-semibold uppercase text-2xs">
-                          {inq.source_channel || 'WhatsApp'}
+                        <td className="py-3 px-3 text-slate-700 font-semibold text-xs whitespace-nowrap">
+                          {(() => {
+                            const ch = String(inq.source_channel || '').toLowerCase().trim();
+                            if (ch.includes('assistant') || ch.includes('chatbot') || ch === 'ai') return 'AI Assistant';
+                            if (ch.includes('dashboard') || ch === 'manual' || ch === 'web' || ch === 'form') return 'Dashboard';
+                            return 'WhatsApp';
+                          })()}
                         </td>
                         <td className="py-3 px-3 text-slate-800 max-w-md">
                           <p className="line-clamp-2 group-hover:text-blue-600 transition-colors font-medium whitespace-pre-wrap">{reqText}</p>

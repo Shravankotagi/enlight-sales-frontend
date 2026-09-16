@@ -95,6 +95,34 @@ const cleanProductType = (pt: string): string => {
   return str;
 };
 
+export function formatSourceChannel(channel?: string | null): string {
+  if (!channel) return 'WhatsApp';
+  const ch = String(channel).toLowerCase().trim();
+  if (
+    ch === 'ai_assistant' ||
+    ch === 'chatbot' ||
+    ch === 'assistant' ||
+    ch === 'ai' ||
+    ch === 'rag_assistant' ||
+    ch === 'base_rag_assistant'
+  ) {
+    return 'AI Assistant';
+  }
+  if (
+    ch === 'web_dashboard' ||
+    ch === 'dashboard' ||
+    ch === 'manual' ||
+    ch === 'form' ||
+    ch === 'web'
+  ) {
+    return 'Dashboard';
+  }
+  if (ch.startsWith('whatsapp') || ch === 'wa') {
+    return 'WhatsApp';
+  }
+  return channel;
+}
+
 /**
  * Filter function to ensure ONLY actual Product Inquiries appear in this tab.
  * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
@@ -105,7 +133,7 @@ function isProductInquiry(inq: InquiryItem): boolean {
   const textLower = rawText.toLowerCase();
   const aiJson = (inq?.ai_extraction_json as any) || {};
 
-  // 1. All official genuine inquiry channels & types (WhatsApp & Dashboard)
+  // 1. All official genuine inquiry channels & types (WhatsApp, Dashboard & AI Assistant)
   const channel = String(inq?.source_channel || '').toLowerCase();
   if (
     inq?.inquiry_type === 'inquiry' ||
@@ -113,6 +141,9 @@ function isProductInquiry(inq: InquiryItem): boolean {
     inq?.inquiry_type === 'quotation_sent' ||
     channel.includes('whatsapp') ||
     channel.includes('dashboard') ||
+    channel.includes('assistant') ||
+    channel.includes('chatbot') ||
+    channel.includes('ai') ||
     channel === 'manual' ||
     channel === 'form' ||
     channel === 'upload' ||
@@ -121,7 +152,8 @@ function isProductInquiry(inq: InquiryItem): boolean {
     inq?.source_channel === 'whatsapp_image' ||
     inq?.source_channel === 'whatsapp_po' ||
     inq?.source_channel === 'web_dashboard' ||
-    inq?.source_channel === 'dashboard'
+    inq?.source_channel === 'dashboard' ||
+    inq?.source_channel === 'ai_assistant'
   ) {
     return true;
   }
@@ -2701,9 +2733,7 @@ export default function InquiriesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
-                      {(inq.source_channel === 'web_dashboard' || inq.source_channel === 'dashboard')
-                        ? 'Dashboard'
-                        : 'WhatsApp'}
+                      {formatSourceChannel(inq.source_channel)}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {dealStageInfo ? (
