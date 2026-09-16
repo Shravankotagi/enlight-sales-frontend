@@ -34,6 +34,7 @@ interface DealProductComboboxProps {
   deals: DealOption[];
   selectedItems: SelectedDealItem[];
   onChange: (items: SelectedDealItem[]) => void;
+  customerName?: string;
   placeholder?: string;
   disabled?: boolean;
   loading?: boolean;
@@ -46,6 +47,7 @@ export default function DealProductCombobox({
   deals = [],
   selectedItems = [],
   onChange,
+  customerName = '',
   placeholder = 'Type to search or select Won Inquiry ID, PO Number, Product...',
   disabled = false,
   loading = false,
@@ -57,10 +59,19 @@ export default function DealProductCombobox({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Filter ONLY Won deals
+  // Filter ONLY Won deals strictly matching customer if provided
   const wonDeals = useMemo(() => {
-    return deals.filter(d => (d.stage || '').toLowerCase() === 'won');
-  }, [deals]);
+    const cleanCustomer = customerName ? customerName.trim().toLowerCase() : '';
+    return deals.filter(d => {
+      const isWon = (d?.stage || '').toLowerCase() === 'won';
+      if (!isWon) return false;
+      if (cleanCustomer) {
+        const dCust = (d?.customer_name || '').trim().toLowerCase();
+        return dCust === cleanCustomer;
+      }
+      return true;
+    });
+  }, [deals, customerName]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -251,9 +262,11 @@ export default function DealProductCombobox({
         <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
           {wonDeals.length === 0 ? (
             <div className="px-4 py-4 text-center text-xs text-slate-500">
-              <AlertCircle size={20} className="mx-auto text-amber-500 mb-1" />
-              <p className="font-semibold text-slate-700">No Won Orders Found</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Complaints can only be logged for won orders / POs.</p>
+              <AlertCircle size={20} className="mx-auto text-amber-500 mb-1.5" />
+              <p className="font-semibold text-slate-800">No Confirmed Orders Found</p>
+              <p className="text-[11px] text-slate-500 mt-1 max-w-[280px] mx-auto leading-relaxed">
+                No confirmed orders found for this customer. A complaint can only be raised against a delivered or confirmed order.
+              </p>
             </div>
           ) : filteredOptions.length === 0 ? (
             <div className="px-4 py-3 text-center text-xs text-slate-400">

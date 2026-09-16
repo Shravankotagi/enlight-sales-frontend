@@ -273,8 +273,10 @@ export default function ComplaintsPage() {
 
   // Fetch won deals when customer is chosen in Create Form
   useEffect(() => {
-    if (!formCustomerName.trim()) {
+    const trimmedCustomer = formCustomerName.trim().toLowerCase();
+    if (!trimmedCustomer) {
       setCustomerDeals([]);
+      setFormSelectedDeals([]);
       return;
     }
     let isMounted = true;
@@ -285,8 +287,12 @@ export default function ComplaintsPage() {
         if (!isMounted) return;
         const raw = res?.data;
         const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-        // Strict client-side won filter guard
-        const wonList = list.filter((d: any) => (d?.stage || '').toLowerCase() === 'won');
+        // Strict client-side won and customer filter guard
+        const wonList = list.filter((d: any) => {
+          const isWon = (d?.stage || '').toLowerCase() === 'won';
+          const matchesCustomer = (d?.customer_name || '').trim().toLowerCase() === trimmedCustomer;
+          return isWon && matchesCustomer;
+        });
         setCustomerDeals(wonList);
       })
       .catch(() => {
@@ -303,8 +309,10 @@ export default function ComplaintsPage() {
 
   // Fetch won deals when customer is chosen in Edit Form
   useEffect(() => {
-    if (!editCustomerName.trim()) {
+    const trimmedCustomer = editCustomerName.trim().toLowerCase();
+    if (!trimmedCustomer) {
       setEditCustomerDeals([]);
+      setEditSelectedDeals([]);
       return;
     }
     dealsApi
@@ -312,7 +320,11 @@ export default function ComplaintsPage() {
       .then(res => {
         const raw = res?.data;
         const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-        const wonList = list.filter((d: any) => (d?.stage || '').toLowerCase() === 'won');
+        const wonList = list.filter((d: any) => {
+          const isWon = (d?.stage || '').toLowerCase() === 'won';
+          const matchesCustomer = (d?.customer_name || '').trim().toLowerCase() === trimmedCustomer;
+          return isWon && matchesCustomer;
+        });
         setEditCustomerDeals(wonList);
       })
       .catch(() => setEditCustomerDeals([]));
@@ -1257,7 +1269,10 @@ export default function ComplaintsPage() {
                   </label>
                   <CustomerCombobox
                     value={editCustomerName}
-                    onChange={setEditCustomerName}
+                    onChange={val => {
+                      setEditCustomerName(val);
+                      setEditSelectedDeals([]);
+                    }}
                     onSelectCustomer={handleSelectCustomerForEdit}
                     customers={customerDirectory}
                     placeholder="Search or enter company name..."
@@ -1274,6 +1289,7 @@ export default function ComplaintsPage() {
                     deals={editCustomerDeals}
                     selectedItems={editSelectedDeals}
                     onChange={setEditSelectedDeals}
+                    customerName={editCustomerName}
                     required
                   />
                 </div>
@@ -1397,6 +1413,7 @@ export default function ComplaintsPage() {
                     value={formCustomerName}
                     onChange={val => {
                       setFormCustomerName(val);
+                      setFormSelectedDeals([]);
                       if (formErrors.customerName) setFormErrors(prev => ({ ...prev, customerName: false }));
                     }}
                     onSelectCustomer={handleSelectCustomerForCreate}
@@ -1421,6 +1438,7 @@ export default function ComplaintsPage() {
                       setFormSelectedDeals(items);
                       if (formErrors.deals) setFormErrors(prev => ({ ...prev, deals: false }));
                     }}
+                    customerName={formCustomerName}
                     loading={loadingDeals}
                     error={formErrors.deals}
                     required
