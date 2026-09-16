@@ -11,6 +11,7 @@ import {
   RefreshCw,
   X,
   User,
+  Users,
   Phone,
   Map as MapIcon,
   Edit2,
@@ -75,6 +76,7 @@ export default function VisitsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [filterFollowup, setFilterFollowup] = useState(() => searchParams.get('followup') || 'all');
+  const [filterSalesperson, setFilterSalesperson] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
@@ -196,6 +198,13 @@ export default function VisitsPage() {
       }
     });
     return map;
+  }, [employees]);
+
+  const salespeopleList = useMemo(() => {
+    const list = employees.filter(
+      (e: any) => !e.role || e.role === 'salesperson' || e.role === 'sales_lead' || e.role === 'sales_manager'
+    );
+    return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [employees]);
 
   // Build unified customer directory combining registered customers + existing visits
@@ -686,76 +695,113 @@ export default function VisitsPage() {
 
   const safeVisits = Array.isArray(visits) ? visits : [];
 
-  // Filter visits by date range, search, outcome, & follow-up status
-  const filtered = safeVisits.filter(v => {
-    if (dateRange.from && dateRange.to) {
-      const dateStr = v.visited_at;
-      if (dateStr) {
-        const itemDate = new Date(dateStr).toISOString().split('T')[0];
-        if (itemDate < dateRange.from || itemDate > dateRange.to) return false;
+  // 1. Base scoped visits: filtered by date range, salesperson dropdown, and search text
+  const baseScopedVisits = useMemo(() => {
+    return safeVisits.filter(v => {
+      if (dateRange.from && dateRange.to) {
+        const dateStr = v.visited_at;
+        if (dateStr) {
+          const itemDate = new Date(dateStr).toISOString().split('T')[0];
+          if (itemDate < dateRange.from || itemDate > dateRange.to) return false;
+        }
       }
-    }
 
-    const repName = getSalespersonDisplayName(v) || '';
-    const matchesSearch =
-      (v?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.person_met || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.customer_address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.remarks || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.follow_up_action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      repName.toLowerCase().includes(searchTerm.toLowerCase());
+      const repName = getSalespersonDisplayName(v) || '';
+      if (filterSalesperson !== 'all') {
+        const vPhone = (v.salesperson_phone || '').replace(/\D/g, '').slice(-10);
+        const selPhone = filterSalesperson.replace(/\D/g, '').slice(-10);
+        const matchesPhone = selPhone && vPhone === selPhone;
+        const matchesName = repName.toLowerCase().trim() === filterSalesperson.toLowerCase().trim();
+        if (!matchesPhone && !matchesName) return false;
+      }
 
-    const matchesOutcome =
-      filterOutcome === 'all' ||
-      getNormalizedOutcome(v) === filterOutcome.toLowerCase();
+      const matchesSearch =
+        (v?.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v?.person_met || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v?.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v?.customer_address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v?.remarks || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v?.follow_up_action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        repName.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const fuInfo = getFollowUpStatusInfo(v);
-    let matchesFollowup = true;
-    if (filterFollowup === 'due') {
-      matchesFollowup = fuInfo.hasFollowUp && (fuInfo.urgency === 'overdue' || fuInfo.urgency === 'today');
-    } else if (filterFollowup === 'pending') {
-      matchesFollowup = fuInfo.hasFollowUp && fuInfo.status === 'pending';
-    } else if (filterFollowup === 'overdue') {
-      matchesFollowup = fuInfo.hasFollowUp && fuInfo.urgency === 'overdue';
-    } else if (filterFollowup === 'due_today') {
-      matchesFollowup = fuInfo.hasFollowUp && fuInfo.urgency === 'today';
-    } else if (filterFollowup === 'completed') {
-      matchesFollowup = fuInfo.hasFollowUp && fuInfo.status === 'completed';
-    } else if (filterFollowup === 'none') {
-      matchesFollowup = !fuInfo.hasFollowUp;
-    }
+      return matchesSearch;
+    });
+  }, [safeVisits, dateRange, filterSalesperson, searchTerm, employeeMap]);
 
-    return matchesSearch && matchesOutcome && matchesFollowup;
-  });
+  // 2. Further filtered by Outcome & Follow-up status for table view
+  const filtered = useMemo(() => {
+    return baseScopedVisits.filter(v => {
+      const matchesOutcome =
+        filterOutcome === 'all' ||
+        getNormalizedOutcome(v) === filterOutcome.toLowerCase();
 
-  const totalVisits = visits.length;
-  const positiveVisits = visits.filter(v => getNormalizedOutcome(v) === 'positive').length;
-  const neutralVisits = visits.filter(v => getNormalizedOutcome(v) === 'neutral').length;
-  const negativeVisits = visits.filter(v => getNormalizedOutcome(v) === 'negative').length;
+      const fuInfo = getFollowUpStatusInfo(v);
+      let matchesFollowup = true;
+      if (filterFollowup === 'due') {
+        matchesFollowup = fuInfo.hasFollowUp && (fuInfo.urgency === 'overdue' || fuInfo.urgency === 'today');
+      } else if (filterFollowup === 'pending') {
+        matchesFollowup = fuInfo.hasFollowUp && fuInfo.status === 'pending';
+      } else if (filterFollowup === 'overdue') {
+        matchesFollowup = fuInfo.hasFollowUp && fuInfo.urgency === 'overdue';
+      } else if (filterFollowup === 'due_today') {
+        matchesFollowup = fuInfo.hasFollowUp && fuInfo.urgency === 'today';
+      } else if (filterFollowup === 'completed') {
+        matchesFollowup = fuInfo.hasFollowUp && fuInfo.status === 'completed';
+      } else if (filterFollowup === 'none') {
+        matchesFollowup = !fuInfo.hasFollowUp;
+      }
 
-  const dueFollowupsCount = visits.filter(v => {
+      return matchesOutcome && matchesFollowup;
+    });
+  }, [baseScopedVisits, filterOutcome, filterFollowup]);
+
+  // Dynamic Stat Cards (cross-filter aware)
+  const visitsForOutcomeMetrics = useMemo(() => {
+    if (filterFollowup === 'all') return baseScopedVisits;
+    return baseScopedVisits.filter(v => {
+      const fuInfo = getFollowUpStatusInfo(v);
+      if (filterFollowup === 'due') return fuInfo.hasFollowUp && (fuInfo.urgency === 'overdue' || fuInfo.urgency === 'today');
+      if (filterFollowup === 'pending') return fuInfo.hasFollowUp && fuInfo.status === 'pending';
+      if (filterFollowup === 'overdue') return fuInfo.hasFollowUp && fuInfo.urgency === 'overdue';
+      if (filterFollowup === 'due_today') return fuInfo.hasFollowUp && fuInfo.urgency === 'today';
+      if (filterFollowup === 'completed') return fuInfo.hasFollowUp && fuInfo.status === 'completed';
+      if (filterFollowup === 'none') return !fuInfo.hasFollowUp;
+      return true;
+    });
+  }, [baseScopedVisits, filterFollowup]);
+
+  const visitsForFollowupMetrics = useMemo(() => {
+    if (filterOutcome === 'all') return baseScopedVisits;
+    return baseScopedVisits.filter(v => getNormalizedOutcome(v) === filterOutcome.toLowerCase());
+  }, [baseScopedVisits, filterOutcome]);
+
+  const totalVisits = (filterOutcome !== 'all' || filterFollowup !== 'all') ? filtered.length : baseScopedVisits.length;
+  const positiveVisits = visitsForOutcomeMetrics.filter(v => getNormalizedOutcome(v) === 'positive').length;
+  const neutralVisits = visitsForOutcomeMetrics.filter(v => getNormalizedOutcome(v) === 'neutral').length;
+  const negativeVisits = visitsForOutcomeMetrics.filter(v => getNormalizedOutcome(v) === 'negative').length;
+
+  const dueFollowupsCount = visitsForFollowupMetrics.filter(v => {
     const fu = getFollowUpStatusInfo(v);
     return fu.hasFollowUp && (fu.urgency === 'overdue' || fu.urgency === 'today');
   }).length;
 
-  const pendingFollowupsCount = visits.filter(v => {
+  const pendingFollowupsCount = visitsForFollowupMetrics.filter(v => {
     const fu = getFollowUpStatusInfo(v);
     return fu.hasFollowUp && fu.status === 'pending';
   }).length;
 
-  const overdueFollowupsCount = visits.filter(v => {
+  const overdueFollowupsCount = visitsForFollowupMetrics.filter(v => {
     const fu = getFollowUpStatusInfo(v);
     return fu.hasFollowUp && fu.urgency === 'overdue';
   }).length;
 
-  const dueTodayFollowupsCount = visits.filter(v => {
+  const dueTodayFollowupsCount = visitsForFollowupMetrics.filter(v => {
     const fu = getFollowUpStatusInfo(v);
     return fu.hasFollowUp && fu.urgency === 'today';
   }).length;
 
-  const completedFollowupsCount = visits.filter(v => {
+  const completedFollowupsCount = visitsForFollowupMetrics.filter(v => {
     const fu = getFollowUpStatusInfo(v);
     return fu.hasFollowUp && fu.status === 'completed';
   }).length;
@@ -763,7 +809,7 @@ export default function VisitsPage() {
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterOutcome, filterFollowup, dateRange]);
+  }, [searchTerm, filterOutcome, filterFollowup, filterSalesperson, dateRange]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const startIndex = (currentPage - 1) * pageSize;
@@ -774,6 +820,7 @@ export default function VisitsPage() {
     setSearchTerm('');
     setFilterOutcome('all');
     setFilterFollowup('all');
+    setFilterSalesperson('all');
     setDayPreset('all');
     setShowCustomDate(false);
     setCustomFrom('');
@@ -928,7 +975,32 @@ export default function VisitsPage() {
             )}
           </div>
 
-          {/* 2. Date Preset Dropdown with 'Last 30 Days' default */}
+          {/* 2. Salesperson Filter Dropdown (Admin & Sales Manager only) */}
+          {canViewSalesperson && (
+            <div className="relative inline-flex items-center w-full sm:w-auto">
+              <Users size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
+              <select
+                value={filterSalesperson}
+                onChange={e => setFilterSalesperson(e.target.value)}
+                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>
+                  All Salespersons ({salespeopleList.length})
+                </option>
+                {salespeopleList.map((sp: any) => (
+                  <option
+                    key={sp.phone || sp.name}
+                    value={sp.name}
+                    className="font-normal text-slate-700"
+                    style={{ fontWeight: 'normal' }}>
+                    {sp.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+            </div>
+          )}
+
+          {/* 3. Date Preset Dropdown with 'Last 30 Days' default */}
           <div className="relative inline-flex items-center w-full sm:w-auto">
             <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
             <select
@@ -945,13 +1017,13 @@ export default function VisitsPage() {
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* 3. Outcome Dropdown */}
+          {/* 4. Outcome Dropdown */}
           <div className="relative inline-flex items-center w-full sm:w-auto">
             <select
               value={filterOutcome}
               onChange={e => setFilterOutcome(e.target.value)}
               className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Outcomes ({visits.length})</option>
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Outcomes ({baseScopedVisits.length})</option>
               <option value="positive" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Positive ({positiveVisits})</option>
               <option value="neutral" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Neutral ({neutralVisits})</option>
               <option value="negative" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Negative ({negativeVisits})</option>
@@ -959,13 +1031,13 @@ export default function VisitsPage() {
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* 4. Follow-up Dropdown */}
+          {/* 5. Follow-up Dropdown */}
           <div className="relative inline-flex items-center w-full sm:w-auto">
             <select
               value={filterFollowup}
               onChange={e => setFilterFollowup(e.target.value)}
               className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Follow-ups ({visits.length})</option>
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Follow-ups ({baseScopedVisits.length})</option>
               <option value="due" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due / Overdue ({dueFollowupsCount})</option>
               <option value="overdue" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Overdue ({overdueFollowupsCount})</option>
               <option value="due_today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due Today ({dueTodayFollowupsCount})</option>
@@ -976,8 +1048,8 @@ export default function VisitsPage() {
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* 5. Clear Filter Button */}
-          {(searchTerm || filterOutcome !== 'all' || filterFollowup !== 'all' || dayPreset !== 'all') && (
+          {/* 6. Clear Filter Button */}
+          {(searchTerm || filterOutcome !== 'all' || filterFollowup !== 'all' || filterSalesperson !== 'all' || dayPreset !== 'all') && (
             <button
               type="button"
               onClick={handleClearFilters}
