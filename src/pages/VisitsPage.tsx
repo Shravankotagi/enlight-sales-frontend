@@ -22,6 +22,8 @@ import {
   ChevronDown,
   Save,
   ArrowLeft,
+  AlertCircle,
+  Check,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -35,25 +37,175 @@ import CustomerCombobox, { type CustomerDirectoryItem } from '../components/Cust
 interface CustomerVisit {
   id: string;
   customer_name: string;
-  person_met?: string;
-  contact_phone?: string;
-  contact_no?: string;
-  location?: string;
-  customer_address?: string;
-  outcome?: 'positive' | 'neutral' | 'negative' | string;
-  remarks?: string;
-  raw_remarks?: string;
-  material_requirement?: string;
-  requirement?: string;
-  follow_up_action?: string;
-  follow_up?: string;
-  followup?: string;
+  person_met?: string | null;
+  contact_phone?: string | null;
+  contact_no?: string | null;
+  location?: string | null;
+  customer_address?: string | null;
+  outcome?: 'positive' | 'neutral' | 'negative' | string | null;
+  remarks?: string | null;
+  raw_remarks?: string | null;
+  material_requirement?: string | null;
+  requirement?: string | null;
+  follow_up_action?: string | null;
+  follow_up?: string | null;
+  followup?: string | null;
+  follow_up_date?: string | null;
+  follow_up_status?: 'pending' | 'completed' | string | null;
+  follow_up_completed_at?: string | null;
   visited_at: string;
-  salesperson_phone?: string;
-  salesperson_name?: string;
+  salesperson_phone?: string | null;
+  salesperson_name?: string | null;
 }
 
-export function formatCityLocality(rawLocation?: string, rawAddress?: string): string {
+export function getFollowUpStatusInfo(v: CustomerVisit): {
+  hasFollowUp: boolean;
+  action: string;
+  dueDateStr: string | null;
+  status: 'pending' | 'completed';
+  urgency: 'completed' | 'overdue' | 'today' | 'upcoming' | 'no_date';
+  diffDays: number | null;
+  relativeText: string;
+  badgeLabel: string;
+  badgeClass: string;
+} {
+  const rawAction =
+    v.follow_up_action ||
+    (v as any).followup ||
+    (v as any).follow_up ||
+    (v.remarks || '').match(/\[(?:Follow-?Up|Follow-?up\s*Action):\s*([^\]]+)\]/i)?.[1] ||
+    (v.remarks || '').match(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*([^|\]\n]+)/i)?.[1];
+
+  const action = rawAction ? String(rawAction).trim() : '';
+  const isNonAction =
+    !action ||
+    action === '-' ||
+    action.toLowerCase() === 'none' ||
+    action.toLowerCase() === 'nil' ||
+    action.toLowerCase() === 'n/a' ||
+    action.toLowerCase().startsWith('no remarks') ||
+    action.toLowerCase().startsWith('no follow');
+
+  if (isNonAction) {
+    return {
+      hasFollowUp: false,
+      action: '',
+      dueDateStr: null,
+      status: 'pending',
+      urgency: 'no_date',
+      diffDays: null,
+      relativeText: '',
+      badgeLabel: '',
+      badgeClass: '',
+    };
+  }
+
+  const status: 'pending' | 'completed' =
+    v.follow_up_status === 'completed' ? 'completed' : 'pending';
+
+  const dueDate = v.follow_up_date
+    ? new Date(v.follow_up_date).toISOString().split('T')[0]
+    : null;
+
+  if (status === 'completed') {
+    return {
+      hasFollowUp: true,
+      action,
+      dueDateStr: dueDate,
+      status: 'completed',
+      urgency: 'completed',
+      diffDays: null,
+      relativeText: 'Done',
+      badgeLabel: 'Done',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+    };
+  }
+
+  if (!dueDate) {
+    return {
+      hasFollowUp: true,
+      action,
+      dueDateStr: null,
+      status: 'pending',
+      urgency: 'no_date',
+      diffDays: null,
+      relativeText: 'Pending',
+      badgeLabel: 'Pending',
+      badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
+    };
+  }
+
+  const todayStr = formatLocalDate();
+  const [tY, tM, tD] = todayStr.split('-').map(Number);
+  const [dY, dM, dD] = dueDate.split('-').map(Number);
+  const todayDate = new Date(Date.UTC(tY, tM - 1, tD));
+  const targetDate = new Date(Date.UTC(dY, dM - 1, dD));
+  const diffDays = Math.round((targetDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  const formattedDate = targetDate.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+
+  if (diffDays < 0) {
+    const absDays = Math.abs(diffDays);
+    const dayLabel = absDays === 1 ? '1 day overdue' : `${absDays} days overdue`;
+    return {
+      hasFollowUp: true,
+      action,
+      dueDateStr: dueDate,
+      status: 'pending',
+      urgency: 'overdue',
+      diffDays,
+      relativeText: `${dayLabel} (${formattedDate})`,
+      badgeLabel: 'Overdue',
+      badgeClass: 'bg-rose-100 text-rose-800 border border-rose-200',
+    };
+  }
+
+  if (diffDays === 0) {
+    return {
+      hasFollowUp: true,
+      action,
+      dueDateStr: dueDate,
+      status: 'pending',
+      urgency: 'today',
+      diffDays: 0,
+      relativeText: 'Due today',
+      badgeLabel: 'Due Today',
+      badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+    };
+  }
+
+  if (diffDays === 1) {
+    return {
+      hasFollowUp: true,
+      action,
+      dueDateStr: dueDate,
+      status: 'pending',
+      urgency: 'upcoming',
+      diffDays: 1,
+      relativeText: `Due tomorrow (${formattedDate})`,
+      badgeLabel: 'Tomorrow',
+      badgeClass: 'bg-blue-100 text-blue-800 border border-blue-200',
+    };
+  }
+
+  return {
+    hasFollowUp: true,
+    action,
+    dueDateStr: dueDate,
+    status: 'pending',
+    urgency: 'upcoming',
+    diffDays,
+    relativeText: `In ${diffDays} days (${formattedDate})`,
+    badgeLabel: `In ${diffDays}d`,
+    badgeClass: 'bg-blue-100 text-blue-800 border border-blue-200',
+  };
+}
+
+export function formatCityLocality(rawLocation?: string | null, rawAddress?: string | null): string {
   const str = (rawLocation || rawAddress || '').trim();
   if (!str || str === '-' || str.toLowerCase() === 'null') return '-';
 
@@ -88,12 +240,20 @@ export default function VisitsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOutcome, setFilterOutcome] = useState('all');
+  const [filterFollowup, setFilterFollowup] = useState(() => searchParams.get('followup') || 'all');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
+
+  useEffect(() => {
+    const fuParam = searchParams.get('followup');
+    if (fuParam) {
+      setFilterFollowup(fuParam);
+    }
+  }, [searchParams]);
 
   // Date Filter Presets (Matching Inquiry tab pattern)
   const [dayPreset, setDayPreset] = useState<string>('all');
@@ -343,8 +503,21 @@ export default function VisitsPage() {
   const [formOutcome, setFormOutcome] = useState('positive');
   const [formRemarks, setFormRemarks] = useState('');
   const [formFollowup, setFormFollowup] = useState('');
+  const [formFollowupDate, setFormFollowupDate] = useState('');
   const [formVisitDate, setFormVisitDate] = useState(formatLocalDate());
   const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
+
+  // Preset Days Helper
+  const setFollowupPresetDays = (days: number, isEdit = false) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const ymd = formatLocalDate(d);
+    if (isEdit) {
+      setEditFollowupDate(ymd);
+    } else {
+      setFormFollowupDate(ymd);
+    }
+  };
 
   // Reset form and open Add New Visit modal cleanly
   const handleOpenAddModal = () => {
@@ -355,6 +528,7 @@ export default function VisitsPage() {
     setFormOutcome('positive');
     setFormRemarks('');
     setFormFollowup('');
+    setFormFollowupDate('');
     setFormVisitDate(formatLocalDate());
     setFormErrors({});
     setIsSavedSuccess(false);
@@ -369,6 +543,8 @@ export default function VisitsPage() {
   const [editOutcome, setEditOutcome] = useState('positive');
   const [editRemarks, setEditRemarks] = useState('');
   const [editFollowup, setEditFollowup] = useState('');
+  const [editFollowupDate, setEditFollowupDate] = useState('');
+  const [editFollowupStatus, setEditFollowupStatus] = useState<'pending' | 'completed'>('pending');
   const [editVisitDate, setEditVisitDate] = useState(formatLocalDate());
 
   const fetchVisits = async (isBackground?: boolean | any) => {
@@ -451,7 +627,8 @@ export default function VisitsPage() {
         location: formLocation.trim(),
         outcome: formOutcome,
         remarks: formRemarks.trim(),
-        follow_up_action: formFollowup.trim(),
+        follow_up_action: formFollowup.trim() || undefined,
+        follow_up_date: formFollowup.trim() ? (formFollowupDate || undefined) : undefined,
         visited_at: new Date(formVisitDate).toISOString(),
       });
 
@@ -469,6 +646,7 @@ export default function VisitsPage() {
         setFormOutcome('positive');
         setFormRemarks('');
         setFormFollowup('');
+        setFormFollowupDate('');
         setFormVisitDate(formatLocalDate());
         setFormErrors({});
         fetchVisits();
@@ -543,6 +721,8 @@ export default function VisitsPage() {
         .trim(),
     );
     setEditFollowup(v.follow_up_action || (v as any).followup || (v as any).follow_up || '');
+    setEditFollowupDate(v.follow_up_date ? new Date(v.follow_up_date).toISOString().split('T')[0] : '');
+    setEditFollowupStatus((v.follow_up_status as any) === 'completed' ? 'completed' : 'pending');
   };
 
   const handleUpdateVisit = async (e: React.FormEvent) => {
@@ -562,7 +742,9 @@ export default function VisitsPage() {
         outcome: editOutcome,
         remarks: cleanRemarks,
         raw_remarks: cleanRemarks,
-        follow_up_action: editFollowup.trim(),
+        follow_up_action: editFollowup.trim() || null,
+        follow_up_date: editFollowup.trim() ? editFollowupDate || null : null,
+        follow_up_status: editFollowup.trim() ? editFollowupStatus : null,
         visited_at: new Date(editVisitDate).toISOString(),
       };
 
@@ -583,6 +765,46 @@ export default function VisitsPage() {
       toast.error('Failed to update visit details.');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleToggleFollowUpStatus = async (
+    e: React.MouseEvent,
+    v: CustomerVisit,
+  ) => {
+    e.stopPropagation();
+    const currentStatus = v.follow_up_status === 'completed' ? 'completed' : 'pending';
+    const newStatus: 'pending' | 'completed' =
+      currentStatus === 'completed' ? 'pending' : 'completed';
+
+    // Optimistic UI update
+    setVisits((prev) =>
+      prev.map((item) =>
+        item.id === v.id
+          ? {
+              ...item,
+              follow_up_status: newStatus,
+              follow_up_completed_at:
+                newStatus === 'completed' ? new Date().toISOString() : undefined,
+            }
+          : item,
+      ),
+    );
+
+    try {
+      await visitsApi.updateFollowUpStatus(v.id, newStatus);
+      toast.success(
+        newStatus === 'completed'
+          ? `Follow-up completed for ${v.customer_name}`
+          : `Follow-up marked pending for ${v.customer_name}`,
+      );
+    } catch (err) {
+      console.error('Failed to toggle follow-up status:', err);
+      toast.error('Failed to update follow-up status.');
+      // Revert on error
+      setVisits((prev) =>
+        prev.map((item) => (item.id === v.id ? v : item)),
+      );
     }
   };
 
@@ -611,7 +833,7 @@ export default function VisitsPage() {
 
   const safeVisits = Array.isArray(visits) ? visits : [];
 
-  // Filter visits by date range, search, & outcome
+  // Filter visits by date range, search, outcome, & follow-up status
   const filtered = safeVisits.filter(v => {
     if (dateRange.from && dateRange.to) {
       const dateStr = v.visited_at;
@@ -631,10 +853,26 @@ export default function VisitsPage() {
       (v?.follow_up_action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v?.material_requirement || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       repName.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesOutcome =
       filterOutcome === 'all' ||
       getNormalizedOutcome(v) === filterOutcome.toLowerCase();
-    return matchesSearch && matchesOutcome;
+
+    const fuInfo = getFollowUpStatusInfo(v);
+    let matchesFollowup = true;
+    if (filterFollowup === 'pending') {
+      matchesFollowup = fuInfo.hasFollowUp && fuInfo.status === 'pending';
+    } else if (filterFollowup === 'overdue') {
+      matchesFollowup = fuInfo.hasFollowUp && fuInfo.urgency === 'overdue';
+    } else if (filterFollowup === 'due_today') {
+      matchesFollowup = fuInfo.hasFollowUp && fuInfo.urgency === 'today';
+    } else if (filterFollowup === 'completed') {
+      matchesFollowup = fuInfo.hasFollowUp && fuInfo.status === 'completed';
+    } else if (filterFollowup === 'none') {
+      matchesFollowup = !fuInfo.hasFollowUp;
+    }
+
+    return matchesSearch && matchesOutcome && matchesFollowup;
   });
 
   const totalVisits = visits.length;
@@ -642,10 +880,30 @@ export default function VisitsPage() {
   const neutralVisits = visits.filter(v => getNormalizedOutcome(v) === 'neutral').length;
   const negativeVisits = visits.filter(v => getNormalizedOutcome(v) === 'negative').length;
 
+  const pendingFollowupsCount = visits.filter(v => {
+    const fu = getFollowUpStatusInfo(v);
+    return fu.hasFollowUp && fu.status === 'pending';
+  }).length;
+
+  const overdueFollowupsCount = visits.filter(v => {
+    const fu = getFollowUpStatusInfo(v);
+    return fu.hasFollowUp && fu.urgency === 'overdue';
+  }).length;
+
+  const dueTodayFollowupsCount = visits.filter(v => {
+    const fu = getFollowUpStatusInfo(v);
+    return fu.hasFollowUp && fu.urgency === 'today';
+  }).length;
+
+  const completedFollowupsCount = visits.filter(v => {
+    const fu = getFollowUpStatusInfo(v);
+    return fu.hasFollowUp && fu.status === 'completed';
+  }).length;
+
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterOutcome, dateRange]);
+  }, [searchTerm, filterOutcome, filterFollowup, dateRange]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const startIndex = (currentPage - 1) * pageSize;
@@ -655,6 +913,7 @@ export default function VisitsPage() {
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterOutcome('all');
+    setFilterFollowup('all');
     setDayPreset('all');
     setShowCustomDate(false);
     setCustomFrom('');
@@ -727,15 +986,22 @@ export default function VisitsPage() {
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Negative</p>
-            <p className="text-2xl font-bold text-rose-600 mt-1">{negativeVisits}</p>
-          </div>
-          <div className="p-3 bg-rose-50 text-rose-600 rounded-lg">
-            <CheckCircle2 size={22} />
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Follow-ups Due</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className="text-2xl font-bold text-blue-600">{pendingFollowupsCount}</p>
+                {overdueFollowupsCount > 0 && (
+                  <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200">
+                    {overdueFollowupsCount} overdue
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+              <Clock size={22} />
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Filter & Search Bar - Single Row matching Inquiry tab layout */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
@@ -792,8 +1058,24 @@ export default function VisitsPage() {
             <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* 4. Clear Filter Button */}
-          {(searchTerm || filterOutcome !== 'all' || dayPreset !== 'all') && (
+          {/* 4. Follow-up Dropdown */}
+          <div className="relative inline-flex items-center w-full sm:w-auto">
+            <select
+              value={filterFollowup}
+              onChange={e => setFilterFollowup(e.target.value)}
+              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
+              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Follow-ups ({visits.length})</option>
+              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Pending ({pendingFollowupsCount})</option>
+              <option value="overdue" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Overdue ({overdueFollowupsCount})</option>
+              <option value="due_today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due Today ({dueTodayFollowupsCount})</option>
+              <option value="completed" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Completed ({completedFollowupsCount})</option>
+              <option value="none" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>No Follow-up</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 5. Clear Filter Button */}
+          {(searchTerm || filterOutcome !== 'all' || filterFollowup !== 'all' || dayPreset !== 'all') && (
             <button
               type="button"
               onClick={handleClearFilters}
@@ -837,21 +1119,22 @@ export default function VisitsPage() {
                 <th className="px-5 py-3.5 text-left min-w-[200px]">Customer</th>
                 <th className="px-4 py-3.5 text-left min-w-[150px]">Contact Person</th>
                 <th className="px-4 py-3.5 text-left min-w-[150px]">Location</th>
-                <th className="px-4 py-3.5 text-center min-w-[130px]">Outcome</th>
+                <th className="px-4 py-3.5 text-center min-w-[120px]">Outcome</th>
+                <th className="px-4 py-3.5 text-left min-w-[220px]">Follow-up</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline mr-2 text-blue-600" />
                     Loading visit logs...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
                     <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-slate-600 font-medium">No visit logs found.</p>
                     <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
@@ -926,7 +1209,53 @@ export default function VisitsPage() {
                         )}
                       </td>
 
-                      {/* 5. Actions */}
+                      {/* 5. Follow-up Action & Status */}
+                      <td className="px-4 py-3.5 text-xs">
+                        {(() => {
+                          const fu = getFollowUpStatusInfo(v);
+                          if (!fu.hasFollowUp) {
+                            return <span className="text-slate-400 font-mono">-</span>;
+                          }
+                          const isCompleted = fu.status === 'completed';
+                          return (
+                            <div className="space-y-1.5 min-w-[200px] max-w-[280px]">
+                              <div className="flex items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleToggleFollowUpStatus(e, v)}
+                                  className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                                    isCompleted
+                                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
+                                      : 'bg-white border-slate-300 hover:border-blue-500 text-transparent hover:text-slate-400'
+                                  }`}
+                                  title={isCompleted ? 'Mark as pending' : 'Mark as completed'}>
+                                  <Check size={11} strokeWidth={3} className={isCompleted ? 'text-white' : 'currentColor'} />
+                                </button>
+                                <span
+                                  className={`font-bold leading-snug line-clamp-2 ${
+                                    isCompleted ? 'line-through text-slate-400 font-medium' : 'text-slate-900'
+                                  }`}
+                                  title={fu.action}>
+                                  {fu.action}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 pl-6">
+                                <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full inline-flex items-center gap-1 shadow-2xs ${fu.badgeClass}`}>
+                                  {fu.urgency === 'completed' && <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />}
+                                  {fu.urgency === 'overdue' && <AlertCircle size={11} className="text-rose-600 shrink-0" />}
+                                  {fu.urgency === 'today' && <Clock size={11} className="text-amber-600 shrink-0" />}
+                                  {fu.urgency === 'upcoming' && <Calendar size={11} className="text-blue-600 shrink-0" />}
+                                  {fu.urgency === 'no_date' && <Clock size={11} className="text-slate-500 shrink-0" />}
+                                  {fu.relativeText}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </td>
+
+                      {/* 6. Actions */}
                       <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
                         <div className="relative inline-block text-left">
                           <button
@@ -1157,34 +1486,82 @@ export default function VisitsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Visit Outcome <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      value={formOutcome}
-                      onChange={e => {
-                        setFormOutcome(e.target.value);
-                        if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
-                      }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
-                      <option value="positive">Positive</option>
-                      <option value="neutral">Neutral</option>
-                      <option value="negative">Negative</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Visit Outcome <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={formOutcome}
+                    onChange={e => {
+                      setFormOutcome(e.target.value);
+                      if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                    <option value="positive">Positive</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="negative">Negative</option>
+                  </select>
+                </div>
 
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Follow-up Action</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Send rate quotation"
-                      value={formFollowup}
-                      onChange={e => setFormFollowup(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                    />
+                <div className="p-3.5 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block font-semibold text-slate-700">Follow-up Action &amp; Due Date</label>
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="text-slate-400 font-medium">Quick Due:</span>
+                      <button
+                        type="button"
+                        onClick={() => setFollowupPresetDays(1, false)}
+                        className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-medium cursor-pointer transition-colors shadow-2xs">
+                        +1d (Tomorrow)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFollowupPresetDays(3, false)}
+                        className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-medium cursor-pointer transition-colors shadow-2xs">
+                        +3d
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFollowupPresetDays(7, false)}
+                        className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-medium cursor-pointer transition-colors shadow-2xs">
+                        +7d (Next Week)
+                      </button>
+                    </div>
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. Send rate quotation next week"
+                        value={formFollowup}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormFollowup(val);
+                          if (val.trim() && !formFollowupDate) {
+                            const nextWeek = new Date();
+                            nextWeek.setDate(nextWeek.getDate() + 7);
+                            setFormFollowupDate(formatLocalDate(nextWeek));
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="date"
+                        value={formFollowupDate}
+                        onChange={e => setFormFollowupDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer bg-white"
+                        title="Follow-up Due Date"
+                      />
+                    </div>
+                  </div>
+                  {formFollowup && formFollowupDate && (
+                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-0.5 font-medium">
+                      <Clock size={12} className="text-blue-600 shrink-0" />
+                      <span>Reminder scheduled for: <strong className="text-slate-800">{new Date(formFollowupDate).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</strong></span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1343,27 +1720,61 @@ export default function VisitsPage() {
                     </div>
                   </div>
 
-                  {/* Follow-up Action (Independently Scrollable) */}
-                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-2xs">
-                    <p className="text-xs font-semibold text-slate-500">Follow-up Action</p>
+                  {/* Follow-up Action & Status (Independently Scrollable) */}
+                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-slate-500">Follow-up Action</p>
+                      {(() => {
+                        const fu = getFollowUpStatusInfo(selectedVisit);
+                        if (!fu.hasFollowUp) return null;
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            {fu.urgency === 'completed' ? (
+                              <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full inline-flex items-center gap-1 ${fu.badgeClass}`}>
+                                <CheckCircle2 size={11} className="text-emerald-600" />
+                                Done
+                              </span>
+                            ) : fu.urgency === 'overdue' ? (
+                              <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full inline-flex items-center gap-1 ${fu.badgeClass}`}>
+                                <AlertCircle size={11} className="text-rose-600" />
+                                Overdue
+                              </span>
+                            ) : fu.urgency === 'today' ? (
+                              <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full inline-flex items-center gap-1 ${fu.badgeClass}`}>
+                                <Clock size={11} className="text-amber-600" />
+                                Due Today
+                              </span>
+                            ) : fu.urgency === 'upcoming' ? (
+                              <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full inline-flex items-center gap-1 ${fu.badgeClass}`}>
+                                <Calendar size={11} className="text-blue-600" />
+                                Upcoming
+                              </span>
+                            ) : (
+                              <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full inline-flex items-center gap-1 ${fu.badgeClass}`}>
+                                <Clock size={11} className="text-slate-500" />
+                                Pending
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
                     <div className="max-h-24 overflow-y-auto pr-1 text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap font-medium">
                       {(() => {
-                        const rawFu =
-                          selectedVisit.follow_up_action ||
-                          (selectedVisit as any).followup ||
-                          (selectedVisit as any).follow_up ||
-                          (selectedVisit.remarks || selectedVisit.raw_remarks || '').match(/\[(?:Follow-?Up|Follow-?up\s*Action):\s*([^\]]+)\]/i)?.[1] ||
-                          (selectedVisit.remarks || selectedVisit.raw_remarks || '').match(/(?:^|\||\n)\s*Follow-?up(?:\s*Action)?:\s*([^|\]\n]+)/i)?.[1];
-                        const cleanFu = rawFu ? String(rawFu).trim() : '';
-                        const isNon =
-                          !cleanFu ||
-                          cleanFu === '-' ||
-                          cleanFu.toLowerCase() === 'none' ||
-                          cleanFu.toLowerCase() === 'nil' ||
-                          cleanFu.toLowerCase() === 'n/a' ||
-                          cleanFu.toLowerCase().startsWith('no remarks') ||
-                          cleanFu.toLowerCase().startsWith('no follow');
-                        return !isNon ? cleanFu : 'None';
+                        const fu = getFollowUpStatusInfo(selectedVisit);
+                        if (!fu.hasFollowUp) return 'None';
+                        return (
+                          <div>
+                            <p className={fu.status === 'completed' ? 'line-through text-slate-400' : 'text-slate-800'}>
+                              {fu.action}
+                            </p>
+                            {fu.dueDateStr && (
+                              <p className="text-[11px] text-slate-500 font-mono mt-1">
+                                Due Date: {new Date(fu.dueDateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </p>
+                            )}
+                          </div>
+                        );
                       })()}
                     </div>
                   </div>
@@ -1452,29 +1863,86 @@ export default function VisitsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Visit Outcome</label>
-                      <select
-                        value={editOutcome}
-                        onChange={e => setEditOutcome(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
-                        <option value="positive">Positive</option>
-                        <option value="neutral">Neutral</option>
-                        <option value="negative">Negative</option>
-                      </select>
-                    </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Visit Outcome</label>
+                    <select
+                      value={editOutcome}
+                      onChange={e => setEditOutcome(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                      <option value="positive">Positive</option>
+                      <option value="neutral">Neutral</option>
+                      <option value="negative">Negative</option>
+                    </select>
+                  </div>
 
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Follow-up Action</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Send rate quotation"
-                        value={editFollowup}
-                        onChange={e => setEditFollowup(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                      />
+                  <div className="p-3.5 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="block font-semibold text-slate-700">Follow-up Action &amp; Due Date</label>
+                      <div className="flex items-center gap-1.5 text-[11px]">
+                        <span className="text-slate-400 font-medium">Quick Due:</span>
+                        <button
+                          type="button"
+                          onClick={() => setFollowupPresetDays(1, true)}
+                          className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-medium cursor-pointer transition-colors shadow-2xs">
+                          +1d (Tomorrow)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFollowupPresetDays(3, true)}
+                          className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-medium cursor-pointer transition-colors shadow-2xs">
+                          +3d
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFollowupPresetDays(7, true)}
+                          className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-medium cursor-pointer transition-colors shadow-2xs">
+                          +7d (Next Week)
+                        </button>
+                      </div>
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-1">
+                        <input
+                          type="text"
+                          placeholder="e.g. Send rate quotation"
+                          value={editFollowup}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setEditFollowup(val);
+                            if (val.trim() && !editFollowupDate) {
+                              const nextWeek = new Date();
+                              nextWeek.setDate(nextWeek.getDate() + 7);
+                              setEditFollowupDate(formatLocalDate(nextWeek));
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="date"
+                          value={editFollowupDate}
+                          onChange={e => setEditFollowupDate(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer bg-white"
+                          title="Follow-up Due Date"
+                        />
+                      </div>
+                      <div>
+                        <select
+                          value={editFollowupStatus}
+                          onChange={e => setEditFollowupStatus(e.target.value as 'pending' | 'completed')}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                          <option value="pending">Pending</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </div>
+                    </div>
+                    {editFollowup && editFollowupDate && (
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-0.5 font-medium">
+                        <Clock size={12} className="text-blue-600 shrink-0" />
+                        <span>Reminder scheduled for: <strong className="text-slate-800">{new Date(editFollowupDate).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</strong></span>
+                      </div>
+                    )}
                   </div>
 
                   <div>

@@ -90,6 +90,8 @@ export const visitsApi = {
   getAll: (params?: any) => API.get('/kra/visits', { params }),
   create: (data: any) => API.post('/kra/visits', data),
   update: (id: string, data: any) => API.patch(`/kra/visits/${id}`, data),
+  updateFollowUpStatus: (id: string, follow_up_status: 'pending' | 'completed') =>
+    API.patch(`/kra/visits/${id}`, { follow_up_status }),
   delete: (id: string) => API.delete(`/kra/visits/${id}`),
 };
 

@@ -690,16 +690,76 @@ export default function HomePage() {
       });
     }
 
-    // 4. Follow-ups Due
-    const visitsWithFollowup = safeVisits.filter(
-      v => (v.follow_up_action || v.follow_up || v.followup || '').trim().length > 0,
-    );
-    if (visitsWithFollowup.length > 0) {
+    // 4. Visit Follow-ups (Overdue / Due Today / Pending)
+    const todayStr = formatLocalDate();
+    const pendingVisitsWithFollowup = safeVisits.filter(v => {
+      const action = (v.follow_up_action || v.follow_up || v.followup || '').trim();
+      if (!action) return false;
+      const lower = action.toLowerCase();
+      if (
+        action === '-' ||
+        lower === 'none' ||
+        lower === 'nil' ||
+        lower === 'n/a' ||
+        lower.startsWith('no remarks') ||
+        lower.startsWith('no follow')
+      ) {
+        return false;
+      }
+      return v.follow_up_status !== 'completed';
+    });
+
+    const overdueVisitFollowups = pendingVisitsWithFollowup.filter(v => {
+      if (!v.follow_up_date) return false;
+      const dStr = new Date(v.follow_up_date).toISOString().split('T')[0];
+      return dStr < todayStr;
+    });
+
+    const todayVisitFollowups = pendingVisitsWithFollowup.filter(v => {
+      if (!v.follow_up_date) return false;
+      const dStr = new Date(v.follow_up_date).toISOString().split('T')[0];
+      return dStr === todayStr;
+    });
+
+    if (overdueVisitFollowups.length > 0) {
       items.push({
-        id: 'action-visit-followups',
-        category: 'Follow-ups Due',
-        title: visitsWithFollowup.length === 1 ? '1 visit follow-up due' : `${visitsWithFollowup.length} visit follow-ups due`,
-        link: '/visits',
+        id: 'action-visit-followups-overdue',
+        category: 'Overdue Visit Follow-ups',
+        title:
+          overdueVisitFollowups.length === 1
+            ? '1 visit follow-up is overdue'
+            : `${overdueVisitFollowups.length} visit follow-ups are overdue`,
+        link: '/visits?followup=overdue',
+        icon: AlertTriangle,
+      });
+    }
+
+    if (todayVisitFollowups.length > 0) {
+      items.push({
+        id: 'action-visit-followups-today',
+        category: 'Visit Follow-ups Due Today',
+        title:
+          todayVisitFollowups.length === 1
+            ? '1 visit follow-up due today'
+            : `${todayVisitFollowups.length} visit follow-ups due today`,
+        link: '/visits?followup=due_today',
+        icon: MapPin,
+      });
+    }
+
+    const otherPending = pendingVisitsWithFollowup.filter(
+      v => !overdueVisitFollowups.includes(v) && !todayVisitFollowups.includes(v),
+    );
+
+    if (overdueVisitFollowups.length === 0 && todayVisitFollowups.length === 0 && otherPending.length > 0) {
+      items.push({
+        id: 'action-visit-followups-pending',
+        category: 'Visit Follow-ups Due',
+        title:
+          otherPending.length === 1
+            ? '1 visit follow-up pending'
+            : `${otherPending.length} visit follow-ups pending`,
+        link: '/visits?followup=pending',
         icon: MapPin,
       });
     }
