@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   ThumbsUp,
+  ThumbsDown,
   RefreshCw,
   X,
   User,
@@ -610,19 +611,33 @@ export default function VisitsPage() {
     const newStatus: 'pending' | 'completed' =
       currentStatus === 'completed' ? 'pending' : 'completed';
 
-    // Optimistic UI update
+    const completedAt = newStatus === 'completed' ? new Date().toISOString() : undefined;
+
+    // Optimistic UI update for visits list
     setVisits((prev) =>
       prev.map((item) =>
         item.id === v.id
           ? {
               ...item,
               follow_up_status: newStatus,
-              follow_up_completed_at:
-                newStatus === 'completed' ? new Date().toISOString() : undefined,
+              follow_up_completed_at: completedAt,
             }
           : item,
       ),
     );
+
+    // Optimistic UI update for selected modal visit if open
+    if (selectedVisit && selectedVisit.id === v.id) {
+      setSelectedVisit((prev) =>
+        prev
+          ? {
+              ...prev,
+              follow_up_status: newStatus,
+              follow_up_completed_at: completedAt,
+            }
+          : null,
+      );
+    }
 
     try {
       await visitsApi.updateFollowUpStatus(v.id, newStatus);
@@ -631,6 +646,8 @@ export default function VisitsPage() {
           ? `Follow-up completed for ${v.customer_name}`
           : `Follow-up marked pending for ${v.customer_name}`,
       );
+      // Background silent refetch to guarantee persistence
+      fetchVisits(true);
     } catch (err) {
       console.error('Failed to toggle follow-up status:', err);
       toast.error('Failed to update follow-up status.');
@@ -638,6 +655,9 @@ export default function VisitsPage() {
       setVisits((prev) =>
         prev.map((item) => (item.id === v.id ? v : item)),
       );
+      if (selectedVisit && selectedVisit.id === v.id) {
+        setSelectedVisit(v);
+      }
     }
   };
 
@@ -794,8 +814,14 @@ export default function VisitsPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div
+            onClick={() => { setFilterOutcome('all'); setFilterFollowup('all'); }}
+            className={`bg-white p-4 rounded-xl border ${
+              filterOutcome === 'all' && filterFollowup === 'all'
+                ? 'border-blue-500 ring-2 ring-blue-100'
+                : 'border-slate-200'
+            } shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 transition-all`}>
             <div>
               <p className="text-xs text-slate-500 font-medium">Total Visits</p>
               <p className="text-2xl font-bold text-slate-900 mt-1">{totalVisits}</p>
@@ -805,7 +831,13 @@ export default function VisitsPage() {
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div
+            onClick={() => setFilterOutcome(filterOutcome === 'positive' ? 'all' : 'positive')}
+            className={`bg-white p-4 rounded-xl border ${
+              filterOutcome === 'positive'
+                ? 'border-emerald-500 ring-2 ring-emerald-100'
+                : 'border-slate-200'
+            } shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-300 transition-all`}>
             <div>
               <p className="text-xs text-slate-500 font-medium">Positive</p>
               <p className="text-2xl font-bold text-emerald-600 mt-1">{positiveVisits}</p>
@@ -815,13 +847,35 @@ export default function VisitsPage() {
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div
+            onClick={() => setFilterOutcome(filterOutcome === 'neutral' ? 'all' : 'neutral')}
+            className={`bg-white p-4 rounded-xl border ${
+              filterOutcome === 'neutral'
+                ? 'border-amber-500 ring-2 ring-amber-100'
+                : 'border-slate-200'
+            } shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-300 transition-all`}>
             <div>
               <p className="text-xs text-slate-500 font-medium">Neutral</p>
               <p className="text-2xl font-bold text-amber-600 mt-1">{neutralVisits}</p>
             </div>
             <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
               <Clock size={22} />
+            </div>
+          </div>
+
+          <div
+            onClick={() => setFilterOutcome(filterOutcome === 'negative' ? 'all' : 'negative')}
+            className={`bg-white p-4 rounded-xl border ${
+              filterOutcome === 'negative'
+                ? 'border-rose-500 ring-2 ring-rose-100'
+                : 'border-slate-200'
+            } shadow-sm flex items-center justify-between cursor-pointer hover:border-rose-300 transition-all`}>
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Negative</p>
+              <p className="text-2xl font-bold text-rose-600 mt-1">{negativeVisits}</p>
+            </div>
+            <div className="p-3 bg-rose-50 text-rose-600 rounded-lg">
+              <ThumbsDown size={22} />
             </div>
           </div>
 
@@ -1577,6 +1631,17 @@ export default function VisitsPage() {
                         if (!fu.hasFollowUp) return null;
                         return (
                           <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => handleToggleFollowUpStatus(e, selectedVisit)}
+                              className={`px-2 py-0.5 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer border shadow-2xs ${
+                                fu.status === 'completed'
+                                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300'
+                              }`}>
+                              <Check size={11} strokeWidth={3} />
+                              {fu.status === 'completed' ? 'Reopen' : 'Mark Done'}
+                            </button>
                             {fu.urgency === 'completed' ? (
                               <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full inline-flex items-center gap-1 ${fu.badgeClass}`}>
                                 <CheckCircle2 size={11} className="text-emerald-600" />
