@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customersApi, employeesApi } from '../lib/api';
 import { useEffect, useState, useMemo } from 'react';
@@ -115,13 +115,20 @@ function deriveSegment(c: any): string {
 
 export default function CustomersPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { effectivePhone, isSalesManager, isAdmin, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterHealth, setFilterHealth] = useState<string>('all');
-  const [filterSegment, setFilterSegment] = useState<string>('all');
+  const [filterSegment, setFilterSegment] = useState<string>(() => searchParams.get('segment') || 'all');
+
+  useEffect(() => {
+    const seg = searchParams.get('segment');
+    if (seg) setFilterSegment(seg);
+  }, [searchParams]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 

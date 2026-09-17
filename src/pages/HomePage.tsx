@@ -14,11 +14,13 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
+import { getFollowUpStatusInfo } from '../utils/visitUtils';
 import {
   Package,
   ShoppingBag,
   MapPin,
   Users,
+  FileText,
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -291,12 +293,12 @@ export default function HomePage() {
         }),
   });
 
-  // 5. Inquiries Review Queue Query (AI Extractions)
-  const { data: reviewQueueData, refetch: refetchReviewQueue } = useQuery({
-    queryKey: ['inquiries-review-queue', effectivePhone, activeRole, activeMode],
+  // 5. Inquiries Query (for Review New Inquiries Action Card - universal across all reps)
+  const { data: inquiriesData, refetch: refetchInquiries } = useQuery({
+    queryKey: ['home-inquiries-list', effectivePhone, activeRole, activeMode],
     queryFn: () =>
       inquiriesApi
-        .getReviewQueue({
+        .getAll({
           ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
           ...(activeMode ? { mode: activeMode } : {}),
         })
@@ -375,7 +377,7 @@ export default function HomePage() {
     refetchDash();
     refetchOrders();
     refetchDeals();
-    refetchReviewQueue();
+    refetchInquiries();
     refetchChurn();
     refetchVisits();
     refetchComplaints();
@@ -386,7 +388,7 @@ export default function HomePage() {
   const safeVisits: any[] = Array.isArray(visitsData) ? visitsData : [];
   const safeComplaints: any[] = Array.isArray(complaintsData) ? complaintsData : [];
   const safeEmployees: any[] = Array.isArray(employeesData) ? employeesData : [];
-  const safeReviewQueue: any[] = Array.isArray(reviewQueueData) ? reviewQueueData : [];
+  const safeInquiries: any[] = Array.isArray(inquiriesData) ? inquiriesData : [];
   const safeCustomers: any[] = Array.isArray(churnData) ? churnData : [];
 
   // ── Customer Directory for Search Dropdown ──────────────────────────────
@@ -515,7 +517,23 @@ export default function HomePage() {
   const totalWonOrdersCount = targetOrders.length;
 
   // 3. New Customers count
-  const newCustomersCount = Number(dashboardData?.kra2?.count ?? 0);
+  const newCustomersCount = useMemo(() => {
+    if (dashboardData?.kra2?.count !== undefined && Number(dashboardData.kra2.count) > 0) {
+      return Number(dashboardData.kra2.count);
+    }
+    // Resilient fallback: calculate from safeCustomers (customer directory / churn risk)
+    if (!safeCustomers || safeCustomers.length === 0) return 0;
+    const filtered = safeCustomers.filter((c: any) => {
+      if (dateRange.from && dateRange.to) {
+        const dStr = c.created_at || c.first_order_date;
+        if (!dStr) return false;
+        const itemDate = new Date(dStr).toISOString().split('T')[0];
+        return itemDate >= dateRange.from && itemDate <= dateRange.to;
+      }
+      return (c.segment || '').toLowerCase() === 'new' || (c.churn_risk || '').toLowerCase() === 'new';
+    });
+    return filtered.length;
+  }, [dashboardData, safeCustomers, dateRange]);
 
   // 4. Customer Visits count
   const totalVisitsCount = useMemo(() => {
@@ -690,33 +708,85 @@ export default function HomePage() {
       });
     }
 
-    // 4. Follow-ups Due
-    const visitsWithFollowup = safeVisits.filter(
-      v => (v.follow_up_action || v.follow_up || v.followup || '').trim().length > 0,
-    );
-    if (visitsWithFollowup.length > 0) {
+    // 4. Visit Follow-ups Due (Overdue + Due Today ONLY)
+    const dueOrOverdueVisits = safeVisits.filter(v => {
+      const fu = getFollowUpStatusInfo(v);
+      return fu.hasFollowUp && (fu.urgency === 'overdue' || fu.urgency === 'today');
+    });
+
+    if (dueOrOverdueVisits.length > 0) {
+      const overdueCount = dueOrOverdueVisits.filter(
+        v => getFollowUpStatusInfo(v).urgency === 'overdue',
+      ).length;
+      const todayCount = dueOrOverdueVisits.filter(
+        v => getFollowUpStatusInfo(v).urgency === 'today',
+      ).length;
+      const totalCount = dueOrOverdueVisits.length;
+
+      let titleText = '';
+      if (overdueCount > 0 && todayCount > 0) {
+        titleText = `${totalCount} visit follow-up${totalCount > 1 ? 's' : ''} due (${overdueCount} overdue, ${todayCount} today)`;
+      } else if (overdueCount > 0) {
+        titleText = `${overdueCount} visit follow-up${overdueCount > 1 ? 's are' : ' is'} overdue`;
+      } else {
+        titleText = `${todayCount} visit follow-up${todayCount > 1 ? 's' : ''} due today`;
+      }
+
       items.push({
-        id: 'action-visit-followups',
-        category: 'Follow-ups Due',
-        title: visitsWithFollowup.length === 1 ? '1 visit follow-up due' : `${visitsWithFollowup.length} visit follow-ups due`,
-        link: '/visits',
-        icon: MapPin,
+        id: 'action-visit-followups-due',
+        category: 'Visit Follow-ups Due',
+        title: titleText,
+        link: '/visits?followup=due',
+        icon: overdueCount > 0 ? AlertTriangle : Clock,
       });
     }
 
-    // 5. AI Extractions
-    if (safeReviewQueue.length > 0) {
+    // 5. Review New Inquiries (Universal for all salespeople across the platform)
+    const unquotedInquiries = safeInquiries.filter(inq => {
+      // 1. Direct or fuzzy linked deal check in safeDeals
+      const linkedDeal = safeDeals.find(
+        (d: any) =>
+          (d.inquiry_id && d.inquiry_id === inq.id) ||
+          (d.customer_name &&
+            inq.customer_name &&
+            d.customer_name.trim().toLowerCase() === inq.customer_name.trim().toLowerCase() &&
+            !['won', 'lost'].includes((d.stage || '').toLowerCase())),
+      );
+
+      if (linkedDeal) {
+        const stage = (linkedDeal.stage || '').toLowerCase().trim();
+        // If the deal already progressed to quote sent, negotiation, won, or lost -> NOT waiting to be quoted
+        if (['quoted', 'quotation_sent', 'proposal', 'negotiation', 'won', 'lost', 'on_hold', 'qualified'].includes(stage)) {
+          return false;
+        }
+        if (stage === 'new_inquiry' || stage === 'review') {
+          return true;
+        }
+      }
+
+      // 2. Direct inquiry status check
+      const st = (inq.status || '').toLowerCase().trim();
+      if (['won', 'quoted', 'quotation_sent', 'confirmed', 'saved', 'processed', 'negotiation', 'on_hold', 'lost'].includes(st)) {
+        return false;
+      }
+
+      // Inquiries with status review, pending, new, draft, auto_created, or unquoted are awaiting quote
+      return true;
+    });
+
+    if (unquotedInquiries.length > 0) {
+      const count = unquotedInquiries.length;
       items.push({
-        id: 'action-ai-review',
-        category: 'AI Extractions',
-        title: safeReviewQueue.length === 1 ? '1 AI extraction awaiting review' : `${safeReviewQueue.length} AI extractions awaiting review`,
-        link: '/inquiries',
-        icon: Sparkles,
+        id: 'action-review-new-inquiries',
+        category: 'Review New Inquiries',
+        title: `${count} new ${count === 1 ? 'inquiry' : 'inquiries'} waiting to be quoted`,
+        link: '/inquiries?stage=new_inquiry',
+        icon: FileText,
       });
     }
 
     return items;
-  }, [safeDeals, safeCustomers, openComplaints, safeVisits, safeReviewQueue]);
+  }, [safeDeals, safeCustomers, openComplaints, safeVisits, safeInquiries]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
@@ -1018,8 +1088,9 @@ export default function HomePage() {
 
         {/* Card 4: New Customers - Blue Soft */}
         <div
-          onClick={() => navigate('/customers')}
-          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
+          onClick={() => navigate('/customers?segment=new')}
+          className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer"
+          title="View New Customers">
           <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
             <Users size={18} />
           </div>

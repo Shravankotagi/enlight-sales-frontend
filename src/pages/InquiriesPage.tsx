@@ -991,7 +991,10 @@ export default function InquiriesPage() {
   const [pipelineLostModal, setPipelineLostModal] = useState<{ dealId: string; reason: string } | null>(null);
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('stage') || params.get('status') || 'all';
+  });
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
 
   const activeSalespersonName =
@@ -1006,6 +1009,10 @@ export default function InquiriesPage() {
       setViewMode('pipeline');
     } else {
       setViewMode('table');
+    }
+    const stageParam = params.get('stage') || params.get('status');
+    if (stageParam) {
+      setFilterStatus(stageParam);
     }
   }, [location.search]);
 
