@@ -152,7 +152,7 @@ export default function IntelligencePage() {
   const reorderList = Array.isArray(reorderData) ? reorderData : [];
   const predictedCount = reorderList.length;
   const customersTrackedCount =
-    allCustomers.length > 0 ? allCustomers.length : totalMonitoredAccounts;
+    totalMonitoredAccounts > 0 ? totalMonitoredAccounts : allCustomers.length;
 
   const avgReorderCycle = useMemo(() => {
     if (!allCustomers || allCustomers.length === 0) return 30;

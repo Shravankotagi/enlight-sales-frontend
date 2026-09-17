@@ -141,6 +141,66 @@ export function formatSourceChannel(channel?: string | null): string {
   return channel;
 }
 
+export function isOcrOrDocumentInquiry(inq: InquiryItem): boolean {
+  if (!inq) return false;
+
+  const ch = String(inq.source_channel || '').toLowerCase().trim();
+  if (
+    ch === 'ocr' ||
+    ch === 'whatsapp_image' ||
+    ch === 'whatsapp_po' ||
+    ch === 'upload' ||
+    ch === 'document' ||
+    ch.includes('ocr') ||
+    ch.includes('image') ||
+    ch.includes('doc') ||
+    ch.includes('pdf')
+  ) {
+    return true;
+  }
+
+  const inqType = String(inq.inquiry_type || '').toLowerCase().trim();
+  if (inqType === 'ocr' || inqType.includes('document') || inqType.includes('ai document')) {
+    return true;
+  }
+
+  if (inq.has_media === true) {
+    return true;
+  }
+
+  if (
+    Array.isArray(inq.media_urls) &&
+    inq.media_urls.length > 0 &&
+    inq.media_urls.some((u) => Boolean(u) && u !== 'attached_document' && u !== '')
+  ) {
+    return true;
+  }
+
+  const raw = String(inq.raw_text || '').trim();
+  if (
+    raw.startsWith('[Inquiry Attachment:') ||
+    raw.startsWith('[Inquiry Document Attached') ||
+    raw.startsWith('[PO Document Attached:') ||
+    raw.startsWith('[Attachment:') ||
+    raw.startsWith('[OCR:') ||
+    raw.startsWith('[Document:')
+  ) {
+    return true;
+  }
+
+  const aiJson = (inq.ai_extraction_json as any) || {};
+  if (
+    aiJson.is_document === true ||
+    aiJson.source_type === 'document' ||
+    aiJson.ocr_extracted === true ||
+    aiJson.is_ocr === true
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Filter function to ensure ONLY actual Product Inquiries appear in this tab.
  * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
@@ -792,14 +852,16 @@ const DEFAULT_PIPELINE_STAGES = [
   { key: 'on_hold', label: 'On Hold', color: 'bg-purple-50 border-purple-200' },
 ];
 
-function DealCard({ deal, onStageChange, onDelete }: {
+function DealCard({ deal, onStageChange, onDelete, onClick }: {
   deal: any;
-  onStageChange: (id: string, stage: string, reason?: string) => void;
+  onStageChange: (id: string, stage: string, cardDeal?: any) => void;
   onDelete: (deal: any) => void;
+  onClick?: () => void;
 }) {
   return (
     <div
-      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow relative group"
+      onClick={onClick}
+      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer"
     >
       <div className="flex items-start justify-between mb-2 gap-1">
         <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
@@ -834,7 +896,7 @@ function DealCard({ deal, onStageChange, onDelete }: {
         <div className="mb-2">
           {deal.deal_items.slice(0, 2).map((item: any, i: number) => (
             <p key={i} className="text-xs text-gray-600">
-              • {item.sku_text} - {item.quantity} {item.unit}
+              • {item.sku_text || item.sku || item.product_name || 'Item'} - {item.quantity} {item.unit || 'MT'}
             </p>
           ))}
           {deal.deal_items.length > 2 && (
@@ -887,7 +949,7 @@ function DealCard({ deal, onStageChange, onDelete }: {
           })
           .map(stage => (
             <button key={stage}
-              onClick={() => onStageChange(deal.id, stage)}
+              onClick={() => onStageChange(deal.id, stage, deal)}
               className={`text-xs px-2 py-1 rounded border transition-colors
                 ${stage === 'won'
                   ? 'border-green-300 text-green-700 hover:bg-green-50'
@@ -1246,8 +1308,13 @@ export default function InquiriesPage() {
     },
   });
 
-  const handlePipelineStageChange = (id: string, stage: string) => {
-    if (stage === 'lost') {
+  const handlePipelineStageChange = (id: string, stage: string, cardDeal?: any) => {
+    const rawInq = cardDeal?.rawInquiry || inquiries.find(i => i.id === id || i.id === cardDeal?.inquiry_id);
+    const details = cardDeal?.details || (rawInq ? parseInquiryText(rawInq.raw_text || '', rawInq) : null);
+
+    if (rawInq && details) {
+      handleUpdateDealStage(rawInq, details, stage);
+    } else if (stage === 'lost') {
       setPipelineLostModal({ dealId: id, reason: '' });
     } else if (stage === 'won') {
       const targetDeal = rawDeals?.find((d: any) => d.id === id);
@@ -2257,58 +2324,6 @@ export default function InquiriesPage() {
     });
   };
 
-  const filteredPipelineDeals = useMemo(() => {
-    const list = (rawDeals || []).filter((d: any) => {
-      const st = (d.stage || 'new_inquiry').toLowerCase().trim();
-      const normStage = (st === 'review' || !st) ? 'new_inquiry' : (st === 'qualified' ? 'quoted' : (st === 'hold' ? 'on_hold' : st));
-      if (filterStatus !== 'all' && normStage !== filterStatus) {
-        return false;
-      }
-      if (!searchTerm) return true;
-      const s = searchTerm.toLowerCase().trim();
-      const cName = (d.customer_name || '').toLowerCase();
-      const poNum = (d.po_number || '').toLowerCase();
-      const dealNum = (d.deal_number ? d.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'inq-') : (d.id ? `inq-${d.id.substring(0, 6)}` : '')).toLowerCase();
-      const dealLegacyNum = (d.deal_number ? d.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'deal-') : (d.id ? `deal-${d.id.substring(0, 6)}` : '')).toLowerCase();
-      const phone = (d.customer_phone || '').toLowerCase();
-      const items = (d.deal_items || [])
-        .map((i: any) => `${i.sku_text || ''} ${i.dimensions || ''}`)
-        .join(' ')
-        .toLowerCase();
-      const dateFormatted = d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
-      return (
-        cName.includes(s) ||
-        poNum.includes(s) ||
-        dealNum.includes(s) ||
-        dealLegacyNum.includes(s) ||
-        phone.includes(s) ||
-        items.includes(s) ||
-        dateFormatted.includes(s)
-      );
-    });
-    return sortNewestFirst(list);
-  }, [rawDeals, searchTerm, filterStatus]);
-
-  const pipelineBoard = useMemo(() => {
-    const stages = ['new_inquiry', 'quoted', 'negotiation', 'on_hold'];
-    return stages.reduce((acc, st) => {
-      acc[st] = filteredPipelineDeals.filter((d: any) => {
-        const dealStage = (d.stage || 'new_inquiry').toLowerCase().trim();
-        if (st === 'new_inquiry') {
-          return dealStage === 'new_inquiry' || dealStage === 'review' || !dealStage;
-        }
-        if (st === 'quoted') {
-          return dealStage === 'quoted' || dealStage === 'qualified';
-        }
-        if (st === 'on_hold') {
-          return dealStage === 'on_hold' || dealStage === 'hold';
-        }
-        return dealStage === st;
-      });
-      return acc;
-    }, {} as Record<string, any[]>);
-  }, [filteredPipelineDeals]);
-
   // Single deterministic source of truth for active inquiries, always newest first
   const activeInquiryList = useMemo(() => {
     const serverList = Array.isArray(rawInquiries) ? rawInquiries : [];
@@ -2417,49 +2432,86 @@ export default function InquiriesPage() {
     return sortNewestFirst(list);
   }, [activeInquiryList, dateRange, searchTerm, filterStatus, rawDeals]);
 
+  const pipelineBoard = useMemo(() => {
+    const board: Record<string, any[]> = {
+      new_inquiry: [],
+      quoted: [],
+      negotiation: [],
+      on_hold: [],
+    };
+
+    filtered.forEach((inq) => {
+      const parsed = parseInquiryText(inq.raw_text || '', inq);
+      const rawStage = getInquiryDealStageKey(inq, parsed.companyName);
+      const stageKey = (rawStage === 'qualified' || rawStage === 'saved' || rawStage === 'confirmed')
+        ? 'quoted'
+        : (rawStage === 'hold' ? 'on_hold' : (rawStage === 'review' || !rawStage ? 'new_inquiry' : rawStage));
+
+      // Won and Lost are strictly excluded from Kanban board columns
+      if (stageKey === 'won' || stageKey === 'lost') {
+        return;
+      }
+
+      if (board[stageKey]) {
+        const linkedDeal = getLinkedDeal(inq, parsed.companyName);
+        const aiJson = (inq.ai_extraction_json as any) || {};
+        const lineItemsSrc = aiJson.line_items || aiJson.lineItems || [];
+
+        let dealItems: any[] = [];
+        if (linkedDeal?.deal_items && linkedDeal.deal_items.length > 0) {
+          dealItems = linkedDeal.deal_items;
+        } else if (lineItemsSrc.length > 0) {
+          dealItems = lineItemsSrc.map((item: any) => ({
+            sku_text: item.sku_text || item.description || item.product_name || 'Item',
+            dimensions: item.dimensions || '',
+            quantity: Number(item.quantity || (item as any).qty || 0),
+            unit: item.unit || 'MT',
+            rate: Number(item.rate || 0),
+            amount: Number(item.amount || (Number(item.quantity || 0) * Number(item.rate || 0))),
+          }));
+        } else if (parsed.lineItems && parsed.lineItems.length > 0) {
+          dealItems = parsed.lineItems;
+        }
+
+        const totalAmt = Number(linkedDeal?.total_amount) || Number(parsed.totalAmount) || Number(aiJson.totalAmount) || Number(aiJson.total_amount) || 0;
+
+        const cleanInqId = inq.id ? inq.id.substring(0, 6).toUpperCase() : '';
+        const dealNumber = linkedDeal?.deal_number
+          ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-')
+          : (cleanInqId ? `INQ-${cleanInqId}` : 'INQ');
+
+        board[stageKey].push({
+          id: linkedDeal?.id || inq.id,
+          inquiry_id: inq.id,
+          deal_number: dealNumber,
+          customer_name: linkedDeal?.customer_name || parsed.companyName || inq.customer_name || inq.sender_name || 'Unknown Customer',
+          customer_phone: linkedDeal?.customer_phone || parsed.customerPhone || inq.customer_phone || inq.sender_phone || '',
+          stage: stageKey,
+          inquiry_type: inq.inquiry_type,
+          po_number: linkedDeal?.po_number || aiJson.po_number || '',
+          deal_items: dealItems,
+          total_amount: totalAmt,
+          created_at: inq.created_at || linkedDeal?.created_at,
+          rawInquiry: inq,
+          details: parsed,
+          linkedDeal: linkedDeal,
+        });
+      }
+    });
+
+    return board;
+  }, [filtered, rawDeals]);
+
   // All-time KPI summary counts (not filtered by date range)
   const totalInquiriesCount = activeInquiryList.length;
 
-  const whatsappInquiriesCount = useMemo(() => {
-    return activeInquiryList.filter(i => {
-      const ch = (i.source_channel || '').toLowerCase().trim();
-      return ch !== 'web_dashboard' && ch !== 'dashboard' && ch !== 'manual' && ch !== 'web';
-    }).length;
+  const ocrInquiriesCount = useMemo(() => {
+    return activeInquiryList.filter(isOcrOrDocumentInquiry).length;
   }, [activeInquiryList]);
 
-  const ocrInquiriesCount = useMemo(() => {
-    return activeInquiryList.filter(i => {
-      if (!i) return false;
-      if (i.has_media) return true;
-      if (Array.isArray(i.media_urls) && i.media_urls.length > 0 && i.media_urls.some(u => Boolean(u) && u !== 'attached_document' && u !== '')) {
-        return true;
-      }
-      const raw = (i.raw_text || '').trim();
-      if (
-        raw.startsWith('[Inquiry Attachment:') ||
-        raw.startsWith('[Inquiry Document Attached') ||
-        raw.startsWith('[PO Document Attached:') ||
-        raw.startsWith('[Attachment:') ||
-        raw.startsWith('[OCR:') ||
-        raw.startsWith('[Document:')
-      ) {
-        return true;
-      }
-      const ch = String(i.source_channel || '').toLowerCase();
-      if (ch === 'whatsapp_image' || ch === 'whatsapp_po' || ch === 'upload' || ch === 'ocr' || ch === 'document') {
-        return true;
-      }
-      const inqType = String(i.inquiry_type || '').toLowerCase();
-      if (inqType.includes('document') || inqType.includes('ai document') || inqType === 'ocr') {
-        return true;
-      }
-      const aiJson = (i.ai_extraction_json as any) || {};
-      if (aiJson.is_document || aiJson.source_type === 'document' || aiJson.ocr_extracted || aiJson.is_ocr) {
-        return true;
-      }
-      return false;
-    }).length;
-  }, [activeInquiryList]);
+  const textInquiriesCount = useMemo(() => {
+    return Math.max(0, totalInquiriesCount - ocrInquiriesCount);
+  }, [totalInquiriesCount, ocrInquiriesCount]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const validCurrentPage = Math.min(currentPage, totalPages);
@@ -2560,8 +2612,8 @@ export default function InquiriesPage() {
 
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-500 font-medium">WhatsApp Inquiries</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{whatsappInquiriesCount}</p>
+              <p className="text-xs text-slate-500 font-medium">Text Inquiries</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{textInquiriesCount}</p>
             </div>
             <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
               <MessageSquare size={22} />
@@ -2713,9 +2765,10 @@ export default function InquiriesPage() {
                 <div className="space-y-2">
                   {(pipelineBoard[key] || []).map((deal: any) => (
                     <DealCard
-                      key={deal.id}
+                      key={deal.inquiry_id || deal.id}
                       deal={deal}
-                      onStageChange={handlePipelineStageChange}
+                      onClick={() => deal.rawInquiry && handleOpenDrawer(deal.rawInquiry)}
+                      onStageChange={(id, stage, cardDeal) => handlePipelineStageChange(id, stage, cardDeal || deal)}
                       onDelete={(d) => setConfirmDeleteDeal(d)}
                     />
                   ))}
