@@ -445,63 +445,7 @@ function CustomerProfilePageContent() {
     updateMutation.mutate(editForm);
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-fade-in pb-12 font-sans">
-        <div className="flex items-center gap-3 animate-pulse">
-          <div className="w-8 h-8 bg-slate-200 rounded-lg"></div>
-          <div className="h-8 bg-slate-200 rounded-xl w-64"></div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 animate-pulse">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-24 bg-slate-100 rounded-xl border border-slate-200"></div>
-          ))}
-        </div>
-        <div className="h-96 bg-slate-100 rounded-2xl border border-slate-200 animate-pulse"></div>
-      </div>
-    );
-  }
-
-  if (isError || !customer) {
-    const isForbidden =
-      (error as any)?.response?.status === 403 ||
-      String((error as any)?.message || '').toLowerCase().includes('denied') ||
-      String((error as any)?.message || '').toLowerCase().includes('permission');
-
-    return (
-      <div className="space-y-6 animate-fade-in pb-12 font-sans text-center py-8">
-        <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 shadow-xs">
-          {isForbidden ? <ShieldAlert size={32} /> : <AlertTriangle size={32} />}
-        </div>
-        <h2 className="text-xl font-bold text-slate-900">
-          {isForbidden ? 'Access Denied' : 'Customer Profile Not Found'}
-        </h2>
-        <p className="text-sm text-slate-500 max-w-md mx-auto">
-          {isForbidden
-            ? 'You do not have permission to view this customer. Salespersons can only view their own customers, and Sales Managers can only view customers belonging to their assigned team.'
-            : error instanceof Error
-              ? error.message
-              : 'The requested customer profile could not be loaded or does not exist.'}
-        </p>
-        <div className="flex items-center justify-center gap-3 pt-2">
-          {!isForbidden && (
-            <button
-              onClick={() => refetch()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer">
-              <RefreshCw size={14} /> Retry
-            </button>
-          )}
-          <button
-            onClick={() => navigate('/customers')}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs cursor-pointer">
-            <ChevronLeft size={16} /> Back to Customer Health
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const deals = Array.isArray(customer.deals) ? customer.deals : [];
+  const deals = Array.isArray(customer?.deals) ? customer.deals : [];
   const wonDeals = deals.filter(
     (d: any) =>
       d &&
@@ -510,13 +454,14 @@ function CustomerProfilePageContent() {
         Boolean(d.po_number) ||
         d.inquiry_type === 'purchase_order')
   );
-  const visits = Array.isArray(customer.visits) ? customer.visits : [];
-  const inquiries = Array.isArray(customer.inquiries) ? customer.inquiries : [];
-  const complaints = Array.isArray(customer.complaints) ? customer.complaints : [];
-  const healthSignals = customer.health_signals || {};
+  const visits = Array.isArray(customer?.visits) ? customer.visits : [];
+  const inquiries = Array.isArray(customer?.inquiries) ? customer.inquiries : [];
+  const complaints = Array.isArray(customer?.complaints) ? customer.complaints : [];
+  const healthSignals = customer?.health_signals || {};
 
   // Aggregate all unique contacts and POCs for this customer across master data and site visits
   const stakeholdersList = useMemo(() => {
+    if (!customer) return [];
     try {
       const list: Array<{
         id: string;
@@ -613,6 +558,62 @@ function CustomerProfilePageContent() {
       return [];
     }
   }, [customer, visits, employeeMap]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-fade-in pb-12 font-sans">
+        <div className="flex items-center gap-3 animate-pulse">
+          <div className="w-8 h-8 bg-slate-200 rounded-lg"></div>
+          <div className="h-8 bg-slate-200 rounded-xl w-64"></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 animate-pulse">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-24 bg-slate-100 rounded-xl border border-slate-200"></div>
+          ))}
+        </div>
+        <div className="h-96 bg-slate-100 rounded-2xl border border-slate-200 animate-pulse"></div>
+      </div>
+    );
+  }
+
+  if (isError || !customer) {
+    const isForbidden =
+      (error as any)?.response?.status === 403 ||
+      String((error as any)?.message || '').toLowerCase().includes('denied') ||
+      String((error as any)?.message || '').toLowerCase().includes('permission');
+
+    return (
+      <div className="space-y-6 animate-fade-in pb-12 font-sans text-center py-8">
+        <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 shadow-xs">
+          {isForbidden ? <ShieldAlert size={32} /> : <AlertTriangle size={32} />}
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">
+          {isForbidden ? 'Access Denied' : 'Customer Profile Not Found'}
+        </h2>
+        <p className="text-sm text-slate-500 max-w-md mx-auto">
+          {isForbidden
+            ? 'You do not have permission to view this customer. Salespersons can only view their own customers, and Sales Managers can only view customers belonging to their assigned team.'
+            : error instanceof Error
+              ? error.message
+              : 'The requested customer profile could not be loaded or does not exist.'}
+        </p>
+        <div className="flex items-center justify-center gap-3 pt-2">
+          {!isForbidden && (
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer">
+              <RefreshCw size={14} /> Retry
+            </button>
+          )}
+          <button
+            onClick={() => navigate('/customers')}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs cursor-pointer">
+            <ChevronLeft size={16} /> Back to Customer Health
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const lastOrderDateStr = customer.last_order_date
     ? safeFormatDate(customer.last_order_date)
