@@ -73,22 +73,16 @@ function EmployeeFooter() {
 
   return (
     <div className="space-y-2">
-      {(isAdmin || isSalesManager) && (
+      {isSalesManager && !isAdmin && (
         <button
           onClick={handleBackToAdmin}
           className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 hover:text-white rounded-xl border border-blue-500/40 text-xs font-bold transition-all shadow-xs"
-          title={
-            isAdmin
-              ? 'Return to Salesperson Selection Page'
-              : 'Select Team Member'
-          }
+          title="Select Team Member"
         >
           <Users size={14} />
           {viewingAs
             ? `Viewing: ${viewingAs.name} (${viewingRoleLabel})`
-            : isAdmin
-              ? 'Salesperson Selection'
-              : 'Team Members'}
+            : 'Team Members'}
         </button>
       )}
       <p className="text-xs text-white font-medium">{employee?.name}</p>

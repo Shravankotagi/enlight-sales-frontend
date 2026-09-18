@@ -15,6 +15,8 @@ import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import { getFollowUpStatusInfo } from '../utils/visitUtils';
+import { deriveSegment } from './CustomersPage';
+import { isProductInquiry, parseInquiryText, resolveInquiryDealStageKey } from './InquiriesPage';
 import {
   Package,
   ShoppingBag,
@@ -247,7 +249,7 @@ export default function HomePage() {
   });
 
   // 2. Dashboard Summary Metrics Query
-  const { data: dashboardData, isLoading: dashLoading, refetch: refetchDash } = useQuery({
+  const { isLoading: dashLoading, refetch: refetchDash } = useQuery({
     queryKey: ['kra-dashboard', dateRange, effectivePhone, activeRole, activeMode],
     queryFn: () =>
       kraApi
@@ -418,7 +420,7 @@ export default function HomePage() {
       const key = name.toLowerCase();
       if (!map.has(key)) {
         map.set(key, {
-          id: `virtual-order-${name}`,
+          id: o.customer_id || `virtual-order-${name}`,
           name,
           contactPerson: o.contact_person || '',
           phone: o.customer_phone || '',
@@ -435,7 +437,7 @@ export default function HomePage() {
       const key = name.toLowerCase();
       if (!map.has(key)) {
         map.set(key, {
-          id: `virtual-deal-${name}`,
+          id: d.customer_id || `virtual-deal-${name}`,
           name,
           contactPerson: d.contact_person || '',
           phone: d.customer_phone || '',
@@ -468,11 +470,10 @@ export default function HomePage() {
     setIsDropdownOpen(false);
     setCustomerSearch('');
     setHighlightedIndex(-1);
-    if (customer.id && !customer.id.startsWith('virtual-')) {
-      navigate(`/customers?id=${encodeURIComponent(customer.id)}`);
-    } else {
-      navigate(`/customers?name=${encodeURIComponent(customer.name)}`);
-    }
+    const targetId = customer.id && !customer.id.startsWith('virtual-')
+      ? customer.id
+      : encodeURIComponent(customer.name);
+    navigate(`/customers/${targetId}?from=dashboard`, { state: { from: 'dashboard' } });
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -497,6 +498,12 @@ export default function HomePage() {
       } else if (filteredCustomers.length > 0) {
         e.preventDefault();
         handleSelectCustomer(filteredCustomers[0]);
+      } else if (customerSearch.trim()) {
+        e.preventDefault();
+        setIsDropdownOpen(false);
+        const q = customerSearch.trim();
+        setCustomerSearch('');
+        navigate(`/customers/${encodeURIComponent(q)}?from=dashboard`, { state: { from: 'dashboard' } });
       }
     } else if (e.key === 'Escape') {
       setIsDropdownOpen(false);
@@ -516,24 +523,20 @@ export default function HomePage() {
   // 2. Won Orders count
   const totalWonOrdersCount = targetOrders.length;
 
-  // 3. New Customers count
+  // 3. New Customers count (matching Customers tab tag "New" and newAccountsCount)
   const newCustomersCount = useMemo(() => {
-    if (dashboardData?.kra2?.count !== undefined && Number(dashboardData.kra2.count) > 0) {
-      return Number(dashboardData.kra2.count);
-    }
-    // Resilient fallback: calculate from safeCustomers (customer directory / churn risk)
     if (!safeCustomers || safeCustomers.length === 0) return 0;
-    const filtered = safeCustomers.filter((c: any) => {
+    return safeCustomers.filter((c: any) => {
+      if (deriveSegment(c) !== 'new') return false;
       if (dateRange.from && dateRange.to) {
-        const dStr = c.created_at || c.first_order_date;
-        if (!dStr) return false;
-        const itemDate = new Date(dStr).toISOString().split('T')[0];
+        const orderDateStr = c.last_order_date || c.created_at;
+        if (!orderDateStr) return false;
+        const itemDate = new Date(orderDateStr).toISOString().split('T')[0];
         return itemDate >= dateRange.from && itemDate <= dateRange.to;
       }
-      return (c.segment || '').toLowerCase() === 'new' || (c.churn_risk || '').toLowerCase() === 'new';
-    });
-    return filtered.length;
-  }, [dashboardData, safeCustomers, dateRange]);
+      return true;
+    }).length;
+  }, [safeCustomers, dateRange]);
 
   // 4. Customer Visits count
   const totalVisitsCount = useMemo(() => {
@@ -741,45 +744,19 @@ export default function HomePage() {
       });
     }
 
-    // 5. Review New Inquiries (Universal for all salespeople across the platform)
-    const unquotedInquiries = safeInquiries.filter(inq => {
-      // 1. Direct or fuzzy linked deal check in safeDeals
-      const linkedDeal = safeDeals.find(
-        (d: any) =>
-          (d.inquiry_id && d.inquiry_id === inq.id) ||
-          (d.customer_name &&
-            inq.customer_name &&
-            d.customer_name.trim().toLowerCase() === inq.customer_name.trim().toLowerCase() &&
-            !['won', 'lost'].includes((d.stage || '').toLowerCase())),
-      );
+    // 5. Review New Inquiries (Strictly matches Inquiries tab stageCounts.new_inquiry)
+    const activeInquiries = safeInquiries.filter(isProductInquiry);
+    const newInquiriesCount = activeInquiries.filter(inq => {
+      const parsed = parseInquiryText(inq.raw_text || '', inq);
+      const stageKey = resolveInquiryDealStageKey(inq, parsed.companyName, safeDeals);
+      return stageKey === 'new_inquiry' || stageKey === 'review';
+    }).length;
 
-      if (linkedDeal) {
-        const stage = (linkedDeal.stage || '').toLowerCase().trim();
-        // If the deal already progressed to quote sent, negotiation, won, or lost -> NOT waiting to be quoted
-        if (['quoted', 'quotation_sent', 'proposal', 'negotiation', 'won', 'lost', 'on_hold', 'qualified'].includes(stage)) {
-          return false;
-        }
-        if (stage === 'new_inquiry' || stage === 'review') {
-          return true;
-        }
-      }
-
-      // 2. Direct inquiry status check
-      const st = (inq.status || '').toLowerCase().trim();
-      if (['won', 'quoted', 'quotation_sent', 'confirmed', 'saved', 'processed', 'negotiation', 'on_hold', 'lost'].includes(st)) {
-        return false;
-      }
-
-      // Inquiries with status review, pending, new, draft, auto_created, or unquoted are awaiting quote
-      return true;
-    });
-
-    if (unquotedInquiries.length > 0) {
-      const count = unquotedInquiries.length;
+    if (newInquiriesCount > 0) {
       items.push({
         id: 'action-review-new-inquiries',
         category: 'Review New Inquiries',
-        title: `${count} new ${count === 1 ? 'inquiry' : 'inquiries'} waiting to be quoted`,
+        title: `${newInquiriesCount} new ${newInquiriesCount === 1 ? 'inquiry' : 'inquiries'} waiting to be quoted`,
         link: '/inquiries?stage=new_inquiry',
         icon: FileText,
       });
@@ -799,6 +776,20 @@ export default function HomePage() {
 
         {canSwitchRole && (
           <div className="flex items-center gap-2 self-start sm:self-auto">
+            {isAdminUser && (
+              <button
+                onClick={() => {
+                  clearViewingAs();
+                  navigate('/admin');
+                }}
+                className="flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-300 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Go to Salesperson Selection Page"
+              >
+                <Users size={14} className="text-blue-600" />
+                Salesperson Selection
+              </button>
+            )}
+
             {isViewingPersonal ? (
               <button
                 onClick={handleSwitchToExecutive}
@@ -815,8 +806,8 @@ export default function HomePage() {
                   <Users size={14} />
                 )}
                 {(viewingAs?.original_role || employee?.role) === 'admin'
-                  ? 'Admin'
-                  : 'Sales Manager'}
+                  ? 'View as Admin'
+                  : 'View as Sales Manager'}
               </button>
             ) : (
               <button
@@ -825,7 +816,7 @@ export default function HomePage() {
                 title="Switch to My Personal Salesperson Dashboard"
               >
                 <UserCheck size={14} />
-                Salesperson
+                View as Salesperson
               </button>
             )}
           </div>

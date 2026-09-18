@@ -29,9 +29,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
+      const isFromDashboard =
+        typeof window !== 'undefined' &&
+        (window.location.search.includes('from=dashboard') ||
+          window.location.hash.includes('from=dashboard'));
+
       return (
-        <div className="max-w-lg mx-auto my-12 p-6 bg-white rounded-2xl border border-rose-200 shadow-sm text-center space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 shadow-2xs">
+        <div className="p-8 text-center bg-white rounded-2xl border border-rose-100 shadow-sm max-w-lg mx-auto my-12 animate-fade-in font-sans">
+          <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center mx-auto mb-3 border border-rose-200">
             <AlertTriangle size={24} />
           </div>
           <h3 className="text-base font-bold text-slate-900">
@@ -39,7 +44,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           </h3>
           <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
             {this.state.error?.message ||
-              'A rendering issue occurred while loading this view. You can retry or return to Customer Health.'}
+              'A rendering issue occurred while loading this view. You can retry or return.'}
           </p>
           <div className="flex items-center justify-center gap-3 pt-2">
             <button
@@ -52,10 +57,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               Retry
             </button>
             <a
-              href="/customers"
+              href={isFromDashboard ? '/home' : '/customers'}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer">
               <ChevronLeft size={14} />
-              Back to Customer Health
+              {isFromDashboard ? 'Back to Dashboard' : 'Back to Customers Tab'}
             </a>
           </div>
         </div>
