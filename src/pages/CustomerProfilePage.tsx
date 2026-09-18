@@ -466,6 +466,7 @@ function CustomerProfilePageContent() {
 
   // Aggregate all unique contacts and POCs for this customer across master data and site visits
   const stakeholdersList = useMemo(() => {
+    if (!customer) return [];
     try {
       const list: Array<{
         id: string;
@@ -612,7 +613,7 @@ function CustomerProfilePageContent() {
           <button
             onClick={() => navigate(isFromDashboard ? '/home' : '/customers')}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs cursor-pointer">
-            <ChevronLeft size={16} /> {isFromDashboard ? 'Back to Dashboard' : 'Back to Customers Tab'}
+            <ChevronLeft size={16} /> {isFromDashboard ? 'Back to Dashboard' : 'Back to Customer Health'}
           </button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2,
-  LayoutDashboard, IndianRupee, Trash2, MessageSquare, ArrowLeft
+  LayoutDashboard, IndianRupee, Trash2, ArrowLeft
 } from 'lucide-react';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -850,6 +850,8 @@ const DEFAULT_PIPELINE_STAGES = [
   { key: 'quoted', label: 'Price Quote', color: 'bg-blue-50 border-blue-200' },
   { key: 'negotiation', label: 'Negotiation', color: 'bg-orange-50 border-orange-200' },
   { key: 'on_hold', label: 'On Hold', color: 'bg-purple-50 border-purple-200' },
+  { key: 'won', label: 'Closed Won', color: 'bg-emerald-50 border-emerald-200' },
+  { key: 'lost', label: 'Closed Lost', color: 'bg-rose-50 border-rose-200' },
 ];
 
 function DealCard({ deal, onStageChange, onDelete, onClick }: {
@@ -858,21 +860,36 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
   onDelete: (deal: any) => void;
   onClick?: () => void;
 }) {
+  const currentStage = (deal.stage || 'new_inquiry').toLowerCase().trim();
+  const isWon = currentStage === 'won';
+  const isLost = currentStage === 'lost';
+
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer"
+      className={`rounded-lg border p-3 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer ${
+        isWon
+          ? 'bg-emerald-50/40 border-emerald-200'
+          : isLost
+          ? 'bg-rose-50/40 border-rose-200'
+          : 'bg-white border-gray-200'
+      }`}
     >
       <div className="flex items-start justify-between mb-2 gap-1">
         <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
           {deal.customer_name || 'Unknown Customer'}
         </h4>
         <div className="flex items-center gap-1 shrink-0">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-            ${deal.stage === 'won' || deal.inquiry_type === 'purchase_order'
-              ? 'bg-green-100 text-green-700'
-              : 'bg-blue-100 text-blue-700'}`}>
-            {deal.stage === 'won' ? 'WON' : deal.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+            isWon
+              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+              : isLost
+              ? 'bg-rose-100 text-rose-800 border-rose-200'
+              : deal.inquiry_type === 'purchase_order'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-blue-100 text-blue-700 border-blue-200'
+          }`}>
+            {isWon ? 'WON' : isLost ? 'LOST' : deal.inquiry_type === 'purchase_order' ? 'PO' : 'Inquiry'}
           </span>
           <button
             type="button"
@@ -889,7 +906,15 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
       </div>
 
       {deal.po_number && (
-        <p className="text-xs text-gray-500 mb-1">PO: {deal.po_number}</p>
+        <p className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded inline-block mb-1.5">
+          PO: {deal.po_number}
+        </p>
+      )}
+
+      {isLost && (deal.lost_reason || deal.loss_reason) && (
+        <div className="mb-2 p-1.5 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700">
+          <span className="font-semibold">Reason:</span> {deal.lost_reason || deal.loss_reason}
+        </div>
       )}
 
       {deal.deal_items && deal.deal_items.length > 0 && (
@@ -926,8 +951,8 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
 
         if (computedTotal > 0) {
           return (
-            <div className="flex items-center gap-1 text-sm font-bold text-gray-900 my-1.5">
-              <IndianRupee size={13} className="text-gray-700" />
+            <div className={`flex items-center gap-1 text-sm font-bold my-1.5 ${isWon ? 'text-emerald-800' : 'text-gray-900'}`}>
+              <IndianRupee size={13} className={isWon ? 'text-emerald-700' : 'text-gray-700'} />
               <span>{Number(computedTotal).toLocaleString('en-IN')}</span>
             </div>
           );
@@ -938,7 +963,6 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
       <div className="mt-3 flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
         {['quoted', 'negotiation', 'on_hold', 'won', 'lost']
           .filter(stage => {
-            const currentStage = (deal.stage || 'new_inquiry').toLowerCase().trim();
             if ((currentStage === 'new_inquiry' || currentStage === 'review') && (stage === 'won' || stage === 'lost')) {
               return false;
             }
@@ -2446,6 +2470,8 @@ export default function InquiriesPage() {
       quoted: [],
       negotiation: [],
       on_hold: [],
+      won: [],
+      lost: [],
     };
 
     filtered.forEach((inq) => {
@@ -2454,11 +2480,6 @@ export default function InquiriesPage() {
       const stageKey = (rawStage === 'qualified' || rawStage === 'saved' || rawStage === 'confirmed')
         ? 'quoted'
         : (rawStage === 'hold' ? 'on_hold' : (rawStage === 'review' || !rawStage ? 'new_inquiry' : rawStage));
-
-      // Won and Lost are strictly excluded from Kanban board columns
-      if (stageKey === 'won' || stageKey === 'lost') {
-        return;
-      }
 
       if (board[stageKey]) {
         const linkedDeal = getLinkedDeal(inq, parsed.companyName);
@@ -2497,6 +2518,8 @@ export default function InquiriesPage() {
           stage: stageKey,
           inquiry_type: inq.inquiry_type,
           po_number: linkedDeal?.po_number || aiJson.po_number || '',
+          lost_reason: linkedDeal?.lost_reason || linkedDeal?.loss_reason || aiJson.lost_reason || (inq as any).lost_reason || (inq as any).loss_reason || '',
+          loss_reason: linkedDeal?.lost_reason || linkedDeal?.loss_reason || aiJson.lost_reason || (inq as any).lost_reason || (inq as any).loss_reason || '',
           deal_items: dealItems,
           total_amount: totalAmt,
           created_at: inq.created_at || linkedDeal?.created_at,
@@ -2510,16 +2533,10 @@ export default function InquiriesPage() {
     return board;
   }, [filtered, rawDeals]);
 
-  // All-time KPI summary counts (not filtered by date range)
+  // All-time Total Inquiries count
   const totalInquiriesCount = activeInquiryList.length;
 
-  const ocrInquiriesCount = useMemo(() => {
-    return activeInquiryList.filter(isOcrOrDocumentInquiry).length;
-  }, [activeInquiryList]);
 
-  const textInquiriesCount = useMemo(() => {
-    return Math.max(0, totalInquiriesCount - ocrInquiriesCount);
-  }, [totalInquiriesCount, ocrInquiriesCount]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const validCurrentPage = Math.min(currentPage, totalPages);
@@ -2606,8 +2623,8 @@ export default function InquiriesPage() {
           </div>
         </div>
 
-        {/* KPI / Summary Cards: Total Inquiries, WhatsApp Inquiries, OCR / Document Inquiries */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* KPI / Summary Card: Total Inquiries */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-500 font-medium">Total Inquiries</p>
@@ -2615,26 +2632,6 @@ export default function InquiriesPage() {
             </div>
             <div className="p-3 bg-slate-100 text-slate-900 rounded-lg">
               <FileText size={22} />
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Text Inquiries</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{textInquiriesCount}</p>
-            </div>
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-              <MessageSquare size={22} />
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-500 font-medium">OCR / Document Inquiries</p>
-              <p className="text-2xl font-bold text-indigo-600 mt-1">{ocrInquiriesCount}</p>
-            </div>
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
-              <FileCheck size={22} />
             </div>
           </div>
         </div>
@@ -2760,17 +2757,17 @@ export default function InquiriesPage() {
 
       {viewMode === 'pipeline' ? (
         /* Kanban Board View */
-        <div className="flex-1 min-h-0 overflow-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex-1 min-h-0 overflow-auto pb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-[1250px] xl:min-w-0">
             {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
-              <div key={key} className={`rounded-xl border-2 ${color} p-3`}>
+              <div key={key} className={`rounded-xl border-2 ${color} p-3 flex flex-col min-w-[190px]`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
                   <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
                     {pipelineBoard[key]?.length || 0}
                   </span>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 flex-1">
                   {(pipelineBoard[key] || []).map((deal: any) => (
                     <DealCard
                       key={deal.inquiry_id || deal.id}
