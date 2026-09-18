@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { customersApi, employeesApi } from '../lib/api';
@@ -276,6 +276,10 @@ function parseVisitRemarks(raw?: any, directOutcome?: any): ParsedVisitRemarks {
 function CustomerProfilePageContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isFromDashboard =
+    location.state?.from === 'dashboard' ||
+    new URLSearchParams(location.search).get('from') === 'dashboard';
   const queryClient = useQueryClient();
   const { isSalesManager, isAdmin, effectivePhone } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
@@ -372,8 +376,9 @@ function CustomerProfilePageContent() {
         id &&
         !id.match(/^[0-9a-f-]{36}$/i)
       ) {
-        navigate(`/customers/${encodeURIComponent(updatedCust.id)}`, {
+        navigate(`/customers/${encodeURIComponent(updatedCust.id)}${isFromDashboard ? '?from=dashboard' : '?from=customers'}`, {
           replace: true,
+          state: { from: isFromDashboard ? 'dashboard' : 'customers' },
         });
       }
     },
@@ -606,9 +611,9 @@ function CustomerProfilePageContent() {
             </button>
           )}
           <button
-            onClick={() => navigate('/customers')}
+            onClick={() => navigate(isFromDashboard ? '/home' : '/customers')}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs cursor-pointer">
-            <ChevronLeft size={16} /> Back to Customer Health
+            <ChevronLeft size={16} /> {isFromDashboard ? 'Back to Dashboard' : 'Back to Customer Health'}
           </button>
         </div>
       </div>
@@ -625,10 +630,10 @@ function CustomerProfilePageContent() {
       <div className="flex flex-col gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
         <div className="flex items-center justify-between gap-3">
           <button
-            onClick={() => navigate('/customers')}
+            onClick={() => navigate(isFromDashboard ? '/home' : '/customers')}
             className="h-9 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white hover:bg-slate-50 px-3.5 rounded-xl border border-slate-200 transition-colors cursor-pointer shadow-2xs">
             <ChevronLeft size={16} />
-            Back to Customer Health
+            {isFromDashboard ? 'Back to Dashboard' : 'Back to Customers Tab'}
           </button>
 
           <div className="flex items-center gap-2.5 shrink-0">

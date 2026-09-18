@@ -23,7 +23,7 @@ import {
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
 
-interface InquiryItem {
+export interface InquiryItem {
   id: string;
   sender_name?: string;
   customer_name?: string;
@@ -43,7 +43,7 @@ interface InquiryItem {
   created_at: string;
 }
 
-interface LineItemDetail {
+export interface LineItemDetail {
   sku_text: string;
   dimensions?: string;
   hsn_code?: string;
@@ -53,7 +53,7 @@ interface LineItemDetail {
   amount: number;
 }
 
-interface ExtractedDetails {
+export interface ExtractedDetails {
   companyName: string;
   customerPhone: string;
   salespersonName?: string;
@@ -205,7 +205,7 @@ export function isOcrOrDocumentInquiry(inq: InquiryItem): boolean {
  * Filter function to ensure ONLY actual Product Inquiries appear in this tab.
  * Filters out generic chat greetings ("hii", "2"), deal stage logs ("delta deal is won"), and PO status questions.
  */
-function isProductInquiry(inq: InquiryItem): boolean {
+export function isProductInquiry(inq: InquiryItem): boolean {
   if (!inq) return false;
   const rawText = (inq?.raw_text || '').trim();
   const textLower = rawText.toLowerCase();
@@ -429,7 +429,7 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
   return items;
 }
 
-function parseInquiryText(text: string, inq: any): ExtractedDetails {
+export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const textRaw = text || '';
   const textLower = textRaw.toLowerCase();
   const aiJson = inq?.ai_extraction_json || {};
@@ -1002,6 +1002,68 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
   );
 }
 
+export function resolveLinkedDeal(inq: InquiryItem, companyName?: string, dealsList: any[] = []) {
+  if (!dealsList || dealsList.length === 0) return null;
+  // 1. Direct 1-to-1 match by inquiry_id
+  const directMatch = dealsList.find((d: any) => d.inquiry_id && d.inquiry_id === inq.id);
+  if (directMatch) return directMatch;
+
+  // 2. Match ONLY to an active open in-progress deal for this customer (never closed won/lost)
+  const cName = (companyName || inq.customer_name || inq.sender_name || '').toLowerCase().trim();
+  if (cName && !isProductOrGenericName(cName)) {
+    const matchingDeals = dealsList.filter((d: any) => (d.customer_name || '').toLowerCase().trim() === cName);
+    if (matchingDeals.length > 0) {
+      const openDeal = matchingDeals.find((d: any) => !['won', 'lost'].includes((d.stage || '').toLowerCase()));
+      if (openDeal) return openDeal;
+    }
+  }
+  return null;
+}
+
+export function resolveInquiryDealStageKey(inq: InquiryItem, companyName?: string, dealsList: any[] = []): string {
+  const linkedDeal = resolveLinkedDeal(inq, companyName, dealsList);
+  if (linkedDeal) {
+    const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
+    if (['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry'].includes(dealStage)) {
+      if (dealStage === 'review') return 'new_inquiry';
+      if (dealStage === 'qualified') return 'quoted';
+      if (dealStage === 'hold') return 'on_hold';
+      return dealStage;
+    }
+  }
+
+  const details = parseInquiryText(inq.raw_text || '', inq);
+  const st = (inq.status || '').toLowerCase().trim();
+  const isPo = inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po' || (inq.raw_text || '').includes('[PO Document Attached');
+  if (isPo && (st === 'confirmed' || st === 'won' || st === 'processed')) {
+    return 'won';
+  }
+  if (st === 'won') {
+    return 'won';
+  }
+
+  const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
+  const isQuoted = (st === 'quoted' || st === 'quotation_sent') && (hasRates || inq.inquiry_type === 'quotation_sent');
+  const isConfirmed = (st === 'confirmed' || st === 'saved' || st === 'processed' || st === 'quotation_ready') && hasRates;
+
+  if (st === 'negotiation') {
+    return 'negotiation';
+  }
+  if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent' || isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed') {
+    return 'quoted';
+  }
+  if (st === 'on_hold' || st === 'hold') {
+    return 'on_hold';
+  }
+  if (st === 'review' || st === 'needs_review' || st === 'pending' || !st || st === 'new' || st === 'draft') {
+    return 'new_inquiry';
+  }
+  if (st === 'lost') {
+    return 'lost';
+  }
+  return 'new_inquiry';
+}
+
 export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1358,21 +1420,7 @@ export default function InquiriesPage() {
   };
 
   const getLinkedDeal = (inq: InquiryItem, companyName?: string) => {
-    if (!rawDeals || rawDeals.length === 0) return null;
-    // 1. Direct 1-to-1 match by inquiry_id
-    const directMatch = rawDeals.find((d: any) => d.inquiry_id && d.inquiry_id === inq.id);
-    if (directMatch) return directMatch;
-
-    // 2. Match ONLY to an active open in-progress deal for this customer (never closed won/lost)
-    const cName = (companyName || inq.customer_name || inq.sender_name || '').toLowerCase().trim();
-    if (cName && !isProductOrGenericName(cName)) {
-      const matchingDeals = rawDeals.filter((d: any) => (d.customer_name || '').toLowerCase().trim() === cName);
-      if (matchingDeals.length > 0) {
-        const openDeal = matchingDeals.find((d: any) => !['won', 'lost'].includes((d.stage || '').toLowerCase()));
-        if (openDeal) return openDeal;
-      }
-    }
-    return null;
+    return resolveLinkedDeal(inq, companyName, rawDeals);
   };
 
   const getDealStageDisplay = (stage?: string) => {
@@ -1400,47 +1448,7 @@ export default function InquiriesPage() {
   };
 
   const getInquiryDealStageKey = (inq: InquiryItem, companyName?: string): string => {
-    const linkedDeal = getLinkedDeal(inq, companyName);
-    if (linkedDeal) {
-      const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
-      if (['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry'].includes(dealStage)) {
-        if (dealStage === 'review') return 'new_inquiry';
-        if (dealStage === 'qualified') return 'quoted';
-        if (dealStage === 'hold') return 'on_hold';
-        return dealStage;
-      }
-    }
-
-    const details = parseInquiryText(inq.raw_text || '', inq);
-    const st = (inq.status || '').toLowerCase().trim();
-    const isPo = inq.inquiry_type === 'purchase_order' || inq.source_channel === 'whatsapp_po' || (inq.raw_text || '').includes('[PO Document Attached');
-    if (isPo && (st === 'confirmed' || st === 'won' || st === 'processed')) {
-      return 'won';
-    }
-    if (st === 'won') {
-      return 'won';
-    }
-
-    const hasRates = (details.lineItems || []).length > 0 && (details.lineItems || []).every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0);
-    const isQuoted = (st === 'quoted' || st === 'quotation_sent') && (hasRates || inq.inquiry_type === 'quotation_sent');
-    const isConfirmed = (st === 'confirmed' || st === 'saved' || st === 'processed' || st === 'quotation_ready') && hasRates;
-
-    if (st === 'negotiation') {
-      return 'negotiation';
-    }
-    if (isQuoted || st === 'quoted' || st === 'quotation_sent' || inq.inquiry_type === 'quotation_sent' || isConfirmed || st === 'confirmed' || st === 'saved' || st === 'processed') {
-      return 'quoted';
-    }
-    if (st === 'on_hold' || st === 'hold') {
-      return 'on_hold';
-    }
-    if (st === 'review' || st === 'needs_review' || st === 'pending' || !st || st === 'new' || st === 'draft') {
-      return 'new_inquiry';
-    }
-    if (st === 'lost') {
-      return 'lost';
-    }
-    return 'new_inquiry';
+    return resolveInquiryDealStageKey(inq, companyName, rawDeals);
   };
 
   const handleUpdateDealStage = async (inq: InquiryItem, details: ExtractedDetails, targetStage: string) => {

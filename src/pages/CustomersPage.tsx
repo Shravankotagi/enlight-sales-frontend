@@ -81,7 +81,7 @@ function formatTonnage(val?: number) {
   return `${rounded.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT`;
 }
 
-function deriveSegment(c: any): string {
+export function deriveSegment(c: any): string {
   if (c.segment && ['key_account', 'growth', 'new'].includes(c.segment.toLowerCase())) {
     return c.segment.toLowerCase();
   }
@@ -566,7 +566,7 @@ export default function CustomersPage() {
                           });
                         }
                       }}
-                      onClick={() => navigate('/customers/' + c.id)}
+                      onClick={() => navigate(`/customers/${c.id}?from=customers`, { state: { from: 'customers' } })}
                       className="hover:bg-slate-50/90 transition-colors group cursor-pointer">
                       {/* # Serial Number */}
                       <td className="px-4 py-3.5 text-xs text-slate-400 font-medium text-center">
