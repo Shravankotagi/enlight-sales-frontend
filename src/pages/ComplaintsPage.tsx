@@ -1169,7 +1169,7 @@ export default function ComplaintsPage() {
             {/* Corrective Action if present */}
             {selectedComplaint.corrective_action && (
               <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl text-xs space-y-1 shrink-0">
-                <p className="text-amber-900 font-semibold">Corrective Action Taken:</p>
+                <p className="text-amber-900 font-semibold">Corrective Action Needed:</p>
                 <p className="text-amber-800">{selectedComplaint.corrective_action}</p>
               </div>
             )}
