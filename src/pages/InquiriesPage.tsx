@@ -5,7 +5,7 @@ import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2,
-  LayoutDashboard, IndianRupee, Trash2, MessageSquare, ArrowLeft
+  LayoutDashboard, IndianRupee, Trash2, ArrowLeft
 } from 'lucide-react';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -2525,16 +2525,10 @@ export default function InquiriesPage() {
     return board;
   }, [filtered, rawDeals]);
 
-  // All-time KPI summary counts (not filtered by date range)
+  // All-time Total Inquiries count
   const totalInquiriesCount = activeInquiryList.length;
 
-  const ocrInquiriesCount = useMemo(() => {
-    return activeInquiryList.filter(isOcrOrDocumentInquiry).length;
-  }, [activeInquiryList]);
 
-  const textInquiriesCount = useMemo(() => {
-    return Math.max(0, totalInquiriesCount - ocrInquiriesCount);
-  }, [totalInquiriesCount, ocrInquiriesCount]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const validCurrentPage = Math.min(currentPage, totalPages);
@@ -2621,8 +2615,8 @@ export default function InquiriesPage() {
           </div>
         </div>
 
-        {/* KPI / Summary Cards: Total Inquiries, WhatsApp Inquiries, OCR / Document Inquiries */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* KPI / Summary Card: Total Inquiries */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-500 font-medium">Total Inquiries</p>
@@ -2630,26 +2624,6 @@ export default function InquiriesPage() {
             </div>
             <div className="p-3 bg-slate-100 text-slate-900 rounded-lg">
               <FileText size={22} />
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Text Inquiries</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{textInquiriesCount}</p>
-            </div>
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-              <MessageSquare size={22} />
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-500 font-medium">OCR / Document Inquiries</p>
-              <p className="text-2xl font-bold text-indigo-600 mt-1">{ocrInquiriesCount}</p>
-            </div>
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
-              <FileCheck size={22} />
             </div>
           </div>
         </div>

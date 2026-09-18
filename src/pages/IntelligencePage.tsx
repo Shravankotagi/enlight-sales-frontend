@@ -52,21 +52,6 @@ export default function IntelligencePage() {
   });
 
   const {
-    data: lossData,
-    refetch: refetchLoss,
-    isFetching: fetchingLoss,
-  } = useQuery({
-    queryKey: ['loss-analytics', salespersonPhone, activeRole, activeMode],
-    queryFn: () =>
-      customersApi
-        .getLossAnalytics({
-          salesperson_phone: salespersonPhone,
-          ...(activeMode ? { mode: activeMode } : {}),
-        })
-        .then((r) => r.data?.data || r.data || {}),
-  });
-
-  const {
     data: allCustomers = [],
     refetch: refetchCustomers,
     isFetching: fetchingCustomers,
@@ -105,7 +90,6 @@ export default function IntelligencePage() {
   const isRefreshing =
     fetchingChurn ||
     fetchingReorder ||
-    fetchingLoss ||
     fetchingCustomers ||
     fetchingDeals;
 
@@ -164,14 +148,31 @@ export default function IntelligencePage() {
   }, [allCustomers]);
 
   // ── Section 3: Loss Analytics Metrics ───────────────────────────────────────
-  const totalLostCount = lossData?.total_lost ?? 0;
-  const totalLostValue = lossData?.total_lost_value ?? 0;
-
   const allDealsList = Array.isArray(dealsData) ? dealsData : [];
-  const wonDealsCount = useMemo(
-    () => allDealsList.filter((d: any) => d.stage === 'won').length,
-    [allDealsList]
+  const wonDealsList = useMemo(
+    () =>
+      allDealsList.filter(
+        (d: any) => (d.stage || '').toLowerCase().trim() === 'won',
+      ),
+    [allDealsList],
   );
+  const lostDealsList = useMemo(
+    () =>
+      allDealsList.filter(
+        (d: any) => (d.stage || '').toLowerCase().trim() === 'lost',
+      ),
+    [allDealsList],
+  );
+
+  const wonDealsCount = wonDealsList.length;
+  const totalLostCount = lostDealsList.length;
+  const totalLostValue = useMemo(() => {
+    return lostDealsList.reduce(
+      (sum: number, d: any) => sum + (Number(d.total_amount) || 0),
+      0,
+    );
+  }, [lostDealsList]);
+
   const totalDecided = wonDealsCount + totalLostCount;
   const winRate =
     totalDecided > 0
@@ -180,15 +181,17 @@ export default function IntelligencePage() {
         ? 100
         : 0;
 
-  const lossReasonsList: any[] = Array.isArray(lossData?.by_reason)
-    ? lossData.by_reason
-    : [];
+  const lossReasonsList: any[] = useMemo(() => {
+    if (lostDealsList.length === 0) return [];
+    const map: Record<string, number> = {};
+    lostDealsList.forEach((d: any) => {
+      const r = d.lost_reason || d.loss_reason || 'Not specified';
+      map[r] = (map[r] || 0) + 1;
+    });
+    return Object.entries(map).map(([reason, count]) => ({ reason, count }));
+  }, [lostDealsList]);
 
-  const recentLossesList: any[] = Array.isArray(lossData?.recent_losses)
-    ? lossData.recent_losses
-    : Array.isArray(lossData?.deals)
-      ? lossData.deals
-      : [];
+  const recentLossesList: any[] = lostDealsList;
 
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
@@ -207,7 +210,6 @@ export default function IntelligencePage() {
               await Promise.all([
                 refetchChurn(),
                 refetchReorder(),
-                refetchLoss(),
                 refetchCustomers(),
                 refetchDeals(),
               ]);
