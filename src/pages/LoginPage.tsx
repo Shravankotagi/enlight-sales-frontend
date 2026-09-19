@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { authApi, BACKEND_URL } from '../lib/api';
 import {
   Phone,
   KeyRound,
@@ -10,23 +11,6 @@ import {
   Lock,
   Sparkles,
 } from 'lucide-react';
-
-const isLocal =
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1');
-const defaultBackend = isLocal
-  ? 'http://localhost:3000'
-  : 'https://enlight-sales-backend-production-b720.up.railway.app';
-let rawBackend = import.meta.env.VITE_BACKEND_URL || defaultBackend;
-if (
-  rawBackend &&
-  !rawBackend.startsWith('http://') &&
-  !rawBackend.startsWith('https://')
-) {
-  rawBackend = `https://${rawBackend}`;
-}
-const BACKEND = rawBackend.replace(/\/+$/, '');
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -47,31 +31,18 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${BACKEND}/auth/request-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: `91${phone.replace(/\D/g, '').slice(-10)}`,
-        }),
-      });
-      const text = await res.text();
-      let data: any = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = { error: text || `Backend server error (${res.status})` };
-      }
-      if (!res.ok)
-        throw new Error(
-          data.error || data.message || `Failed to send OTP (${res.status})`,
-        );
+      const res = await authApi.requestOtp(phone);
+      const data = res.data;
       if (data.data?.dev_otp) setDevOtp(data.data.dev_otp);
       setStep('otp');
     } catch (err: any) {
-      setError(
-        err.message ||
-          'Unable to connect to backend service. Please check backend server.',
-      );
+      const msg =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        (err.message === 'Network Error'
+          ? `Unable to reach backend service (${BACKEND_URL}). Please verify backend server is running.`
+          : err.message || 'Unable to connect to backend service.');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -85,31 +56,18 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${BACKEND}/auth/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: `91${phone.replace(/\D/g, '').slice(-10)}`,
-          otp,
-        }),
-      });
-      const text = await res.text();
-      let data: any = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = { error: text || `Backend server error (${res.status})` };
-      }
-      if (!res.ok)
-        throw new Error(
-          data.error || data.message || `Invalid OTP (${res.status})`,
-        );
+      const res = await authApi.verifyOtp(phone, otp);
+      const data = res.data;
       login(data.data.token, data.data.employee);
       navigate('/');
     } catch (err: any) {
-      setError(
-        err.message || 'Verification failed. Please check backend service.',
-      );
+      const msg =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        (err.message === 'Network Error'
+          ? `Unable to reach backend service (${BACKEND_URL}). Please verify backend server is running.`
+          : err.message || 'Verification failed. Please check backend service.');
+      setError(msg);
     } finally {
       setLoading(false);
     }

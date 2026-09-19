@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { reportsApi, inquiriesApi, dealsApi, employeesApi } from '../lib/api';
+import { reportsApi, inquiriesApi, dealsApi, employeesApi, BOT_URL } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import SalesQuotationModal from '../components/SalesQuotationModal';
@@ -109,7 +109,7 @@ export default function AdminDashboard() {
     setIsPushing(true);
     setSyncMsg(null);
     try {
-      await axios.get('https://enlight-sales-bot-production.up.railway.app/bigin-sync');
+      await axios.get(`${BOT_URL}/bigin-sync`);
       setSyncMsg({ text: ' Database records & live deals pushed to Zoho Bigin CRM successfully!', type: 'success' });
       handleRefreshAll();
     } catch (err: any) {
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
     setIsPulling(true);
     setSyncMsg(null);
     try {
-      await axios.get('https://enlight-sales-bot-production.up.railway.app/bigin-import');
+      await axios.get(`${BOT_URL}/bigin-import`);
       setSyncMsg({ text: ' Contacts & active deals pulled from Zoho Bigin CRM to Database!', type: 'success' });
       handleRefreshAll();
     } catch (err: any) {

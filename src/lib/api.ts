@@ -1,14 +1,36 @@
 import axios from 'axios';
 
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const defaultBackend = isLocal ? 'http://localhost:3000' : 'https://enlight-sales-backend-production-b720.up.railway.app';
-let rawBackend = import.meta.env.VITE_BACKEND_URL || defaultBackend;
-if (rawBackend && !rawBackend.startsWith('http://') && !rawBackend.startsWith('https://')) {
-  rawBackend = `https://${rawBackend}`;
+
+export function getBackendUrl(): string {
+  let url = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
+  if (!url) {
+    if (isLocal) return 'http://localhost:3000';
+    return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  }
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  return url.replace(/\/+$/, '');
 }
 
+export const BACKEND_URL = getBackendUrl();
+
+export function getBotUrl(): string {
+  let url = import.meta.env.VITE_BOT_URL;
+  if (url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`;
+    }
+    return url.replace(/\/+$/, '');
+  }
+  return BACKEND_URL;
+}
+
+export const BOT_URL = getBotUrl();
+
 const API = axios.create({
-  baseURL: rawBackend.replace(/\/+$/, ''),
+  baseURL: BACKEND_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 });
@@ -167,6 +189,18 @@ export const activityLogsApi = {
     mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
+};
+
+export const authApi = {
+  requestOtp: (phone: string) =>
+    API.post('/auth/request-otp', {
+      phone: `91${phone.replace(/\D/g, '').slice(-10)}`,
+    }),
+  verifyOtp: (phone: string, otp: string) =>
+    API.post('/auth/verify-otp', {
+      phone: `91${phone.replace(/\D/g, '').slice(-10)}`,
+      otp,
+    }),
 };
 
 export default API;
