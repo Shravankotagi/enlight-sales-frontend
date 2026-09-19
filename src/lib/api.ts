@@ -6,7 +6,7 @@ export function getBackendUrl(): string {
   let url = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
   if (!url) {
     if (isLocal) return 'http://localhost:3000';
-    return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    return 'https://api.enlightmetals.com';
   }
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = `https://${url}`;
