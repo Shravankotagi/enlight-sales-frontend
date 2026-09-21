@@ -140,7 +140,7 @@ export const employeesApi = {
 
 export const chatbotApi = {
   sendMessage: (data: { message: string; sessionId?: string }) =>
-    API.post('/chat/message', data, { timeout: 60000 }),
+    API.post('/chat/message', data, { timeout: 120000 }),
   getSessions: () => API.get('/chat/sessions'),
   getSessionMessages: (sessionId: string) =>
     API.get(`/chat/sessions/${sessionId}/messages`),
