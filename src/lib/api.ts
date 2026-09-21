@@ -136,6 +136,7 @@ export const inquiriesApi = {
   generatePdf: (payload: any) => API.post('/inquiries/generate-pdf', payload, { responseType: 'blob' }),
   parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
+  delete: (id: string) => API.delete(`/inquiries/${id}`),
 };
 
 export const productsApi = {
