@@ -180,13 +180,22 @@ export default function AssistantPage() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
-      const errReply =
+      let errReply =
         err.response?.data?.message || err.message || 'Error processing your request.';
+      if (
+        err.code === 'ECONNABORTED' ||
+        errReply.includes('timeout') ||
+        errReply.includes('60000ms') ||
+        errReply.includes('120000ms')
+      ) {
+        errReply =
+          'The request took longer than expected to process. Please try again or refine your query.';
+      }
       setError(errReply);
       const errAsstMsg: ChatMessage = {
         id: 'err-' + Date.now(),
         role: 'assistant',
-        content: ` ${errReply}`,
+        content: errReply,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errAsstMsg]);
