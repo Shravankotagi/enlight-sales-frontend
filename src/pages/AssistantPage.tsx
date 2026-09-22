@@ -234,7 +234,34 @@ export default function AssistantPage() {
         { label: 'Sales SOP Guidelines', text: 'Search the Knowledge Base for discount rules and quotation policies.', icon: Search },
       ];
 
-
+  // Streamlines menu prompt text for messages with interactive list cards
+  const getDisplayContent = (msg: ChatMessage): string => {
+    const raw = msg.content || '';
+    if (msg.interactiveType === 'list' && msg.interactiveList?.sections && msg.interactiveList.sections.length > 0) {
+      if (
+        raw.includes('SalesOS Assistant') ||
+        raw.includes('Log New Inquiry') ||
+        /\b1\.\s+\*?\*?Log New Inquiry/i.test(raw)
+      ) {
+        let prefix = '';
+        if (raw.includes('Activity cancelled')) {
+          prefix = 'Activity cancelled.\n\n';
+        } else if (raw.includes('currently in the')) {
+          const parts = raw.split(/\n\nHere is the menu/i);
+          if (parts.length > 1) {
+            prefix = parts[0].trim() + '\n\n';
+          } else {
+            const firstPara = raw.split(/\n\n/)[0];
+            if (firstPara) prefix = firstPara.trim() + '\n\n';
+          }
+        } else if (raw.includes('To start an activity, please select')) {
+          prefix = 'To start an activity, please select the relevant option from the menu below:\n\n';
+        }
+        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–10) or type what you'd like to do.`;
+      }
+    }
+    return raw;
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
@@ -451,7 +478,7 @@ export default function AssistantPage() {
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                         ) : (
                           <div className="space-y-3">
-                            <MarkdownMessage content={msg.content || ''} />
+                            <MarkdownMessage content={getDisplayContent(msg)} />
 
                             {/* Interactive 10-Option Catalog Menu */}
                             {msg.interactiveType === 'list' &&
