@@ -1021,6 +1021,14 @@ export function resolveLinkedDeal(inq: InquiryItem, companyName?: string, dealsL
 }
 
 export function resolveInquiryDealStageKey(inq: InquiryItem, companyName?: string, dealsList: any[] = []): string {
+  const directInqStage = (inq as any)?.stage ? String((inq as any).stage).toLowerCase().trim() : '';
+  if (directInqStage && ['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry', 'review', 'hold'].includes(directInqStage)) {
+    if (directInqStage === 'review') return 'new_inquiry';
+    if (directInqStage === 'qualified') return 'quoted';
+    if (directInqStage === 'hold') return 'on_hold';
+    return directInqStage;
+  }
+
   const linkedDeal = resolveLinkedDeal(inq, companyName, dealsList);
   if (linkedDeal) {
     const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
@@ -2505,12 +2513,14 @@ export default function InquiriesPage() {
         const totalAmt = Number(linkedDeal?.total_amount) || Number(parsed.totalAmount) || Number(aiJson.totalAmount) || Number(aiJson.total_amount) || 0;
 
         const cleanInqId = inq.id ? inq.id.substring(0, 6).toUpperCase() : '';
-        const dealNumber = linkedDeal?.deal_number
-          ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-')
-          : (cleanInqId ? `INQ-${cleanInqId}` : 'INQ');
+        const dealNumber = cleanInqId
+          ? `INQ-${cleanInqId}`
+          : (linkedDeal?.deal_number
+            ? linkedDeal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, 'INQ-')
+            : 'INQ');
 
         board[stageKey].push({
-          id: linkedDeal?.id || inq.id,
+          id: inq.id || linkedDeal?.id,
           inquiry_id: inq.id,
           deal_number: dealNumber,
           customer_name: linkedDeal?.customer_name || parsed.companyName || inq.customer_name || inq.sender_name || 'Unknown Customer',
@@ -2879,7 +2889,7 @@ export default function InquiriesPage() {
                 const dealStageKey = getInquiryDealStageKey(inq, details.companyName);
                 const dealStageInfo = getDealStageDisplay(dealStageKey);
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
-                const dealIdDisplay = linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : (inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : '-');
+                const dealIdDisplay = inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : (linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : '-');
 
                 const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation' || dealStageKey === 'on_hold';
                 const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted';
@@ -3137,12 +3147,9 @@ export default function InquiriesPage() {
                   </h2>
                   <p className="text-xs text-slate-500 font-mono mt-0.5">
                     {(() => {
-                      const linkedDeal = getLinkedDeal(selectedInquiry, editDetails?.companyName);
-                      const inqIdDisplay = linkedDeal?.id
-                        ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}`
-                        : (selectedInquiry.id
-                          ? `INQ-${selectedInquiry.id.substring(0, 6).toUpperCase()}`
-                          : '-');
+                      const inqIdDisplay = selectedInquiry.id
+                        ? `INQ-${selectedInquiry.id.substring(0, 6).toUpperCase()}`
+                        : '-';
                       return `ID: #${inqIdDisplay.replace(/^#/, '')}`;
                     })()}
                   </p>
