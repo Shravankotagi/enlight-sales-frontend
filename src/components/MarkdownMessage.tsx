@@ -1,13 +1,52 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { BookOpen } from 'lucide-react';
 
 interface MarkdownMessageProps {
   content: string;
 }
 
+/**
+ * Preprocesses raw message content to ensure standard Markdown list syntax,
+ * clean line breaks, and proper paragraph structure for the chat interface.
+ */
+function preprocessMarkdown(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+
+  let text = raw;
+
+  // 1. Convert mid-sentence / inline Unicode bullets (e.g., "Field: * • Field 2: ...") into separate list lines
+  text = text.replace(/([^\n])\s*[•⁃◦▪▫►◆]\s+/g, '$1\n- ');
+
+  // 2. Convert Unicode bullets or asterisks at start of lines into standard Markdown hyphen list items (- )
+  text = text.replace(/^([ \t]*)[•⁃◦▪▫►◆–—]\s*/gm, '$1- ');
+
+  // 3. Convert keycap number emojis (1️⃣, 2️⃣, etc.) at line starts into standard numbered lists
+  text = text.replace(/^([ \t]*)([1-9]|10)️⃣\s*/gm, '$1$2. ');
+
+  // 4. Normalize WhatsApp-style bold labels in list items (e.g. "- *Field Name:* value") to standard Markdown bold ("- **Field Name:** value")
+  text = text.replace(/^([ \t]*-\s*)\*([^*:\n]+:)\*/gm, '$1**$2**');
+
+  // 5. Normalize standalone WhatsApp-style bold title lines (e.g. "*Title Header*") to standard Markdown bold ("**Title Header**")
+  text = text.replace(/^([ \t]*)\*([^*\n]+)\*([ \t]*)$/gm, '$1**$2**$3');
+
+  // 6. Ensure proper separation before and after list blocks so CommonMark parses <ul>/<ol> correctly
+  // Add a blank line before a list if preceded by non-list, non-empty text
+  text = text.replace(/([^\n\-\*\+\d])\n([ \t]*[-*+]\s+)/g, '$1\n\n$2');
+  text = text.replace(/([^\n\-\*\+\d])\n([ \t]*\d+\.\s+)/g, '$1\n\n$2');
+
+  // Add a blank line after a list if followed by regular paragraph text
+  text = text.replace(/(\n[ \t]*[-*+]\s+[^\n]+)\n([^\n\s\-*+\d])/g, '$1\n\n$2');
+  text = text.replace(/(\n[ \t]*\d+\.\s+[^\n]+)\n([^\n\s\-*+\d])/g, '$1\n\n$2');
+
+  return text.trim();
+}
+
 export default function MarkdownMessage({ content }: MarkdownMessageProps) {
+  const processedContent = useMemo(() => preprocessMarkdown(content), [content]);
+
   // Pre-process citation tags so they render as rich, high-visibility Knowledge Base badges
   const renderTextWithCitations = (children: React.ReactNode): React.ReactNode => {
     if (typeof children !== 'string') return children;
@@ -69,7 +108,7 @@ export default function MarkdownMessage({ content }: MarkdownMessageProps) {
   return (
     <div className="prose-xs max-w-none text-gray-800 text-sm leading-relaxed space-y-2">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
           // Paragraphs
           p: ({ children }) => (
@@ -105,17 +144,17 @@ export default function MarkdownMessage({ content }: MarkdownMessageProps) {
 
           // Lists
           ul: ({ children }) => (
-            <ul className="list-disc list-outside pl-5 space-y-1 my-2 text-gray-800">
+            <ul className="list-disc list-outside pl-5 space-y-1.5 my-2.5 text-gray-800 marker:text-blue-500">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal list-outside pl-5 space-y-1 my-2 text-gray-800">
+            <ol className="list-decimal list-outside pl-5 space-y-1.5 my-2.5 text-gray-800 marker:text-blue-600 font-medium">
               {children}
             </ol>
           ),
           li: ({ children }) => (
-            <li className="leading-relaxed pl-0.5">
+            <li className="leading-relaxed pl-1 font-normal text-gray-800">
               {renderTextWithCitations(children)}
             </li>
           ),
@@ -187,7 +226,7 @@ export default function MarkdownMessage({ content }: MarkdownMessageProps) {
           hr: () => <hr className="my-3 border-gray-200" />,
         }}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
