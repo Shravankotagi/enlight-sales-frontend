@@ -1,45 +1,68 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, ShieldCheck } from 'lucide-react';
 
 interface MarkdownMessageProps {
   content: string;
 }
 
 export default function MarkdownMessage({ content }: MarkdownMessageProps) {
-  // Pre-process citation tags so they are identifiable or render nicely
+  // Pre-process citation tags so they render as rich, high-visibility Knowledge Base badges
   const renderTextWithCitations = (children: React.ReactNode): React.ReactNode => {
     if (typeof children !== 'string') return children;
 
-    const citationRegex = /\[Source:\s*([^\]]+)\]/g;
+    // Matches:
+    // 1. [Source: Document Title]
+    // 2. _Source: Document Title_
+    // 3. *Source:* Document Title
+    // 4. **Source:** Document Title
+    // 5. Source: Document Title (at line/block level)
+    const citationRegex = /(\[Source:\s*[^\]]+\]|_Source:\s*[^_]+_|\*\*Source:\*\*\s*[^\n\r]+|\*Source:\*\s*[^\n\r]+|(?:\n|^)Source:\s*[^\n\r]+)/gi;
     const parts = children.split(citationRegex);
 
     if (parts.length === 1) return children;
 
     const elements: React.ReactNode[] = [];
     let i = 0;
+
     while (i < parts.length) {
-      if (parts[i]) {
-        elements.push(parts[i]);
+      const part = parts[i];
+      if (!part) {
+        i++;
+        continue;
       }
-      if (i + 1 < parts.length) {
-        const docTitle = parts[i + 1];
-        elements.push(
-          <span
-            key={`cite-${i}`}
-            className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded font-mono text-[11px] font-semibold my-0.5 mx-1 shadow-2xs hover:bg-amber-100 transition-colors cursor-default"
-            title={`Knowledge Base Source: ${docTitle}`}
-          >
-            <BookOpen size={11} className="shrink-0 text-amber-600" />
-            Source: {docTitle}
-          </span>
-        );
-        i += 2;
+
+      const match = part.match(/(?:\[Source:\s*([^\]]+)\]|_Source:\s*([^_]+)_|\*\*Source:\*\*\s*([^\n\r]+)|\*Source:\*\s*([^\n\r]+)|(?:^|\n)Source:\s*([^\n\r]+))/i);
+
+      if (match) {
+        const rawTitle = (match[1] || match[2] || match[3] || match[4] || match[5] || '').trim();
+        const cleanTitle = rawTitle.replace(/^[*_~`]+|[*_~`]+$/g, '').trim();
+
+        if (cleanTitle) {
+          elements.push(
+            <span
+              key={`cite-${i}`}
+              className="inline-flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-300/80 px-2.5 py-1 rounded-lg text-xs font-medium my-1.5 shadow-2xs transition-colors cursor-default"
+              title={`Knowledge Base Source Document: ${cleanTitle}`}
+            >
+              <BookOpen size={13} className="shrink-0 text-amber-600" />
+              <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">
+                Source
+              </span>
+              <span className="text-gray-400">|</span>
+              <span className="font-semibold text-gray-900">
+                {cleanTitle}
+              </span>
+            </span>
+          );
+        }
       } else {
-        i += 1;
+        elements.push(part);
       }
+      i++;
     }
+
     return elements;
   };
 
