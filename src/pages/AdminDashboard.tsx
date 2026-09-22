@@ -701,8 +701,21 @@ export default function AdminDashboard() {
                 return (
                   <div key={stage.stage} className="space-y-1.5">
                     <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-                      <span className="capitalize">{stage.stage?.replace('_', ' ')}</span>
-                      <span className="text-slate-900">{stage.count} deals</span>
+                      <span>
+                        {stage.label ||
+                          (stage.stage === 'new_inquiry' || stage.stage === 'new_deals'
+                            ? 'New Inquiry'
+                            : stage.stage === 'quoted' || stage.stage === 'qualified'
+                            ? 'Price Quote'
+                            : stage.stage === 'on_hold'
+                            ? 'On Hold'
+                            : stage.stage === 'won'
+                            ? 'Closed Won'
+                            : stage.stage === 'lost'
+                            ? 'Closed Lost'
+                            : String(stage.stage).replace('_', ' '))}
+                      </span>
+                      <span className="text-slate-900 font-semibold">{stage.count} deal{stage.count !== 1 ? 's' : ''}</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-200">
                       <div

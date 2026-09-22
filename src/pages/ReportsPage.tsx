@@ -251,10 +251,18 @@ export default function ReportsPage() {
                         : 0;
                     return (
                       <div key={stage.stage} className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-gray-700 w-28">
+                        <span className="text-sm font-medium text-gray-700 w-32 shrink-0 truncate">
                           {stage.label ||
                             (stage.stage === 'new_inquiry' || stage.stage === 'new_deals'
-                              ? 'New Deals'
+                              ? 'New Inquiry'
+                              : stage.stage === 'quoted' || stage.stage === 'qualified'
+                              ? 'Price Quote'
+                              : stage.stage === 'on_hold'
+                              ? 'On Hold'
+                              : stage.stage === 'won'
+                              ? 'Closed Won'
+                              : stage.stage === 'lost'
+                              ? 'Closed Lost'
                               : String(stage.stage).replace('_', ' '))}
                         </span>
                         <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
