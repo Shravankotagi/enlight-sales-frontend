@@ -20,12 +20,17 @@ import {
 } from 'lucide-react';
 import KnowledgeBaseModal from '../components/KnowledgeBaseModal';
 import MarkdownMessage from '../components/MarkdownMessage';
+import InteractiveButtons, { type InteractiveButton } from '../components/chat/InteractiveButtons';
+import InteractiveCatalogMenu, { type InteractiveListData } from '../components/chat/InteractiveCatalogMenu';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   created_at?: string;
+  interactiveType?: 'buttons' | 'list' | 'text';
+  interactiveButtons?: InteractiveButton[] | null;
+  interactiveList?: InteractiveListData | null;
 }
 
 interface ChatSession {
@@ -122,9 +127,14 @@ export default function AssistantPage() {
     setInputText('');
   };
 
-  const handleSend = async (promptTextOverride?: string) => {
+  const handleSend = async (
+    promptTextOverride?: string,
+    displayTitle?: string,
+  ) => {
     const textToSend = promptTextOverride || inputText.trim();
     if (!textToSend || loading) return;
+
+    const userDisplayText = displayTitle || textToSend;
 
     setInputText('');
     setError(null);
@@ -133,7 +143,7 @@ export default function AssistantPage() {
     const tempUserMsg: ChatMessage = {
       id: 'temp-' + Date.now(),
       role: 'user',
-      content: textToSend,
+      content: userDisplayText,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, tempUserMsg]);
@@ -148,11 +158,14 @@ export default function AssistantPage() {
       const resData = res.data?.data || res.data || {};
       const sessionId = resData.sessionId || resData.session_id;
       const reply = resData.reply || 'Request completed.';
+      const interactiveType = resData.interactiveType || 'text';
+      const interactiveButtons = resData.interactiveButtons || null;
+      const interactiveList = resData.interactiveList || null;
 
       const titleSnippet =
-        textToSend.length > 35
-          ? textToSend.slice(0, 35).trim() + '...'
-          : textToSend.trim();
+        userDisplayText.length > 35
+          ? userDisplayText.slice(0, 35).trim() + '...'
+          : userDisplayText.trim();
 
       if (sessionId) {
         setActiveSessionId(sessionId);
@@ -177,6 +190,9 @@ export default function AssistantPage() {
         role: 'assistant',
         content: reply,
         created_at: new Date().toISOString(),
+        interactiveType,
+        interactiveButtons,
+        interactiveList,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
@@ -398,41 +414,76 @@ export default function AssistantPage() {
               </div>
             ) : (
               Array.isArray(messages) &&
-              messages.map((msg) => {
-                const isUser = msg.role === 'user';
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex items-start gap-3.5 max-w-3xl ${
-                      isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'
-                    }`}
-                  >
-                    <div
-                      className={`p-2 rounded-xl shrink-0 shadow-2xs ${
-                        isUser
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-gray-200 text-blue-600'
-                      }`}
-                    >
-                      {isUser ? <User size={16} /> : <Bot size={16} />}
-                    </div>
+              (() => {
+                const lastAssistantIndex = messages
+                  .map((m) => m.role)
+                  .lastIndexOf('assistant');
 
+                return messages.map((msg, idx) => {
+                  const isUser = msg.role === 'user';
+                  const isLatestAssistant = idx === lastAssistantIndex;
+
+                  return (
                     <div
-                      className={`p-4 rounded-2xl text-sm shadow-2xs ${
-                        isUser
-                          ? 'bg-blue-600 text-white rounded-tr-none font-normal'
-                          : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                      key={msg.id || idx}
+                      className={`flex items-start gap-3.5 max-w-3xl ${
+                        isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'
                       }`}
                     >
-                      {isUser ? (
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                      ) : (
-                        <MarkdownMessage content={msg.content || ''} />
-                      )}
+                      <div
+                        className={`p-2 rounded-xl shrink-0 shadow-2xs ${
+                          isUser
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white border border-gray-200 text-blue-600'
+                        }`}
+                      >
+                        {isUser ? <User size={16} /> : <Bot size={16} />}
+                      </div>
+
+                      <div
+                        className={`p-4 rounded-2xl text-sm shadow-2xs ${
+                          isUser
+                            ? 'bg-blue-600 text-white rounded-tr-none font-normal'
+                            : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                        }`}
+                      >
+                        {isUser ? (
+                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                        ) : (
+                          <div className="space-y-3">
+                            <MarkdownMessage content={msg.content || ''} />
+
+                            {/* Interactive 10-Option Catalog Menu */}
+                            {msg.interactiveType === 'list' &&
+                              msg.interactiveList && (
+                                <InteractiveCatalogMenu
+                                  interactiveList={msg.interactiveList}
+                                  onSelect={(payload, title) =>
+                                    handleSend(payload, title)
+                                  }
+                                  disabled={!isLatestAssistant || loading}
+                                />
+                              )}
+
+                            {/* Interactive Quick-Reply Buttons */}
+                            {msg.interactiveType === 'buttons' &&
+                              Array.isArray(msg.interactiveButtons) &&
+                              msg.interactiveButtons.length > 0 && (
+                                <InteractiveButtons
+                                  buttons={msg.interactiveButtons}
+                                  onSelect={(payload, title) =>
+                                    handleSend(payload, title)
+                                  }
+                                  disabled={!isLatestAssistant || loading}
+                                />
+                              )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                });
+              })()
             )}
 
             {/* Thinking / Loading indicator */}
