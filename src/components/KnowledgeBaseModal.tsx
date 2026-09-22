@@ -33,6 +33,18 @@ interface KnowledgeBaseModalProps {
   isAdmin: boolean;
 }
 
+const ALLOWED_EXTENSIONS = [
+  '.pdf',
+  '.txt',
+  '.md',
+  '.markdown',
+  '.text',
+  '.json',
+  '.csv',
+];
+
+const MAX_FILE_SIZE_MB = 25;
+
 export default function KnowledgeBaseModal({
   isOpen,
   onClose,
@@ -51,10 +63,24 @@ export default function KnowledgeBaseModal({
   const [visibilityRole, setVisibilityRole] = useState<string>('all');
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [extractingPdf, setExtractingPdf] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const resetUploadForm = () => {
+    setDocTitle('');
+    setDocContent('');
+    setFileName(null);
+    setVisibilityRole('all');
+    setUploadError(null);
+    setUploadSuccess(null);
+    setExtractingPdf(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const fetchDocuments = async () => {
     try {
@@ -77,27 +103,107 @@ export default function KnowledgeBaseModal({
   useEffect(() => {
     if (isOpen) {
       fetchDocuments();
-      setUploadSuccess(null);
-      setUploadError(null);
+      resetUploadForm();
+      setActiveTab('library');
+      setSearchQuery('');
+      setDeleteConfirmId(null);
     }
   }, [isOpen]);
 
-  const handleFileUpload = (file: File) => {
-    setFileName(file.name);
-    if (!docTitle) {
-      // Auto-populate title from filename without extension
-      setDocTitle(file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
+  const handleModalClose = () => {
+    resetUploadForm();
+    onClose();
+  };
+
+  const validateFile = (file: File): boolean => {
+    if (!file) return false;
+
+    const extIndex = file.name.lastIndexOf('.');
+    const ext = extIndex !== -1 ? file.name.slice(extIndex).toLowerCase() : '';
+
+    if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
+      const displayExt = ext || 'unknown';
+      const errorMsg = `Unsupported file format: "${file.name}" (${displayExt}). Please upload a supported document (.pdf, .txt, .md, .csv, .json).`;
+      setUploadError(errorMsg);
+      toast.error(`Unsupported file type (${displayExt})`);
+      setFileName(null);
+      setDocTitle('');
+      setDocContent('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return false;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      setDocContent(content || '');
-    };
-    reader.onerror = () => {
-      setUploadError('Failed to read selected file.');
-    };
-    reader.readAsText(file);
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      const errorMsg = `File "${file.name}" exceeds maximum allowed size of ${MAX_FILE_SIZE_MB} MB.`;
+      setUploadError(errorMsg);
+      toast.error(`File too large (max ${MAX_FILE_SIZE_MB}MB)`);
+      setFileName(null);
+      setDocTitle('');
+      setDocContent('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!validateFile(file)) {
+      return;
+    }
+
+    setUploadError(null);
+    setUploadSuccess(null);
+    setFileName(file.name);
+    const cleanAutoTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim();
+    if (!docTitle) {
+      setDocTitle(cleanAutoTitle);
+    }
+
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+
+    if (isPdf) {
+      setExtractingPdf(true);
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const fileBase64 = e.target?.result as string;
+          const res = await kbApi.extractText({
+            fileBase64,
+            fileName: file.name,
+          });
+          const extracted = res.data?.data || res.data || {};
+          const text = extracted.text || '';
+          setDocContent(text);
+          if (extracted.title && !docTitle) {
+            setDocTitle(extracted.title);
+          }
+          toast.success(`Extracted text from ${file.name}`);
+        } catch (err: any) {
+          console.error('PDF text extraction failed:', err);
+          const errMsg = err.response?.data?.message || err.message || 'Failed to extract text from PDF.';
+          setUploadError(`PDF Text Extraction Failed: ${errMsg}. You can also paste the document content manually below.`);
+        } finally {
+          setExtractingPdf(false);
+        }
+      };
+      reader.onerror = () => {
+        setUploadError('Failed to read selected PDF file.');
+        setExtractingPdf(false);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        setDocContent(content || '');
+      };
+      reader.onerror = () => {
+        setUploadError('Failed to read selected file.');
+      };
+      reader.readAsText(file);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -112,6 +218,15 @@ export default function KnowledgeBaseModal({
     if (!docTitle.trim() || !docContent.trim()) {
       setUploadError('Document title and content are required.');
       return;
+    }
+
+    if (fileName) {
+      const extIndex = fileName.lastIndexOf('.');
+      const ext = extIndex !== -1 ? fileName.slice(extIndex).toLowerCase() : '';
+      if (ext && !ALLOWED_EXTENSIONS.includes(ext)) {
+        setUploadError(`Cannot save document: Unsupported file format "${fileName}". Please upload a supported file.`);
+        return;
+      }
     }
 
     try {
@@ -239,7 +354,7 @@ export default function KnowledgeBaseModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleModalClose}
             className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
           >
             <X size={18} />
@@ -450,22 +565,31 @@ export default function KnowledgeBaseModal({
                     e.target.files.length > 0 &&
                     handleFileUpload(e.target.files[0])
                   }
-                  accept=".txt,.md,.markdown,.json,.csv"
+                  accept=".pdf,.txt,.md,.markdown,.json,.csv"
                   className="hidden"
                 />
                 <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto">
-                  <UploadCloud size={20} />
+                  {extractingPdf ? (
+                    <Loader2 size={20} className="animate-spin text-blue-600" />
+                  ) : (
+                    <UploadCloud size={20} />
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-800">
-                    {fileName ? (
+                    {extractingPdf ? (
+                      <span className="text-blue-600 flex items-center justify-center gap-1.5">
+                        <Loader2 size={12} className="animate-spin" />
+                        Extracting & structuring text from PDF...
+                      </span>
+                    ) : fileName ? (
                       <span className="text-blue-600">Selected: {fileName}</span>
                     ) : (
                       'Click to upload or drag and drop document'
                     )}
                   </p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
-                    Supports .txt, .md, .csv, .json text files
+                    Supports PDF (.pdf), Word / Markdown (.md), Text (.txt), CSV (.csv)
                   </p>
                 </div>
               </div>
@@ -535,7 +659,10 @@ export default function KnowledgeBaseModal({
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('library')}
+                  onClick={() => {
+                    resetUploadForm();
+                    setActiveTab('library');
+                  }}
                   className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
                 >
                   Cancel
