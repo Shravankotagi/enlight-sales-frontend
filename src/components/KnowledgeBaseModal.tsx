@@ -51,6 +51,7 @@ export default function KnowledgeBaseModal({
   const [visibilityRole, setVisibilityRole] = useState<string>('all');
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [extractingPdf, setExtractingPdf] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -79,25 +80,63 @@ export default function KnowledgeBaseModal({
       fetchDocuments();
       setUploadSuccess(null);
       setUploadError(null);
+      setExtractingPdf(false);
     }
   }, [isOpen]);
 
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = async (file: File) => {
     setFileName(file.name);
+    const cleanAutoTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim();
     if (!docTitle) {
-      // Auto-populate title from filename without extension
-      setDocTitle(file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
+      setDocTitle(cleanAutoTitle);
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      setDocContent(content || '');
-    };
-    reader.onerror = () => {
-      setUploadError('Failed to read selected file.');
-    };
-    reader.readAsText(file);
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+
+    if (isPdf) {
+      setExtractingPdf(true);
+      setUploadError(null);
+      setUploadSuccess(null);
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const fileBase64 = e.target?.result as string;
+          const res = await kbApi.extractText({
+            fileBase64,
+            fileName: file.name,
+          });
+          const extracted = res.data?.data || res.data || {};
+          const text = extracted.text || '';
+          setDocContent(text);
+          if (extracted.title && !docTitle) {
+            setDocTitle(extracted.title);
+          }
+          toast.success(`Extracted text from ${file.name}`);
+        } catch (err: any) {
+          console.error('PDF text extraction failed:', err);
+          const errMsg = err.response?.data?.message || err.message || 'Failed to extract text from PDF.';
+          setUploadError(`PDF Text Extraction Failed: ${errMsg}. You can also paste the document content manually below.`);
+        } finally {
+          setExtractingPdf(false);
+        }
+      };
+      reader.onerror = () => {
+        setUploadError('Failed to read selected PDF file.');
+        setExtractingPdf(false);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        setDocContent(content || '');
+      };
+      reader.onerror = () => {
+        setUploadError('Failed to read selected file.');
+      };
+      reader.readAsText(file);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -450,22 +489,31 @@ export default function KnowledgeBaseModal({
                     e.target.files.length > 0 &&
                     handleFileUpload(e.target.files[0])
                   }
-                  accept=".txt,.md,.markdown,.json,.csv"
+                  accept=".pdf,.txt,.md,.markdown,.json,.csv"
                   className="hidden"
                 />
                 <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto">
-                  <UploadCloud size={20} />
+                  {extractingPdf ? (
+                    <Loader2 size={20} className="animate-spin text-blue-600" />
+                  ) : (
+                    <UploadCloud size={20} />
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-800">
-                    {fileName ? (
+                    {extractingPdf ? (
+                      <span className="text-blue-600 flex items-center justify-center gap-1.5">
+                        <Loader2 size={12} className="animate-spin" />
+                        Extracting & structuring text from PDF...
+                      </span>
+                    ) : fileName ? (
                       <span className="text-blue-600">Selected: {fileName}</span>
                     ) : (
                       'Click to upload or drag and drop document'
                     )}
                   </p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
-                    Supports .txt, .md, .csv, .json text files
+                    Supports PDF (.pdf), Word / Markdown (.md), Text (.txt), CSV (.csv)
                   </p>
                 </div>
               </div>

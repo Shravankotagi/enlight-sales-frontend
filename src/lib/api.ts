@@ -177,6 +177,8 @@ export const kbApi = {
     visibilityRole: string;
     sourceFileUrl?: string;
   }) => API.post('/chat/kb/upload', data),
+  extractText: (data: { fileBase64: string; fileName?: string }) =>
+    API.post('/chat/kb/extract-text', data),
   deleteDocument: (id: string) => API.delete(`/chat/kb/documents/${id}`),
 };
 
