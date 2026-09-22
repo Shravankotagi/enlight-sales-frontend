@@ -148,8 +148,12 @@ export default function MarkdownMessage({ content }: MarkdownMessageProps) {
               {children}
             </ul>
           ),
-          ol: ({ children }) => (
-            <ol className="list-decimal list-outside pl-5 space-y-1.5 my-2.5 text-gray-800 marker:text-blue-600 font-medium">
+          ol: ({ children, start, ...props }) => (
+            <ol
+              start={start}
+              className="list-decimal list-outside pl-5 space-y-1.5 my-2.5 text-gray-800 marker:text-blue-600 font-medium"
+              {...props}
+            >
               {children}
             </ol>
           ),
