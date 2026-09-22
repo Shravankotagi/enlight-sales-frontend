@@ -694,14 +694,20 @@ export default function AdminDashboard() {
             </div>
 
             <div className="p-5 space-y-4">
-              {(funnel?.funnel || []).map((stage: any) => {
-                const maxCount = funnel.funnel[0]?.count > 0 ? funnel.funnel[0].count : 1;
-                const pct = Math.round((stage.count / maxCount) * 100);
+              {(() => {
+                const funnelList = funnel?.funnel || [];
+                const maxCount = Math.max(
+                  ...funnelList.map((s: any) => Number(s.count) || 0),
+                  1
+                );
+                return funnelList.map((stage: any) => {
+                  const count = Number(stage.count) || 0;
+                  const pct = count > 0 ? Math.round((count / maxCount) * 100) : 0;
 
-                return (
-                  <div key={stage.stage} className="space-y-1.5">
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-                      <span>
+                  return (
+                    <div key={stage.stage} className="space-y-1.5">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-700">
+                        <span>
                         {stage.label ||
                           (stage.stage === 'new_inquiry' || stage.stage === 'new_deals'
                             ? 'New Inquiry'
@@ -725,7 +731,8 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 );
-              })}
+              });
+            })()}
             </div>
           </div>
 
