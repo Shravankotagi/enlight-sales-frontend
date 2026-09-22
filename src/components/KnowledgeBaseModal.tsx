@@ -69,6 +69,19 @@ export default function KnowledgeBaseModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const resetUploadForm = () => {
+    setDocTitle('');
+    setDocContent('');
+    setFileName(null);
+    setVisibilityRole('all');
+    setUploadError(null);
+    setUploadSuccess(null);
+    setExtractingPdf(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const fetchDocuments = async () => {
     try {
       setLoading(true);
@@ -90,11 +103,17 @@ export default function KnowledgeBaseModal({
   useEffect(() => {
     if (isOpen) {
       fetchDocuments();
-      setUploadSuccess(null);
-      setUploadError(null);
-      setExtractingPdf(false);
+      resetUploadForm();
+      setActiveTab('library');
+      setSearchQuery('');
+      setDeleteConfirmId(null);
     }
   }, [isOpen]);
+
+  const handleModalClose = () => {
+    resetUploadForm();
+    onClose();
+  };
 
   const validateFile = (file: File): boolean => {
     if (!file) return false;
@@ -335,7 +354,7 @@ export default function KnowledgeBaseModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleModalClose}
             className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
           >
             <X size={18} />
@@ -640,7 +659,10 @@ export default function KnowledgeBaseModal({
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('library')}
+                  onClick={() => {
+                    resetUploadForm();
+                    setActiveTab('library');
+                  }}
                   className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
                 >
                   Cancel
