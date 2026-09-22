@@ -33,6 +33,18 @@ interface KnowledgeBaseModalProps {
   isAdmin: boolean;
 }
 
+const ALLOWED_EXTENSIONS = [
+  '.pdf',
+  '.txt',
+  '.md',
+  '.markdown',
+  '.text',
+  '.json',
+  '.csv',
+];
+
+const MAX_FILE_SIZE_MB = 25;
+
 export default function KnowledgeBaseModal({
   isOpen,
   onClose,
@@ -84,7 +96,45 @@ export default function KnowledgeBaseModal({
     }
   }, [isOpen]);
 
+  const validateFile = (file: File): boolean => {
+    if (!file) return false;
+
+    const extIndex = file.name.lastIndexOf('.');
+    const ext = extIndex !== -1 ? file.name.slice(extIndex).toLowerCase() : '';
+
+    if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
+      const displayExt = ext || 'unknown';
+      const errorMsg = `Unsupported file format: "${file.name}" (${displayExt}). Please upload a supported document (.pdf, .txt, .md, .csv, .json).`;
+      setUploadError(errorMsg);
+      toast.error(`Unsupported file type (${displayExt})`);
+      setFileName(null);
+      setDocTitle('');
+      setDocContent('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return false;
+    }
+
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      const errorMsg = `File "${file.name}" exceeds maximum allowed size of ${MAX_FILE_SIZE_MB} MB.`;
+      setUploadError(errorMsg);
+      toast.error(`File too large (max ${MAX_FILE_SIZE_MB}MB)`);
+      setFileName(null);
+      setDocTitle('');
+      setDocContent('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return false;
+    }
+
+    return true;
+  };
+
   const handleFileUpload = async (file: File) => {
+    if (!validateFile(file)) {
+      return;
+    }
+
+    setUploadError(null);
+    setUploadSuccess(null);
     setFileName(file.name);
     const cleanAutoTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim();
     if (!docTitle) {
@@ -95,8 +145,6 @@ export default function KnowledgeBaseModal({
 
     if (isPdf) {
       setExtractingPdf(true);
-      setUploadError(null);
-      setUploadSuccess(null);
 
       const reader = new FileReader();
       reader.onload = async (e) => {
@@ -151,6 +199,15 @@ export default function KnowledgeBaseModal({
     if (!docTitle.trim() || !docContent.trim()) {
       setUploadError('Document title and content are required.');
       return;
+    }
+
+    if (fileName) {
+      const extIndex = fileName.lastIndexOf('.');
+      const ext = extIndex !== -1 ? fileName.slice(extIndex).toLowerCase() : '';
+      if (ext && !ALLOWED_EXTENSIONS.includes(ext)) {
+        setUploadError(`Cannot save document: Unsupported file format "${fileName}". Please upload a supported file.`);
+        return;
+      }
     }
 
     try {
