@@ -2,8 +2,8 @@ import {
   CheckCircle2,
   Edit3,
   XCircle,
-  Menu,
-  RotateCw,
+  LayoutGrid,
+  PlusCircle,
   ArrowRight,
 } from 'lucide-react';
 
@@ -30,14 +30,31 @@ export default function InteractiveButtons({
     const id = (btn.id || '').toLowerCase();
     const title = (btn.title || '').toLowerCase();
 
-    // 1. Confirm / Yes / Save
+    // 1. Repeat Actions / Log Another / Create New (Always Green with Plus Icon)
+    if (
+      id.includes('repeat') ||
+      title.includes('another') ||
+      title.includes('log another') ||
+      title.includes('record another') ||
+      title.includes('onboard another')
+    ) {
+      return {
+        icon: PlusCircle,
+        className: disabled
+          ? 'bg-gray-100 text-gray-400 border-gray-200'
+          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs hover:shadow-xs active:scale-98',
+        payload: btn.payload || btn.id,
+      };
+    }
+
+    // 2. Primary Confirm / Yes / Save (Solid Green with Checkmark)
     if (
       id.includes('confirm_yes') ||
       id.includes('cust_yes') ||
       id.includes('resume_yes') ||
-      title.includes('yes') ||
       title.includes('save') ||
-      title.includes('confirm')
+      title.includes('confirm') ||
+      /\b(?:yes|proceed|continue)\b/i.test(title)
     ) {
       return {
         icon: CheckCircle2,
@@ -48,8 +65,8 @@ export default function InteractiveButtons({
       };
     }
 
-    // 2. Edit Details
-    if (id.includes('edit') || title.includes('edit')) {
+    // 3. Edit Details (Amber with Pencil Icon)
+    if (id.includes('edit') || title.includes('edit') || title.includes('change')) {
       return {
         icon: Edit3,
         className: disabled
@@ -59,13 +76,27 @@ export default function InteractiveButtons({
       };
     }
 
-    // 3. Cancel / Discard / No
+    // 4. Main Menu / Options (Blue with Grid Icon)
     if (
-      id.includes('cancel') ||
+      id.includes('post_menu') ||
+      id.includes('resume_no') ||
+      title.includes('menu') ||
+      title.includes('options')
+    ) {
+      return {
+        icon: LayoutGrid,
+        className: disabled
+          ? 'bg-gray-100 text-gray-400 border-gray-200'
+          : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-2xs hover:shadow-xs active:scale-98',
+        payload: btn.payload || 'menu',
+      };
+    }
+
+    // 5. Cancel / Discard / Negative Actions (Rose Red with X Icon - strict word boundaries)
+    if (
+      id.includes('confirm_cancel') ||
       id.includes('cust_no') ||
-      title.includes('cancel') ||
-      title.includes('discard') ||
-      title.includes('no')
+      /\b(?:cancel|discard|no)\b/i.test(title)
     ) {
       return {
         icon: XCircle,
@@ -76,33 +107,7 @@ export default function InteractiveButtons({
       };
     }
 
-    // 4. Main Menu / Options
-    if (
-      id.includes('post_menu') ||
-      id.includes('resume_no') ||
-      title.includes('menu')
-    ) {
-      return {
-        icon: Menu,
-        className: disabled
-          ? 'bg-gray-100 text-gray-400 border-gray-200'
-          : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-2xs hover:shadow-xs active:scale-98',
-        payload: btn.payload || 'menu',
-      };
-    }
-
-    // 5. Repeat Actions / Log Another
-    if (id.includes('repeat') || title.includes('another') || title.includes('log')) {
-      return {
-        icon: RotateCw,
-        className: disabled
-          ? 'bg-gray-100 text-gray-400 border-gray-200'
-          : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 shadow-2xs hover:shadow-xs active:scale-98',
-        payload: btn.payload || btn.id,
-      };
-    }
-
-    // 6. Default Fallback
+    // 6. Default Fallback (Neutral Gray with Arrow)
     return {
       icon: ArrowRight,
       className: disabled
