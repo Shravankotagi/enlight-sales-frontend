@@ -254,21 +254,22 @@ export function convertLineItemToMt(item: LineItemInput): {
 
   if (!widthM || !lengthM) {
     const dim3Match = combinedText.match(
-      /(\d+(?:\.\d+)?)\s*(?:mm|m)?\s*[xX*]\s*(\d+(?:\.\d+)?)\s*(?:mm|m)?\s*[xX*]\s*(\d+(?:\.\d+)?)\s*(?:mm|m)?/,
+      /(\d+(?:\.\d+)?)\s*(?:mm|m)?\s*[xX*×]\s*(\d+(?:\.\d+)?)\s*(?:mm|m)?\s*[xX*×]\s*(\d+(?:\.\d+)?)\s*(?:mm|m)?/,
     );
     if (dim3Match) {
       const n1 = parseFloat(dim3Match[1]);
       const n2 = parseFloat(dim3Match[2]);
       const n3 = parseFloat(dim3Match[3]);
       const sorted = [n1, n2, n3].sort((a, b) => a - b);
-      if (!thickness) thickness = sorted[0];
+      // In steel specs (e.g. 05X1500X6300MM), the smallest dimension is always thickness in mm
+      thickness = sorted[0];
       const w = sorted[1];
       const l = sorted[2];
       widthM = w > 20 ? w / 1000 : w;
       lengthM = l > 20 ? l / 1000 : l;
     } else {
       const dim2Match = combinedText.match(
-        /(\d+(?:\.\d+)?)\s*(?:mm|m)?\s*[xX*]\s*(\d+(?:\.\d+)?)\s*(?:mm|m)?/,
+        /(\d+(?:\.\d+)?)\s*(?:mm|m)?\s*[xX*×]\s*(\d+(?:\.\d+)?)\s*(?:mm|m)?/,
       );
       if (dim2Match) {
         const d1 = parseFloat(dim2Match[1]);
@@ -277,6 +278,10 @@ export function convertLineItemToMt(item: LineItemInput): {
         const l = Math.max(d1, d2);
         widthM = w > 20 ? w / 1000 : w;
         lengthM = l > 20 ? l / 1000 : l;
+        // If thickness was mistakenly matched from a large width/length suffix (e.g. 6300mm), invalidate it
+        if (thickness && thickness >= w) {
+          thickness = null;
+        }
       }
     }
   }
@@ -321,6 +326,9 @@ export function convertLineItemToMt(item: LineItemInput): {
 
 /**
  * Calculates converted total tonnage in MT across all line items with precision and transparency.
+ * RULE:
+ * - If all line items have the SAME unit: directly sum their quantities (e.g. 60 MT + 60 MT = 120 MT).
+ * - If line items have DIFFERENT units: convert each item to MT and sum into total MT.
  */
 export function calculateTotalTonnageMt(
   lineItems: LineItemInput[],
@@ -329,11 +337,64 @@ export function calculateTotalTonnageMt(
     return { totalMt: 0, hasUnconvertible: false, formattedText: '0.00 MT' };
   }
 
+  // 1. Identify distinct normalized units across all valid line items
+  const validItems = lineItems.filter(i => {
+    const q = Number(i.quantity ?? i.quantity_mt ?? i.qty ?? 0);
+    return !isNaN(q) && q > 0;
+  });
+
+  if (validItems.length === 0) {
+    return { totalMt: 0, hasUnconvertible: false, formattedText: '0.00 MT' };
+  }
+
+  const units = validItems.map(i => normalizeUnit(i.unit || 'MT'));
+  const uniqueUnits = Array.from(new Set(units));
+  const isSameUnit = uniqueUnits.length === 1;
+  const commonUnit = isSameUnit ? uniqueUnits[0] : null;
+
+  // 2. SAME UNIT: Directly add quantities together!
+  if (isSameUnit && commonUnit) {
+    const totalSum = validItems.reduce(
+      (sum, i) => sum + (Number(i.quantity ?? i.quantity_mt ?? i.qty ?? 0) || 0),
+      0,
+    );
+    const roundedQty = Math.round(totalSum * 1000) / 1000;
+    const formattedQty = roundedQty.toLocaleString('en-IN', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 3,
+    });
+
+    if (commonUnit === 'MT') {
+      return {
+        totalMt: roundedQty,
+        hasUnconvertible: false,
+        formattedText: `${formattedQty} MT`,
+      };
+    }
+
+    if (commonUnit === 'KG') {
+      const mtVal = Math.round((totalSum / 1000) * 1000) / 1000;
+      return {
+        totalMt: mtVal,
+        hasUnconvertible: false,
+        formattedText: `${formattedQty} KG (${mtVal.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT)`,
+      };
+    }
+
+    // For piece units (Nos, Pcs, Sheets, Plates, Coils, etc.)
+    return {
+      totalMt: roundedQty,
+      hasUnconvertible: false,
+      formattedText: `${formattedQty} ${commonUnit}`,
+    };
+  }
+
+  // 3. DIFFERENT UNITS: Convert each item to MT and sum together
   let totalMt = 0;
   let hasUnconvertible = false;
   const unconvertibleItems: string[] = [];
 
-  for (const item of lineItems) {
+  for (const item of validItems) {
     const res = convertLineItemToMt(item);
     if (res.canConvert && res.mt !== null) {
       totalMt += res.mt;

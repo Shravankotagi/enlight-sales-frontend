@@ -3465,6 +3465,8 @@ export default function InquiriesPage() {
                                 <option value="Pcs">Pcs</option>
                                 <option value="KG">KG</option>
                                 <option value="Sheets">Sheets</option>
+                                <option value="Plates">Plates</option>
+                                <option value="Coils">Coils</option>
                               </select>
                             </div>
                             {fieldErrors[`qty_${idx}`] && (

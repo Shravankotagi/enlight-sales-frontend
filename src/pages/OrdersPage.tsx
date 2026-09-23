@@ -629,10 +629,19 @@ export default function OrdersPage() {
           const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
             const skuText = (i.sku_text || i.description || i.product || 'Material').trim();
             const dims = (i.dimensions || '').trim();
-            const rawUnit = (i.unit || 'MT').trim();
+            let rawUnit = (i.unit || 'MT').trim();
             const q = Number(i.quantity) || 0;
             const r = Number(i.rate) || 0;
             const amt = Number(i.amount) || Math.round(q * r);
+            
+            // Protect against OCR hallucinating product names (e.g. 'Plates', 'Sheets', 'Coils') as units when document specifies MT
+            if (
+              /^(?:plate|plates|sheet|sheets|coil|coils|beam|channel|pipe)$/i.test(rawUnit) &&
+              (r > 1000 || /m\.?t/i.test(skuText) || /m\.?t/i.test(dims) || /\bmt\b/i.test(skuText))
+            ) {
+              rawUnit = 'MT';
+            }
+
             return {
               sku_text: skuText,
               dimensions: dims,
@@ -1915,6 +1924,8 @@ export default function OrdersPage() {
                               <option value="Pcs">Pcs</option>
                               <option value="KG">KG</option>
                               <option value="Sheets">Sheets</option>
+                              <option value="Plates">Plates</option>
+                              <option value="Coils">Coils</option>
                             </select>
                           </div>
                         </td>
