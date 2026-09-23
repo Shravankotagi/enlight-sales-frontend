@@ -155,8 +155,16 @@ export default function LogsPage() {
     if (Array.isArray(list)) {
       counts.All = list.length;
       for (const log of list) {
-        if (log.module && counts[log.module] !== undefined) {
-          counts[log.module]++;
+        if (!log.module) continue;
+        const mod = String(log.module).toLowerCase();
+        if (mod.includes('inquir')) {
+          counts.Inquiries++;
+        } else if (mod.includes('order') || mod.includes('deal')) {
+          counts.Orders++;
+        } else if (mod.includes('visit')) {
+          counts.Visits++;
+        } else if (mod.includes('complaint')) {
+          counts.Complaints++;
         }
       }
     }
@@ -164,58 +172,62 @@ export default function LogsPage() {
   }, [allModuleCountsData, activityLogsData]);
 
   const getModuleBadge = (mod: string) => {
-    switch (mod) {
-      case 'Inquiries':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-blue-50 text-blue-700 border border-blue-200 uppercase shadow-2xs">
-            <FileText size={12} className="text-blue-600" />
-            Inquiries
-          </span>
-        );
-      case 'Orders':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase shadow-2xs">
-            <ShoppingCart size={12} className="text-emerald-600" />
-            Orders
-          </span>
-        );
-      case 'Visits':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-purple-50 text-purple-700 border border-purple-200 uppercase shadow-2xs">
-            <MapPin size={12} className="text-purple-600" />
-            Visits
-          </span>
-        );
-      case 'Complaints':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-rose-50 text-rose-700 border border-rose-200 uppercase shadow-2xs">
-            <AlertTriangle size={12} className="text-rose-600" />
-            Complaints
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-slate-100 text-slate-700 border border-slate-200 uppercase">
-            <Layers size={12} className="text-slate-500" />
-            {mod || 'General'}
-          </span>
-        );
+    const lowerMod = String(mod || '').toLowerCase();
+    if (lowerMod.includes('inquir')) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-blue-50 text-blue-700 border border-blue-200 uppercase shadow-2xs">
+          <FileText size={12} className="text-blue-600" />
+          Inquiries
+        </span>
+      );
     }
+    if (lowerMod.includes('order') || lowerMod.includes('deal')) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase shadow-2xs">
+          <ShoppingCart size={12} className="text-emerald-600" />
+          Orders
+        </span>
+      );
+    }
+    if (lowerMod.includes('visit')) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-purple-50 text-purple-700 border border-purple-200 uppercase shadow-2xs">
+          <MapPin size={12} className="text-purple-600" />
+          Visits
+        </span>
+      );
+    }
+    if (lowerMod.includes('complaint')) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-rose-50 text-rose-700 border border-rose-200 uppercase shadow-2xs">
+          <AlertTriangle size={12} className="text-rose-600" />
+          Complaints
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+        <Layers size={12} className="text-slate-500" />
+        {mod || 'General'}
+      </span>
+    );
   };
 
   const getNodeColor = (mod: string) => {
-    switch (mod) {
-      case 'Orders':
-        return 'border-emerald-500 bg-emerald-50 shadow-[0_0_8px_rgba(16,185,129,0.35)]';
-      case 'Inquiries':
-        return 'border-blue-600 bg-blue-50 shadow-[0_0_8px_rgba(37,99,235,0.35)]';
-      case 'Visits':
-        return 'border-purple-500 bg-purple-50 shadow-[0_0_8px_rgba(168,85,247,0.35)]';
-      case 'Complaints':
-        return 'border-rose-500 bg-rose-50 shadow-[0_0_8px_rgba(244,63,94,0.35)]';
-      default:
-        return 'border-blue-500 bg-blue-50 shadow-[0_0_8px_rgba(59,130,246,0.35)]';
+    const lowerMod = String(mod || '').toLowerCase();
+    if (lowerMod.includes('order') || lowerMod.includes('deal')) {
+      return 'border-emerald-500 bg-emerald-50 shadow-[0_0_8px_rgba(16,185,129,0.35)]';
     }
+    if (lowerMod.includes('inquir')) {
+      return 'border-blue-600 bg-blue-50 shadow-[0_0_8px_rgba(37,99,235,0.35)]';
+    }
+    if (lowerMod.includes('visit')) {
+      return 'border-purple-500 bg-purple-50 shadow-[0_0_8px_rgba(168,85,247,0.35)]';
+    }
+    if (lowerMod.includes('complaint')) {
+      return 'border-rose-500 bg-rose-50 shadow-[0_0_8px_rgba(244,63,94,0.35)]';
+    }
+    return 'border-blue-500 bg-blue-50 shadow-[0_0_8px_rgba(59,130,246,0.35)]';
   };
 
   const formatRelativeTime = (timestampStr: string) => {
