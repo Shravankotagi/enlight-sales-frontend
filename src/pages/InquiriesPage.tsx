@@ -32,6 +32,16 @@ export interface InquiryItem {
   salesperson_name?: string;
   assigned_salesperson_name?: string;
   salesperson_phone?: string;
+  payment_terms?: string;
+  paymentTerms?: string;
+  delivery_location?: string;
+  deliveryLocation?: string;
+  stage?: string;
+  total_amount?: number;
+  po_number?: string;
+  po_date?: string;
+  won_at?: string;
+  lost_reason?: string;
   raw_text?: string;
   inquiry_type?: string;
   status?: string;
@@ -41,6 +51,7 @@ export interface InquiryItem {
   overall_confidence?: number;
   ai_extraction_json?: any;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface LineItemDetail {
@@ -674,6 +685,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   };
 
   // 7. Delivery Location (Capture full delivery address without payment terms leakage)
+  let directDelivery = cleanDeliveryLocation(inq?.delivery_location || inq?.deliveryLocation || '');
   let fromJson = cleanDeliveryLocation(aiJson.delivery_location || aiJson.deliveryLocation || '');
 
   let fromText = '';
@@ -697,8 +709,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
     }
   }
 
-  let deliveryLocation = fromJson;
-  if (fromText && fromText.length > fromJson.length) {
+  let deliveryLocation = directDelivery || fromJson;
+  if (!directDelivery && fromText && fromText.length > fromJson.length) {
     deliveryLocation = fromText;
   } else if (!deliveryLocation) {
     deliveryLocation = fromText;
@@ -729,8 +741,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
     }
   }
 
-  // 9. Payment Terms (Extract directly from aiJson or text)
-  let paymentTerms = aiJson.payment_terms || aiJson.paymentTerms || '';
+  // 9. Payment Terms (Extract directly from inq, aiJson or text)
+  let paymentTerms = inq?.payment_terms || inq?.paymentTerms || aiJson.payment_terms || aiJson.paymentTerms || '';
   if (!paymentTerms) {
     const payMatch = textRaw.match(/(?:payment\s*terms?|payment|terms?)\s*[:=-]?\s*([A-Za-z0-9\s%/-]+?)(?:[.,\n]|$)/i);
     if (payMatch && payMatch[1].trim().length > 2 && !/^(is|are|of|the|we)$/i.test(payMatch[1].trim())) {
@@ -1675,8 +1687,8 @@ export default function InquiriesPage() {
                 salespersonName: resolvedSp,
                 totalAmount: frozenTotal,
                 lineItems: frozenLineItems,
-                paymentTerms: ai.payment_terms || ai.paymentTerms || prev.paymentTerms || '',
-                deliveryLocation: ai.delivery_location || ai.deliveryLocation || prev.deliveryLocation || '',
+                paymentTerms: freshItem.payment_terms || freshItem.paymentTerms || ai.payment_terms || ai.paymentTerms || parsed.paymentTerms || prev.paymentTerms || '',
+                deliveryLocation: freshItem.delivery_location || freshItem.deliveryLocation || ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || prev.deliveryLocation || '',
               };
             });
 
@@ -1782,10 +1794,10 @@ export default function InquiriesPage() {
         quantityUnits: ai.quantityUnits || 0,
         unitPrice: frozenLineItems[0]?.rate || ai.unitPrice || 0,
         totalAmount: frozenTotal,
-        paymentTerms: ai.payment_terms || ai.paymentTerms || parsed.paymentTerms || '',
-        deliveryLocation: (parsed.deliveryLocation && parsed.deliveryLocation.length > (ai.delivery_location || ai.deliveryLocation || '').length)
+        paymentTerms: inq.payment_terms || inq.paymentTerms || ai.payment_terms || ai.paymentTerms || parsed.paymentTerms || '',
+        deliveryLocation: inq.delivery_location || inq.deliveryLocation || (parsed.deliveryLocation && parsed.deliveryLocation.length > (ai.delivery_location || ai.deliveryLocation || '').length
           ? parsed.deliveryLocation
-          : (ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || ''),
+          : (ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || '')),
         deliveryDate: ai.delivery_date || ai.deliveryDate || '',
         lineItems: frozenLineItems,
       });

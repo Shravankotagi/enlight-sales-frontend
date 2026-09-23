@@ -18,12 +18,23 @@ interface InquiryItem {
   sender_phone?: string;
   salesperson_name?: string;
   assigned_salesperson_name?: string;
+  salesperson_phone?: string;
+  payment_terms?: string;
+  paymentTerms?: string;
+  delivery_location?: string;
+  deliveryLocation?: string;
+  stage?: string;
+  total_amount?: number;
+  po_number?: string;
+  po_date?: string;
   raw_text?: string;
   inquiry_type?: string;
   status?: string;
   source_channel?: string;
   media_urls?: string[];
+  has_media?: boolean;
   overall_confidence?: number;
+  ai_extraction_json?: any;
   created_at: string;
 }
 

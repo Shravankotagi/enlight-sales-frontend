@@ -70,6 +70,27 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
     )
     .on(
       'postgres_changes',
+      { event: '*', schema: 'public', table: 'inquiry_items' },
+      (payload) => {
+        console.log('[Realtime] Inquiry Items table change:', payload.eventType);
+        notifyChange('inquiry_items', payload.eventType, payload);
+        debounceInvalidate([
+          ['inquiries-list'],
+          ['inquiries'],
+          ['inquiries-review-queue'],
+          ['admin-inquiries-queue'],
+          ['pipeline'],
+          ['kanban'],
+          ['kra-dashboard'],
+          ['kra-sheets'],
+          ['home-inquiries'],
+          ['action-queue'],
+          ['reports-overview-data'],
+        ]);
+      }
+    )
+    .on(
+      'postgres_changes',
       { event: '*', schema: 'public', table: 'deals' },
       (payload) => {
         console.log('[Realtime] Deals table change:', payload.eventType);
@@ -217,6 +238,26 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
           ['activity-logs'],
           ['activity-logs-counts'],
           ['action-queue'],
+        ]);
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'payment_tracking' },
+      (payload) => {
+        console.log('[Realtime] Payment Tracking table change:', payload.eventType);
+        notifyChange('payment_tracking', payload.eventType, payload);
+        debounceInvalidate([
+          ['payment-tracking'],
+          ['payments'],
+          ['deals'],
+          ['deal'],
+          ['orders-list'],
+          ['pipeline'],
+          ['kra-dashboard'],
+          ['kra-sheets'],
+          ['action-queue'],
+          ['reports-overview-data'],
         ]);
       }
     )
