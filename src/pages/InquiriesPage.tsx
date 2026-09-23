@@ -1653,6 +1653,9 @@ export default function InquiriesPage() {
           setSelectedInquiry(freshItem);
           const ai = (freshItem.ai_extraction_json as any) || {};
           const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
+          const resolvedSp = getSalespersonName(freshItem);
+          const parsed = parseInquiryText(freshItem.raw_text || '', freshItem);
+
           if (lineItemsSrc.length > 0) {
             const frozenLineItems = lineItemsSrc.map((item: any) => {
               const skuText = item.sku_text || item.description || '';
@@ -1675,8 +1678,6 @@ export default function InquiriesPage() {
               (frozenLineItems.length > 0
                 ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
                 : 0);
-            const resolvedSp = getSalespersonName(freshItem);
-            const parsed = parseInquiryText(freshItem.raw_text || '', freshItem);
 
             setEditDetails(prev => {
               if (!prev) return null;
@@ -1695,6 +1696,17 @@ export default function InquiriesPage() {
             const hasValidRates = frozenLineItems.length > 0 && frozenLineItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
             const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((freshItem.status || '').toLowerCase()) && hasValidRates;
             setSaveSuccess(isConfirmedState);
+          } else {
+            setEditDetails(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                ...parsed,
+                salespersonName: resolvedSp,
+                paymentTerms: freshItem.payment_terms || freshItem.paymentTerms || ai.payment_terms || ai.paymentTerms || parsed.paymentTerms || prev.paymentTerms || '',
+                deliveryLocation: freshItem.delivery_location || freshItem.deliveryLocation || ai.delivery_location || ai.deliveryLocation || parsed.deliveryLocation || prev.deliveryLocation || '',
+              };
+            });
           }
         }
       }
@@ -1704,13 +1716,14 @@ export default function InquiriesPage() {
   useEffect(() => {
     const handleDbChange = (e: any) => {
       const { table } = e.detail || {};
-      if (table === 'inquiries' || table === 'deals' || table === 'deal_items') {
+      if (table === 'inquiries' || table === 'deals' || table === 'deal_items' || table === 'inquiry_items') {
         fetchMonthlyInquiries();
+        fetchDeals();
       }
     };
     window.addEventListener('enlight-db-change', handleDbChange);
     return () => window.removeEventListener('enlight-db-change', handleDbChange);
-  }, [fetchMonthlyInquiries]);
+  }, [fetchMonthlyInquiries, fetchDeals]);
 
   useEffect(() => {
     if (Array.isArray(rawCustomers) && rawCustomers.length > 0) {

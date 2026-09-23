@@ -38,7 +38,8 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
     }
     debounceTimers[keyId] = setTimeout(() => {
       keys.forEach((queryKey) => {
-        queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey, exact: false, refetchType: 'active' });
+        queryClient.refetchQueries({ queryKey, exact: false, type: 'active' });
       });
       delete debounceTimers[keyId];
     }, delayMs);
