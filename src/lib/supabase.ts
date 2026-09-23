@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { QueryClient } from '@tanstack/react-query';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rrzguenyebimrbbykowm.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyemd1ZW55ZWJpbXJiYnlrb3dtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NTQxMjcsImV4cCI6MjEwNDMzMDEyN30.2nbrH6gtg6KH4i-GhTHHCICmttng6F0oZVwXQUCUiP4';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://supabase.enlightmetals.com';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTAwNjM2NjksImV4cCI6MTg5MzQ1NjAwMCwicm9sZSI6ImFub24iLCJpc3MiOiJzdXBhYmFzZSJ9.ZUUqJnSFw86p3RDih77HDSmN-CUQrAv6IaH1OrdzlFM';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {
