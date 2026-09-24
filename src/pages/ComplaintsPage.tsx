@@ -570,6 +570,9 @@ export default function ComplaintsPage() {
     if (formSelectedDeals.length === 0) errors.deals = true;
     if (!formType) errors.type = true;
     if (!formDescription.trim()) errors.description = true;
+    if (formStatus === 'resolved' && !formResolutionNotes.trim()) {
+      errors.resolutionNotes = true;
+    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -579,6 +582,8 @@ export default function ComplaintsPage() {
         toast.error('Complaint Date is required.');
       } else if (errors.raisedBy) {
         toast.error('Complaint Raised By / Contact Person is required.');
+      } else if (errors.resolutionNotes) {
+        toast.error('Resolution notes are required when status is marked as Resolved.');
       }
       return;
     }
@@ -604,8 +609,8 @@ export default function ComplaintsPage() {
         corrective_action: formCorrectiveAction.trim() || null,
         customer_communication: formCustomerCommunication.trim() || null,
         resolution_notes: formResolutionNotes.trim() || null,
-        resolution_date: formResolutionDate || null,
-        status: 'reported',
+        resolution_date: formResolutionDate || (formStatus === 'resolved' ? (formResolutionDate || formatLocalDate()) : null),
+        status: formStatus || 'reported',
         attachments: formAttachments,
       });
 
@@ -1488,7 +1493,7 @@ export default function ComplaintsPage() {
       {/* Edit Complaint Modal */}
       {editingComplaint && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Edit3 className="text-blue-600" size={18} />
@@ -1502,238 +1507,255 @@ export default function ComplaintsPage() {
             </div>
 
             <form onSubmit={handleSaveEdit} className="flex flex-col flex-1 overflow-hidden">
-              <div className="space-y-3.5 py-4 px-1 overflow-y-auto flex-1 text-xs">
-                {/* 1. Customer Combobox */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Company / Customer Name <span className="text-rose-500">*</span>
-                  </label>
-                  <CustomerCombobox
-                    value={editCustomerName}
-                    onChange={val => {
-                      setEditCustomerName(val);
-                      setEditSelectedDeals([]);
-                    }}
-                    onSelectCustomer={handleSelectCustomerForEdit}
-                    customers={customerDirectory}
-                    placeholder="Search or enter company name..."
-                    required
-                  />
-                </div>
-
-                {/* 2. Complaint Date */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Complaint Date <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={editComplaintDate}
-                    onChange={e => setEditComplaintDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                  />
-                </div>
-
-                {/* 3. Complaint Raised By / Contact Person */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Complaint Raised By / Contact Person <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Rahul Sharma (Quality Head)"
-                    value={editRaisedBy}
-                    onChange={e => setEditRaisedBy(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                  />
-                </div>
-
-                {/* 4. Multi-Select Won Inquiry ID / PO Selector */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
-                  </label>
-                  <DealProductCombobox
-                    deals={editCustomerDeals}
-                    selectedItems={editSelectedDeals}
-                    onChange={setEditSelectedDeals}
-                    customerName={editCustomerName}
-                    required
-                  />
-                </div>
-
-                {/* 5. Invoice / Delivery Challan No. */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Invoice / Delivery Challan No.
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. DC-2026-9821 / INV-4821"
-                    value={editChallanNo}
-                    onChange={e => setEditChallanNo(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium font-mono"
-                  />
-                </div>
-
-                {/* 6. Complaint Type */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Complaint Type <span className="text-rose-500">*</span></label>
-                  <div className="relative flex items-center">
-                    <select
-                      value={editType}
-                      onChange={e => setEditType(e.target.value)}
-                      className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                      <option value="Quality Defect">Quality Defect</option>
-                      <option value="Physical Damage">Physical Damage</option>
-                      <option value="Quantity Shortage">Quantity Shortage</option>
-                      <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
-                      <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
-                      <option value="Specification Mismatch">Specification Mismatch</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* 7. Description */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Complaint Description <span className="text-rose-500">*</span></label>
-                  <textarea
-                    rows={3}
-                    required
-                    value={editDescription}
-                    onChange={e => setEditDescription(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                  />
-                </div>
-
-                {/* 8. Evidence / Attachments */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>Evidence / Attachments</span>
-                    <span className="text-slate-400 font-normal text-[11px]">Images or PDF (max 15MB)</span>
-                  </label>
-                  <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-3 bg-slate-50/60 transition-colors text-center cursor-pointer relative">
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*,application/pdf"
-                      onChange={e => {
-                        if (e.target.files) handleAddAttachments(e.target.files, true);
-                        e.target.value = '';
-                      }}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                    <div className="flex flex-col items-center gap-1 text-slate-500">
-                      <Upload size={18} className="text-blue-600" />
-                      <p className="text-xs font-medium">
-                        Click or drag files here to attach evidence
-                      </p>
-                    </div>
-                  </div>
-
-                  {editAttachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {editAttachments.map((att, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2.5 py-1 rounded-lg text-[11px] font-medium">
-                          {isPdf(att.file_url, att.file_type) ? (
-                            <FileText size={13} className="text-red-500 shrink-0" />
-                          ) : (
-                            <ImageIcon size={13} className="text-blue-500 shrink-0" />
-                          )}
-                          <span className="truncate max-w-[120px]" title={att.file_name}>
-                            {att.file_name || `Attachment ${idx + 1}`}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setEditAttachments(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-slate-400 hover:text-red-600 p-0.5 rounded transition-colors cursor-pointer"
-                            title="Remove">
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 9. Corrective Action */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Corrective Action Taken</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Replacement batch dispatched / Credit note issued"
-                    value={editCorrectiveAction}
-                    onChange={e => setEditCorrectiveAction(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                  />
-                </div>
-
-                {/* 10. Customer Communication / Update */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Customer Communication / Update</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Notes on communication with customer or update shared..."
-                    value={editCustomerCommunication}
-                    onChange={e => setEditCustomerCommunication(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                  />
-                </div>
-
-                {/* 11 & 12. Status & Resolution Date */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Status <span className="text-rose-500">*</span></label>
-                    <div className="relative flex items-center">
-                      <select
-                        value={editStatus}
-                        onChange={e => setEditStatus(e.target.value)}
-                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                        <option value="reported">Pending (Open)</option>
-                        <option value="reopened">Reopened</option>
-                        <option value="resolved">Resolved (Closed)</option>
-                      </select>
-                      <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                    </div>
-                  </div>
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 py-3 overflow-y-auto flex-1 text-xs">
+                {/* Left Column */}
+                <div className="space-y-3">
+                  {/* 1. Customer Combobox */}
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Resolution Date
+                      Company / Customer Name <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="date"
-                      value={editResolutionDate}
-                      onChange={e => setEditResolutionDate(e.target.value)}
+                    <CustomerCombobox
+                      value={editCustomerName}
+                      onChange={val => {
+                        setEditCustomerName(val);
+                        setEditSelectedDeals([]);
+                      }}
+                      onSelectCustomer={handleSelectCustomerForEdit}
+                      customers={customerDirectory}
+                      placeholder="Search or enter company name..."
+                      required
+                    />
+                  </div>
+
+                  {/* 2 & 3. Complaint Date & Complaint Raised By */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Complaint Date <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={editComplaintDate}
+                        onChange={e => setEditComplaintDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Complaint Raised By <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Rahul Sharma"
+                        value={editRaisedBy}
+                        onChange={e => setEditRaisedBy(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. Multi-Select Won Inquiry ID / PO Selector */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
+                    </label>
+                    <DealProductCombobox
+                      deals={editCustomerDeals}
+                      selectedItems={editSelectedDeals}
+                      onChange={setEditSelectedDeals}
+                      customerName={editCustomerName}
+                      required
+                    />
+                  </div>
+
+                  {/* 5 & 6. Complaint Type & Invoice / Challan No. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Complaint Type <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <select
+                          value={editType}
+                          onChange={e => setEditType(e.target.value)}
+                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                          <option value="Quality Defect">Quality Defect</option>
+                          <option value="Physical Damage">Physical Damage</option>
+                          <option value="Quantity Shortage">Quantity Shortage</option>
+                          <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
+                          <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
+                          <option value="Specification Mismatch">Specification Mismatch</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Invoice / Challan No.
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. DC-9821 / INV-4821"
+                        value={editChallanNo}
+                        onChange={e => setEditChallanNo(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 7. Description */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Complaint Description <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      required
+                      placeholder="Describe the complaint details..."
+                      value={editDescription}
+                      onChange={e => setEditDescription(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                     />
                   </div>
                 </div>
 
-                {/* 13. Resolution Notes */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Resolution Notes {editStatus === 'resolved' && <span className="text-rose-500">*</span>}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Resolution details..."
-                    value={editResolutionNotes}
-                    onChange={e => setEditResolutionNotes(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                    required={editStatus === 'resolved'}
-                  />
+                {/* Right Column */}
+                <div className="space-y-3">
+                  {/* 8. Evidence / Attachments */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Evidence / Attachments</span>
+                      <span className="text-slate-400 font-normal text-[11px]">Images or PDF (max 15MB)</span>
+                    </label>
+                    <div className="border border-dashed border-slate-300 hover:border-blue-400 rounded-xl px-3 py-2 bg-slate-50/70 transition-colors text-center cursor-pointer relative flex items-center justify-center gap-2">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*,application/pdf"
+                        onChange={e => {
+                          if (e.target.files) handleAddAttachments(e.target.files, true);
+                          e.target.value = '';
+                        }}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      />
+                      <Upload size={15} className="text-blue-600 shrink-0" />
+                      <span className="text-xs font-medium text-slate-600">
+                        Click or drop files to attach evidence
+                      </span>
+                    </div>
+
+                    {editAttachments.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5 max-h-16 overflow-y-auto">
+                        {editAttachments.map((att, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded-lg text-[11px] font-medium">
+                            {isPdf(att.file_url, att.file_type) ? (
+                              <FileText size={12} className="text-red-500 shrink-0" />
+                            ) : (
+                              <ImageIcon size={12} className="text-blue-500 shrink-0" />
+                            )}
+                            <span className="truncate max-w-[100px]" title={att.file_name}>
+                              {att.file_name || `Attachment ${idx + 1}`}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setEditAttachments(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-slate-400 hover:text-red-600 p-0.5 rounded transition-colors cursor-pointer"
+                              title="Remove">
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 9. Corrective Action */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Corrective Action Taken</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Replacement batch dispatched / Credit note issued"
+                      value={editCorrectiveAction}
+                      onChange={e => setEditCorrectiveAction(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+
+                  {/* 10. Customer Communication / Update */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Customer Communication / Update</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Notes on communication with customer or update shared..."
+                      value={editCustomerCommunication}
+                      onChange={e => setEditCustomerCommunication(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+
+                  {/* 11, 12, 13. Status, Resolution Date & Notes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Status <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <select
+                          value={editStatus}
+                          onChange={e => {
+                            setEditStatus(e.target.value);
+                            if (e.target.value === 'resolved' && !editResolutionDate) {
+                              setEditResolutionDate(formatLocalDate());
+                            }
+                          }}
+                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                          <option value="reported">Pending (Open)</option>
+                          <option value="resolved">Resolved (Closed)</option>
+                          <option value="reopened">Reopened</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Resolution Date {editStatus === 'resolved' && <span className="text-rose-500">*</span>}
+                      </label>
+                      <input
+                        type="date"
+                        value={editResolutionDate}
+                        onChange={e => setEditResolutionDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Resolution Notes {editStatus === 'resolved' && <span className="text-rose-500">*</span>}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={editStatus === 'resolved' ? 'Resolution notes (mandatory when resolved)...' : 'Optional notes if resolved...'}
+                        value={editResolutionNotes}
+                        onChange={e => setEditResolutionNotes(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        required={editStatus === 'resolved'}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-2">
                 <button
                   type="button"
                   onClick={() => setEditingComplaint(null)}
@@ -1756,7 +1778,7 @@ export default function ComplaintsPage() {
       {/* Log Complaint Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <AlertTriangle className="text-blue-600" size={18} />
@@ -1770,281 +1792,287 @@ export default function ComplaintsPage() {
             </div>
 
             <form onSubmit={handleCreateComplaint} className="flex flex-col flex-1 overflow-hidden">
-              <div className="space-y-3.5 py-4 px-1 overflow-y-auto flex-1 text-xs">
-                {/* 1. Customer Combobox */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Company / Customer Name <span className="text-rose-500">*</span>
-                  </label>
-                  <CustomerCombobox
-                    value={formCustomerName}
-                    onChange={val => {
-                      setFormCustomerName(val);
-                      setFormSelectedDeals([]);
-                      if (formErrors.customerName) setFormErrors(prev => ({ ...prev, customerName: false }));
-                    }}
-                    onSelectCustomer={handleSelectCustomerForCreate}
-                    customers={customerDirectory}
-                    placeholder="Search or enter company name..."
-                    required
-                  />
-                  {formErrors.customerName && (
-                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select or enter customer name.</p>
-                  )}
-                </div>
-
-                {/* 2. Complaint Date */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Complaint Date <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formComplaintDate}
-                    onChange={e => {
-                      setFormComplaintDate(e.target.value);
-                      if (formErrors.complaintDate) setFormErrors(prev => ({ ...prev, complaintDate: false }));
-                    }}
-                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
-                      formErrors.complaintDate ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                    }`}
-                  />
-                  {formErrors.complaintDate && (
-                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select complaint date.</p>
-                  )}
-                </div>
-
-                {/* 3. Complaint Raised By / Contact Person */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Complaint Raised By / Contact Person <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Rahul Sharma (Quality Head)"
-                    value={formRaisedBy}
-                    onChange={e => {
-                      setFormRaisedBy(e.target.value);
-                      if (formErrors.raisedBy) setFormErrors(prev => ({ ...prev, raisedBy: false }));
-                    }}
-                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
-                      formErrors.raisedBy ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                    }`}
-                  />
-                  {formErrors.raisedBy && (
-                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter who raised the complaint.</p>
-                  )}
-                </div>
-
-                {/* 4. Mandatory Multi-Select Won Inquiry ID / PO Number Selector */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
-                  </label>
-                  <DealProductCombobox
-                    deals={customerDeals}
-                    selectedItems={formSelectedDeals}
-                    onChange={items => {
-                      setFormSelectedDeals(items);
-                      if (formErrors.deals) setFormErrors(prev => ({ ...prev, deals: false }));
-                    }}
-                    customerName={formCustomerName}
-                    loading={loadingDeals}
-                    error={formErrors.deals}
-                    required
-                  />
-                  {formErrors.deals && (
-                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select at least one Won Inquiry / PO &amp; Product.</p>
-                  )}
-                </div>
-
-                {/* 5. Invoice / Delivery Challan No. */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Invoice / Delivery Challan No.
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. DC-2026-9821 / INV-4821"
-                    value={formChallanNo}
-                    onChange={e => setFormChallanNo(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium font-mono"
-                  />
-                </div>
-
-                {/* 6. Complaint Type */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Complaint Type <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative flex items-center">
-                    <select
-                      value={formType}
-                      onChange={e => {
-                        setFormType(e.target.value);
-                        if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
-                      }}
-                      className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                      <option value="Quality Defect">Quality Defect</option>
-                      <option value="Physical Damage">Physical Damage</option>
-                      <option value="Quantity Shortage">Quantity Shortage</option>
-                      <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
-                      <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
-                      <option value="Specification Mismatch">Specification Mismatch</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* 7. Description */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Complaint Description <span className="text-rose-500">*</span>
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Describe the complaint details..."
-                    value={formDescription}
-                    onChange={e => {
-                      setFormDescription(e.target.value);
-                      if (formErrors.description) setFormErrors(prev => ({ ...prev, description: false }));
-                    }}
-                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
-                      formErrors.description ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                    }`}
-                  />
-                  {formErrors.description && (
-                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter complaint description.</p>
-                  )}
-                </div>
-
-                {/* 8. Evidence / Attachments */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>Evidence / Attachments</span>
-                    <span className="text-slate-400 font-normal text-[11px]">Images or PDF (max 15MB)</span>
-                  </label>
-                  <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-3 bg-slate-50/60 transition-colors text-center cursor-pointer relative">
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*,application/pdf"
-                      onChange={e => {
-                        if (e.target.files) handleAddAttachments(e.target.files, false);
-                        e.target.value = '';
-                      }}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                    <div className="flex flex-col items-center gap-1 text-slate-500">
-                      <Upload size={18} className="text-blue-600" />
-                      <p className="text-xs font-medium">
-                        Click or drag files here to attach evidence
-                      </p>
-                    </div>
-                  </div>
-
-                  {formAttachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {formAttachments.map((att, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2.5 py-1 rounded-lg text-[11px] font-medium">
-                          {isPdf(att.file_url, att.file_type) ? (
-                            <FileText size={13} className="text-red-500 shrink-0" />
-                          ) : (
-                            <ImageIcon size={13} className="text-blue-500 shrink-0" />
-                          )}
-                          <span className="truncate max-w-[120px]" title={att.file_name}>
-                            {att.file_name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setFormAttachments(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-slate-400 hover:text-red-600 p-0.5 rounded transition-colors cursor-pointer"
-                            title="Remove">
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 9. Corrective Action */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Corrective Action Taken</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Replacement batch dispatched / Credit note issued"
-                    value={formCorrectiveAction}
-                    onChange={e => setFormCorrectiveAction(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                  />
-                </div>
-
-                {/* 10. Customer Communication / Update */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Customer Communication / Update</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Notes on communication with customer or update shared..."
-                    value={formCustomerCommunication}
-                    onChange={e => setFormCustomerCommunication(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                  />
-                </div>
-
-                {/* 11 & 12. Resolution Notes & Resolution Date (Optional at creation) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 py-3 overflow-y-auto flex-1 text-xs">
+                {/* Left Column */}
+                <div className="space-y-3">
+                  {/* 1. Customer Combobox */}
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Resolution Notes
+                      Company / Customer Name <span className="text-rose-500">*</span>
                     </label>
+                    <CustomerCombobox
+                      value={formCustomerName}
+                      onChange={val => {
+                        setFormCustomerName(val);
+                        setFormSelectedDeals([]);
+                        if (formErrors.customerName) setFormErrors(prev => ({ ...prev, customerName: false }));
+                      }}
+                      onSelectCustomer={handleSelectCustomerForCreate}
+                      customers={customerDirectory}
+                      placeholder="Search or enter company name..."
+                      required
+                    />
+                    {formErrors.customerName && (
+                      <p className="text-[11px] text-rose-500 font-semibold mt-0.5">Please select customer name.</p>
+                    )}
+                  </div>
+
+                  {/* 2 & 3. Complaint Date & Complaint Raised By */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Complaint Date <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={formComplaintDate}
+                        onChange={e => {
+                          setFormComplaintDate(e.target.value);
+                          if (formErrors.complaintDate) setFormErrors(prev => ({ ...prev, complaintDate: false }));
+                        }}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
+                          formErrors.complaintDate ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Complaint Raised By <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Rahul Sharma"
+                        value={formRaisedBy}
+                        onChange={e => {
+                          setFormRaisedBy(e.target.value);
+                          if (formErrors.raisedBy) setFormErrors(prev => ({ ...prev, raisedBy: false }));
+                        }}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
+                          formErrors.raisedBy ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. Mandatory Multi-Select Won Inquiry ID / PO Number Selector */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
+                    </label>
+                    <DealProductCombobox
+                      deals={customerDeals}
+                      selectedItems={formSelectedDeals}
+                      onChange={items => {
+                        setFormSelectedDeals(items);
+                        if (formErrors.deals) setFormErrors(prev => ({ ...prev, deals: false }));
+                      }}
+                      customerName={formCustomerName}
+                      loading={loadingDeals}
+                      error={formErrors.deals}
+                      required
+                    />
+                  </div>
+
+                  {/* 5 & 6. Complaint Type & Invoice / Delivery Challan No. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Complaint Type <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <select
+                          value={formType}
+                          onChange={e => {
+                            setFormType(e.target.value);
+                            if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
+                          }}
+                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                          <option value="Quality Defect">Quality Defect</option>
+                          <option value="Physical Damage">Physical Damage</option>
+                          <option value="Quantity Shortage">Quantity Shortage</option>
+                          <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
+                          <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
+                          <option value="Specification Mismatch">Specification Mismatch</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Invoice / Challan No.
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. DC-9821 / INV-4821"
+                        value={formChallanNo}
+                        onChange={e => setFormChallanNo(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 7. Description */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Complaint Description <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Describe the complaint details..."
+                      value={formDescription}
+                      onChange={e => {
+                        setFormDescription(e.target.value);
+                        if (formErrors.description) setFormErrors(prev => ({ ...prev, description: false }));
+                      }}
+                      className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
+                        formErrors.description ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column */}
+                <div className="space-y-3">
+                  {/* 8. Evidence / Attachments */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Evidence / Attachments</span>
+                      <span className="text-slate-400 font-normal text-[11px]">Images or PDF (max 15MB)</span>
+                    </label>
+                    <div className="border border-dashed border-slate-300 hover:border-blue-400 rounded-xl px-3 py-2 bg-slate-50/70 transition-colors text-center cursor-pointer relative flex items-center justify-center gap-2">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*,application/pdf"
+                        onChange={e => {
+                          if (e.target.files) handleAddAttachments(e.target.files, false);
+                          e.target.value = '';
+                        }}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      />
+                      <Upload size={15} className="text-blue-600 shrink-0" />
+                      <span className="text-xs font-medium text-slate-600">
+                        Click or drop files to attach evidence
+                      </span>
+                    </div>
+
+                    {formAttachments.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5 max-h-16 overflow-y-auto">
+                        {formAttachments.map((att, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded-lg text-[11px] font-medium">
+                            {isPdf(att.file_url, att.file_type) ? (
+                              <FileText size={12} className="text-red-500 shrink-0" />
+                            ) : (
+                              <ImageIcon size={12} className="text-blue-500 shrink-0" />
+                            )}
+                            <span className="truncate max-w-[100px]" title={att.file_name}>
+                              {att.file_name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setFormAttachments(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-slate-400 hover:text-red-600 p-0.5 rounded transition-colors cursor-pointer"
+                              title="Remove">
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 9. Corrective Action */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Corrective Action Taken</label>
                     <input
                       type="text"
-                      placeholder="Optional notes if already resolved..."
-                      value={formResolutionNotes}
-                      onChange={e => setFormResolutionNotes(e.target.value)}
+                      placeholder="e.g. Replacement batch dispatched / Credit note issued"
+                      value={formCorrectiveAction}
+                      onChange={e => setFormCorrectiveAction(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                     />
                   </div>
 
+                  {/* 10. Customer Communication / Update */}
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Resolution Date
-                    </label>
+                    <label className="block font-semibold text-slate-700 mb-1">Customer Communication / Update</label>
                     <input
-                      type="date"
-                      value={formResolutionDate}
-                      onChange={e => setFormResolutionDate(e.target.value)}
+                      type="text"
+                      placeholder="Notes on communication with customer or update shared..."
+                      value={formCustomerCommunication}
+                      onChange={e => setFormCustomerCommunication(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                     />
                   </div>
-                </div>
 
-                {/* 13. Initial Status (Locked to Pending at creation) */}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Initial Status <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative flex items-center">
-                    <select
-                      disabled
-                      value={formStatus}
-                      className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-xl text-xs bg-slate-100 text-slate-600 font-medium cursor-not-allowed appearance-none">
-                      <option value="reported">Pending (Open)</option>
-                    </select>
-                    <span className="absolute right-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Locked</span>
+                  {/* 11, 12, 13. Initial Status, Resolution Date & Notes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Initial Status <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <select
+                          value={formStatus}
+                          onChange={e => {
+                            setFormStatus(e.target.value);
+                            if (e.target.value === 'resolved' && !formResolutionDate) {
+                              setFormResolutionDate(formatLocalDate());
+                            }
+                            if (formErrors.status) setFormErrors(prev => ({ ...prev, status: false }));
+                          }}
+                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
+                          <option value="reported">Pending (Open)</option>
+                          <option value="resolved">Resolved (Closed)</option>
+                          <option value="reopened">Reopened</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Resolution Date {formStatus === 'resolved' && <span className="text-rose-500">*</span>}
+                      </label>
+                      <input
+                        type="date"
+                        value={formResolutionDate}
+                        onChange={e => setFormResolutionDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Resolution Notes {formStatus === 'resolved' && <span className="text-rose-500">*</span>}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={formStatus === 'resolved' ? 'Resolution notes (mandatory when resolved)...' : 'Optional notes if resolved...'}
+                        value={formResolutionNotes}
+                        onChange={e => {
+                          setFormResolutionNotes(e.target.value);
+                          if (formErrors.resolutionNotes) setFormErrors(prev => ({ ...prev, resolutionNotes: false }));
+                        }}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
+                          formErrors.resolutionNotes ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                        }`}
+                        required={formStatus === 'resolved'}
+                      />
+                    </div>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">Status starts as Pending and can be resolved in details or edit view.</p>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-2">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
