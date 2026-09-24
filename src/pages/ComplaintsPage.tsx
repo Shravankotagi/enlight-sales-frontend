@@ -19,6 +19,12 @@ import {
   ChevronRight,
   Save,
   ArrowLeft,
+  Paperclip,
+  Upload,
+  FileText,
+  Image as ImageIcon,
+  Eye,
+  ExternalLink,
 } from 'lucide-react';
 import { complaintsApi, employeesApi, customersApi, dealsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -30,18 +36,35 @@ import {
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 import DealProductCombobox, { type SelectedDealItem } from '../components/DealProductCombobox';
 
+export interface ComplaintAttachment {
+  id?: string;
+  complaint_id?: string;
+  file_url: string;
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
+  uploaded_at?: string;
+}
+
 interface Complaint {
   id: string;
   customer_name: string;
+  complaint_date?: string | null;
+  raised_by?: string | null;
   deal_id?: string | null;
   po_number?: string | null;
+  challan_no?: string | null;
   product_name?: string | null;
   affected_product?: string | null;
   complaint_type?: string | null;
   description?: string | null;
   corrective_action?: string | null;
+  customer_communication?: string | null;
   status: 'reported' | 'resolved' | 'reopened' | 'open' | string;
   resolution_notes?: string | null;
+  resolution_date?: string | null;
+  attachments?: ComplaintAttachment[];
+  media_urls?: string[];
   created_at?: string | null;
   reported_at?: string | null;
   resolved_at?: string | null;
@@ -179,26 +202,44 @@ export default function ComplaintsPage() {
   const [modalResolutionNotes, setModalResolutionNotes] = useState('');
   const [modalActionLoading, setModalActionLoading] = useState(false);
 
+  // Evidence / Attachment Viewer Modal
+  const [viewerAttachmentUrl, setViewerAttachmentUrl] = useState<string | null>(null);
+  const [viewerAttachmentTitle, setViewerAttachmentTitle] = useState<string>('');
+  const [viewerAttachmentList, setViewerAttachmentList] = useState<Array<{ file_url: string; file_name?: string; file_type?: string }>>([]);
+  const [viewerActiveIndex, setViewerActiveIndex] = useState<number>(0);
+
   // Edit Modal
   const [editingComplaint, setEditingComplaint] = useState<Complaint | null>(null);
   const [editCustomerName, setEditCustomerName] = useState('');
+  const [editComplaintDate, setEditComplaintDate] = useState('');
+  const [editRaisedBy, setEditRaisedBy] = useState('');
   const [editSelectedDeals, setEditSelectedDeals] = useState<SelectedDealItem[]>([]);
+  const [editChallanNo, setEditChallanNo] = useState('');
   const [editType, setEditType] = useState('Quality Defect');
   const [editDescription, setEditDescription] = useState('');
+  const [editAttachments, setEditAttachments] = useState<Array<{ id?: string; file_url: string; file_name: string; file_type: string; file_size?: number }>>([]);
   const [editCorrectiveAction, setEditCorrectiveAction] = useState('');
+  const [editCustomerCommunication, setEditCustomerCommunication] = useState('');
   const [editStatus, setEditStatus] = useState('reported');
   const [editResolutionNotes, setEditResolutionNotes] = useState('');
+  const [editResolutionDate, setEditResolutionDate] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [editCustomerDeals, setEditCustomerDeals] = useState<any[]>([]);
 
   // Create Form state
   const [formCustomerName, setFormCustomerName] = useState('');
+  const [formComplaintDate, setFormComplaintDate] = useState(formatLocalDate());
+  const [formRaisedBy, setFormRaisedBy] = useState('');
   const [formSelectedDeals, setFormSelectedDeals] = useState<SelectedDealItem[]>([]);
+  const [formChallanNo, setFormChallanNo] = useState('');
   const [formType, setFormType] = useState('Quality Defect');
   const [formDescription, setFormDescription] = useState('');
+  const [formAttachments, setFormAttachments] = useState<Array<{ file_url: string; file_name: string; file_type: string; file_size?: number }>>([]);
   const [formCorrectiveAction, setFormCorrectiveAction] = useState('');
-  const [formStatus, setFormStatus] = useState('reported');
+  const [formCustomerCommunication, setFormCustomerCommunication] = useState('');
   const [formResolutionNotes, setFormResolutionNotes] = useState('');
+  const [formResolutionDate, setFormResolutionDate] = useState('');
+  const [formStatus, setFormStatus] = useState('reported');
   const [customerDeals, setCustomerDeals] = useState<any[]>([]);
   const [loadingDeals, setLoadingDeals] = useState(false);
 
@@ -434,15 +475,88 @@ export default function ComplaintsPage() {
 
   const handleOpenAddModal = () => {
     setFormCustomerName('');
+    setFormComplaintDate(formatLocalDate());
+    setFormRaisedBy('');
     setFormSelectedDeals([]);
+    setFormChallanNo('');
     setFormType('Quality Defect');
     setFormDescription('');
+    setFormAttachments([]);
     setFormCorrectiveAction('');
-    setFormStatus('reported');
+    setFormCustomerCommunication('');
     setFormResolutionNotes('');
+    setFormResolutionDate('');
+    setFormStatus('reported');
     setFormErrors({});
     setIsSavedSuccess(false);
     setShowCreateModal(true);
+  };
+
+  const isPdf = (url?: string, type?: string) => {
+    if (type?.toLowerCase().includes('pdf')) return true;
+    if (!url) return false;
+    return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
+  };
+
+  const handleAddAttachments = (files: FileList | File[], isEdit = false) => {
+    const fileArr = Array.from(files);
+    fileArr.forEach(file => {
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error(`File "${file.name}" exceeds 15MB limit.`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        const newAttachment = {
+          file_url: base64,
+          file_name: file.name,
+          file_type: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+          file_size: file.size,
+        };
+        if (isEdit) {
+          setEditAttachments(prev => [...prev, newAttachment]);
+        } else {
+          setFormAttachments(prev => [...prev, newAttachment]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleOpenAttachmentsViewer = (comp: Complaint) => {
+    const list: Array<{ file_url: string; file_name?: string; file_type?: string }> = [];
+    if (Array.isArray(comp.attachments) && comp.attachments.length > 0) {
+      comp.attachments.forEach((a, i) => {
+        if (a && a.file_url) {
+          list.push({
+            file_url: a.file_url,
+            file_name: a.file_name || `Attachment ${i + 1}`,
+            file_type: a.file_type || (isPdf(a.file_url) ? 'application/pdf' : 'image/jpeg'),
+          });
+        }
+      });
+    } else if (Array.isArray(comp.media_urls) && comp.media_urls.length > 0) {
+      comp.media_urls.forEach((url, i) => {
+        if (url) {
+          list.push({
+            file_url: url,
+            file_name: `Attachment ${i + 1}`,
+            file_type: isPdf(url) ? 'application/pdf' : 'image/jpeg',
+          });
+        }
+      });
+    }
+
+    if (list.length === 0) {
+      toast.error('No attachments available for this complaint.');
+      return;
+    }
+
+    setViewerAttachmentList(list);
+    setViewerActiveIndex(0);
+    setViewerAttachmentUrl(list[0].file_url);
+    setViewerAttachmentTitle(list[0].file_name || `${comp.customer_name} - Evidence Document`);
   };
 
   // Create Complaint
@@ -451,20 +565,20 @@ export default function ComplaintsPage() {
 
     const errors: Record<string, boolean> = {};
     if (!formCustomerName.trim()) errors.customerName = true;
+    if (!formComplaintDate) errors.complaintDate = true;
+    if (!formRaisedBy.trim()) errors.raisedBy = true;
     if (formSelectedDeals.length === 0) errors.deals = true;
     if (!formType) errors.type = true;
     if (!formDescription.trim()) errors.description = true;
-    if (!formStatus) errors.status = true;
-    if (formStatus === 'resolved' && !formResolutionNotes.trim()) {
-      errors.resolutionNotes = true;
-    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       if (errors.deals) {
         toast.error('Please select at least one Won Deal / PO & Product.');
-      } else if (errors.resolutionNotes) {
-        toast.error('Resolution notes are required when status is marked as Resolved.');
+      } else if (errors.complaintDate) {
+        toast.error('Complaint Date is required.');
+      } else if (errors.raisedBy) {
+        toast.error('Complaint Raised By / Contact Person is required.');
       }
       return;
     }
@@ -478,15 +592,21 @@ export default function ComplaintsPage() {
 
       await complaintsApi.create({
         customer_name: formCustomerName.trim(),
+        complaint_date: formComplaintDate,
+        raised_by: formRaisedBy.trim(),
         deal_id: primaryDeal ? primaryDeal.dealId : null,
         po_number: combinedPoNumbers || null,
+        challan_no: formChallanNo.trim() || null,
         product_name: combinedProducts || 'General Material',
         affected_product: combinedProducts || 'General Material',
         complaint_type: formType,
         description: formDescription.trim(),
         corrective_action: formCorrectiveAction.trim() || null,
-        status: formStatus,
+        customer_communication: formCustomerCommunication.trim() || null,
         resolution_notes: formResolutionNotes.trim() || null,
+        resolution_date: formResolutionDate || null,
+        status: 'reported',
+        attachments: formAttachments,
       });
 
       setIsSavedSuccess(true);
@@ -495,14 +615,7 @@ export default function ComplaintsPage() {
       setTimeout(() => {
         setIsSavedSuccess(false);
         setShowCreateModal(false);
-        setFormCustomerName('');
-        setFormSelectedDeals([]);
-        setFormType('Quality Defect');
-        setFormDescription('');
-        setFormCorrectiveAction('');
-        setFormStatus('reported');
-        setFormResolutionNotes('');
-        setFormErrors({});
+        handleOpenAddModal();
         fetchComplaints();
       }, 500);
     } catch (err: any) {
@@ -517,6 +630,24 @@ export default function ComplaintsPage() {
   const openEditModal = (comp: Complaint) => {
     setEditingComplaint(comp);
     setEditCustomerName(comp.customer_name || '');
+    setEditComplaintDate(comp.complaint_date ? comp.complaint_date.split('T')[0] : (comp.created_at ? comp.created_at.split('T')[0] : formatLocalDate()));
+    setEditRaisedBy(comp.raised_by || '');
+    setEditChallanNo(comp.challan_no || '');
+    setEditType(comp.complaint_type || 'Quality Defect');
+    setEditDescription(comp.description || '');
+    setEditCorrectiveAction(comp.corrective_action || '');
+    setEditCustomerCommunication(comp.customer_communication || '');
+    setEditStatus(comp.status || 'reported');
+    setEditResolutionNotes(comp.resolution_notes || '');
+    setEditAttachments(
+      (comp.attachments || []).map((a, i) => ({
+        id: a.id,
+        file_url: a.file_url,
+        file_name: a.file_name || `Attachment ${i + 1}`,
+        file_type: a.file_type || (isPdf(a.file_url) ? 'application/pdf' : 'image/jpeg'),
+        file_size: a.file_size,
+      }))
+    );
 
     if (comp.deal_id) {
       const cleanId = (comp.deal_id.startsWith('DEAL-') || comp.deal_id.startsWith('INQ-')) ? comp.deal_id.replace(/^(?:DEAL|INQ)-/, '') : comp.deal_id.substring(0, 6).toUpperCase();
@@ -533,12 +664,6 @@ export default function ComplaintsPage() {
     } else {
       setEditSelectedDeals([]);
     }
-
-    setEditType(comp.complaint_type || 'Quality Defect');
-    setEditDescription(comp.description || '');
-    setEditCorrectiveAction(comp.corrective_action || '');
-    setEditStatus(comp.status || 'reported');
-    setEditResolutionNotes(comp.resolution_notes || '');
   };
 
   // Save Edited Complaint
@@ -546,6 +671,14 @@ export default function ComplaintsPage() {
     e.preventDefault();
     if (!editingComplaint || !editCustomerName.trim()) return;
 
+    if (!editComplaintDate) {
+      toast.error('Complaint date is required.');
+      return;
+    }
+    if (!editRaisedBy.trim()) {
+      toast.error('Complaint raised by / contact person is required.');
+      return;
+    }
     if (editSelectedDeals.length === 0) {
       toast.error('Please select at least one Won Deal / PO & Product.');
       return;
@@ -564,15 +697,21 @@ export default function ComplaintsPage() {
 
       const updatedPayload: any = {
         customer_name: editCustomerName.trim(),
+        complaint_date: editComplaintDate,
+        raised_by: editRaisedBy.trim(),
         deal_id: primaryDeal ? primaryDeal.dealId : null,
         po_number: combinedPoNumbers || null,
+        challan_no: editChallanNo.trim() || null,
         product_name: combinedProducts || 'General Material',
         affected_product: combinedProducts || 'General Material',
         complaint_type: editType,
         description: editDescription.trim(),
         corrective_action: editCorrectiveAction.trim() || null,
+        customer_communication: editCustomerCommunication.trim() || null,
         status: editStatus,
         resolution_notes: editResolutionNotes.trim() || null,
+        resolution_date: editResolutionDate || (editStatus === 'resolved' ? (editResolutionDate || formatLocalDate()) : null),
+        attachments: editAttachments,
       };
 
       await complaintsApi.update(editingComplaint.id, updatedPayload);
@@ -1106,7 +1245,7 @@ export default function ComplaintsPage() {
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
           onClick={handleCloseComplaintModal}>
           <div
-            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto space-y-4"
+            className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto space-y-4"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
@@ -1121,10 +1260,12 @@ export default function ComplaintsPage() {
                 )}
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">{selectedComplaint.customer_name}</h2>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 flex-wrap">
                     <span className="flex items-center gap-1">
                       <Calendar size={12} className="text-slate-400" />
-                      {formatComplaintDateTime(selectedComplaint.created_at || selectedComplaint.reported_at)}
+                      {selectedComplaint.complaint_date
+                        ? new Date(selectedComplaint.complaint_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : formatComplaintDateTime(selectedComplaint.created_at || selectedComplaint.reported_at)}
                     </span>
                     {canViewSalesperson && (
                       <span>
@@ -1146,7 +1287,7 @@ export default function ComplaintsPage() {
               </div>
             </div>
 
-            {/* Info Cards Grid */}
+            {/* Info Cards Grid - Show Populated Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
               {/* Linked Won Deal & PO */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
@@ -1168,27 +1309,47 @@ export default function ComplaintsPage() {
                 </div>
               </div>
 
+              {/* Complaint Raised By / Contact Person */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                <p className="text-xs font-medium text-slate-400 mb-1">Complaint Raised By</p>
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                  <User size={14} className="text-blue-600 shrink-0" />
+                  <span className="truncate">{selectedComplaint.raised_by || 'Customer Contact'}</span>
+                </div>
+              </div>
+
               {/* Complaint Type */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                 <p className="text-xs font-medium text-slate-400 mb-1">Complaint Type</p>
                 <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                   <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-                  {selectedComplaint.complaint_type || 'Quality Defect'}
+                  <span>{selectedComplaint.complaint_type || 'Quality Defect'}</span>
                 </div>
               </div>
 
+              {/* Invoice / Delivery Challan No. (if populated) */}
+              {selectedComplaint.challan_no && (
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  <p className="text-xs font-medium text-slate-400 mb-1">Invoice / Challan No.</p>
+                  <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 font-mono">
+                    <FileText size={14} className="text-indigo-600 shrink-0" />
+                    <span>{selectedComplaint.challan_no}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Product Name */}
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 col-span-1 sm:col-span-2">
+              <div className={`bg-slate-50 p-3.5 rounded-2xl border border-slate-200 ${selectedComplaint.challan_no ? 'col-span-1 sm:col-span-2' : ''}`}>
                 <p className="text-xs font-medium text-slate-400 mb-1">Product(s) Affected</p>
                 <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                   <Package size={14} className="text-blue-600 shrink-0" />
-                  {getComplaintProductDisplay(selectedComplaint)}
+                  <span>{getComplaintProductDisplay(selectedComplaint)}</span>
                 </div>
               </div>
             </div>
 
             {/* Complaint Description Block */}
-            <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1 text-xs flex-1 overflow-y-auto">
+            <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1 text-xs flex-1 overflow-y-auto max-h-40">
               <p className="text-slate-500 font-semibold mb-1">Complaint Description:</p>
               <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
                 {selectedComplaint.description || 'No description provided.'}
@@ -1198,17 +1359,53 @@ export default function ComplaintsPage() {
             {/* Corrective Action if present */}
             {selectedComplaint.corrective_action && (
               <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl text-xs space-y-1 shrink-0">
-                <p className="text-amber-900 font-semibold">Corrective Action Needed:</p>
+                <p className="text-amber-900 font-semibold">Corrective Action Taken:</p>
                 <p className="text-amber-800">{selectedComplaint.corrective_action}</p>
+              </div>
+            )}
+
+            {/* Customer Communication / Update if present */}
+            {selectedComplaint.customer_communication && (
+              <div className="p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs space-y-1 shrink-0">
+                <p className="text-indigo-900 font-semibold">Customer Communication / Update:</p>
+                <p className="text-indigo-800">{selectedComplaint.customer_communication}</p>
+              </div>
+            )}
+
+            {/* Attachments quick-access banner if attachments exist */}
+            {((Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ||
+              (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2 text-xs text-slate-700 font-semibold">
+                  <Paperclip size={15} className="text-blue-600" />
+                  <span>
+                    Evidence / Attachments (
+                    {(selectedComplaint.attachments?.length || selectedComplaint.media_urls?.length || 0)} files)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
+                  <Eye size={13} />
+                  Show Attachments
+                </button>
               </div>
             )}
 
             {/* Resolution Workspace */}
             <div className="p-3.5 bg-blue-50/40 border border-blue-100 rounded-xl space-y-2.5 shrink-0">
-              <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <CheckCircle2 size={14} className="text-blue-600" />
-                Resolution Notes <span className="text-rose-500">*</span>
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <CheckCircle2 size={14} className="text-blue-600" />
+                  Resolution Notes <span className="text-rose-500">*</span>
+                </p>
+                {selectedComplaint.resolution_date && (
+                  <span className="text-[11px] font-mono text-slate-500">
+                    Resolution Date: {new Date(selectedComplaint.resolution_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
 
               {selectedComplaint.status === 'resolved' ? (
                 <div className="space-y-1.5">
@@ -1228,46 +1425,61 @@ export default function ComplaintsPage() {
                     placeholder="Enter resolution notes before resolving..."
                     value={modalResolutionNotes}
                     onChange={e => setModalResolutionNotes(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">Resolution notes are mandatory before marking as resolved.</p>
                 </div>
               )}
             </div>
 
-            {/* Modal Bottom Right Action Buttons */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  const c = selectedComplaint;
-                  setSelectedComplaint(null);
-                  openEditModal(c);
-                }}
-                className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer">
-                <Edit3 size={14} />
-                Edit Details
-              </button>
+            {/* Modal Bottom Action Buttons */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2.5 shrink-0 flex-wrap">
+              <div>
+                {((Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ||
+                  (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
+                    <Paperclip size={13} />
+                    View Attachments ({selectedComplaint.attachments?.length || selectedComplaint.media_urls?.length})
+                  </button>
+                )}
+              </div>
 
-              {selectedComplaint.status === 'resolved' ? (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleReopenInModal}
-                  disabled={modalActionLoading}
-                  className="px-4 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-                  <RefreshCw size={14} className={modalActionLoading ? 'animate-spin' : ''} />
-                  {modalActionLoading ? 'Updating...' : 'Reopen Complaint'}
+                  onClick={() => {
+                    const c = selectedComplaint;
+                    setSelectedComplaint(null);
+                    openEditModal(c);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer">
+                  <Edit3 size={14} />
+                  Edit Details
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleResolveInModal}
-                  disabled={modalActionLoading}
-                  className="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-                  <Check size={14} />
-                  {modalActionLoading ? 'Saving...' : 'Mark as Resolved'}
-                </button>
-              )}
+
+                {selectedComplaint.status === 'resolved' ? (
+                  <button
+                    type="button"
+                    onClick={handleReopenInModal}
+                    disabled={modalActionLoading}
+                    className="px-4 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                    <RefreshCw size={14} className={modalActionLoading ? 'animate-spin' : ''} />
+                    {modalActionLoading ? 'Updating...' : 'Reopen Complaint'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResolveInModal}
+                    disabled={modalActionLoading}
+                    className="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                    <Check size={14} />
+                    {modalActionLoading ? 'Saving...' : 'Mark as Resolved'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1309,7 +1521,36 @@ export default function ComplaintsPage() {
                   />
                 </div>
 
-                {/* 2. Multi-Select Won Inquiry ID / PO Selector */}
+                {/* 2. Complaint Date */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Complaint Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editComplaintDate}
+                    onChange={e => setEditComplaintDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+
+                {/* 3. Complaint Raised By / Contact Person */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Complaint Raised By / Contact Person <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Rahul Sharma (Quality Head)"
+                    value={editRaisedBy}
+                    onChange={e => setEditRaisedBy(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+
+                {/* 4. Multi-Select Won Inquiry ID / PO Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
@@ -1323,7 +1564,21 @@ export default function ComplaintsPage() {
                   />
                 </div>
 
-                {/* 3. Complaint Type */}
+                {/* 5. Invoice / Delivery Challan No. */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Invoice / Delivery Challan No.
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. DC-2026-9821 / INV-4821"
+                    value={editChallanNo}
+                    onChange={e => setEditChallanNo(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium font-mono"
+                  />
+                </div>
+
+                {/* 6. Complaint Type */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Complaint Type <span className="text-rose-500">*</span></label>
                   <div className="relative flex items-center">
@@ -1343,7 +1598,7 @@ export default function ComplaintsPage() {
                   </div>
                 </div>
 
-                {/* 4. Description */}
+                {/* 7. Description */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Complaint Description <span className="text-rose-500">*</span></label>
                   <textarea
@@ -1355,7 +1610,59 @@ export default function ComplaintsPage() {
                   />
                 </div>
 
-                {/* 5. Corrective Action */}
+                {/* 8. Evidence / Attachments */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Evidence / Attachments</span>
+                    <span className="text-slate-400 font-normal text-[11px]">Images or PDF (max 15MB)</span>
+                  </label>
+                  <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-3 bg-slate-50/60 transition-colors text-center cursor-pointer relative">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf"
+                      onChange={e => {
+                        if (e.target.files) handleAddAttachments(e.target.files, true);
+                        e.target.value = '';
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <div className="flex flex-col items-center gap-1 text-slate-500">
+                      <Upload size={18} className="text-blue-600" />
+                      <p className="text-xs font-medium">
+                        Click or drag files here to attach evidence
+                      </p>
+                    </div>
+                  </div>
+
+                  {editAttachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {editAttachments.map((att, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2.5 py-1 rounded-lg text-[11px] font-medium">
+                          {isPdf(att.file_url, att.file_type) ? (
+                            <FileText size={13} className="text-red-500 shrink-0" />
+                          ) : (
+                            <ImageIcon size={13} className="text-blue-500 shrink-0" />
+                          )}
+                          <span className="truncate max-w-[120px]" title={att.file_name}>
+                            {att.file_name || `Attachment ${idx + 1}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditAttachments(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-slate-400 hover:text-red-600 p-0.5 rounded transition-colors cursor-pointer"
+                            title="Remove">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 9. Corrective Action */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Corrective Action Taken</label>
                   <input
@@ -1367,7 +1674,19 @@ export default function ComplaintsPage() {
                   />
                 </div>
 
-                {/* 6. Status & Resolution Notes */}
+                {/* 10. Customer Communication / Update */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Customer Communication / Update</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Notes on communication with customer or update shared..."
+                    value={editCustomerCommunication}
+                    onChange={e => setEditCustomerCommunication(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+
+                {/* 11 & 12. Status & Resolution Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Status <span className="text-rose-500">*</span></label>
@@ -1386,22 +1705,41 @@ export default function ComplaintsPage() {
 
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Resolution Notes {editStatus === 'resolved' && <span className="text-rose-500">*</span>}
+                      Resolution Date
                     </label>
                     <input
-                      type="text"
-                      placeholder="Resolution details..."
-                      value={editResolutionNotes}
-                      onChange={e => setEditResolutionNotes(e.target.value)}
+                      type="date"
+                      value={editResolutionDate}
+                      onChange={e => setEditResolutionDate(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                      required={editStatus === 'resolved'}
                     />
                   </div>
+                </div>
+
+                {/* 13. Resolution Notes */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Resolution Notes {editStatus === 'resolved' && <span className="text-rose-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Resolution details..."
+                    value={editResolutionNotes}
+                    onChange={e => setEditResolutionNotes(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    required={editStatus === 'resolved'}
+                  />
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingComplaint(null)}
+                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
+                  Cancel
+                </button>
                 <button
                   type="submit"
                   disabled={editSaving}
@@ -1455,7 +1793,52 @@ export default function ComplaintsPage() {
                   )}
                 </div>
 
-                {/* 2. Mandatory Multi-Select Won Inquiry ID / PO Number Selector */}
+                {/* 2. Complaint Date */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Complaint Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formComplaintDate}
+                    onChange={e => {
+                      setFormComplaintDate(e.target.value);
+                      if (formErrors.complaintDate) setFormErrors(prev => ({ ...prev, complaintDate: false }));
+                    }}
+                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
+                      formErrors.complaintDate ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                    }`}
+                  />
+                  {formErrors.complaintDate && (
+                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select complaint date.</p>
+                  )}
+                </div>
+
+                {/* 3. Complaint Raised By / Contact Person */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Complaint Raised By / Contact Person <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Rahul Sharma (Quality Head)"
+                    value={formRaisedBy}
+                    onChange={e => {
+                      setFormRaisedBy(e.target.value);
+                      if (formErrors.raisedBy) setFormErrors(prev => ({ ...prev, raisedBy: false }));
+                    }}
+                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
+                      formErrors.raisedBy ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                    }`}
+                  />
+                  {formErrors.raisedBy && (
+                    <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter who raised the complaint.</p>
+                  )}
+                </div>
+
+                {/* 4. Mandatory Multi-Select Won Inquiry ID / PO Number Selector */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
@@ -1477,7 +1860,21 @@ export default function ComplaintsPage() {
                   )}
                 </div>
 
-                {/* 3. Complaint Type */}
+                {/* 5. Invoice / Delivery Challan No. */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Invoice / Delivery Challan No.
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. DC-2026-9821 / INV-4821"
+                    value={formChallanNo}
+                    onChange={e => setFormChallanNo(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium font-mono"
+                  />
+                </div>
+
+                {/* 6. Complaint Type */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Complaint Type <span className="text-rose-500">*</span>
@@ -1502,7 +1899,7 @@ export default function ComplaintsPage() {
                   </div>
                 </div>
 
-                {/* 4. Description */}
+                {/* 7. Description */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Complaint Description <span className="text-rose-500">*</span>
@@ -1515,62 +1912,134 @@ export default function ComplaintsPage() {
                       setFormDescription(e.target.value);
                       if (formErrors.description) setFormErrors(prev => ({ ...prev, description: false }));
                     }}
-                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${formErrors.description ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                      }`}
+                    className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all font-medium ${
+                      formErrors.description ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                    }`}
                   />
                   {formErrors.description && (
                     <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter complaint description.</p>
                   )}
                 </div>
 
-                {/* 5. Corrective Action */}
+                {/* 8. Evidence / Attachments */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Evidence / Attachments</span>
+                    <span className="text-slate-400 font-normal text-[11px]">Images or PDF (max 15MB)</span>
+                  </label>
+                  <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-3 bg-slate-50/60 transition-colors text-center cursor-pointer relative">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf"
+                      onChange={e => {
+                        if (e.target.files) handleAddAttachments(e.target.files, false);
+                        e.target.value = '';
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <div className="flex flex-col items-center gap-1 text-slate-500">
+                      <Upload size={18} className="text-blue-600" />
+                      <p className="text-xs font-medium">
+                        Click or drag files here to attach evidence
+                      </p>
+                    </div>
+                  </div>
+
+                  {formAttachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {formAttachments.map((att, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2.5 py-1 rounded-lg text-[11px] font-medium">
+                          {isPdf(att.file_url, att.file_type) ? (
+                            <FileText size={13} className="text-red-500 shrink-0" />
+                          ) : (
+                            <ImageIcon size={13} className="text-blue-500 shrink-0" />
+                          )}
+                          <span className="truncate max-w-[120px]" title={att.file_name}>
+                            {att.file_name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setFormAttachments(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-slate-400 hover:text-red-600 p-0.5 rounded transition-colors cursor-pointer"
+                            title="Remove">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 9. Corrective Action */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Corrective Action Taken</label>
                   <input
                     type="text"
-                    placeholder="e.g. Replacement dispatched / Inspection scheduled"
+                    placeholder="e.g. Replacement batch dispatched / Credit note issued"
                     value={formCorrectiveAction}
                     onChange={e => setFormCorrectiveAction(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                   />
                 </div>
 
-                {/* 6. Initial Status & Resolution Notes */}
+                {/* 10. Customer Communication / Update */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Customer Communication / Update</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Notes on communication with customer or update shared..."
+                    value={formCustomerCommunication}
+                    onChange={e => setFormCustomerCommunication(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+
+                {/* 11 & 12. Resolution Notes & Resolution Date (Optional at creation) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Initial Status <span className="text-rose-500">*</span>
+                      Resolution Notes
                     </label>
-                    <div className="relative flex items-center">
-                      <select
-                        value={formStatus}
-                        onChange={e => {
-                          setFormStatus(e.target.value);
-                          if (formErrors.status) setFormErrors(prev => ({ ...prev, status: false }));
-                        }}
-                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                        <option value="reported">Pending (Open)</option>
-                        <option value="resolved">Resolved (Closed)</option>
-                      </select>
-                      <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                    </div>
+                    <input
+                      type="text"
+                      placeholder="Optional notes if already resolved..."
+                      value={formResolutionNotes}
+                      onChange={e => setFormResolutionNotes(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
                   </div>
 
-                  {formStatus === 'resolved' && (
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
-                        Resolution Notes <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Resolution details..."
-                        value={formResolutionNotes}
-                        onChange={e => setFormResolutionNotes(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                        required
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Resolution Date
+                    </label>
+                    <input
+                      type="date"
+                      value={formResolutionDate}
+                      onChange={e => setFormResolutionDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* 13. Initial Status (Locked to Pending at creation) */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Initial Status <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <select
+                      disabled
+                      value={formStatus}
+                      className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-xl text-xs bg-slate-100 text-slate-600 font-medium cursor-not-allowed appearance-none">
+                      <option value="reported">Pending (Open)</option>
+                    </select>
+                    <span className="absolute right-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Locked</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Status starts as Pending and can be resolved in details or edit view.</p>
                 </div>
               </div>
 
@@ -1591,6 +2060,93 @@ export default function ComplaintsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Attachment Preview Modal */}
+      {viewerAttachmentUrl && (
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Paperclip size={18} className="text-blue-600 shrink-0" />
+                <h3 className="font-bold text-slate-900 text-sm truncate" title={viewerAttachmentTitle}>
+                  {viewerAttachmentTitle}
+                </h3>
+                {viewerAttachmentList.length > 1 && (
+                  <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
+                    {viewerActiveIndex + 1} / {viewerAttachmentList.length}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {viewerAttachmentList.length > 1 && (
+                  <div className="flex items-center gap-1 mr-2">
+                    <button
+                      type="button"
+                      disabled={viewerActiveIndex === 0}
+                      onClick={() => {
+                        const nextIdx = viewerActiveIndex - 1;
+                        setViewerActiveIndex(nextIdx);
+                        setViewerAttachmentUrl(viewerAttachmentList[nextIdx].file_url);
+                        setViewerAttachmentTitle(viewerAttachmentList[nextIdx].file_name || `Attachment ${nextIdx + 1}`);
+                      }}
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Previous">
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={viewerActiveIndex === viewerAttachmentList.length - 1}
+                      onClick={() => {
+                        const nextIdx = viewerActiveIndex + 1;
+                        setViewerActiveIndex(nextIdx);
+                        setViewerAttachmentUrl(viewerAttachmentList[nextIdx].file_url);
+                        setViewerAttachmentTitle(viewerAttachmentList[nextIdx].file_name || `Attachment ${nextIdx + 1}`);
+                      }}
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Next">
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+                <a
+                  href={viewerAttachmentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5">
+                  <ExternalLink size={13} />
+                  Open in New Window
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setViewerAttachmentUrl(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                  title="Close">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content Display */}
+            <div className="flex-1 p-4 bg-slate-100/70 overflow-auto flex items-center justify-center min-h-[400px]">
+              {isPdf(viewerAttachmentUrl, viewerAttachmentList[viewerActiveIndex]?.file_type) ? (
+                <iframe
+                  src={viewerAttachmentUrl}
+                  title="PDF Attachment Preview"
+                  className="w-full h-[70vh] rounded-xl border border-slate-200 bg-white shadow-sm"
+                />
+              ) : (
+                <img
+                  src={viewerAttachmentUrl}
+                  alt="Attachment Preview"
+                  className="max-h-[70vh] max-w-full object-contain rounded-xl shadow-md mx-auto"
+                />
+              )}
+            </div>
           </div>
         </div>
       )}
