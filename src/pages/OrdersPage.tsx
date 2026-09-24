@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -314,6 +314,8 @@ export default function OrdersPage() {
   const [searchParams] = useSearchParams();
   const targetOrderId = searchParams.get('orderId') || searchParams.get('id');
   const returnTo = searchParams.get('returnTo');
+  const autoOpenedOrderIdRef = useRef<string | null>(null);
+  const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const queryClient = useQueryClient();
   const { effectivePhone, activeRole, activeMode } = useAuth();
@@ -964,13 +966,31 @@ export default function OrdersPage() {
     setPoImageViewerUrl(`extracted_preview://${ord.id}`);
   };
 
+  const handleClosePoViewer = () => {
+    setPoImageViewerUrl(null);
+    setSelectedPoOrder(null);
+    setModalReturnTo(null);
+
+    // Clean order search params from URL so subsequent filter changes/actions don't reopen modal
+    const currentParams = new URLSearchParams(window.location.search);
+    if (currentParams.has('orderId') || currentParams.has('id') || currentParams.has('returnTo')) {
+      currentParams.delete('orderId');
+      currentParams.delete('id');
+      currentParams.delete('returnTo');
+      const newSearch = currentParams.toString();
+      navigate({ search: newSearch ? `?${newSearch}` : '' }, { replace: true });
+    }
+  };
+
   // Auto-open requested PO if navigated with ?orderId=... or ?id=...
   useEffect(() => {
-    if (!targetOrderId) return;
+    if (!targetOrderId || autoOpenedOrderIdRef.current === targetOrderId) return;
     const found = rawOrders.find(
       (o: any) => o.id === targetOrderId || o.po_number === targetOrderId,
     );
     if (found) {
+      autoOpenedOrderIdRef.current = targetOrderId;
+      if (returnTo) setModalReturnTo(returnTo);
       handleViewPoDocument(found);
     } else if (rawOrders.length > 0) {
       dealsApi
@@ -978,14 +998,17 @@ export default function OrdersPage() {
         .then(res => {
           const fullDeal = res?.data?.data || res?.data;
           if (fullDeal) {
+            autoOpenedOrderIdRef.current = targetOrderId;
+            if (returnTo) setModalReturnTo(returnTo);
             handleViewPoDocument(fullDeal);
           }
         })
         .catch(err => {
           console.warn('Could not load order for modal auto-open:', err);
+          autoOpenedOrderIdRef.current = targetOrderId;
         });
     }
-  }, [targetOrderId, rawOrders]);
+  }, [targetOrderId, rawOrders, returnTo]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -1504,10 +1527,7 @@ export default function OrdersPage() {
       {poImageViewerUrl && (
         <div
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => {
-            setPoImageViewerUrl(null);
-            setSelectedPoOrder(null);
-          }}>
+          onClick={handleClosePoViewer}>
           <div
             className={`relative w-full max-h-[90vh] bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col ${
               poImageViewerUrl.startsWith('extracted_preview://') ? 'max-w-3xl' : 'max-w-5xl'
@@ -1515,10 +1535,10 @@ export default function OrdersPage() {
             onClick={e => e.stopPropagation()}>
             <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 flex-wrap">
-                {returnTo && (
+                {(modalReturnTo || returnTo) && (
                   <button
                     type="button"
-                    onClick={() => navigate(returnTo)}
+                    onClick={() => navigate(modalReturnTo || returnTo!)}
                     className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs">
                     <ArrowLeft size={14} /> Back to Customer Profile
                   </button>
@@ -1533,10 +1553,7 @@ export default function OrdersPage() {
                 </span>
               </div>
               <button
-                onClick={() => {
-                  setPoImageViewerUrl(null);
-                  setSelectedPoOrder(null);
-                }}
+                onClick={handleClosePoViewer}
                 className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer">
                 <X size={18} /> Close
               </button>

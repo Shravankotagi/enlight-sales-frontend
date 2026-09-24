@@ -1102,6 +1102,8 @@ export default function InquiriesPage() {
     return params.get('stage') || params.get('status') || 'all';
   });
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryItem | null>(null);
+  const autoOpenedInquiryRef = useRef<string | null>(null);
+  const [drawerReturnTo, setDrawerReturnTo] = useState<string | null>(() => new URLSearchParams(window.location.search).get('returnTo'));
 
   const activeSalespersonName =
     viewingAs?.name ||
@@ -1839,6 +1841,18 @@ export default function InquiriesPage() {
     setSelectedInquiry(null);
     setEditDetails(null);
     setDrawerFileBase64(null);
+    setDrawerReturnTo(null);
+
+    // Clean inquiry search params from URL so switching views/filters does not re-open drawer
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('inquiryId') || params.has('id') || params.has('inquiry_id') || params.has('returnTo')) {
+      params.delete('inquiryId');
+      params.delete('id');
+      params.delete('inquiry_id');
+      params.delete('returnTo');
+      const newSearch = params.toString();
+      navigate({ search: newSearch ? `?${newSearch}` : '' }, { replace: true });
+    }
   };
 
   useEffect(() => {
@@ -1849,21 +1863,29 @@ export default function InquiriesPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const targetId = params.get('inquiryId') || params.get('id') || params.get('inquiry_id');
-    if (targetId) {
-      const found = inquiries.find((i) => String(i.id) === targetId || String(i.id).includes(targetId));
-      if (found) {
-        handleOpenDrawer(found);
-      } else if (inquiries.length > 0) {
-        inquiriesApi
-          .getOne(targetId)
-          .then((res) => {
-            const item = res?.data?.data || res?.data;
-            if (item) handleOpenDrawer(item);
-          })
-          .catch((err) => {
-            console.warn('Could not auto-open requested inquiry:', err);
-          });
-      }
+    const returnToParam = params.get('returnTo');
+    if (!targetId || autoOpenedInquiryRef.current === targetId) return;
+
+    const found = inquiries.find((i) => String(i.id) === targetId || String(i.id).includes(targetId));
+    if (found) {
+      autoOpenedInquiryRef.current = targetId;
+      if (returnToParam) setDrawerReturnTo(returnToParam);
+      handleOpenDrawer(found);
+    } else if (inquiries.length > 0) {
+      inquiriesApi
+        .getOne(targetId)
+        .then((res) => {
+          const item = res?.data?.data || res?.data;
+          if (item) {
+            autoOpenedInquiryRef.current = targetId;
+            if (returnToParam) setDrawerReturnTo(returnToParam);
+            handleOpenDrawer(item);
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not auto-open requested inquiry:', err);
+          autoOpenedInquiryRef.current = targetId;
+        });
     }
   }, [inquiries, location.search]);
 
@@ -3182,11 +3204,11 @@ export default function InquiriesPage() {
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
-                {new URLSearchParams(location.search).get('returnTo') && (
+                {(drawerReturnTo || new URLSearchParams(location.search).get('returnTo')) && (
                   <button
                     type="button"
                     onClick={() => {
-                      const ret = new URLSearchParams(location.search).get('returnTo');
+                      const ret = drawerReturnTo || new URLSearchParams(location.search).get('returnTo');
                       if (ret) navigate(ret);
                     }}
                     className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs border border-blue-200">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -69,6 +69,8 @@ export default function ComplaintsPage() {
   const [searchParams] = useSearchParams();
   const targetComplaintId = searchParams.get('complaintId') || searchParams.get('id');
   const returnTo = searchParams.get('returnTo');
+  const autoOpenedComplaintRef = useRef<string | null>(null);
+  const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
@@ -597,13 +599,31 @@ export default function ComplaintsPage() {
     setModalResolutionNotes(comp.resolution_notes || '');
   };
 
+  const handleCloseComplaintModal = () => {
+    setSelectedComplaint(null);
+    setModalResolutionNotes('');
+    setModalReturnTo(null);
+
+    // Clean complaint search params from URL so subsequent filter changes/polling don't reopen modal
+    const currentParams = new URLSearchParams(window.location.search);
+    if (currentParams.has('complaintId') || currentParams.has('id') || currentParams.has('returnTo')) {
+      currentParams.delete('complaintId');
+      currentParams.delete('id');
+      currentParams.delete('returnTo');
+      const newSearch = currentParams.toString();
+      navigate({ search: newSearch ? `?${newSearch}` : '' }, { replace: true });
+    }
+  };
+
   // Auto-open requested complaint modal if navigated with ?complaintId=... or ?id=...
   useEffect(() => {
-    if (!targetComplaintId) return;
+    if (!targetComplaintId || autoOpenedComplaintRef.current === targetComplaintId) return;
     const found = complaints.find(
       (c) => String(c.id) === targetComplaintId || String(c.id).includes(targetComplaintId),
     );
     if (found) {
+      autoOpenedComplaintRef.current = targetComplaintId;
+      if (returnTo) setModalReturnTo(returnTo);
       openComplaintDetails(found);
     } else if (complaints.length > 0) {
       complaintsApi
@@ -612,13 +632,18 @@ export default function ComplaintsPage() {
           const raw = res?.data;
           const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
           const match = list.find((c: any) => String(c.id) === targetComplaintId || String(c.id).includes(targetComplaintId));
-          if (match) openComplaintDetails(match);
+          if (match) {
+            autoOpenedComplaintRef.current = targetComplaintId;
+            if (returnTo) setModalReturnTo(returnTo);
+            openComplaintDetails(match);
+          }
         })
         .catch((err) => {
           console.warn('Could not auto-open requested complaint:', err);
+          autoOpenedComplaintRef.current = targetComplaintId;
         });
     }
-  }, [targetComplaintId, complaints]);
+  }, [targetComplaintId, complaints, returnTo]);
 
   // Resolve inside Details Modal
   const handleResolveInModal = async () => {
@@ -1077,15 +1102,19 @@ export default function ComplaintsPage() {
 
       {/* Complaint Details Modal */}
       {selectedComplaint && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto space-y-4">
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
+          onClick={handleCloseComplaintModal}>
+          <div
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto space-y-4"
+            onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 flex-wrap">
-                {returnTo && (
+                {(modalReturnTo || returnTo) && (
                   <button
                     type="button"
-                    onClick={() => navigate(returnTo)}
+                    onClick={() => navigate(modalReturnTo || returnTo!)}
                     className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs border border-blue-200">
                     <ArrowLeft size={14} /> Back to Customer Profile
                   </button>
@@ -1109,7 +1138,7 @@ export default function ComplaintsPage() {
               <div className="flex items-center gap-3 shrink-0">
                 {renderStatusBadge(selectedComplaint.status)}
                 <button
-                  onClick={() => setSelectedComplaint(null)}
+                  onClick={handleCloseComplaintModal}
                   className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors cursor-pointer"
                   title="Close">
                   <X size={18} />

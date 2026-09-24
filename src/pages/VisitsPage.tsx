@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   MapPin,
@@ -65,6 +65,8 @@ export default function VisitsPage() {
   const [searchParams] = useSearchParams();
   const targetVisitId = searchParams.get('visitId') || searchParams.get('id');
   const returnTo = searchParams.get('returnTo');
+  const autoOpenedVisitRef = useRef<string | null>(null);
+  const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
@@ -311,13 +313,31 @@ export default function VisitsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const handleCloseVisitModal = () => {
+    setSelectedVisit(null);
+    setIsEditing(false);
+    setModalReturnTo(null);
+
+    // Clean visit search params from URL so subsequent filter changes/polling don't reopen modal
+    const currentParams = new URLSearchParams(window.location.search);
+    if (currentParams.has('visitId') || currentParams.has('id') || currentParams.has('returnTo')) {
+      currentParams.delete('visitId');
+      currentParams.delete('id');
+      currentParams.delete('returnTo');
+      const newSearch = currentParams.toString();
+      navigate({ search: newSearch ? `?${newSearch}` : '' }, { replace: true });
+    }
+  };
+
   // Auto-open requested visit modal if navigated with ?visitId=... or ?id=...
   useEffect(() => {
-    if (!targetVisitId) return;
+    if (!targetVisitId || autoOpenedVisitRef.current === targetVisitId) return;
     const found = visits.find(
       (v) => String(v.id) === targetVisitId || String(v.id).includes(targetVisitId),
     );
     if (found) {
+      autoOpenedVisitRef.current = targetVisitId;
+      if (returnTo) setModalReturnTo(returnTo);
       setSelectedVisit(found);
       setIsEditing(false);
     } else if (visits.length > 0) {
@@ -328,15 +348,18 @@ export default function VisitsPage() {
           const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
           const match = list.find((v: any) => String(v.id) === targetVisitId || String(v.id).includes(targetVisitId));
           if (match) {
+            autoOpenedVisitRef.current = targetVisitId;
+            if (returnTo) setModalReturnTo(returnTo);
             setSelectedVisit(match);
             setIsEditing(false);
           }
         })
         .catch((err) => {
           console.warn('Could not auto-open requested visit:', err);
+          autoOpenedVisitRef.current = targetVisitId;
         });
     }
-  }, [targetVisitId, visits]);
+  }, [targetVisitId, visits, returnTo]);
 
   // Create Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -682,7 +705,7 @@ export default function VisitsPage() {
       await visitsApi.delete(selectedVisit.id);
       setVisits(prev => prev.filter(item => item.id !== selectedVisit.id));
       setShowDeleteModal(false);
-      setSelectedVisit(null);
+      handleCloseVisitModal();
       toast.success('Visit record deleted');
       fetchVisits();
     } catch (err) {
@@ -1583,15 +1606,19 @@ export default function VisitsPage() {
 
       {/* Interactive Visit Details & Edit Modal */}
       {selectedVisit && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
+          onClick={handleCloseVisitModal}>
+          <div
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto"
+            onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 flex-wrap">
-                {returnTo && (
+                {(modalReturnTo || returnTo) && (
                   <button
                     type="button"
-                    onClick={() => navigate(returnTo)}
+                    onClick={() => navigate(modalReturnTo || returnTo!)}
                     className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs border border-blue-200">
                     <ArrowLeft size={14} /> Back to Customer Profile
                   </button>
@@ -1643,7 +1670,7 @@ export default function VisitsPage() {
                 )}
 
                 <button
-                  onClick={() => setSelectedVisit(null)}
+                  onClick={handleCloseVisitModal}
                   className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors ml-1 cursor-pointer"
                   title="Close">
                   <X size={20} />
@@ -1946,10 +1973,7 @@ export default function VisitsPage() {
                 <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedVisit(null);
-                      setIsEditing(false);
-                    }}
+                    onClick={handleCloseVisitModal}
                     className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
                     Cancel
                   </button>
