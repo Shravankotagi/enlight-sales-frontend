@@ -277,7 +277,8 @@ export default function VisitsPage() {
       if (formErrors.personMet) setFormErrors(prev => ({ ...prev, personMet: false }));
     }
     if (cust.contact_phone) {
-      setFormContactPhone(cust.contact_phone);
+      const clean = cust.contact_phone.replace(/\D/g, '').slice(-10);
+      setFormContactPhone(clean);
       if (formErrors.contactPhone) setFormErrors(prev => ({ ...prev, contactPhone: false }));
     }
     if (cust.location && !formLocation) {
@@ -289,7 +290,11 @@ export default function VisitsPage() {
   const handleSelectCustomerForEdit = (cust: CustomerDirectoryItem) => {
     setEditCustomerName(cust.customer_name);
     if (cust.contact_person) setEditPersonMet(cust.contact_person);
-    if (cust.contact_phone) setEditContactPhone(cust.contact_phone);
+    if (cust.contact_phone) {
+      const clean = cust.contact_phone.replace(/\D/g, '').slice(-10);
+      setEditContactPhone(clean);
+      if (editErrors.contactPhone) setEditErrors(prev => ({ ...prev, contactPhone: false }));
+    }
     if (cust.location && !editLocation) setEditLocation(cust.location);
   };
 
@@ -371,7 +376,7 @@ export default function VisitsPage() {
   const [formFollowup, setFormFollowup] = useState('');
   const [formFollowupDate, setFormFollowupDate] = useState('');
   const [formVisitDate, setFormVisitDate] = useState(formatLocalDate());
-  const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string | boolean>>({});
 
   // Preset Days Helper
   const setFollowupPresetDays = (days: number, isEdit = false) => {
@@ -412,6 +417,7 @@ export default function VisitsPage() {
   const [editFollowupDate, setEditFollowupDate] = useState('');
   const [editFollowupStatus, setEditFollowupStatus] = useState<'pending' | 'completed'>('pending');
   const [editVisitDate, setEditVisitDate] = useState(formatLocalDate());
+  const [editErrors, setEditErrors] = useState<Record<string, string | boolean>>({});
 
   const fetchVisits = async (isBackground?: boolean | any) => {
     const silent = isBackground === true;
@@ -470,10 +476,17 @@ export default function VisitsPage() {
     e.preventDefault();
 
     // Required Field Validation & Highlighting
-    const errors: Record<string, boolean> = {};
+    const errors: Record<string, string | boolean> = {};
     if (!formCustomerName.trim()) errors.customerName = true;
     if (!formPersonMet.trim()) errors.personMet = true;
-    if (!formContactPhone.trim()) errors.contactPhone = true;
+
+    const cleanContactPhone = formContactPhone.replace(/\D/g, '');
+    if (!cleanContactPhone) {
+      errors.contactPhone = 'Please enter contact phone.';
+    } else if (cleanContactPhone.length !== 10) {
+      errors.contactPhone = 'Please enter a valid 10-digit mobile number.';
+    }
+
     if (!formLocation.trim()) errors.location = true;
     if (!formVisitDate) errors.visitDate = true;
     if (!formOutcome) errors.outcome = true;
@@ -489,7 +502,7 @@ export default function VisitsPage() {
       await visitsApi.create({
         customer_name: formCustomerName.trim(),
         person_met: formPersonMet.trim(),
-        contact_phone: formContactPhone.trim(),
+        contact_phone: cleanContactPhone,
         location: formLocation.trim(),
         outcome: formOutcome,
         remarks: formRemarks.trim(),
@@ -572,9 +585,12 @@ export default function VisitsPage() {
   const openVisitDetails = (v: CustomerVisit, editMode = false) => {
     setSelectedVisit(v);
     setIsEditing(editMode);
+    setEditErrors({});
     setEditCustomerName(v.customer_name || '');
     setEditPersonMet(v.person_met && v.person_met !== 'null' ? v.person_met : '');
-    setEditContactPhone(v.contact_phone || (v as any).contact_no || '');
+    setEditContactPhone(
+      (v.contact_phone || (v as any).contact_no || '').replace(/\D/g, '').slice(-10),
+    );
     setEditLocation(v.location || (v as any).customer_address || '');
     setEditVisitDate(
       v.visited_at ? new Date(v.visited_at).toISOString().split('T')[0] : formatLocalDate(),
@@ -593,7 +609,23 @@ export default function VisitsPage() {
 
   const handleUpdateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedVisit || !editCustomerName.trim()) return;
+    if (!selectedVisit) return;
+
+    const errors: Record<string, string | boolean> = {};
+    if (!editCustomerName.trim()) errors.customerName = true;
+    if (!editPersonMet.trim()) errors.personMet = true;
+
+    const cleanEditPhone = editContactPhone.replace(/\D/g, '');
+    if (!cleanEditPhone) {
+      errors.contactPhone = 'Please enter contact phone.';
+    } else if (cleanEditPhone.length !== 10) {
+      errors.contactPhone = 'Please enter a valid 10-digit mobile number.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      return;
+    }
 
     try {
       setActionLoading(true);
@@ -601,8 +633,8 @@ export default function VisitsPage() {
       const updatedData = {
         customer_name: editCustomerName.trim(),
         person_met: editPersonMet.trim(),
-        contact_phone: editContactPhone.trim(),
-        contact_no: editContactPhone.trim(),
+        contact_phone: cleanEditPhone,
+        contact_no: cleanEditPhone,
         location: editLocation.trim(),
         customer_address: editLocation.trim(),
         outcome: editOutcome,
@@ -624,6 +656,7 @@ export default function VisitsPage() {
       setVisits(prev => prev.map(item => (item.id === selectedVisit.id ? updatedObj : item)));
       setSelectedVisit(null);
       setIsEditing(false);
+      setEditErrors({});
       toast.success('Visit details updated successfully!');
       await fetchVisits();
     } catch (err) {
@@ -1423,11 +1456,13 @@ export default function VisitsPage() {
                       Contact Phone <span className="text-rose-500">*</span>
                     </label>
                     <input
-                      type="text"
+                      type="tel"
+                      maxLength={10}
                       placeholder="e.g. 9822012345"
                       value={formContactPhone}
                       onChange={e => {
-                        setFormContactPhone(e.target.value);
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setFormContactPhone(val);
                         if (formErrors.contactPhone) setFormErrors(prev => ({ ...prev, contactPhone: false }));
                       }}
                       className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
@@ -1435,7 +1470,9 @@ export default function VisitsPage() {
                       }`}
                     />
                     {formErrors.contactPhone && (
-                      <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter contact phone.</p>
+                      <p className="text-[11px] text-rose-500 font-semibold mt-1">
+                        {typeof formErrors.contactPhone === 'string' ? formErrors.contactPhone : 'Please enter a valid 10-digit mobile number.'}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -1843,13 +1880,28 @@ export default function VisitsPage() {
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Contact Phone</label>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Contact Phone <span className="text-rose-500">*</span>
+                      </label>
                       <input
-                        type="text"
+                        type="tel"
+                        maxLength={10}
+                        placeholder="e.g. 9822012345"
                         value={editContactPhone}
-                        onChange={e => setEditContactPhone(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        onChange={e => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setEditContactPhone(val);
+                          if (editErrors.contactPhone) setEditErrors(prev => ({ ...prev, contactPhone: false }));
+                        }}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                          editErrors.contactPhone ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500 font-medium'
+                        }`}
                       />
+                      {editErrors.contactPhone && (
+                        <p className="text-[11px] text-rose-500 font-semibold mt-1">
+                          {typeof editErrors.contactPhone === 'string' ? editErrors.contactPhone : 'Please enter a valid 10-digit mobile number.'}
+                        </p>
+                      )}
                     </div>
                   </div>
 
