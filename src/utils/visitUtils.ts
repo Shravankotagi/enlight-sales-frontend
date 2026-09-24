@@ -22,6 +22,35 @@ export interface CustomerVisit {
   visited_at: string;
   salesperson_phone?: string | null;
   salesperson_name?: string | null;
+  email?: string | null;
+  designation?: string | null;
+  customer_type?: 'OEM' | 'Fabricator' | 'EPC' | 'Manufacturer' | 'Trader' | string | null;
+  visit_type?: 'First Visit' | 'Follow-up 1' | 'Follow-up 2' | 'Follow-up 3' | 'Regular Visit' | string | null;
+  customer_probability?: 'Hot' | 'Warm' | 'Cold' | string | null;
+  product_details?: string | null;
+  monthly_consumption?: string | null;
+  current_requirement?: string | null;
+  next_purchase_expected?: string | null;
+  delivery_location?: string | null;
+  preferred_make?: string | null;
+  payment_terms?: string | null;
+  gps_photo_url?: string | null;
+  gps_latitude?: number | null;
+  gps_longitude?: number | null;
+  gps_accuracy?: number | null;
+  attachments?: VisitAttachment[] | null;
+}
+
+export interface VisitAttachment {
+  id?: string;
+  name?: string;
+  url?: string;
+  file_url?: string;
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
+  size?: number;
+  type?: string;
 }
 
 export function getFollowUpStatusInfo(v: CustomerVisit | any): {

@@ -7,6 +7,13 @@ export interface CustomerDirectoryItem {
   contact_person?: string;
   contact_phone?: string;
   location?: string;
+  email?: string;
+  designation?: string;
+  customer_type?: string;
+  delivery_location?: string;
+  preferred_make?: string;
+  payment_terms?: string;
+  monthly_consumption?: string;
 }
 
 interface CustomerComboboxProps {

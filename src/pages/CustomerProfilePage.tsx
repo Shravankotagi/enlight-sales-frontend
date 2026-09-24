@@ -472,6 +472,7 @@ function CustomerProfilePageContent() {
         id: string;
         name: string;
         phone?: string;
+        email?: string;
         roleLabel: string;
         isPrimary: boolean;
         meta?: string;
@@ -520,7 +521,8 @@ function CustomerProfilePageContent() {
               id: `visit-poc-${idx}-${rawName}`,
               name: rawName,
               phone: rawPhone || undefined,
-              roleLabel: 'Site Visit POC',
+              email: v.email || undefined,
+              roleLabel: v.designation || 'Site Visit POC',
               isPrimary: false,
               meta:
                 visitDateStr !== '—'
@@ -1374,7 +1376,9 @@ function CustomerProfilePageContent() {
                       </td>
                       <td className="py-3 px-3 text-slate-800">
                         <p className="font-semibold">{v.person_met || 'Site Representative'}</p>
-                        {v.contact_no && <p className="text-2xs text-slate-500">{v.contact_no}</p>}
+                        {v.designation && <p className="text-2xs text-slate-500 font-medium">{v.designation}</p>}
+                        {v.contact_no && <p className="text-2xs text-slate-500 font-mono">{v.contact_no}</p>}
+                        {v.email && <p className="text-2xs text-slate-500 font-mono truncate max-w-[140px]">{v.email}</p>}
                       </td>
                       <td className="py-3.5 px-3 text-slate-900 max-w-lg min-w-[280px]">
                         {(() => {
@@ -1384,30 +1388,40 @@ function CustomerProfilePageContent() {
                               <p className="leading-relaxed font-normal text-slate-900">
                                 {parsed.cleanNotes}
                               </p>
-                              {(parsed.outcome || parsed.requirement || parsed.interests || parsed.followUp) && (
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[11px] text-slate-900 border-t border-slate-100">
-                                  {parsed.outcome && (
-                                    <span>
-                                      <strong className="font-bold text-slate-900">Outcome:</strong> {parsed.outcome}
-                                    </span>
-                                  )}
-                                  {parsed.requirement && (
-                                    <span>
-                                      <strong className="font-bold text-slate-900">Requirement:</strong> {parsed.requirement}
-                                    </span>
-                                  )}
-                                  {parsed.interests && (
-                                    <span>
-                                      <strong className="font-bold text-slate-900">Interests:</strong> {parsed.interests}
-                                    </span>
-                                  )}
-                                  {parsed.followUp && (
-                                    <span>
-                                      <strong className="font-bold text-slate-900">Follow-up:</strong> {parsed.followUp}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100">
+                                {v.customer_type && (
+                                  <span className="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    {v.customer_type}
+                                  </span>
+                                )}
+                                {v.customer_probability && (
+                                  <span
+                                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${
+                                      v.customer_probability.toLowerCase() === 'hot'
+                                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                        : v.customer_probability.toLowerCase() === 'warm'
+                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                        : 'bg-sky-50 text-sky-700 border-sky-200'
+                                    }`}>
+                                    {v.customer_probability}
+                                  </span>
+                                )}
+                                {v.monthly_consumption && (
+                                  <span className="text-[11px] text-slate-600 font-medium">
+                                    Consumption: {v.monthly_consumption}
+                                  </span>
+                                )}
+                                {parsed.outcome && (
+                                  <span className="text-[11px] text-slate-600">
+                                    <strong>Outcome:</strong> {parsed.outcome}
+                                  </span>
+                                )}
+                                {parsed.followUp && (
+                                  <span className="text-[11px] text-slate-600">
+                                    <strong>Follow-up:</strong> {parsed.followUp}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           );
                         })()}
