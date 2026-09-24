@@ -1478,7 +1478,6 @@ export default function OrdersPage() {
                     const res = await inquiriesApi.sendQuotation(shareOrder.id, payload);
                     const msg = res?.data?.message || res?.data?.data?.message || `PO Document dispatched to ${targetEmail}!`;
                     setResendNotice(msg);
-                    toast.success(msg);
                     if (res?.data?.email_sent !== false) {
                       setTimeout(() => {
                         setShowSendModal(false);

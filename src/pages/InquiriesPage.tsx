@@ -3964,7 +3964,6 @@ export default function InquiriesPage() {
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
                     setResendNotice(msg);
-                    toast.success(msg);
                     setIsQuotationSent(true);
 
                     // 1. Optimistic live update of local state immediately
