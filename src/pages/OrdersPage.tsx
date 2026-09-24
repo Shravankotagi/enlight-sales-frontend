@@ -816,9 +816,19 @@ export default function OrdersPage() {
 
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['all-deals-list'] });
+      queryClient.invalidateQueries({ queryKey: ['home-inquiries-list'] });
       queryClient.invalidateQueries({ queryKey: ['pipeline'] });
       queryClient.invalidateQueries({ queryKey: ['kanban'] });
       queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['reports-overview-data'] });
+      queryClient.invalidateQueries({ queryKey: ['intelligence-deals'] });
+
+      window.dispatchEvent(new CustomEvent('enlight-db-change', { detail: { table: 'deals' } }));
+      window.dispatchEvent(new CustomEvent('enlight-db-change', { detail: { table: 'inquiries' } }));
+
       await fetchOrders();
     } catch (err: any) {
       console.error('Error creating order:', err);
