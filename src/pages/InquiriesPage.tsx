@@ -3199,7 +3199,7 @@ export default function InquiriesPage() {
                       const inqIdDisplay = selectedInquiry.id
                         ? `INQ-${selectedInquiry.id.substring(0, 6).toUpperCase()}`
                         : '-';
-                      return `ID: #${inqIdDisplay.replace(/^#/, '')}`;
+                      return `ID: ${inqIdDisplay.replace(/^#/, '')}`;
                     })()}
                   </p>
                 </div>
