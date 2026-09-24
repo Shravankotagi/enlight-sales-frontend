@@ -1140,7 +1140,7 @@ export default function InquiriesPage() {
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [shareInquiry, setShareInquiry] = useState<InquiryItem | null>(null);
   const [shareDetails, setShareDetails] = useState<ExtractedDetails | null>(null);
-  const [quotationEmail, setQuotationEmail] = useState('shravankotagi314@gmail.com');
+  const [quotationEmail, setQuotationEmail] = useState('');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
@@ -3079,7 +3079,7 @@ export default function InquiriesPage() {
                                   setSubMenuInqId(null);
                                   setShareInquiry(inq);
                                   setShareDetails(details);
-                                  setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || 'shravankotagi314@gmail.com');
+                                  setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || '');
                                   setShowQuotationModal(true);
                                 }}
                                 className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer">
@@ -3746,7 +3746,7 @@ export default function InquiriesPage() {
                     onClick={() => {
                       setShareInquiry(selectedInquiry);
                       setShareDetails(editDetails);
-                      setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || 'shravankotagi314@gmail.com');
+                      setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
                       setShowQuotationModal(true);
                     }}
                     className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
@@ -3910,7 +3910,7 @@ export default function InquiriesPage() {
                 <input
                   type="email"
                   required
-                  placeholder="e.g. shravankotagi314@gmail.com"
+                  placeholder="e.g. customer@example.com"
                   value={quotationEmail}
                   onChange={e => setQuotationEmail(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
@@ -3949,10 +3949,14 @@ export default function InquiriesPage() {
                 type="button"
                 disabled={sendingQuotation || !quotationEmail.trim()}
                 onClick={async () => {
+                  const targetEmail = quotationEmail.trim();
+                  if (!targetEmail || !targetEmail.includes('@')) {
+                    toast.error('Please enter a valid customer email address');
+                    return;
+                  }
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
-                    const targetEmail = quotationEmail.trim() || 'shravankotagi314@gmail.com';
                     const res = await inquiriesApi.sendQuotation(shareInquiry.id, {
                       customer_email: targetEmail,
                       customer_name: shareDetails.companyName,

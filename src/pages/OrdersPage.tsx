@@ -472,7 +472,7 @@ export default function OrdersPage() {
   // Send / Share Modal
   const [showSendModal, setShowSendModal] = useState(false);
   const [shareOrder, setShareOrder] = useState<Order | null>(null);
-  const [sendEmail, setSendEmail] = useState('shravankotagi314@gmail.com');
+  const [sendEmail, setSendEmail] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
 
@@ -828,7 +828,7 @@ export default function OrdersPage() {
 
   const handleOpenSendModal = async (ord: Order) => {
     setShareOrder(ord);
-    setSendEmail((ord as any).customer_email || 'shravankotagi314@gmail.com');
+    setSendEmail((ord as any).customer_email || '');
     setResendNotice('');
     setShowSendModal(true);
 
@@ -1390,7 +1390,7 @@ export default function OrdersPage() {
                 <input
                   type="email"
                   required
-                  placeholder="e.g. shravankotagi314@gmail.com"
+                  placeholder="e.g. customer@example.com"
                   value={sendEmail}
                   onChange={e => setSendEmail(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
@@ -1419,7 +1419,7 @@ export default function OrdersPage() {
                 onClick={async () => {
                   if (!shareOrder) return;
                   const targetEmail = sendEmail.trim();
-                  if (!targetEmail) {
+                  if (!targetEmail || !targetEmail.includes('@')) {
                     toast.error('Please enter a valid recipient email address');
                     return;
                   }
