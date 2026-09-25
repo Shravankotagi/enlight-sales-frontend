@@ -28,6 +28,7 @@ import {
   ArrowUpRight,
   Scale,
   Phone,
+  Mail,
   Users,
   User,
 } from 'lucide-react';
@@ -287,6 +288,16 @@ function CustomerProfilePageContent() {
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits'>('overview');
   const [copiedGst, setCopiedGst] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+
+  const handleCopyEmail = (emailText?: string) => {
+    if (!emailText) return;
+    navigator.clipboard.writeText(emailText);
+    setCopiedEmail(emailText);
+    toast.success('Email copied to clipboard');
+    setTimeout(() => setCopiedEmail(null), 2000);
+  };
+
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
 
@@ -483,7 +494,20 @@ function CustomerProfilePageContent() {
       // 1. Primary Account Contact
       const custContactPerson = safeStr(customer?.contact_person);
       const custPhone = safeStr(customer?.customer_phone);
-      if (custContactPerson || custPhone) {
+      const custEmail =
+        safeStr(customer?.email) ||
+        (Array.isArray(visits)
+          ? visits.find(
+              (v: any) =>
+                v &&
+                v.email &&
+                (!v.person_met ||
+                  v.person_met.toLowerCase() === custContactPerson.toLowerCase() ||
+                  v.person_met.toLowerCase() === 'contact person'),
+            )?.email || visits.find((v: any) => v && v.email)?.email
+          : undefined);
+
+      if (custContactPerson || custPhone || custEmail) {
         const name = custContactPerson || 'Primary Contact';
         const phone = custPhone;
         const key = `${name.toLowerCase()}::${phone.replace(/\D/g, '')}`;
@@ -492,6 +516,7 @@ function CustomerProfilePageContent() {
           id: 'primary-poc',
           name,
           phone: phone || undefined,
+          email: custEmail || undefined,
           roleLabel: 'Primary POC',
           isPrimary: true,
           meta: 'Customer Master Record',
@@ -956,35 +981,59 @@ function CustomerProfilePageContent() {
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 pt-0.5">
-                        {contact.phone ? (
+                      <div className="flex flex-col gap-1.5 pt-0.5">
+                        <div className="flex items-center justify-between gap-2">
+                          {contact.phone ? (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <Phone size={11} className="text-slate-400 shrink-0" />
+                              <a
+                                href={`tel:${contact.phone}`}
+                                className="font-semibold text-slate-800 hover:text-blue-600 transition-colors">
+                                {contact.phone}
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyPhone(contact.phone)}
+                                className="text-slate-400 hover:text-blue-600 transition-colors p-0.5 cursor-pointer ml-0.5"
+                                title="Copy phone number">
+                                {copiedPhone === contact.phone ? (
+                                  <Check size={12} className="text-emerald-600" />
+                                ) : (
+                                  <Copy size={12} />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">Phone not recorded</span>
+                          )}
+
+                          {contact.meta && (
+                            <span className="text-[10px] text-slate-400 font-medium truncate">
+                              {contact.meta}
+                            </span>
+                          )}
+                        </div>
+
+                        {contact.email && (
                           <div className="flex items-center gap-1.5 text-xs">
-                            <Phone size={11} className="text-slate-400 shrink-0" />
+                            <Mail size={11} className="text-slate-400 shrink-0" />
                             <a
-                              href={`tel:${contact.phone}`}
-                              className="font-semibold text-slate-800 hover:text-blue-600 transition-colors">
-                              {contact.phone}
+                              href={`mailto:${contact.email}`}
+                              className="font-semibold text-slate-800 hover:text-blue-600 transition-colors truncate">
+                              {contact.email}
                             </a>
                             <button
                               type="button"
-                              onClick={() => handleCopyPhone(contact.phone)}
+                              onClick={() => handleCopyEmail(contact.email)}
                               className="text-slate-400 hover:text-blue-600 transition-colors p-0.5 cursor-pointer ml-0.5"
-                              title="Copy phone number">
-                              {copiedPhone === contact.phone ? (
+                              title="Copy email address">
+                              {copiedEmail === contact.email ? (
                                 <Check size={12} className="text-emerald-600" />
                               ) : (
                                 <Copy size={12} />
                               )}
                             </button>
                           </div>
-                        ) : (
-                          <span className="text-[11px] text-slate-400">Phone not recorded</span>
-                        )}
-
-                        {contact.meta && (
-                          <span className="text-[10px] text-slate-400 font-medium truncate">
-                            {contact.meta}
-                          </span>
                         )}
                       </div>
                     </div>

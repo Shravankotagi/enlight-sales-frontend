@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   MapPin,
   Plus,
@@ -15,7 +16,6 @@ import {
   Phone,
   Map as MapIcon,
   Edit2,
-  Trash2,
   Calendar,
   MoreVertical,
   Eye,
@@ -42,6 +42,7 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
   formatLocalDate,
+  formatLocalTime,
   getDaysAgo,
 } from '../utils/dateUtils';
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
@@ -71,6 +72,7 @@ export function formatCityLocality(rawLocation?: string | null, rawAddress?: str
 }
 
 export default function VisitsPage() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const targetVisitId = searchParams.get('visitId') || searchParams.get('id');
@@ -356,7 +358,6 @@ export default function VisitsPage() {
   // Details & Edit Modal States
   const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const handleCloseVisitModal = () => {
@@ -417,6 +418,7 @@ export default function VisitsPage() {
   const [formFollowup, setFormFollowup] = useState('');
   const [formFollowupDate, setFormFollowupDate] = useState('');
   const [formVisitDate, setFormVisitDate] = useState(formatLocalDate());
+  const [formVisitTime, setFormVisitTime] = useState(formatLocalTime());
   const [formErrors, setFormErrors] = useState<Record<string, string | boolean>>({});
 
   // Extended Fields for Create Form
@@ -573,6 +575,7 @@ export default function VisitsPage() {
   const [editFollowupDate, setEditFollowupDate] = useState('');
   const [editFollowupStatus, setEditFollowupStatus] = useState<'pending' | 'completed'>('pending');
   const [editVisitDate, setEditVisitDate] = useState(formatLocalDate());
+  const [editVisitTime, setEditVisitTime] = useState(formatLocalTime());
   const [editErrors, setEditErrors] = useState<Record<string, string | boolean>>({});
 
   // Extended Fields for Edit Form
@@ -674,6 +677,10 @@ export default function VisitsPage() {
 
     try {
       setSubmitting(true);
+      const [vYear, vMonth, vDay] = formVisitDate.split('-').map(Number);
+      const [vHour, vMinute] = (formVisitTime || formatLocalTime()).split(':').map(Number);
+      const visitedAtDate = new Date(vYear, vMonth - 1, vDay, vHour, vMinute, 0);
+
       await visitsApi.create({
         customer_name: formCustomerName.trim(),
         person_met: formPersonMet.trim(),
@@ -683,7 +690,7 @@ export default function VisitsPage() {
         remarks: formRemarks.trim(),
         follow_up_action: formFollowup.trim() || undefined,
         follow_up_date: formFollowup.trim() ? (formFollowupDate || undefined) : undefined,
-        visited_at: new Date(formVisitDate).toISOString(),
+        visited_at: visitedAtDate.toISOString(),
         email: formEmail.trim() || undefined,
         designation: formDesignation.trim() || undefined,
         customer_type: formCustomerType || undefined,
@@ -703,6 +710,9 @@ export default function VisitsPage() {
         attachments: formAttachments.length > 0 ? formAttachments : undefined,
       });
 
+      queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-directory'] });
+
       setIsSavedSuccess(true);
       toast.success('Visit log saved successfully!');
 
@@ -719,6 +729,7 @@ export default function VisitsPage() {
         setFormFollowup('');
         setFormFollowupDate('');
         setFormVisitDate(formatLocalDate());
+        setFormVisitTime(formatLocalTime());
         setFormErrors({});
         setFormEmail('');
         setFormDesignation('');
@@ -801,9 +812,9 @@ export default function VisitsPage() {
       (v.contact_phone || (v as any).contact_no || '').replace(/\D/g, '').slice(-10),
     );
     setEditLocation(v.location || (v as any).customer_address || '');
-    setEditVisitDate(
-      v.visited_at ? new Date(v.visited_at).toISOString().split('T')[0] : formatLocalDate(),
-    );
+    const vDate = v.visited_at ? new Date(v.visited_at) : new Date();
+    setEditVisitDate(formatLocalDate(vDate));
+    setEditVisitTime(formatLocalTime(vDate));
     setEditOutcome(getNormalizedOutcome(v));
     const remarksSource = v.remarks || v.raw_remarks || '';
     setEditRemarks(
@@ -863,6 +874,10 @@ export default function VisitsPage() {
 
     try {
       setActionLoading(true);
+      const [eYear, eMonth, eDay] = editVisitDate.split('-').map(Number);
+      const [eHour, eMinute] = (editVisitTime || '00:00').split(':').map(Number);
+      const visitedAtDate = new Date(eYear, eMonth - 1, eDay, eHour, eMinute, 0);
+
       const cleanRemarks = editRemarks.trim();
       const updatedData = {
         customer_name: editCustomerName.trim(),
@@ -877,7 +892,7 @@ export default function VisitsPage() {
         follow_up_action: editFollowup.trim() || null,
         follow_up_date: editFollowup.trim() ? editFollowupDate || null : null,
         follow_up_status: editFollowup.trim() ? editFollowupStatus : null,
-        visited_at: new Date(editVisitDate).toISOString(),
+        visited_at: visitedAtDate.toISOString(),
         email: editEmail.trim() || null,
         designation: editDesignation.trim() || null,
         customer_type: editCustomerType || null,
@@ -898,6 +913,9 @@ export default function VisitsPage() {
       };
 
       await visitsApi.update(selectedVisit.id, updatedData);
+
+      queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-directory'] });
 
       const updatedObj: CustomerVisit = {
         ...selectedVisit,
@@ -974,29 +992,6 @@ export default function VisitsPage() {
       if (selectedVisit && selectedVisit.id === v.id) {
         setSelectedVisit(v);
       }
-    }
-  };
-
-  const handleDeleteClick = () => {
-    setShowDeleteModal(true);
-  };
-
-  const executeDeleteVisit = async () => {
-    if (!selectedVisit) return;
-
-    try {
-      setActionLoading(true);
-      await visitsApi.delete(selectedVisit.id);
-      setVisits(prev => prev.filter(item => item.id !== selectedVisit.id));
-      setShowDeleteModal(false);
-      handleCloseVisitModal();
-      toast.success('Visit record deleted');
-      fetchVisits();
-    } catch (err) {
-      console.error('Error deleting visit:', err);
-      toast.error('Failed to delete visit record.');
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -1915,7 +1910,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Visit Date <span className="text-rose-500">*</span>
@@ -1930,6 +1925,16 @@ export default function VisitsPage() {
                           className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none transition-all cursor-pointer ${
                             formErrors.visitDate ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
                           }`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Visit Time</label>
+                        <input
+                          type="time"
+                          value={formVisitTime}
+                          onChange={e => setFormVisitTime(e.target.value)}
+                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
                         />
                       </div>
 
@@ -2618,14 +2623,6 @@ export default function VisitsPage() {
                 <div className="pt-3 border-t border-slate-100 flex justify-end items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={handleDeleteClick}
-                    disabled={actionLoading}
-                    className="px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer">
-                    <Trash2 size={14} />
-                    Delete Visit
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setIsEditing(true)}
                     className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer">
                     <Edit2 size={13} />
@@ -2756,13 +2753,23 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Visit Date</label>
                           <input
                             type="date"
                             value={editVisitDate}
                             onChange={e => setEditVisitDate(e.target.value)}
+                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Visit Time</label>
+                          <input
+                            type="time"
+                            value={editVisitTime}
+                            onChange={e => setEditVisitTime(e.target.value)}
                             className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
                           />
                         </div>
@@ -3075,7 +3082,7 @@ export default function VisitsPage() {
                 <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
                   <button
                     type="button"
-                    onClick={() => setIsEditing(false)}
+                    onClick={handleCloseVisitModal}
                     className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
                     Cancel
                   </button>
@@ -3089,46 +3096,6 @@ export default function VisitsPage() {
                 </div>
               </form>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Custom In-App Delete Confirmation Modal */}
-      {showDeleteModal && selectedVisit && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
-                <Trash2 size={24} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Delete Visit Log</h3>
-                <p className="text-xs text-slate-500 mt-0.5">This action cannot be undone.</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Are you sure you want to permanently delete the visit record for{' '}
-              <strong className="text-slate-900 font-semibold">{selectedVisit.customer_name}</strong>?
-            </p>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                disabled={actionLoading}
-                className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all cursor-pointer">
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeDeleteVisit}
-                disabled={actionLoading}
-                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5 cursor-pointer">
-                <Trash2 size={14} />
-                {actionLoading ? 'Deleting...' : 'Delete Visit'}
-              </button>
-            </div>
           </div>
         </div>
       )}
