@@ -4,13 +4,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, User, MoreVertical, Loader2,
+  ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, ArrowLeft
 } from 'lucide-react';
 import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
+import PaginationControl from '../components/PaginationControl';
 import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import {
@@ -3123,55 +3124,15 @@ export default function InquiriesPage() {
 
         {/* Pagination Bar */}
         {filtered.length > 0 && (
-          <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
-            <div className="font-medium">
-              Showing <span className="font-bold text-slate-900">{startIndex + 1}</span> to{' '}
-              <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
-              <span className="font-bold text-slate-900">{filtered.length}</span> inquiries
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={validCurrentPage === 1}
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1 transition-colors shadow-2xs text-xs">
-                <ChevronLeft size={14} /> Prev
-              </button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === totalPages || (p >= validCurrentPage - 2 && p <= validCurrentPage + 2))
-                  .map((pageNum, i, arr) => {
-                    const prevPageNum = arr[i - 1];
-                    const showEllipsis = prevPageNum && pageNum - prevPageNum > 1;
-                    return (
-                      <span key={pageNum} className="flex items-center">
-                        {showEllipsis && <span className="px-1 text-slate-400 font-mono text-xs">...</span>}
-                        <button
-                          type="button"
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`w-7 h-7 rounded-lg text-xs font-bold transition-all flex items-center justify-center ${
-                            validCurrentPage === pageNum
-                              ? 'bg-blue-600 text-white shadow-xs'
-                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                          }`}>
-                          {pageNum}
-                        </button>
-                      </span>
-                    );
-                  })}
-              </div>
-
-              <button
-                type="button"
-                disabled={validCurrentPage === totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1 transition-colors shadow-2xs text-xs">
-                Next <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
+          <PaginationControl
+            currentPage={validCurrentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filtered.length}
+            startIndex={filtered.length === 0 ? 0 : startIndex + 1}
+            endIndex={endIndex}
+            itemLabel="inquiries"
+          />
         )}
       </div>
       )}

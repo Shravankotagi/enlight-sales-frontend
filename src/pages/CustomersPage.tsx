@@ -11,8 +11,6 @@ import {
   RefreshCw,
   Calendar,
   X,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   Award,
   TrendingUp,
@@ -21,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
+import PaginationControl from '../components/PaginationControl';
 
 function HealthBadge({ risk }: { risk: string }) {
   const r = (risk || '').toLowerCase();
@@ -650,45 +649,15 @@ export default function CustomersPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div>
-            Showing <span className="font-bold text-slate-900">{filteredCustomers.length === 0 ? 0 : startIndex + 1}</span> to{' '}
-            <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
-            <span className="font-bold text-slate-900">{filteredCustomers.length}</span> customers
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-              className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer flex items-center gap-1">
-              <ChevronLeft size={14} className="text-slate-400" />
-              Prev
-            </button>
-
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-              <button
-                key={pageNum}
-                type="button"
-                onClick={() => setCurrentPage(pageNum)}
-                className={`w-7 h-7 rounded-xl text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${currentPage === pageNum
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-transparent hover:border-slate-200'
-                  }`}>
-                {pageNum}
-              </button>
-            ))}
-
-            <button
-              type="button"
-              disabled={currentPage === totalPages || totalPages === 0}
-              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-              className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer flex items-center gap-1">
-              Next
-              <ChevronRight size={14} className="text-slate-400" />
-            </button>
-          </div>
-        </div>
+        <PaginationControl
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={filteredCustomers.length}
+          startIndex={filteredCustomers.length === 0 ? 0 : startIndex + 1}
+          endIndex={endIndex}
+          itemLabel="customers"
+        />
       </div>
     </div>
   );
