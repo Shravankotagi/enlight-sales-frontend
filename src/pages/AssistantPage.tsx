@@ -17,6 +17,10 @@ import {
   BarChart2,
   Users,
   Search,
+  Camera,
+  MapPin,
+  X,
+  Loader2,
 } from 'lucide-react';
 import KnowledgeBaseModal from '../components/KnowledgeBaseModal';
 import MarkdownMessage from '../components/MarkdownMessage';
@@ -31,6 +35,8 @@ interface ChatMessage {
   interactiveType?: 'buttons' | 'list' | 'text';
   interactiveButtons?: InteractiveButton[] | null;
   interactiveList?: InteractiveListData | null;
+  image?: { base64: string; mimeType: string } | null;
+  gps?: { latitude: number; longitude: number; accuracy?: number } | null;
 }
 
 interface ChatSession {
@@ -55,6 +61,21 @@ export default function AssistantPage() {
   const [kbModalOpen, setKbModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Photo & GPS attachment state for field visits
+  const [selectedPhoto, setSelectedPhoto] = useState<{
+    file: File;
+    previewUrl: string;
+    base64: string;
+  } | null>(null);
+  const [gpsLocation, setGpsLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  } | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'acquiring' | 'acquired' | 'error'>('idle');
+  const [gpsStatusText, setGpsStatusText] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const activeEmployee = viewingAs || employee;
   const role = (activeEmployee?.role || 'salesperson').toLowerCase();
   const isManagerOrAdmin =
@@ -67,6 +88,62 @@ export default function AssistantPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      setSelectedPhoto({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        base64,
+      });
+    };
+    reader.readAsDataURL(file);
+
+    // Automatically capture GPS location from browser geolocation
+    if ('geolocation' in navigator) {
+      setGpsStatus('acquiring');
+      setGpsStatusText('Acquiring GPS location...');
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const coords = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+          setGpsLocation(coords);
+          setGpsStatus('acquired');
+          setGpsStatusText(`GPS Tagged: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)} (±${Math.round(coords.accuracy)}m)`);
+        },
+        (geoErr) => {
+          console.warn('Geolocation capture notice:', geoErr.message);
+          setGpsStatus('error');
+          setGpsStatusText('GPS unavailable');
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    } else {
+      setGpsStatus('error');
+      setGpsStatusText('Geolocation not supported');
+    }
+  };
+
+  const handleClearPhoto = () => {
+    if (selectedPhoto?.previewUrl) {
+      URL.revokeObjectURL(selectedPhoto.previewUrl);
+    }
+    setSelectedPhoto(null);
+    setGpsLocation(null);
+    setGpsStatus('idle');
+    setGpsStatusText('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const loadSessions = async () => {
     try {
@@ -125,6 +202,7 @@ export default function AssistantPage() {
     setMessages([]);
     setError(null);
     setInputText('');
+    handleClearPhoto();
   };
 
   const handleSend = async (
@@ -132,11 +210,14 @@ export default function AssistantPage() {
     displayTitle?: string,
   ) => {
     const textToSend = promptTextOverride || inputText.trim();
-    if (!textToSend || loading) return;
+    if ((!textToSend && !selectedPhoto) || loading) return;
 
-    const userDisplayText = displayTitle || textToSend;
+    const userDisplayText = displayTitle || textToSend || (selectedPhoto ? 'Attached photo for visit' : '');
+    const photoToSend = selectedPhoto;
+    const gpsToSend = gpsLocation;
 
     setInputText('');
+    handleClearPhoto();
     setError(null);
 
     // Optimistic user turn addition
@@ -145,14 +226,18 @@ export default function AssistantPage() {
       role: 'user',
       content: userDisplayText,
       created_at: new Date().toISOString(),
+      image: photoToSend ? { base64: photoToSend.base64, mimeType: photoToSend.file.type } : null,
+      gps: gpsToSend || null,
     };
     setMessages((prev) => [...prev, tempUserMsg]);
     setLoading(true);
 
     try {
       const res = await chatbotApi.sendMessage({
-        message: textToSend,
+        message: textToSend || (photoToSend ? 'Attached customer visit photo' : ''),
         sessionId: activeSessionId || undefined,
+        image: photoToSend ? { base64: photoToSend.base64, mimeType: photoToSend.file.type } : undefined,
+        gps: gpsToSend || undefined,
       });
 
       const resData = res.data?.data || res.data || {};
@@ -475,7 +560,27 @@ export default function AssistantPage() {
                         }`}
                       >
                         {isUser ? (
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          <div className="space-y-2">
+                            {msg.image?.base64 && (
+                              <div className="rounded-lg overflow-hidden border border-blue-400 max-w-sm">
+                                <img
+                                  src={msg.image.base64}
+                                  alt="Visit attachment"
+                                  className="w-full max-h-60 object-cover"
+                                />
+                              </div>
+                            )}
+                            {msg.gps && (
+                              <div className="text-[11px] text-blue-100 flex items-center gap-1 font-mono">
+                                <MapPin size={12} className="shrink-0" />
+                                <span>
+                                  {msg.gps.latitude.toFixed(4)}, {msg.gps.longitude.toFixed(4)}
+                                  {msg.gps.accuracy ? ` (±${Math.round(msg.gps.accuracy)}m)` : ''}
+                                </span>
+                              </div>
+                            )}
+                            {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                          </div>
                         ) : (
                           <div className="space-y-3">
                             <MarkdownMessage content={getDisplayContent(msg)} />
@@ -537,24 +642,84 @@ export default function AssistantPage() {
 
           {/* Chat Input Bar */}
           <div className="p-4 bg-white border-t border-gray-200">
+            {/* Selected Photo & GPS Tag Preview Chip */}
+            {selectedPhoto && (
+              <div className="flex items-center gap-3 p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl mb-3 text-xs">
+                <img
+                  src={selectedPhoto.previewUrl}
+                  alt="Attachment preview"
+                  className="w-12 h-12 rounded-lg object-cover border border-blue-300 shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-800 truncate">
+                    {selectedPhoto.file.name}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-gray-600 mt-0.5">
+                    {gpsStatus === 'acquiring' && (
+                      <>
+                        <Loader2 size={13} className="animate-spin text-blue-600 shrink-0" />
+                        <span className="text-blue-600">Acquiring GPS location...</span>
+                      </>
+                    )}
+                    {gpsStatus === 'acquired' && (
+                      <>
+                        <MapPin size={13} className="text-emerald-600 shrink-0" />
+                        <span className="text-emerald-700 font-medium">{gpsStatusText}</span>
+                      </>
+                    )}
+                    {gpsStatus === 'error' && (
+                      <>
+                        <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                        <span className="text-amber-700">{gpsStatusText}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearPhoto}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white shrink-0 transition-colors"
+                  title="Remove attachment"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSend();
               }}
-              className="flex items-center gap-3 bg-gray-50 border border-gray-300 focus-within:border-blue-500 focus-within:bg-white px-4 py-2.5 rounded-xl transition-all shadow-2xs"
+              className="flex items-center gap-2 bg-gray-50 border border-gray-300 focus-within:border-blue-500 focus-within:bg-white px-3 py-2 rounded-xl transition-all shadow-2xs"
             >
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-200/60 rounded-lg transition-all shrink-0"
+                title="Attach visit photo (GPS tagged)"
+              >
+                <Camera size={18} />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoSelect}
+              />
               <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask about pipeline deals, customer 360, SOP rules, churn radar..."
+                placeholder={selectedPhoto ? "Add notes for this photo (e.g. Visited Om Steel Pune)..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
                 className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />
               <button
                 type="submit"
-                disabled={!inputText.trim() || loading}
+                disabled={(!inputText.trim() && !selectedPhoto) || loading}
                 className="p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg transition-all active:scale-95 shrink-0 shadow-2xs"
               >
                 <Send size={16} />

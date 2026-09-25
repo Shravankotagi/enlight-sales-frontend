@@ -10,6 +10,12 @@ export function formatLocalDate(d: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+export function formatLocalTime(d: Date = new Date()): string {
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
 export function getFirstDayOfWeek(d: Date = new Date()): string {
   const target = new Date(d);
   const day = target.getDay();
