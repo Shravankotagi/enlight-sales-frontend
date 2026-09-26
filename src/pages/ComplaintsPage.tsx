@@ -25,6 +25,8 @@ import {
   Image as ImageIcon,
   Eye,
   ExternalLink,
+  Building2,
+  ShieldCheck,
 } from 'lucide-react';
 import { complaintsApi, employeesApi, customersApi, dealsApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -1221,7 +1223,7 @@ export default function ComplaintsPage() {
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
           onClick={handleCloseComplaintModal}>
           <div
-            className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto space-y-4"
+            className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto space-y-3.5"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
@@ -1235,227 +1237,295 @@ export default function ComplaintsPage() {
                   </button>
                 )}
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">{selectedComplaint.customer_name}</h2>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 flex-wrap">
-                    <span className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg shrink-0">
+                      <AlertTriangle size={18} />
+                    </div>
+                    <h2 className="text-lg font-bold text-slate-900">{selectedComplaint.customer_name}</h2>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 flex-wrap">
+                    <span className="flex items-center gap-1 font-medium">
                       <Calendar size={12} className="text-slate-400" />
                       {selectedComplaint.complaint_date
-                        ? new Date(selectedComplaint.complaint_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                        ? new Date(selectedComplaint.complaint_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
                         : formatComplaintDateTime(selectedComplaint.created_at || selectedComplaint.reported_at)}
                     </span>
                     {canViewSalesperson && (
                       <span>
-                        • Rep: <strong className="text-slate-700">{getSalespersonDisplayName(selectedComplaint)}</strong>
+                        • Rep: <strong className="text-slate-700 font-semibold">{getSalespersonDisplayName(selectedComplaint)}</strong>
                       </span>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
                 {renderStatusBadge(selectedComplaint.status)}
                 <button
                   onClick={handleCloseComplaintModal}
                   className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors cursor-pointer"
                   title="Close">
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
             </div>
 
-            {/* Info Cards Grid - Show Populated Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
-              {/* Linked Won Deal & PO */}
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                <p className="text-xs font-medium text-slate-400 mb-1">Linked Order / PO Reference</p>
-                <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
-                  {selectedComplaint.po_number && (
-                    <span className="font-mono text-slate-800 font-bold bg-white border border-slate-300 px-2 py-0.5 rounded shadow-2xs text-xs">
-                      PO: {selectedComplaint.po_number}
-                    </span>
-                  )}
-                  {selectedComplaint.deal_id && (
-                    <span className="font-mono text-blue-700 text-xs bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                      #{selectedComplaint.deal_id.startsWith('INQ-') || selectedComplaint.deal_id.startsWith('DEAL-') ? selectedComplaint.deal_id.replace(/^DEAL-/, 'INQ-') : `INQ-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
-                    </span>
-                  )}
-                  {!selectedComplaint.po_number && !selectedComplaint.deal_id && (
-                    <span className="text-slate-400 font-normal text-xs">Won Order</span>
-                  )}
-                </div>
-              </div>
+            {/* Scrollable Content Area */}
+            <div className="overflow-y-auto flex-1 space-y-3.5 pr-1 py-1">
+              {/* Top Row: Two Side-by-Side Intelligence Cards (Mirrors VisitsPage Image 4) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+                {/* Card 1: 🏛️ STAKEHOLDER & COMPLAINT DETAILS */}
+                <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-3 shadow-2xs">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-blue-700 tracking-wide uppercase border-b border-slate-100 pb-2">
+                    <Building2 size={13} className="text-blue-600" />
+                    <span>STAKEHOLDER &amp; COMPLAINT DETAILS</span>
+                  </div>
 
-              {/* Complaint Raised By / Contact Person */}
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                <p className="text-xs font-medium text-slate-400 mb-1">Complaint Raised By</p>
-                <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                  <User size={14} className="text-blue-600 shrink-0" />
-                  <span className="truncate">{selectedComplaint.raised_by || 'Customer Contact'}</span>
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Complaint Raised By</p>
+                      <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-xs mt-0.5">
+                        <User size={13} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{selectedComplaint.raised_by || '-'}</span>
+                      </p>
+                    </div>
 
-              {/* Complaint Type */}
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                <p className="text-xs font-medium text-slate-400 mb-1">Complaint Type</p>
-                <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                  <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-                  <span>{selectedComplaint.complaint_type || 'Quality Defect'}</span>
-                </div>
-              </div>
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Complaint Date</p>
+                      <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-xs mt-0.5">
+                        <Calendar size={13} className="text-slate-400 shrink-0" />
+                        <span>
+                          {selectedComplaint.complaint_date
+                            ? new Date(selectedComplaint.complaint_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                            : '-'}
+                        </span>
+                      </p>
+                    </div>
 
-              {/* Invoice / Delivery Challan No. (if populated) */}
-              {selectedComplaint.challan_no && (
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                  <p className="text-xs font-medium text-slate-400 mb-1">Invoice / Challan No.</p>
-                  <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 font-mono">
-                    <FileText size={14} className="text-indigo-600 shrink-0" />
-                    <span>{selectedComplaint.challan_no}</span>
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Complaint Type</p>
+                      <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-xs mt-0.5">
+                        <AlertTriangle size={13} className="text-amber-500 shrink-0" />
+                        <span className="truncate">{selectedComplaint.complaint_type || '-'}</span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Invoice / Challan No.</p>
+                      <p className="text-slate-800 font-semibold font-mono flex items-center gap-1.5 text-xs mt-0.5">
+                        <FileText size={13} className="text-indigo-500 shrink-0" />
+                        <span className="truncate">{selectedComplaint.challan_no || '-'}</span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Linked Order / PO Reference</p>
+                      <div className="font-semibold text-slate-800 text-xs flex items-center gap-1.5 flex-wrap mt-0.5">
+                        {selectedComplaint.po_number && (
+                          <span className="font-mono text-slate-800 font-bold bg-white border border-slate-300 px-1.5 py-0.5 rounded shadow-2xs text-[11px]">
+                            PO: {selectedComplaint.po_number}
+                          </span>
+                        )}
+                        {selectedComplaint.deal_id && (
+                          <span className="font-mono text-blue-700 text-[11px] bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                            #{selectedComplaint.deal_id.startsWith('INQ-') || selectedComplaint.deal_id.startsWith('DEAL-')
+                              ? selectedComplaint.deal_id.replace(/^DEAL-/, 'INQ-')
+                              : `INQ-${selectedComplaint.deal_id.substring(0, 6).toUpperCase()}`}
+                          </span>
+                        )}
+                        {!selectedComplaint.po_number && !selectedComplaint.deal_id && (
+                          <span className="text-slate-600 font-normal">-</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Product(s) Affected</p>
+                      <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-xs mt-0.5">
+                        <Package size={13} className="text-blue-500 shrink-0" />
+                        <span className="truncate">{getComplaintProductDisplay(selectedComplaint) || '-'}</span>
+                      </p>
+                    </div>
                   </div>
                 </div>
-              )}
 
-              {/* Product Name */}
-              <div className={`bg-slate-50 p-3.5 rounded-2xl border border-slate-200 ${selectedComplaint.challan_no ? 'col-span-1 sm:col-span-2' : ''}`}>
-                <p className="text-xs font-medium text-slate-400 mb-1">Product(s) Affected</p>
-                <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                  <Package size={14} className="text-blue-600 shrink-0" />
-                  <span>{getComplaintProductDisplay(selectedComplaint)}</span>
+                {/* Card 2: 💼 ACTION & RESOLUTION INTELLIGENCE */}
+                <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-3 shadow-2xs">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-blue-700 tracking-wide uppercase border-b border-slate-100 pb-2">
+                    <ShieldCheck size={13} className="text-blue-600" />
+                    <span>ACTION &amp; RESOLUTION INTELLIGENCE</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Corrective Action Taken</p>
+                      <p className="text-slate-800 font-semibold text-xs leading-snug mt-0.5 break-words">
+                        {selectedComplaint.corrective_action || '-'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Customer Communication</p>
+                      <p className="text-slate-800 font-semibold text-xs leading-snug mt-0.5 break-words">
+                        {selectedComplaint.customer_communication || '-'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Resolution Date</p>
+                      <p className="text-slate-800 font-semibold font-mono text-xs flex items-center gap-1.5 mt-0.5">
+                        <Calendar size={13} className="text-slate-400 shrink-0" />
+                        <span>
+                          {selectedComplaint.resolution_date
+                            ? new Date(selectedComplaint.resolution_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                            : '-'}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-slate-400 font-medium text-[11px]">Current Status</p>
+                      <div className="mt-0.5">
+                        {renderStatusBadge(selectedComplaint.status)}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Complaint Description Block */}
-            <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1 text-xs flex-1 overflow-y-auto max-h-40">
-              <p className="text-slate-500 font-semibold mb-1">Complaint Description:</p>
-              <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
-                {selectedComplaint.description || 'No description provided.'}
-              </p>
-            </div>
-
-            {/* Corrective Action if present */}
-            {selectedComplaint.corrective_action && (
-              <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl text-xs space-y-1 shrink-0">
-                <p className="text-amber-900 font-semibold">Corrective Action Taken:</p>
-                <p className="text-amber-800">{selectedComplaint.corrective_action}</p>
-              </div>
-            )}
-
-            {/* Customer Communication / Update if present */}
-            {selectedComplaint.customer_communication && (
-              <div className="p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs space-y-1 shrink-0">
-                <p className="text-indigo-900 font-semibold">Customer Communication / Update:</p>
-                <p className="text-indigo-800">{selectedComplaint.customer_communication}</p>
-              </div>
-            )}
-
-            {/* Attachments quick-access banner if attachments exist */}
-            {((Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ||
-              (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2 shrink-0">
-                <div className="flex items-center gap-2 text-xs text-slate-700 font-semibold">
-                  <Paperclip size={15} className="text-blue-600" />
-                  <span>
-                    Evidence / Attachments (
-                    {(selectedComplaint.attachments?.length || selectedComplaint.media_urls?.length || 0)} files)
-                  </span>
+              {/* Card 3: Complaint Description */}
+              <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-2xs">
+                <p className="text-xs font-semibold text-slate-500">Complaint Description</p>
+                <div className="max-h-32 overflow-y-auto pr-1 text-xs text-slate-800 leading-relaxed break-words whitespace-pre-wrap font-normal">
+                  {selectedComplaint.description || '-'}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
-                  <Eye size={13} />
-                  Show Attachments
-                </button>
-              </div>
-            )}
-
-            {/* Resolution Workspace */}
-            <div className="p-3.5 bg-blue-50/40 border border-blue-100 rounded-xl space-y-2.5 shrink-0">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <CheckCircle2 size={14} className="text-blue-600" />
-                  Resolution Notes <span className="text-rose-500">*</span>
-                </p>
-                {selectedComplaint.resolution_date && (
-                  <span className="text-[11px] font-mono text-slate-500">
-                    Resolution Date: {new Date(selectedComplaint.resolution_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </span>
-                )}
               </div>
 
-              {selectedComplaint.status === 'resolved' ? (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg leading-relaxed">
-                    {selectedComplaint.resolution_notes || 'Marked as resolved.'}
+              {/* Card 4: Evidence & Attachments (Mirrors Image 4 Visit Attachments section) */}
+              <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                    <Paperclip size={13} className="text-blue-600" />
+                    Evidence &amp; Attachments
+                    {((Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ||
+                      (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
+                      <span className="text-[11px] font-bold text-slate-700">
+                        ({selectedComplaint.attachments?.length || selectedComplaint.media_urls?.length || 0} files)
+                      </span>
+                    )}
                   </p>
-                  {selectedComplaint.resolved_at && (
-                    <p className="text-[11px] text-slate-500">
-                      Resolved on {formatComplaintDateTime(selectedComplaint.resolved_at)}
-                    </p>
+                  {((Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ||
+                    (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
+                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer">
+                      <Eye size={12} />
+                      Show Files
+                    </button>
                   )}
                 </div>
-              ) : (
-                <div>
-                  <input
-                    type="text"
-                    placeholder="Enter resolution notes before resolving..."
-                    value={modalResolutionNotes}
-                    onChange={e => setModalResolutionNotes(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Resolution notes are mandatory before marking as resolved.</p>
-                </div>
-              )}
-            </div>
 
-            {/* Modal Bottom Action Buttons */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2.5 shrink-0 flex-wrap">
-              <div>
                 {((Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ||
-                  (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
-                  <button
-                    type="button"
-                    onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
-                    <Paperclip size={13} />
-                    View Attachments ({selectedComplaint.attachments?.length || selectedComplaint.media_urls?.length})
-                  </button>
+                  (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) ? (
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    {(selectedComplaint.attachments || []).map((att, i) => (
+                      <div
+                        key={att.id || i}
+                        onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
+                        className="px-2.5 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg flex items-center gap-1.5 text-xs text-slate-700 transition-colors cursor-pointer shadow-2xs">
+                        <FileText size={13} className="text-blue-600 shrink-0" />
+                        <span className="font-medium max-w-[140px] truncate">{att.file_name || `Evidence ${i + 1}`}</span>
+                      </div>
+                    ))}
+                    {(selectedComplaint.media_urls || []).slice(0, 3).map((_url, i) => (
+                      <div
+                        key={i}
+                        onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
+                        className="px-2.5 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg flex items-center gap-1.5 text-xs text-slate-700 transition-colors cursor-pointer shadow-2xs">
+                        <ImageIcon size={13} className="text-blue-600 shrink-0" />
+                        <span className="font-medium">Image {i + 1}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">No photo or document attachments recorded for this complaint.</p>
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const c = selectedComplaint;
-                    setSelectedComplaint(null);
-                    openEditModal(c);
-                  }}
-                  className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer">
-                  <Edit3 size={14} />
-                  Edit Details
-                </button>
+              {/* Card 5: Resolution Notes & Actions */}
+              <div className="p-3.5 bg-blue-50/40 border border-blue-100 rounded-xl space-y-2.5 shrink-0 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <CheckCircle2 size={14} className={selectedComplaint.status === 'resolved' ? 'text-emerald-600' : 'text-blue-600'} />
+                    Resolution Notes {selectedComplaint.status !== 'resolved' && <span className="text-rose-500">*</span>}
+                  </p>
+                  {selectedComplaint.resolution_date && (
+                    <span className="text-[11px] font-mono text-slate-500">
+                      Target/Resolution Date: {new Date(selectedComplaint.resolution_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
 
                 {selectedComplaint.status === 'resolved' ? (
-                  <button
-                    type="button"
-                    onClick={handleReopenInModal}
-                    disabled={modalActionLoading}
-                    className="px-4 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-                    <RefreshCw size={14} className={modalActionLoading ? 'animate-spin' : ''} />
-                    {modalActionLoading ? 'Updating...' : 'Reopen Complaint'}
-                  </button>
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg leading-relaxed">
+                      {selectedComplaint.resolution_notes || '-'}
+                    </p>
+                    {selectedComplaint.resolved_at && (
+                      <p className="text-[11px] text-slate-500">
+                        Resolved on {formatComplaintDateTime(selectedComplaint.resolved_at)}
+                      </p>
+                    )}
+                  </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleResolveInModal}
-                    disabled={modalActionLoading}
-                    className="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-                    <Check size={14} />
-                    {modalActionLoading ? 'Saving...' : 'Mark as Resolved'}
-                  </button>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Enter resolution notes before resolving..."
+                      value={modalResolutionNotes}
+                      onChange={e => setModalResolutionNotes(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Resolution notes are mandatory before marking as resolved.</p>
+                  </div>
                 )}
               </div>
+            </div>
+
+            {/* Modal Footer Action Buttons */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const c = selectedComplaint;
+                  setSelectedComplaint(null);
+                  openEditModal(c);
+                }}
+                className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer">
+                <Edit3 size={13} />
+                Edit Details
+              </button>
+
+              {selectedComplaint.status === 'resolved' ? (
+                <button
+                  type="button"
+                  onClick={handleReopenInModal}
+                  disabled={modalActionLoading}
+                  className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                  <RefreshCw size={13} className={modalActionLoading ? 'animate-spin' : ''} />
+                  {modalActionLoading ? 'Updating...' : 'Reopen Complaint'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResolveInModal}
+                  disabled={modalActionLoading}
+                  className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                  <Check size={13} strokeWidth={3} />
+                  {modalActionLoading ? 'Saving...' : 'Mark as Resolved'}
+                </button>
+              )}
             </div>
           </div>
         </div>
