@@ -495,30 +495,90 @@ export default function ComplaintsPage() {
     return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
   };
 
-  const handleAddAttachments = (files: FileList | File[], isEdit = false) => {
-    const fileArr = Array.from(files);
-    fileArr.forEach(file => {
-      if (file.size > 15 * 1024 * 1024) {
-        toast.error(`File "${file.name}" exceeds 15MB limit.`);
+  const compressClientImage = (file: File): Promise<string> => {
+    return new Promise(resolve => {
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
         return;
       }
+
       const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        const newAttachment = {
-          file_url: base64,
-          file_name: file.name,
-          file_type: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
-          file_size: file.size,
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.75);
+            resolve(compressed);
+          } else {
+            resolve(e.target?.result as string);
+          }
         };
-        if (isEdit) {
-          setEditAttachments(prev => [...prev, newAttachment]);
-        } else {
-          setFormAttachments(prev => [...prev, newAttachment]);
-        }
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
       };
+      reader.onerror = () => resolve('');
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleAddAttachments = async (files: FileList | File[], isEdit = false) => {
+    const fileArr = Array.from(files);
+    const currentList = isEdit ? editAttachments : formAttachments;
+
+    if (currentList.length >= 3) {
+      toast.error('Maximum 3 attachments allowed per complaint.');
+      return;
+    }
+
+    const availableSlots = 3 - currentList.length;
+    const filesToProcess = fileArr.slice(0, availableSlots);
+    if (fileArr.length > availableSlots) {
+      toast(`Maximum 3 attachments allowed per complaint. Added ${availableSlots} file(s).`, { icon: '⚠️' });
+    }
+
+    for (const file of filesToProcess) {
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error(`File "${file.name}" exceeds 15MB limit.`);
+        continue;
+      }
+      const base64 = await compressClientImage(file);
+      if (!base64) continue;
+
+      const isPdfFile = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const newAttachment = {
+        file_url: base64,
+        file_name: file.name,
+        file_type: isPdfFile ? 'application/pdf' : 'image/jpeg',
+        file_size: file.size,
+      };
+      if (isEdit) {
+        setEditAttachments(prev => (prev.length < 3 ? [...prev, newAttachment] : prev));
+      } else {
+        setFormAttachments(prev => (prev.length < 3 ? [...prev, newAttachment] : prev));
+      }
+    }
   };
 
   const handleOpenAttachmentsViewer = (comp: Complaint, initialIndex = 0) => {
@@ -1676,7 +1736,7 @@ export default function ComplaintsPage() {
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
                       <span>Evidence / Attachments</span>
-                      <span className="text-slate-400 font-normal text-[11px]">Images or PDF (max 15MB)</span>
+                      <span className="text-slate-400 font-normal text-[11px]">Max 3 files (Images or PDF, max 15MB each)</span>
                     </label>
                     <div className="border border-dashed border-slate-300 hover:border-blue-400 rounded-xl px-3 py-2 bg-slate-50/70 transition-colors text-center cursor-pointer relative flex items-center justify-center gap-2">
                       <input
@@ -1987,7 +2047,7 @@ export default function ComplaintsPage() {
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
                       <span>Evidence / Attachments</span>
-                      <span className="text-slate-400 font-normal text-[11px]">Images or PDF (max 15MB)</span>
+                      <span className="text-slate-400 font-normal text-[11px]">Max 3 files (Images or PDF, max 15MB each)</span>
                     </label>
                     <div className="border border-dashed border-slate-300 hover:border-blue-400 rounded-xl px-3 py-2 bg-slate-50/70 transition-colors text-center cursor-pointer relative flex items-center justify-center gap-2">
                       <input
