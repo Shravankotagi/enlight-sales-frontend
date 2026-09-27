@@ -527,14 +527,14 @@ export default function ComplaintsPage() {
     });
   };
 
-  const handleOpenAttachmentsViewer = (comp: Complaint) => {
+  const handleOpenAttachmentsViewer = (comp: Complaint, initialIndex = 0) => {
     const list: Array<{ file_url: string; file_name?: string; file_type?: string }> = [];
     if (Array.isArray(comp.attachments) && comp.attachments.length > 0) {
       comp.attachments.forEach((a, i) => {
         if (a && a.file_url) {
           list.push({
             file_url: a.file_url,
-            file_name: a.file_name || `Attachment ${i + 1}`,
+            file_name: a.file_name || `Evidence ${i + 1}`,
             file_type: a.file_type || (isPdf(a.file_url) ? 'application/pdf' : 'image/jpeg'),
           });
         }
@@ -544,7 +544,7 @@ export default function ComplaintsPage() {
         if (url) {
           list.push({
             file_url: url,
-            file_name: `Attachment ${i + 1}`,
+            file_name: `Evidence ${i + 1}`,
             file_type: isPdf(url) ? 'application/pdf' : 'image/jpeg',
           });
         }
@@ -556,10 +556,11 @@ export default function ComplaintsPage() {
       return;
     }
 
+    const safeIndex = (initialIndex >= 0 && initialIndex < list.length) ? initialIndex : 0;
     setViewerAttachmentList(list);
-    setViewerActiveIndex(0);
-    setViewerAttachmentUrl(list[0].file_url);
-    setViewerAttachmentTitle(list[0].file_name || `${comp.customer_name} - Evidence Document`);
+    setViewerActiveIndex(safeIndex);
+    setViewerAttachmentUrl(list[safeIndex].file_url);
+    setViewerAttachmentTitle(list[safeIndex].file_name || `${comp.customer_name} - Evidence Document`);
   };
 
   // Create Complaint
@@ -1401,7 +1402,7 @@ export default function ComplaintsPage() {
                 </div>
               </div>
 
-              {/* Card 4: Evidence & Attachments (Mirrors Image 4 Visit Attachments section) */}
+              {/* Card 4: Evidence & Attachments */}
               <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
@@ -1410,7 +1411,9 @@ export default function ComplaintsPage() {
                     {((Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ||
                       (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
                       <span className="text-[11px] font-bold text-slate-700">
-                        ({selectedComplaint.attachments?.length || selectedComplaint.media_urls?.length || 0} files)
+                        ({(Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0)
+                          ? selectedComplaint.attachments.length
+                          : (selectedComplaint.media_urls?.length || 0)} files)
                       </span>
                     )}
                   </p>
@@ -1418,7 +1421,7 @@ export default function ComplaintsPage() {
                     (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
                     <button
                       type="button"
-                      onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
+                      onClick={() => handleOpenAttachmentsViewer(selectedComplaint, 0)}
                       className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer">
                       <Eye size={12} />
                       Show Files
@@ -1429,24 +1432,31 @@ export default function ComplaintsPage() {
                 {((Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ||
                   (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) ? (
                   <div className="flex items-center gap-2 flex-wrap pt-1">
-                    {(selectedComplaint.attachments || []).map((att, i) => (
-                      <div
-                        key={att.id || i}
-                        onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
-                        className="px-2.5 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg flex items-center gap-1.5 text-xs text-slate-700 transition-colors cursor-pointer shadow-2xs">
-                        <FileText size={13} className="text-blue-600 shrink-0" />
-                        <span className="font-medium max-w-[140px] truncate">{att.file_name || `Evidence ${i + 1}`}</span>
-                      </div>
-                    ))}
-                    {(selectedComplaint.media_urls || []).slice(0, 3).map((_url, i) => (
-                      <div
-                        key={i}
-                        onClick={() => handleOpenAttachmentsViewer(selectedComplaint)}
-                        className="px-2.5 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg flex items-center gap-1.5 text-xs text-slate-700 transition-colors cursor-pointer shadow-2xs">
-                        <ImageIcon size={13} className="text-blue-600 shrink-0" />
-                        <span className="font-medium">Image {i + 1}</span>
-                      </div>
-                    ))}
+                    {(Array.isArray(selectedComplaint.attachments) && selectedComplaint.attachments.length > 0) ? (
+                      selectedComplaint.attachments.map((att, i) => (
+                        <div
+                          key={att.id || i}
+                          onClick={() => handleOpenAttachmentsViewer(selectedComplaint, i)}
+                          className="px-2.5 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg flex items-center gap-1.5 text-xs text-slate-700 transition-colors cursor-pointer shadow-2xs">
+                          {isPdf(att.file_url, att.file_type) ? (
+                            <FileText size={13} className="text-blue-600 shrink-0" />
+                          ) : (
+                            <ImageIcon size={13} className="text-blue-600 shrink-0" />
+                          )}
+                          <span className="font-medium max-w-[140px] truncate">{att.file_name || `Evidence ${i + 1}`}</span>
+                        </div>
+                      ))
+                    ) : (
+                      (selectedComplaint.media_urls || []).map((_url, i) => (
+                        <div
+                          key={i}
+                          onClick={() => handleOpenAttachmentsViewer(selectedComplaint, i)}
+                          className="px-2.5 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg flex items-center gap-1.5 text-xs text-slate-700 transition-colors cursor-pointer shadow-2xs">
+                          <ImageIcon size={13} className="text-blue-600 shrink-0" />
+                          <span className="font-medium">Image {i + 1}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-slate-400 italic">No photo or document attachments recorded for this complaint.</p>
