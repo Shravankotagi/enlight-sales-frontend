@@ -457,22 +457,16 @@ export default function ComplaintsPage() {
     };
     window.addEventListener('enlight-db-change', handleDbChange);
 
-    // 15s silent background polling fail-safe
+    // 30s silent background polling fail-safe
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         fetchComplaints(true);
       }
-    }, 15000);
-
-    const handleFocus = () => {
-      fetchComplaints(true);
-    };
-    window.addEventListener('focus', handleFocus);
+    }, 30000);
 
     return () => {
       window.removeEventListener('enlight-db-change', handleDbChange);
       clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
     };
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
