@@ -470,7 +470,7 @@ export default function ComplaintsPage() {
     };
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
-  const handleOpenAddModal = () => {
+  const resetCreateForm = () => {
     setFormCustomerName('');
     setFormComplaintDate(formatLocalDate());
     setFormRaisedBy('');
@@ -486,6 +486,10 @@ export default function ComplaintsPage() {
     setFormStatus('reported');
     setFormErrors({});
     setIsSavedSuccess(false);
+  };
+
+  const handleOpenAddModal = () => {
+    resetCreateForm();
     setShowCreateModal(true);
   };
 
@@ -678,7 +682,7 @@ export default function ComplaintsPage() {
       setTimeout(() => {
         setIsSavedSuccess(false);
         setShowCreateModal(false);
-        handleOpenAddModal();
+        resetCreateForm();
         fetchComplaints();
       }, 500);
     } catch (err: any) {
