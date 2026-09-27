@@ -241,7 +241,7 @@ export default function ComplaintsPage() {
   const [formCorrectiveAction, setFormCorrectiveAction] = useState('');
   const [formCustomerCommunication, setFormCustomerCommunication] = useState('');
   const [formResolutionNotes, setFormResolutionNotes] = useState('');
-  const [formResolutionDate, setFormResolutionDate] = useState('');
+  const [formResolutionDate, setFormResolutionDate] = useState(formatLocalDate());
   const [formStatus, setFormStatus] = useState('reported');
   const [customerDeals, setCustomerDeals] = useState<any[]>([]);
   const [loadingDeals, setLoadingDeals] = useState(false);
@@ -482,7 +482,7 @@ export default function ComplaintsPage() {
     setFormCorrectiveAction('');
     setFormCustomerCommunication('');
     setFormResolutionNotes('');
-    setFormResolutionDate('');
+    setFormResolutionDate(formatLocalDate());
     setFormStatus('reported');
     setFormErrors({});
     setIsSavedSuccess(false);
@@ -706,6 +706,11 @@ export default function ComplaintsPage() {
     setEditCustomerCommunication(comp.customer_communication || '');
     setEditStatus(comp.status || 'reported');
     setEditResolutionNotes(comp.resolution_notes || '');
+    setEditResolutionDate(
+      comp.resolution_date
+        ? comp.resolution_date.split('T')[0]
+        : (comp.resolved_at ? comp.resolved_at.split('T')[0] : formatLocalDate())
+    );
     setEditAttachments(
       (comp.attachments || []).map((a, i) => ({
         id: a.id,
