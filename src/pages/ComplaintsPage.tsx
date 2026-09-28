@@ -202,6 +202,7 @@ export default function ComplaintsPage() {
 
   // Details Modal
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [modalResolutionNotes, setModalResolutionNotes] = useState('');
   const [modalActionLoading, setModalActionLoading] = useState(false);
 
@@ -585,10 +586,44 @@ export default function ComplaintsPage() {
     }
   };
 
-  const handleOpenAttachmentsViewer = (comp: Complaint, initialIndex = 0) => {
+  const loadComplaintFiles = async (comp: Complaint): Promise<Complaint> => {
+    const alreadyLoaded = (comp.attachments || []).some((a) => Boolean(a.file_url));
+    if (alreadyLoaded || !comp.id) return comp;
+    const hasMeta = (comp.attachments || []).length > 0;
+    if (!hasMeta) return comp;
+
+    const res = await complaintsApi.getAttachments(comp.id);
+    const raw = res?.data;
+    const files: ComplaintAttachment[] = Array.isArray(raw)
+      ? raw
+      : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    return {
+      ...comp,
+      attachments: files,
+      media_urls: files.map((a) => a.file_url).filter(Boolean),
+    };
+  };
+
+  const handleOpenAttachmentsViewer = async (comp: Complaint, initialIndex = 0) => {
+    let current = comp;
+    const missingFiles = (comp.attachments || []).length > 0 && !(comp.attachments || []).some((a) => a.file_url);
+    if (missingFiles) {
+      try {
+        setAttachmentsLoading(true);
+        current = await loadComplaintFiles(comp);
+        setSelectedComplaint((prev) => (prev && prev.id === comp.id ? current : prev));
+      } catch (err) {
+        console.error('Error loading complaint attachments:', err);
+        toast.error('Could not load attachments.');
+        return;
+      } finally {
+        setAttachmentsLoading(false);
+      }
+    }
+
     const list: Array<{ file_url: string; file_name?: string; file_type?: string }> = [];
-    if (Array.isArray(comp.attachments) && comp.attachments.length > 0) {
-      comp.attachments.forEach((a, i) => {
+    if (Array.isArray(current.attachments) && current.attachments.length > 0) {
+      current.attachments.forEach((a, i) => {
         if (a && a.file_url) {
           list.push({
             file_url: a.file_url,
@@ -597,8 +632,8 @@ export default function ComplaintsPage() {
           });
         }
       });
-    } else if (Array.isArray(comp.media_urls) && comp.media_urls.length > 0) {
-      comp.media_urls.forEach((url, i) => {
+    } else if (Array.isArray(current.media_urls) && current.media_urls.length > 0) {
+      current.media_urls.forEach((url, i) => {
         if (url) {
           list.push({
             file_url: url,
@@ -808,10 +843,25 @@ export default function ComplaintsPage() {
   const openComplaintDetails = (comp: Complaint) => {
     setSelectedComplaint(comp);
     setModalResolutionNotes(comp.resolution_notes || '');
+    const needsFiles = (comp.attachments || []).length > 0 && !(comp.attachments || []).some((a) => a.file_url);
+    if (!needsFiles) {
+      setAttachmentsLoading(false);
+      return;
+    }
+    setAttachmentsLoading(true);
+    loadComplaintFiles(comp)
+      .then((hydrated) => {
+        setSelectedComplaint((prev) => (prev && prev.id === comp.id ? hydrated : prev));
+      })
+      .catch((err) => {
+        console.error('Error loading complaint attachments:', err);
+      })
+      .finally(() => setAttachmentsLoading(false));
   };
 
   const handleCloseComplaintModal = () => {
     setSelectedComplaint(null);
+    setAttachmentsLoading(false);
     setModalResolutionNotes('');
     setModalReturnTo(null);
 
@@ -1484,10 +1534,11 @@ export default function ComplaintsPage() {
                     (Array.isArray(selectedComplaint.media_urls) && selectedComplaint.media_urls.length > 0)) && (
                     <button
                       type="button"
+                      disabled={attachmentsLoading}
                       onClick={() => handleOpenAttachmentsViewer(selectedComplaint, 0)}
-                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer">
+                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer">
                       <Eye size={12} />
-                      Show Files
+                      {attachmentsLoading ? 'Loading...' : 'Show Files'}
                     </button>
                   )}
                 </div>

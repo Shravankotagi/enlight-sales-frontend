@@ -102,6 +102,7 @@ export const kraApi = {
 
 export const complaintsApi = {
   getAll: (params?: any) => API.get('/kra/complaints', { params }),
+  getAttachments: (id: string) => API.get(`/kra/complaints/${id}/attachments`),
   create: (data: any) => API.post('/kra/complaints', data),
   update: (id: string, data: any) => API.patch(`/kra/complaints/${id}`, data),
   updateStatus: (id: string, status: string, resolution_notes?: string) =>
