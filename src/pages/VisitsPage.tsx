@@ -81,6 +81,7 @@ export default function VisitsPage() {
 
   const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
+  const canEditVisit = isAdmin || isSalesManager;
 
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -803,7 +804,7 @@ export default function VisitsPage() {
 
   const openVisitDetails = (v: CustomerVisit, editMode = false) => {
     setSelectedVisit(v);
-    setIsEditing(editMode);
+    setIsEditing(canEditVisit ? editMode : false);
     setEditErrors({});
     setEditCustomerName(v.customer_name || '');
     setEditPersonMet(v.person_met && v.person_met !== 'null' ? v.person_met : '');
@@ -853,6 +854,10 @@ export default function VisitsPage() {
 
   const handleUpdateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEditVisit) {
+      alert('Access Denied: Only Sales Managers and Administrators have permission to update field visits.');
+      return;
+    }
     if (!selectedVisit) return;
 
     const errors: Record<string, string | boolean> = {};
@@ -1678,16 +1683,18 @@ export default function VisitsPage() {
                                 <Eye size={14} className="text-slate-400" />
                                 View
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveActionMenuId(null);
-                                  openVisitDetails(v, true);
-                                }}
-                                className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors cursor-pointer">
-                                <Edit2 size={14} className="text-slate-400" />
-                                Edit
-                              </button>
+                              {canEditVisit && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    openVisitDetails(v, true);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors cursor-pointer">
+                                  <Edit2 size={14} className="text-slate-400" />
+                                  Edit
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2589,13 +2596,15 @@ export default function VisitsPage() {
 
                 {/* View Mode Footer */}
                 <div className="pt-3 border-t border-slate-100 flex justify-end items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(true)}
-                    className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer">
-                    <Edit2 size={13} />
-                    Edit Visit
-                  </button>
+                  {canEditVisit && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer">
+                      <Edit2 size={13} />
+                      Edit Visit
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
