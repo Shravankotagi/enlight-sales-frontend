@@ -48,18 +48,53 @@ interface ChatSession {
 }
 
 const ACTIVE_SESSION_KEY = 'enlight_active_chat_session_id';
+const MESSAGES_CACHE_KEY = 'enlight_active_chat_messages';
+
+function getSavedSessionId(): string | null {
+  try {
+    return sessionStorage.getItem(ACTIVE_SESSION_KEY) || localStorage.getItem(ACTIVE_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function getCachedMessages(sessionId: string | null): ChatMessage[] {
+  if (!sessionId || sessionId === 'new') return [];
+  try {
+    const raw = sessionStorage.getItem(`${MESSAGES_CACHE_KEY}_${sessionId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.warn('Failed to parse cached chat messages:', err);
+  }
+  return [];
+}
 
 export default function AssistantPage() {
   const { employee, viewingAs } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const initialSessionId = getSavedSessionId();
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(
+    initialSessionId && initialSessionId !== 'new' ? initialSessionId : null
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    getCachedMessages(initialSessionId)
+  );
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingSessions, setFetchingSessions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kbModalOpen, setKbModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
+
+  const focusInput = () => {
+    setTimeout(() => {
+      textInputRef.current?.focus();
+    }, 50);
+  };
 
   // Photo & GPS attachment state for field visits
   const [selectedPhoto, setSelectedPhoto] = useState<{
@@ -89,6 +124,13 @@ export default function AssistantPage() {
     scrollToBottom();
   }, [messages, loading]);
 
+  // Keep texting cursor on the text input whenever loading ends or on initial mount
+  useEffect(() => {
+    if (!loading) {
+      focusInput();
+    }
+  }, [loading]);
+
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -101,6 +143,7 @@ export default function AssistantPage() {
         previewUrl: URL.createObjectURL(file),
         base64,
       });
+      focusInput();
     };
     reader.readAsDataURL(file);
 
@@ -118,17 +161,20 @@ export default function AssistantPage() {
           setGpsLocation(coords);
           setGpsStatus('acquired');
           setGpsStatusText(`GPS Tagged: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)} (±${Math.round(coords.accuracy)}m)`);
+          focusInput();
         },
         (geoErr) => {
           console.warn('Geolocation capture notice:', geoErr.message);
           setGpsStatus('error');
           setGpsStatusText('GPS unavailable');
+          focusInput();
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     } else {
       setGpsStatus('error');
       setGpsStatusText('Geolocation not supported');
+      focusInput();
     }
   };
 
@@ -143,6 +189,7 @@ export default function AssistantPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    focusInput();
   };
 
   const loadSessions = async () => {
@@ -157,8 +204,8 @@ export default function AssistantPage() {
         : [];
       setSessions(sessionList);
 
-      const savedSessionId = sessionStorage.getItem(ACTIVE_SESSION_KEY);
-      if (savedSessionId && savedSessionId !== 'new' && sessionList.some((s) => s.id === savedSessionId)) {
+      const savedSessionId = getSavedSessionId();
+      if (savedSessionId && savedSessionId !== 'new') {
         selectSession(savedSessionId);
       } else if (!savedSessionId && sessionList.length > 0) {
         selectSession(sessionList[0].id);
@@ -178,6 +225,16 @@ export default function AssistantPage() {
     try {
       setActiveSessionId(sessionId);
       sessionStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+      try {
+        localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+      } catch {}
+
+      // Pre-load from cache if available so there is zero empty screen jump
+      const cached = getCachedMessages(sessionId);
+      if (cached.length > 0) {
+        setMessages(cached);
+      }
+
       setLoading(true);
       setError(null);
       const res = await chatbotApi.getSessionMessages(sessionId);
@@ -188,21 +245,29 @@ export default function AssistantPage() {
         ? rawData
         : [];
       setMessages(msgList);
+      try {
+        sessionStorage.setItem(`${MESSAGES_CACHE_KEY}_${sessionId}`, JSON.stringify(msgList));
+      } catch {}
     } catch (err: any) {
       console.error('Failed to load session messages:', err);
       setError('Could not load session history.');
     } finally {
       setLoading(false);
+      focusInput();
     }
   };
 
   const handleNewConversation = () => {
     setActiveSessionId(null);
     sessionStorage.setItem(ACTIVE_SESSION_KEY, 'new');
+    try {
+      localStorage.setItem(ACTIVE_SESSION_KEY, 'new');
+    } catch {}
     setMessages([]);
     setError(null);
     setInputText('');
     handleClearPhoto();
+    focusInput();
   };
 
   const handleSend = async (
@@ -229,7 +294,15 @@ export default function AssistantPage() {
       image: photoToSend ? { base64: photoToSend.base64, mimeType: photoToSend.file.type } : null,
       gps: gpsToSend || null,
     };
-    setMessages((prev) => [...prev, tempUserMsg]);
+    setMessages((prev) => {
+      const next = [...prev, tempUserMsg];
+      if (activeSessionId) {
+        try {
+          sessionStorage.setItem(`${MESSAGES_CACHE_KEY}_${activeSessionId}`, JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
     setLoading(true);
 
     try {
@@ -255,6 +328,9 @@ export default function AssistantPage() {
       if (sessionId) {
         setActiveSessionId(sessionId);
         sessionStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+        try {
+          localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+        } catch {}
 
         setSessions((prevSessions) => {
           const existing = prevSessions.find((s) => s.id === sessionId);
@@ -279,7 +355,16 @@ export default function AssistantPage() {
         interactiveButtons,
         interactiveList,
       };
-      setMessages((prev) => [...prev, assistantMsg]);
+      setMessages((prev) => {
+        const next = [...prev, assistantMsg];
+        const targetId = sessionId || activeSessionId;
+        if (targetId) {
+          try {
+            sessionStorage.setItem(`${MESSAGES_CACHE_KEY}_${targetId}`, JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
     } catch (err: any) {
       let errReply =
         err.response?.data?.message || err.message || 'Error processing your request.';
@@ -299,9 +384,18 @@ export default function AssistantPage() {
         content: errReply,
         created_at: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, errAsstMsg]);
+      setMessages((prev) => {
+        const next = [...prev, errAsstMsg];
+        if (activeSessionId) {
+          try {
+            sessionStorage.setItem(`${MESSAGES_CACHE_KEY}_${activeSessionId}`, JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
     } finally {
       setLoading(false);
+      focusInput();
     }
   };
 
@@ -318,6 +412,25 @@ export default function AssistantPage() {
         { label: 'Customer 360 Overview', text: 'What is the 360 overview for our top customer accounts?', icon: Users },
         { label: 'Sales SOP Guidelines', text: 'Search the Knowledge Base for discount rules and quotation policies.', icon: Search },
       ];
+
+  // Resolves image source from raw base64, data URLs, or remote URLs
+  const getImageSource = (img: any): string | null => {
+    if (!img) return null;
+    if (typeof img === 'string') {
+      if (img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://')) {
+        return img;
+      }
+      return `data:image/jpeg;base64,${img}`;
+    }
+    if (img.base64) {
+      if (img.base64.startsWith('data:') || img.base64.startsWith('http://') || img.base64.startsWith('https://')) {
+        return img.base64;
+      }
+      return `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`;
+    }
+    if (img.url) return img.url;
+    return null;
+  };
 
   // Streamlines menu prompt text for messages with interactive list cards
   const getDisplayContent = (msg: ChatMessage): string => {
@@ -506,7 +619,10 @@ export default function AssistantPage() {
                     return (
                       <button
                         key={idx}
-                        onClick={() => handleSend(qp.text)}
+                        onClick={() => {
+                          handleSend(qp.text);
+                          focusInput();
+                        }}
                         className="flex flex-col p-4 bg-white hover:bg-blue-50/60 border border-gray-200 hover:border-blue-300 rounded-xl transition-all shadow-2xs group"
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -561,21 +677,24 @@ export default function AssistantPage() {
                       >
                         {isUser ? (
                           <div className="space-y-2">
-                            {msg.image?.base64 && (
-                              <div className="rounded-lg overflow-hidden border border-blue-400 max-w-sm">
-                                <img
-                                  src={msg.image.base64}
-                                  alt="Visit attachment"
-                                  className="w-full max-h-60 object-cover"
-                                />
-                              </div>
-                            )}
+                            {(() => {
+                              const imgSrc = getImageSource(msg.image);
+                              return imgSrc ? (
+                                <div className="rounded-lg overflow-hidden border border-blue-400 max-w-sm">
+                                  <img
+                                    src={imgSrc}
+                                    alt="Visit attachment"
+                                    className="w-full max-h-60 object-cover"
+                                  />
+                                </div>
+                              ) : null;
+                            })()}
                             {msg.gps && (
                               <div className="text-[11px] text-blue-100 flex items-center gap-1 font-mono">
                                 <MapPin size={12} className="shrink-0" />
                                 <span>
-                                  {msg.gps.latitude.toFixed(4)}, {msg.gps.longitude.toFixed(4)}
-                                  {msg.gps.accuracy ? ` (±${Math.round(msg.gps.accuracy)}m)` : ''}
+                                  {Number(msg.gps.latitude).toFixed(4)}, {Number(msg.gps.longitude).toFixed(4)}
+                                  {msg.gps.accuracy ? ` (±${Math.round(Number(msg.gps.accuracy))}m)` : ''}
                                 </span>
                               </div>
                             )}
@@ -590,9 +709,10 @@ export default function AssistantPage() {
                               msg.interactiveList && (
                                 <InteractiveCatalogMenu
                                   interactiveList={msg.interactiveList}
-                                  onSelect={(payload, title) =>
-                                    handleSend(payload, title)
-                                  }
+                                  onSelect={(payload, title) => {
+                                    handleSend(payload, title);
+                                    focusInput();
+                                  }}
                                   disabled={!isLatestAssistant || loading}
                                 />
                               )}
@@ -603,9 +723,10 @@ export default function AssistantPage() {
                               msg.interactiveButtons.length > 0 && (
                                 <InteractiveButtons
                                   buttons={msg.interactiveButtons}
-                                  onSelect={(payload, title) =>
-                                    handleSend(payload, title)
-                                  }
+                                  onSelect={(payload, title) => {
+                                    handleSend(payload, title);
+                                    focusInput();
+                                  }}
                                   disabled={!isLatestAssistant || loading}
                                 />
                               )}
@@ -710,6 +831,7 @@ export default function AssistantPage() {
                 onChange={handlePhotoSelect}
               />
               <input
+                ref={textInputRef}
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
