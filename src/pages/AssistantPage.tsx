@@ -280,7 +280,7 @@ export default function AssistantPage() {
     const textToSend = promptTextOverride || inputText.trim();
     if ((!textToSend && !selectedPhoto) || loading) return;
 
-    const userDisplayText = displayTitle || textToSend || (selectedPhoto ? 'Attached photo for visit' : '');
+    const userDisplayText = displayTitle || textToSend || (selectedPhoto ? 'Attached image' : '');
     const photoToSend = selectedPhoto;
     const gpsToSend = gpsLocation;
 
@@ -310,7 +310,7 @@ export default function AssistantPage() {
 
     try {
       const res = await chatbotApi.sendMessage({
-        message: textToSend || (photoToSend ? 'Attached customer visit photo' : ''),
+        message: textToSend || (photoToSend ? 'Attached image' : ''),
         sessionId: activeSessionId || undefined,
         image: photoToSend ? { base64: photoToSend.base64, mimeType: photoToSend.file.type } : undefined,
         gps: gpsToSend || undefined,
@@ -835,7 +835,7 @@ export default function AssistantPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
                 className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-200/60 rounded-lg transition-all shrink-0"
-                title="Attach visit photo (GPS tagged)"
+                title="Attach image"
               >
                 <Camera size={18} />
               </button>
@@ -851,7 +851,7 @@ export default function AssistantPage() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder={selectedPhoto ? "Add notes for this photo (e.g. Visited Om Steel Pune)..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
+                placeholder={selectedPhoto ? "Add notes for this image..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
                 className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />

@@ -91,14 +91,14 @@ export default function InteractiveCatalogMenu({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {(sec.rows || []).map((row, rIdx) => {
                 const Icon = getRowIcon(row.id || '', row.title || '');
-                const rawNum = row.id ? row.id.replace(/^menu_/, '') : String(rIdx + 1);
+                const selectionPayload = row.id || String(rIdx + 1);
 
                 return (
                   <button
                     key={row.id || rIdx}
                     type="button"
                     disabled={disabled}
-                    onClick={() => onSelect(rawNum, row.title)}
+                    onClick={() => onSelect(selectionPayload, row.title)}
                     className={`flex items-start gap-2.5 p-2.5 text-left rounded-xl border transition-all ${
                       disabled
                         ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed'
