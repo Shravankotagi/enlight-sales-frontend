@@ -1034,23 +1034,23 @@ export function resolveLinkedDeal(inq: InquiryItem, companyName?: string, dealsL
 }
 
 export function resolveInquiryDealStageKey(inq: InquiryItem, companyName?: string, dealsList: any[] = []): string {
-  const directInqStage = (inq as any)?.stage ? String((inq as any).stage).toLowerCase().trim() : '';
-  if (directInqStage && ['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry', 'review', 'hold'].includes(directInqStage)) {
-    if (directInqStage === 'review') return 'new_inquiry';
-    if (directInqStage === 'qualified') return 'quoted';
-    if (directInqStage === 'hold') return 'on_hold';
-    return directInqStage;
-  }
-
+  // 1. If the linked deal in deals table has moved to an active pipeline stage, that deal stage is the source of truth!
   const linkedDeal = resolveLinkedDeal(inq, companyName, dealsList);
   if (linkedDeal) {
     const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
-    if (['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry'].includes(dealStage)) {
-      if (dealStage === 'review') return 'new_inquiry';
+    if (['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified'].includes(dealStage)) {
       if (dealStage === 'qualified') return 'quoted';
       if (dealStage === 'hold') return 'on_hold';
       return dealStage;
     }
+  }
+
+  // 2. Direct inquiry stage if explicitly set beyond new_inquiry
+  const directInqStage = (inq as any)?.stage ? String((inq as any).stage).toLowerCase().trim() : '';
+  if (directInqStage && ['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified'].includes(directInqStage)) {
+    if (directInqStage === 'qualified') return 'quoted';
+    if (directInqStage === 'hold') return 'on_hold';
+    return directInqStage;
   }
 
   const details = parseInquiryText(inq.raw_text || '', inq);
@@ -1327,6 +1327,8 @@ export default function InquiriesPage() {
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
@@ -1381,6 +1383,8 @@ export default function InquiriesPage() {
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const stageMutation = useMutation({

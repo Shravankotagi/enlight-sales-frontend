@@ -136,17 +136,6 @@ interface LineItemDetail {
 export function formatOrderSourceText(ord?: Order | null): string {
   if (!ord) return 'No source document or text available for this order.';
 
-  // If raw_text is present, meaningful and not just a document placeholder, return it
-  if (
-    ord.raw_text &&
-    typeof ord.raw_text === 'string' &&
-    ord.raw_text.trim() &&
-    !ord.raw_text.trim().startsWith('[Inquiry Attachment:') &&
-    !ord.raw_text.trim().startsWith('[PO Document:')
-  ) {
-    return ord.raw_text.trim();
-  }
-
   const lines: string[] = [];
   if (ord.customer_name) lines.push(`Company: ${ord.customer_name}`);
   if (ord.customer_phone) lines.push(`Phone: ${ord.customer_phone}`);
@@ -158,21 +147,47 @@ export function formatOrderSourceText(ord?: Order | null): string {
   const items = ord.deal_items || [];
   if (Array.isArray(items) && items.length > 0) {
     lines.push('\nLine Items:');
+    let subtotal = 0;
     items.forEach((item: any, idx: number) => {
       const name = item.sku_text || item.description || item.name || item.sku || 'Product';
       const spec = item.dimensions || item.spec || item.specification || '';
       const qty = item.quantity ?? item.qty ?? 0;
       const unit = item.unit || 'MT';
       const rate = Number(item.rate ?? item.unit_price ?? item.quoted_price ?? item.price_per_mt ?? 0);
+      const amount = Number(item.amount ?? 0) || (qty * rate);
+      if (amount > 0) subtotal += amount;
       const hsn = item.hsn_code || item.hsn || detectHsnCode(name) || '';
 
       let itemStr = `${idx + 1}. ${name}`;
-      if (spec) itemStr += ` | Spec: ${spec}`;
-      itemStr += ` | Qty: ${qty} ${unit}`;
-      if (rate > 0) itemStr += ` | Rate: ₹${rate.toLocaleString('en-IN')}/${unit}`;
-      if (hsn) itemStr += ` | (Auto HSN: ${hsn})`;
+      if (spec) itemStr += ` (${spec})`;
+      itemStr += ` | ${qty} ${unit}`;
+      if (rate > 0) itemStr += ` | ₹${rate.toLocaleString('en-IN')}/${unit}`;
+      if (amount > 0) itemStr += ` | Line Total: ₹${amount.toLocaleString('en-IN')}`;
+      if (hsn) itemStr += ` [HSN: ${hsn}]`;
       lines.push(itemStr);
     });
+
+    if (subtotal > 0) {
+      const gst = Math.round(subtotal * 0.18);
+      const total = subtotal + gst;
+      lines.push(`\nSubtotal: ₹${subtotal.toLocaleString('en-IN')}`);
+      lines.push(`GST (18%): ₹${gst.toLocaleString('en-IN')}`);
+      lines.push(`Total Order Value: ₹${total.toLocaleString('en-IN')}`);
+    }
+  }
+
+  // If raw_text is present, meaningful and not just a document placeholder, include it as source reference
+  if (
+    ord.raw_text &&
+    typeof ord.raw_text === 'string' &&
+    ord.raw_text.trim() &&
+    !ord.raw_text.trim().startsWith('[Inquiry Attachment:') &&
+    !ord.raw_text.trim().startsWith('[PO Document:')
+  ) {
+    if (lines.length > 0) {
+      lines.push('\nOriginal Source Message:');
+    }
+    lines.push(ord.raw_text.trim());
   }
 
   if (lines.length === 0) {

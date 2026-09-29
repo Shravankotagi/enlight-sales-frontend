@@ -274,10 +274,37 @@ export default function AssistantPage() {
     promptTextOverride?: string,
     displayTitle?: string,
   ) => {
-    const textToSend = promptTextOverride || inputText.trim();
+    let textToSend = promptTextOverride || inputText.trim();
     if ((!textToSend && !selectedPhoto) || loading) return;
 
-    const userDisplayText = displayTitle || textToSend || (selectedPhoto ? 'Attached photo for visit' : '');
+    let userDisplayText = displayTitle || textToSend || (selectedPhoto ? 'Attached photo for visit' : '');
+
+    // Parity with WhatsApp list selection: if user typed a menu number (1–10) while looking at the Catalog Menu
+    if (!promptTextOverride && textToSend) {
+      const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
+      const isAwaitingCatalogMenu =
+        lastAssistantMsg?.interactiveType === 'list' &&
+        Array.isArray(lastAssistantMsg?.interactiveList?.sections) &&
+        lastAssistantMsg.interactiveList.sections.length > 0;
+
+      if (isAwaitingCatalogMenu) {
+        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?([1-9]|10)\.?$/i);
+        if (numMatch) {
+          const selectedNum = numMatch[1];
+          for (const sec of lastAssistantMsg.interactiveList?.sections || []) {
+            const foundRow = sec.rows?.find(
+              (r) => r.id === `menu_${selectedNum}` || r.title.startsWith(`${selectedNum}.`)
+            );
+            if (foundRow) {
+              textToSend = foundRow.id || `menu_${selectedNum}`;
+              userDisplayText = foundRow.title;
+              break;
+            }
+          }
+        }
+      }
+    }
+
     const photoToSend = selectedPhoto;
     const gpsToSend = gpsLocation;
 
