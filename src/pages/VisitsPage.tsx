@@ -357,8 +357,18 @@ export default function VisitsPage() {
 
   // Details & Edit Modal States
   const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    if (!previewImage) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPreviewImage(null);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [previewImage]);
 
   const handleCloseVisitModal = () => {
     setSelectedVisit(null);
@@ -1541,17 +1551,9 @@ export default function VisitsPage() {
                           )}
                           {v.gps_photo_url && (
                             <span
-                              title="GPS Photo attached"
-                              className="p-1 rounded-md text-blue-600 bg-blue-50 border border-blue-200 inline-flex items-center">
-                              <Camera size={11} />
-                            </span>
-                          )}
-                          {Array.isArray(v.attachments) && v.attachments.length > 0 && (
-                            <span
-                              title={`${v.attachments.length} attachment(s)`}
-                              className="px-1.5 py-0.5 rounded-md text-slate-600 bg-slate-100 border border-slate-200 inline-flex items-center text-[10px] gap-0.5">
+                              title="Visit photo attached"
+                              className="p-1 rounded-md text-slate-600 bg-slate-100 border border-slate-200 inline-flex items-center">
                               <Paperclip size={10} />
-                              {v.attachments.length}
                             </span>
                           )}
                         </div>
@@ -2534,11 +2536,17 @@ export default function VisitsPage() {
                         {/* GPS Tagged Photo Card */}
                         {selectedVisit.gps_photo_url && (
                           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-white rounded-xl border border-slate-200">
-                            <img
-                              src={selectedVisit.gps_photo_url}
-                              alt="Visit Verification"
-                              className="w-24 h-24 object-cover rounded-lg border border-slate-200 shadow-2xs shrink-0"
-                            />
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage({ url: selectedVisit.gps_photo_url!, title: 'Customer Visit Photo' })}
+                              className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              aria-label="View customer visit photo">
+                              <img
+                                src={selectedVisit.gps_photo_url}
+                                alt="Visit Verification"
+                                className="w-24 h-24 object-cover rounded-lg border border-slate-200 shadow-2xs"
+                              />
+                            </button>
                             <div className="space-y-1 min-w-0">
                               <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                                 <Camera size={14} className="text-blue-600" /> Customer Visit Photo
@@ -2565,28 +2573,6 @@ export default function VisitsPage() {
                           </div>
                         )}
 
-                        {/* Other Attachments */}
-                        {Array.isArray(selectedVisit.attachments) && selectedVisit.attachments.length > 0 && (
-                          <div className="space-y-1.5">
-                            <p className="text-[11px] font-semibold text-slate-500">Other Documents</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {selectedVisit.attachments.map((att: VisitAttachment, idx: number) => (
-                                <a
-                                  key={idx}
-                                  href={att.url || att.file_url || '#'}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex items-center justify-between p-2 px-3 bg-white hover:bg-blue-50/50 rounded-lg border border-slate-200 text-xs text-slate-700 hover:text-blue-700 transition-colors group">
-                                  <span className="truncate max-w-[200px] flex items-center gap-1.5 font-medium">
-                                    <FileText size={13} className="text-slate-400 group-hover:text-blue-600 shrink-0" />
-                                    {att.name || att.file_name || 'Attachment'}
-                                  </span>
-                                  <ExternalLink size={12} className="text-slate-400 group-hover:text-blue-600 shrink-0 ml-2" />
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <p className="text-slate-400 text-xs italic">No photo or document attachments recorded for this visit.</p>
@@ -3073,6 +3059,29 @@ export default function VisitsPage() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[60] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={previewImage.title}
+          onClick={() => setPreviewImage(null)}>
+          <div className="relative max-w-6xl max-h-[90vh]" onClick={event => event.stopPropagation()}>
+            <img
+              src={previewImage.url}
+              alt={previewImage.title}
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="absolute -top-3 -right-3 p-2 bg-white text-slate-700 rounded-full shadow-lg hover:bg-slate-100"
+              aria-label="Close image preview">
+              <X size={18} />
+            </button>
           </div>
         </div>
       )}
