@@ -50,6 +50,74 @@ interface ChatSession {
 const ACTIVE_SESSION_KEY = 'enlight_active_chat_session_id';
 const MESSAGES_CACHE_KEY = 'enlight_active_chat_messages';
 
+const TECHNICAL_PAYLOAD_DISPLAY_MAP: Record<string, string> = {
+  menu_1: '1. Log New Inquiry',
+  menu_2: '2. Update Inquiry',
+  menu_3: '3. Log New Order',
+  menu_4: '4. Update Order',
+  menu_5: '5. Log Field Visit',
+  menu_6: '6. Update Field Visit',
+  menu_7: '7. New Customer Acquisition',
+  menu_8: '8. Log Customer Complaint',
+  menu_9: '9. Update Customer Complaint',
+  menu_10: '10. General Query',
+
+  start_log_inquiry: '1. Log New Inquiry',
+  start_update_inquiry: '2. Update Inquiry',
+  start_log_order: '3. Log New Order',
+  start_update_order: '4. Update Order',
+  start_log_visit: '5. Log Field Visit',
+  start_update_visit: '6. Update Field Visit',
+  start_new_customer: '7. New Customer Acquisition',
+  start_log_complaint: '8. Log Customer Complaint',
+  start_update_complaint: '9. Update Customer Complaint',
+  start_general_query: '10. General Query',
+
+  btn_repeat_log_inquiry: 'Log Another Inquiry',
+  btn_repeat_update_inquiry: 'Update Another Inquiry',
+  btn_repeat_log_order: 'Record Another Order',
+  btn_repeat_update_order: 'Update Another Order',
+  btn_repeat_log_visit: 'Log Another Visit',
+  btn_repeat_update_visit: 'Update Another Visit',
+  btn_repeat_new_customer: 'Onboard Another Customer',
+  btn_repeat_log_new_customer: 'Onboard Another Customer',
+  btn_repeat_log_complaint: 'Log Another Complaint',
+  btn_repeat_update_complaint: 'Update Another Complaint',
+
+  btn_confirm_yes: 'Save / Yes',
+  btn_confirm_edit: 'Edit Details',
+  btn_confirm_cancel: 'Cancel',
+  btn_post_menu: 'Menu',
+  btn_cust_yes: 'Yes, Add Customer',
+  btn_cust_no: 'No / Cancel',
+  btn_resume_yes: 'Yes, Continue',
+  btn_resume_no: 'No, Go to Menu',
+  btn_att_no: 'No',
+};
+
+export function formatUserDisplayMessage(content?: string): string {
+  if (!content || typeof content !== 'string') return content || '';
+  const trimmed = content.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (TECHNICAL_PAYLOAD_DISPLAY_MAP[lower]) {
+    return TECHNICAL_PAYLOAD_DISPLAY_MAP[lower];
+  }
+
+  // Dynamic fallback for any pattern like menu_X or btn_repeat_X
+  if (/^menu_([1-9]|10)$/i.test(lower)) {
+    const num = lower.replace(/^menu_/, '');
+    return TECHNICAL_PAYLOAD_DISPLAY_MAP[`menu_${num}`] || `Option ${num}`;
+  }
+
+  if (lower.startsWith('btn_repeat_')) {
+    const cleanAction = lower.replace(/^btn_repeat_/, '').replace(/_/g, ' ');
+    return `Record Another ${cleanAction.replace(/\b\w/g, (c) => c.toUpperCase())}`;
+  }
+
+  return content;
+}
+
 function getSavedSessionId(): string | null {
   try {
     return sessionStorage.getItem(ACTIVE_SESSION_KEY) || localStorage.getItem(ACTIVE_SESSION_KEY);
@@ -277,7 +345,7 @@ export default function AssistantPage() {
     let textToSend = promptTextOverride || inputText.trim();
     if ((!textToSend && !selectedPhoto) || loading) return;
 
-    let userDisplayText = displayTitle || textToSend || (selectedPhoto ? 'Attached photo for visit' : '');
+    let userDisplayText = displayTitle || formatUserDisplayMessage(textToSend) || (selectedPhoto ? 'Attached photo for visit' : '');
 
     // Parity with WhatsApp list selection: if user typed a menu number (1–10) while looking at the Catalog Menu
     if (!promptTextOverride && textToSend) {
@@ -347,10 +415,11 @@ export default function AssistantPage() {
       const interactiveButtons = resData.interactiveButtons || null;
       const interactiveList = resData.interactiveList || null;
 
+      const cleanSnippet = formatUserDisplayMessage(userDisplayText);
       const titleSnippet =
-        userDisplayText.length > 35
-          ? userDisplayText.slice(0, 35).trim() + '...'
-          : userDisplayText.trim();
+        cleanSnippet.length > 35
+          ? cleanSnippet.slice(0, 35).trim() + '...'
+          : cleanSnippet.trim();
 
       if (sessionId) {
         setActiveSessionId(sessionId);
@@ -597,7 +666,7 @@ export default function AssistantPage() {
                         className={isSelected ? 'text-blue-600' : 'text-gray-400'}
                       />
                       <span className="truncate">
-                        {sess.title || (sess.id ? `Session #${sess.id.slice(0, 8)}` : 'New Conversation')}
+                        {formatUserDisplayMessage(sess.title) || (sess.id ? `Session #${sess.id.slice(0, 8)}` : 'New Conversation')}
                       </span>
                     </div>
                     <span className="text-[10px] text-gray-400 shrink-0">
@@ -725,7 +794,7 @@ export default function AssistantPage() {
                                 </span>
                               </div>
                             )}
-                            {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                            {msg.content && <p className="whitespace-pre-wrap">{formatUserDisplayMessage(msg.content)}</p>}
                           </div>
                         ) : (
                           <div className="space-y-3">
