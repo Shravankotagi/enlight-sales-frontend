@@ -19,7 +19,7 @@ import {
   BarChart2,
   Users,
   Search,
-  Camera,
+  Paperclip,
   MapPin,
   X,
   Loader2,
@@ -837,7 +837,7 @@ export default function AssistantPage() {
                 className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-200/60 rounded-lg transition-all shrink-0"
                 title="Attach image"
               >
-                <Camera size={18} />
+                <Paperclip size={18} />
               </button>
               <input
                 ref={fileInputRef}
