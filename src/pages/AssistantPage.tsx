@@ -6,6 +6,8 @@ import {
   Send,
   Plus,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   Shield,
   BookOpen,
   AlertTriangle,
@@ -155,6 +157,7 @@ export default function AssistantPage() {
   const [fetchingSessions, setFetchingSessions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kbModalOpen, setKbModalOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
 
@@ -345,7 +348,7 @@ export default function AssistantPage() {
     let textToSend = promptTextOverride || inputText.trim();
     if ((!textToSend && !selectedPhoto) || loading) return;
 
-    let userDisplayText = displayTitle || formatUserDisplayMessage(textToSend) || (selectedPhoto ? 'Attached photo for visit' : '');
+    let userDisplayText = displayTitle || formatUserDisplayMessage(textToSend) || (selectedPhoto ? 'Attached image' : '');
 
     // Parity with WhatsApp list selection: if user typed a menu number (1–10) while looking at the Catalog Menu
     if (!promptTextOverride && textToSend) {
@@ -372,7 +375,6 @@ export default function AssistantPage() {
         }
       }
     }
-
     const photoToSend = selectedPhoto;
     const gpsToSend = gpsLocation;
 
@@ -402,7 +404,7 @@ export default function AssistantPage() {
 
     try {
       const res = await chatbotApi.sendMessage({
-        message: textToSend || (photoToSend ? 'Attached customer visit photo' : ''),
+        message: textToSend || (photoToSend ? 'Attached image' : ''),
         sessionId: activeSessionId || undefined,
         image: photoToSend ? { base64: photoToSend.base64, mimeType: photoToSend.file.type } : undefined,
         gps: gpsToSend || undefined,
@@ -612,82 +614,95 @@ export default function AssistantPage() {
       {/* Main Container: Sidebar + Chat Area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar / Session History */}
-        <div className="w-72 bg-gray-50/70 border-r border-gray-200 flex flex-col p-4 space-y-4">
-          <button
-            onClick={handleNewConversation}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all shadow-xs active:scale-98"
-          >
-            <Plus size={18} />
-            <span>New Conversation</span>
-          </button>
-
-          <div className="flex items-center justify-between px-1 text-xs font-semibold text-gray-500">
-            <span>Recent Conversations</span>
+        <div
+          className={`bg-gray-50/70 border-r border-gray-200 flex flex-col shrink-0 transition-[width,padding] duration-200 ${
+            isSidebarCollapsed ? 'w-16 p-2' : 'w-72 p-4'
+          }`}
+        >
+          <div className={`flex gap-2 ${isSidebarCollapsed ? 'flex-col' : 'items-center'}`}>
             <button
-              onClick={loadSessions}
-              className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
-              title="Refresh sessions"
+              onClick={handleNewConversation}
+              className={`flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all shadow-xs active:scale-98 ${
+                isSidebarCollapsed ? 'h-10 w-10' : 'flex-1 px-4 py-2.5'
+              }`}
+              title={isSidebarCollapsed ? 'New conversation' : undefined}
             >
-              <RefreshCw size={12} className={fetchingSessions ? 'animate-spin' : ''} />
+              <Plus size={18} />
+              {!isSidebarCollapsed && <span>New Conversation</span>}
+            </button>
+            <button
+              onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+              className={`flex items-center justify-center text-gray-500 hover:text-blue-700 hover:bg-blue-50 border border-gray-200 rounded-xl transition-colors ${
+                isSidebarCollapsed ? 'h-10 w-10' : 'h-10 w-10 shrink-0'
+              }`}
+              title={isSidebarCollapsed ? 'Expand conversation history' : 'Collapse conversation history'}
+              aria-label={isSidebarCollapsed ? 'Expand conversation history' : 'Collapse conversation history'}
+              aria-expanded={!isSidebarCollapsed}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </button>
           </div>
 
-          {/* Session List */}
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-            {!Array.isArray(sessions) || sessions.length === 0 ? (
-              <div className="p-4 text-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
-                No past sessions found. Start a new conversation!
+          {!isSidebarCollapsed && (
+            <>
+              <div className="flex items-center justify-between px-1 mt-4 text-xs font-semibold text-gray-500">
+                <span>Recent Conversations</span>
+                <button
+                  onClick={loadSessions}
+                  className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                  title="Refresh sessions"
+                >
+                  <RefreshCw size={12} className={fetchingSessions ? 'animate-spin' : ''} />
+                </button>
               </div>
-            ) : (
-              sessions.map((sess) => {
-                const isSelected = sess.id === activeSessionId;
-                const formattedDate = sess.last_active_at
-                  ? new Date(sess.last_active_at).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : 'Active';
 
-                return (
-                  <button
-                    key={sess.id}
-                    onClick={() => selectSession(sess.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-all ${
-                      isSelected
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200 font-semibold shadow-2xs'
-                        : 'text-gray-700 hover:bg-gray-200/60 hover:text-gray-900 border border-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <MessageSquare
-                        size={14}
-                        className={isSelected ? 'text-blue-600' : 'text-gray-400'}
-                      />
-                      <span className="truncate">
-                        {formatUserDisplayMessage(sess.title) || (sess.id ? `Session #${sess.id.slice(0, 8)}` : 'New Conversation')}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-gray-400 shrink-0">
-                      {formattedDate}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
+              {/* Session List */}
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 mt-4">
+                {!Array.isArray(sessions) || sessions.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
+                    No past sessions found. Start a new conversation!
+                  </div>
+                ) : (
+                  sessions.map((sess) => {
+                    const isSelected = sess.id === activeSessionId;
+                    const formattedDate = sess.last_active_at
+                      ? new Date(sess.last_active_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Active';
 
-          {/* Safety & Cap Notice */}
-          <div className="p-3 bg-white border border-gray-200 rounded-xl text-[11px] text-gray-600 space-y-1 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-semibold text-gray-800">
-              <Shield size={13} className="text-blue-600" />
-              <span>RBAC & Cost Protection</span>
-            </div>
-            <p className="text-[10px] text-gray-500 leading-tight">
-              Data queries are dual-layer scoped to your identity. Daily Gemini spend is capped at $5.00/day.
-            </p>
-          </div>
+                    return (
+                      <button
+                        key={sess.id}
+                        onClick={() => selectSession(sess.id)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-all ${
+                          isSelected
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200 font-semibold shadow-2xs'
+                            : 'text-gray-700 hover:bg-gray-200/60 hover:text-gray-900 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <MessageSquare
+                            size={14}
+                            className={isSelected ? 'text-blue-600' : 'text-gray-400'}
+                          />
+                          <span className="truncate">
+                            {formatUserDisplayMessage(sess.title) || (sess.id ? `Session #${sess.id.slice(0, 8)}` : 'New Conversation')}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-400 shrink-0">
+                          {formattedDate}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Chat Area */}
@@ -915,7 +930,7 @@ export default function AssistantPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
                 className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-200/60 rounded-lg transition-all shrink-0"
-                title="Attach visit photo (GPS tagged)"
+                title="Attach image"
               >
                 <Camera size={18} />
               </button>
@@ -931,7 +946,7 @@ export default function AssistantPage() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder={selectedPhoto ? "Add notes for this photo (e.g. Visited Om Steel Pune)..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
+                placeholder={selectedPhoto ? "Add notes for this image..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
                 className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />

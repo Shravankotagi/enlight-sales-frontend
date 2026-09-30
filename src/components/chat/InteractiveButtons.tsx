@@ -103,7 +103,7 @@ export default function InteractiveButtons({
         className: disabled
           ? 'bg-gray-100 text-gray-400 border-gray-200'
           : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 shadow-2xs hover:shadow-xs active:scale-98',
-        payload: btn.payload || 'cancel',
+        payload: btn.payload || (id === 'btn_att_no' ? btn.id : 'cancel'),
       };
     }
 
