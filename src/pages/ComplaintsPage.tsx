@@ -214,21 +214,12 @@ export default function ComplaintsPage() {
 
   // Edit Modal
   const [editingComplaint, setEditingComplaint] = useState<Complaint | null>(null);
-  const [editCustomerName, setEditCustomerName] = useState('');
-  const [editComplaintDate, setEditComplaintDate] = useState('');
   const [editRaisedBy, setEditRaisedBy] = useState('');
-  const [editSelectedDeals, setEditSelectedDeals] = useState<SelectedDealItem[]>([]);
-  const [editChallanNo, setEditChallanNo] = useState('');
   const [editType, setEditType] = useState('Quality Defect');
   const [editDescription, setEditDescription] = useState('');
-  const [editAttachments, setEditAttachments] = useState<Array<{ id?: string; file_url: string; file_name: string; file_type: string; file_size?: number }>>([]);
-  const [editCorrectiveAction, setEditCorrectiveAction] = useState('');
-  const [editCustomerCommunication, setEditCustomerCommunication] = useState('');
   const [editStatus, setEditStatus] = useState('reported');
   const [editResolutionNotes, setEditResolutionNotes] = useState('');
-  const [editResolutionDate, setEditResolutionDate] = useState('');
   const [editSaving, setEditSaving] = useState(false);
-  const [editCustomerDeals, setEditCustomerDeals] = useState<any[]>([]);
 
   // Create Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -354,38 +345,10 @@ export default function ComplaintsPage() {
     };
   }, [formCustomerName]);
 
-  // Fetch won deals when customer is chosen in Edit Form
-  useEffect(() => {
-    const trimmedCustomer = editCustomerName.trim().toLowerCase();
-    if (!trimmedCustomer) {
-      setEditCustomerDeals([]);
-      setEditSelectedDeals([]);
-      return;
-    }
-    dealsApi
-      .getAll({ customer_name: editCustomerName.trim(), stage: 'won' })
-      .then(res => {
-        const raw = res?.data;
-        const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-        const wonList = list.filter((d: any) => {
-          const isWon = (d?.stage || '').toLowerCase() === 'won';
-          const matchesCustomer = (d?.customer_name || '').trim().toLowerCase() === trimmedCustomer;
-          return isWon && matchesCustomer;
-        });
-        setEditCustomerDeals(wonList);
-      })
-      .catch(() => setEditCustomerDeals([]));
-  }, [editCustomerName]);
-
   const handleSelectCustomerForCreate = (cust: CustomerDirectoryItem) => {
     setFormCustomerName(cust.customer_name);
     setFormSelectedDeals([]);
     if (formErrors.customerName) setFormErrors(prev => ({ ...prev, customerName: false }));
-  };
-
-  const handleSelectCustomerForEdit = (cust: CustomerDirectoryItem) => {
-    setEditCustomerName(cust.customer_name);
-    setEditSelectedDeals([]);
   };
 
   const getSalespersonDisplayName = (comp: Complaint) => {
@@ -548,9 +511,9 @@ export default function ComplaintsPage() {
     });
   };
 
-  const handleAddAttachments = async (files: FileList | File[], isEdit = false) => {
+  const handleAddAttachments = async (files: FileList | File[]) => {
     const fileArr = Array.from(files);
-    const currentList = isEdit ? editAttachments : formAttachments;
+    const currentList = formAttachments;
 
     if (currentList.length >= 3) {
       toast.error('Maximum 3 attachments allowed per complaint.');
@@ -578,11 +541,7 @@ export default function ComplaintsPage() {
         file_type: isPdfFile ? 'application/pdf' : 'image/jpeg',
         file_size: file.size,
       };
-      if (isEdit) {
-        setEditAttachments(prev => (prev.length < 3 ? [...prev, newAttachment] : prev));
-      } else {
-        setFormAttachments(prev => (prev.length < 3 ? [...prev, newAttachment] : prev));
-      }
+      setFormAttachments(prev => (prev.length < 3 ? [...prev, newAttachment] : prev));
     }
   };
 
@@ -731,63 +690,20 @@ export default function ComplaintsPage() {
   // Open Edit Modal
   const openEditModal = (comp: Complaint) => {
     setEditingComplaint(comp);
-    setEditCustomerName(comp.customer_name || '');
-    setEditComplaintDate(comp.complaint_date ? comp.complaint_date.split('T')[0] : (comp.created_at ? comp.created_at.split('T')[0] : formatLocalDate()));
     setEditRaisedBy(comp.raised_by || '');
-    setEditChallanNo(comp.challan_no || '');
     setEditType(comp.complaint_type || 'Quality Defect');
     setEditDescription(comp.description || '');
-    setEditCorrectiveAction(comp.corrective_action || '');
-    setEditCustomerCommunication(comp.customer_communication || '');
     setEditStatus(comp.status || 'reported');
     setEditResolutionNotes(comp.resolution_notes || '');
-    setEditResolutionDate(
-      comp.resolution_date
-        ? comp.resolution_date.split('T')[0]
-        : (comp.resolved_at ? comp.resolved_at.split('T')[0] : formatLocalDate())
-    );
-    setEditAttachments(
-      (comp.attachments || []).map((a, i) => ({
-        id: a.id,
-        file_url: a.file_url,
-        file_name: a.file_name || `Attachment ${i + 1}`,
-        file_type: a.file_type || (isPdf(a.file_url) ? 'application/pdf' : 'image/jpeg'),
-        file_size: a.file_size,
-      }))
-    );
-
-    if (comp.deal_id) {
-      const cleanId = (comp.deal_id.startsWith('DEAL-') || comp.deal_id.startsWith('INQ-')) ? comp.deal_id.replace(/^(?:DEAL|INQ)-/, '') : comp.deal_id.substring(0, 6).toUpperCase();
-      const product = comp.product_name || comp.affected_product || 'General Material';
-      setEditSelectedDeals([
-        {
-          dealId: comp.deal_id,
-          dealCode: `#INQ-${cleanId}`,
-          poNumber: comp.po_number || '',
-          product: product,
-          fullLabel: `#INQ-${cleanId} — ${product}`,
-        },
-      ]);
-    } else {
-      setEditSelectedDeals([]);
-    }
   };
 
   // Save Edited Complaint
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingComplaint || !editCustomerName.trim()) return;
+    if (!editingComplaint) return;
 
-    if (!editComplaintDate) {
-      toast.error('Complaint date is required.');
-      return;
-    }
     if (!editRaisedBy.trim()) {
       toast.error('Complaint raised by / contact person is required.');
-      return;
-    }
-    if (editSelectedDeals.length === 0) {
-      toast.error('Please select at least one Won Deal / PO & Product.');
       return;
     }
 
@@ -798,27 +714,12 @@ export default function ComplaintsPage() {
 
     try {
       setEditSaving(true);
-      const primaryDeal = editSelectedDeals[0];
-      const combinedProducts = editSelectedDeals.map(d => d.product).filter(Boolean).join(', ');
-      const combinedPoNumbers = Array.from(new Set(editSelectedDeals.map(d => d.poNumber).filter(Boolean))).join(', ');
-
       const updatedPayload: any = {
-        customer_name: editCustomerName.trim(),
-        complaint_date: editComplaintDate,
         raised_by: editRaisedBy.trim(),
-        deal_id: primaryDeal ? primaryDeal.dealId : null,
-        po_number: combinedPoNumbers || null,
-        challan_no: editChallanNo.trim() || null,
-        product_name: combinedProducts || 'General Material',
-        affected_product: combinedProducts || 'General Material',
         complaint_type: editType,
         description: editDescription.trim(),
-        corrective_action: editCorrectiveAction.trim() || null,
-        customer_communication: editCustomerCommunication.trim() || null,
         status: editStatus,
         resolution_notes: editResolutionNotes.trim() || null,
-        resolution_date: editResolutionDate || (editStatus === 'resolved' ? (editResolutionDate || formatLocalDate()) : null),
-        attachments: editAttachments,
       };
 
       await complaintsApi.update(editingComplaint.id, updatedPayload);
@@ -1675,39 +1576,62 @@ export default function ComplaintsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 py-3 overflow-y-auto flex-1 text-xs">
                 {/* Left Column */}
                 <div className="space-y-3">
-                  {/* 1. Customer Combobox */}
+                  <p className="rounded-xl bg-slate-50 px-3 py-2 text-slate-500">
+                    Only the approved post-log fields can be edited. Customer, complaint date, linked order, product, evidence, and other logged details are locked.
+                  </p>
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Company / Customer Name <span className="text-rose-500">*</span>
-                    </label>
-                    <CustomerCombobox
-                      value={editCustomerName}
-                      onChange={val => {
-                        setEditCustomerName(val);
-                        setEditSelectedDeals([]);
-                      }}
-                      onSelectCustomer={handleSelectCustomerForEdit}
-                      customers={customerDirectory}
-                      placeholder="Search or enter company name..."
-                      required
-                    />
-                  </div>
-
-                  {/* 2 & 3. Complaint Date & Complaint Raised By */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
-                        Complaint Date <span className="text-rose-500">*</span>
+                      <label className="block font-semibold text-slate-500 mb-1">
+                        Company / Customer Name
                       </label>
                       <input
-                        type="date"
-                        required
-                        value={editComplaintDate}
-                        onChange={e => setEditComplaintDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        type="text"
+                        value={editingComplaint.customer_name || ''}
+                        readOnly
+                        aria-readonly="true"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed"
                       />
                     </div>
-
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-500 mb-1">
+                        Linked Inquiry ID / PO Number
+                      </label>
+                      <input
+                        type="text"
+                        value={editingComplaint.po_number || editingComplaint.deal_id || '-'}
+                        readOnly
+                        aria-readonly="true"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-500 mb-1">
+                        Product / Material
+                      </label>
+                      <input
+                        type="text"
+                        value={getComplaintProductDisplay(editingComplaint)}
+                        readOnly
+                        aria-readonly="true"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-500 mb-1">
+                        Complaint Date
+                      </label>
+                      <input
+                        type="text"
+                        value={formatComplaintDateTime(editingComplaint.complaint_date || editingComplaint.created_at)}
+                        readOnly
+                        aria-readonly="true"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed"
+                      />
+                    </div>
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
                         Complaint Raised By <span className="text-rose-500">*</span>
@@ -1723,21 +1647,6 @@ export default function ComplaintsPage() {
                     </div>
                   </div>
 
-                  {/* 4. Multi-Select Won Inquiry ID / PO Selector */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Linked Inquiry ID / PO Number &amp; Product <span className="text-rose-500">*</span>
-                    </label>
-                    <DealProductCombobox
-                      deals={editCustomerDeals}
-                      selectedItems={editSelectedDeals}
-                      onChange={setEditSelectedDeals}
-                      customerName={editCustomerName}
-                      required
-                    />
-                  </div>
-
-                  {/* 5 & 6. Complaint Type & Invoice / Challan No. */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
@@ -1759,17 +1668,16 @@ export default function ComplaintsPage() {
                         <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
                       </div>
                     </div>
-
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
+                      <label className="block font-semibold text-slate-500 mb-1">
                         Invoice / Challan No.
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. DC-9821 / INV-4821"
-                        value={editChallanNo}
-                        onChange={e => setEditChallanNo(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium font-mono"
+                        value={editingComplaint.challan_no || '-'}
+                        readOnly
+                        aria-readonly="true"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -1792,81 +1700,43 @@ export default function ComplaintsPage() {
 
                 {/* Right Column */}
                 <div className="space-y-3">
-                  {/* 8. Evidence / Attachments */}
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                      <span>Evidence / Attachments</span>
-                      <span className="text-slate-400 font-normal text-[11px]">Max 3 files (Images or PDF, max 15MB each)</span>
+                    <label className="block font-semibold text-slate-500 mb-1">
+                      Evidence / Attachments
                     </label>
-                    <div className="border border-dashed border-slate-300 hover:border-blue-400 rounded-xl px-3 py-2 bg-slate-50/70 transition-colors text-center cursor-pointer relative flex items-center justify-center gap-2">
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*,application/pdf"
-                        onChange={e => {
-                          if (e.target.files) handleAddAttachments(e.target.files, true);
-                          e.target.value = '';
-                        }}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                      <Upload size={15} className="text-blue-600 shrink-0" />
-                      <span className="text-xs font-medium text-slate-600">
-                        Click or drop files to attach evidence
-                      </span>
-                    </div>
-
-                    {editAttachments.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-1.5 max-h-16 overflow-y-auto">
-                        {editAttachments.map((att, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded-lg text-[11px] font-medium">
-                            {isPdf(att.file_url, att.file_type) ? (
-                              <FileText size={12} className="text-red-500 shrink-0" />
-                            ) : (
-                              <ImageIcon size={12} className="text-blue-500 shrink-0" />
-                            )}
-                            <span className="truncate max-w-[100px]" title={att.file_name}>
-                              {att.file_name || `Attachment ${idx + 1}`}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setEditAttachments(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-slate-400 hover:text-red-600 p-0.5 rounded transition-colors cursor-pointer"
-                              title="Remove">
-                              <X size={11} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 9. Corrective Action */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Corrective Action Taken</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Replacement batch dispatched / Credit note issued"
-                      value={editCorrectiveAction}
-                      onChange={e => setEditCorrectiveAction(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                    />
-                  </div>
-
-                  {/* 10. Customer Communication / Update */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Customer Communication / Update</label>
                     <textarea
                       rows={2}
-                      placeholder="Notes on communication with customer or update shared..."
-                      value={editCustomerCommunication}
-                      onChange={e => setEditCustomerCommunication(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                      value={(editingComplaint.attachments || []).map((attachment, index) => attachment.file_name || `Evidence ${index + 1}`).join(', ') || 'No attachments'}
+                      readOnly
+                      aria-readonly="true"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed resize-none"
                     />
                   </div>
-
-                  {/* 11, 12, 13. Status, Resolution Date & Notes */}
+                  <div>
+                    <label className="block font-semibold text-slate-500 mb-1">
+                      Corrective Action Taken
+                    </label>
+                    <input
+                      type="text"
+                      value={editingComplaint.corrective_action || '-'}
+                      readOnly
+                      aria-readonly="true"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-500 mb-1">
+                      Customer Communication / Update
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={editingComplaint.customer_communication || '-'}
+                      readOnly
+                      aria-readonly="true"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed resize-none"
+                    />
+                  </div>
+                  {/* Status and Resolution Notes */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
@@ -1875,12 +1745,7 @@ export default function ComplaintsPage() {
                       <div className="relative flex items-center">
                         <select
                           value={editStatus}
-                          onChange={e => {
-                            setEditStatus(e.target.value);
-                            if (e.target.value === 'resolved' && !editResolutionDate) {
-                              setEditResolutionDate(formatLocalDate());
-                            }
-                          }}
+                          onChange={e => setEditStatus(e.target.value)}
                           className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
                           <option value="reported">Pending (Open)</option>
                           <option value="resolved">Resolved (Closed)</option>
@@ -1891,14 +1756,15 @@ export default function ComplaintsPage() {
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
-                        Resolution Date {editStatus === 'resolved' && <span className="text-rose-500">*</span>}
+                      <label className="block font-semibold text-slate-500 mb-1">
+                        Resolution Date
                       </label>
                       <input
-                        type="date"
-                        value={editResolutionDate}
-                        onChange={e => setEditResolutionDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        type="text"
+                        value={formatComplaintDateTime(editingComplaint.resolution_date || editingComplaint.resolved_at)}
+                        readOnly
+                        aria-readonly="true"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-500 cursor-not-allowed"
                       />
                     </div>
 
@@ -2115,7 +1981,7 @@ export default function ComplaintsPage() {
                         multiple
                         accept="image/*,application/pdf"
                         onChange={e => {
-                          if (e.target.files) handleAddAttachments(e.target.files, false);
+                          if (e.target.files) handleAddAttachments(e.target.files);
                           e.target.value = '';
                         }}
                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
