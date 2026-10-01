@@ -1332,33 +1332,23 @@ export default function InquiriesPage() {
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
-    queryKey: ['customer-names-list'],
-    queryFn: async () => {
-      const custRes = await customersApi.getAll().catch(() => null);
+    queryKey: ['customer-names-list', effectivePhone, activeRole, activeMode],
+    queryFn: async (): Promise<string[]> => {
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
+
+      const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
-      const fetchedNames = cList.map((c: any) => c.customer_name || c.name || c.company_name).filter(Boolean);
+      const fetchedNames: string[] = cList
+        .map((c: any) => String(c.customer_name || c.name || c.company_name || '').trim())
+        .filter(Boolean);
 
-      const defaultNames = [
-        'Supreme Steel',
-        'Mehta Engineering',
-        'Delta Structural Steel',
-        'Ram Ratna Infrastructure Pvt. Ltd.',
-        'AVION EXIM PVT. LTD.',
-        'SB Scafform Technovert Pvt. Ltd.',
-        'Apex Metals & Engg',
-        'Bhushan Steel Works',
-        'Kirloskar Pneumatic',
-        'Vardhaman Engineering',
-        'Dynamic Industries',
-        'Mahalaxmi Steel',
-        'Rathi Steel Corp',
-      ];
-
-      const inquiryCustomerNames = (rawInquiries || []).map(i => i.customer_name || i.sender_name).filter(Boolean);
-
-      return Array.from(new Set([...fetchedNames, ...inquiryCustomerNames, ...defaultNames]));
+      return Array.from(new Set(fetchedNames)).sort((a, b) => a.localeCompare(b));
     },
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: rawEmployees = [] } = useQuery<any[]>({
@@ -1733,9 +1723,7 @@ export default function InquiriesPage() {
   }, [fetchMonthlyInquiries, fetchDeals]);
 
   useEffect(() => {
-    if (Array.isArray(rawCustomers) && rawCustomers.length > 0) {
-      setExistingCustomers(rawCustomers);
-    }
+    setExistingCustomers(Array.isArray(rawCustomers) ? rawCustomers : []);
   }, [rawCustomers]);
 
   const handleOpenDrawer = (inq: InquiryItem) => {
