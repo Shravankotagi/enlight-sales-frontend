@@ -1189,7 +1189,7 @@ export default function OrdersPage() {
 
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
@@ -1207,11 +1207,7 @@ export default function OrdersPage() {
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">No orders found.</td>
-                </tr>
-              ) : (
+              ) : filtered.length === 0 ? null : (
                 paginatedOrders.map((ord, idx) => {
                   const globalIdx = startIndex + idx + 1;
                   const ordLineItems = (ord?.deal_items && ord.deal_items.length > 0) ? ord.deal_items : [];
@@ -1327,6 +1323,11 @@ export default function OrdersPage() {
               )}
             </tbody>
           </table>
+          {!loading && filtered.length === 0 && (
+            <div className="flex-1 flex items-center justify-center px-4 text-center text-sm text-slate-400">
+              No orders found.
+            </div>
+          )}
         </div>
 
         {/* Pagination Bar */}

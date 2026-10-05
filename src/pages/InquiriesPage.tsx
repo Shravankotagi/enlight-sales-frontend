@@ -7,7 +7,7 @@ import {
   ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, ArrowLeft
 } from 'lucide-react';
-import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
+import { inquiriesApi, customersApi, employeesApi, dealsApi, activityLogsApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -83,6 +83,20 @@ export interface ExtractedDetails {
   deliveryDate: string;
   lineItems: LineItemDetail[];
 }
+
+const formatLastSharedLabel = (iso?: string | null): string => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const formatted = date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `Last Shared - ${formatted}`;
+};
 
 const cleanProductType = (pt: string): string => {
   if (!pt) return 'HR Coil';
@@ -1147,6 +1161,7 @@ export default function InquiriesPage() {
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
+  const [lastSharedById, setLastSharedById] = useState<Record<string, string>>({});
 
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
@@ -1177,6 +1192,63 @@ export default function InquiriesPage() {
     poNumber: string;
     poDate: string;
   } | null>(null);
+
+  useEffect(() => {
+    const inquiry = selectedInquiry;
+    if (!inquiry?.id) return;
+    const stored =
+      lastSharedById[inquiry.id] ||
+      (inquiry.ai_extraction_json as any)?.quotation_shared_at;
+    if (stored) return;
+    const status = (inquiry.status || '').toLowerCase();
+    const alreadyShared =
+      status === 'quoted' ||
+      status === 'won' ||
+      status === 'quotation_sent' ||
+      inquiry.inquiry_type === 'quotation_sent' ||
+      isQuotationSent;
+    if (!alreadyShared) return;
+
+    let cancelled = false;
+    const name = (
+      inquiry.customer_name ||
+      inquiry.sender_name ||
+      editDetails?.companyName ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+
+    activityLogsApi
+      .getAll({ module: 'Inquiries', search: 'Quotation sent', limit: 200 })
+      .then((response) => {
+        if (cancelled) return;
+        const raw = response?.data;
+        const rows = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.data)
+            ? raw.data
+            : Array.isArray(raw?.data?.data)
+              ? raw.data.data
+              : [];
+        const match = rows.find((log: any) => {
+          const description = String(log?.description || '').toLowerCase();
+          if (!description.startsWith('quotation sent')) return false;
+          if (log?.entity_id) return String(log.entity_id) === String(inquiry.id);
+          return Boolean(name) && description.includes(name);
+        });
+        const iso = match?.timestamp || match?.created_at;
+        if (!iso) return;
+        setLastSharedById((prev) =>
+          prev[inquiry.id] ? prev : { ...prev, [inquiry.id]: iso },
+        );
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedInquiry, editDetails?.companyName, isQuotationSent, lastSharedById]);
 
   const LOST_REASONS = [
     'Price',
@@ -2424,9 +2496,74 @@ export default function InquiriesPage() {
     return sortNewestFirst(combined);
   }, [rawInquiries, inquiries]);
 
+  // Date range and search only. Status stays on the table and Kanban so the dropdown can still show every stage in the period.
+  const periodInquiries = useMemo(() => {
+    const list = activeInquiryList.filter(i => {
+      try {
+        if (dateRange.from && dateRange.to) {
+          const parseSafeIso = (dStr?: string) => {
+            if (!dStr) return '';
+            try {
+              const trimmed = String(dStr).trim();
+              if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+              const d = new Date(trimmed);
+              if (isNaN(d.getTime())) return '';
+              return d.toISOString().split('T')[0];
+            } catch {
+              return '';
+            }
+          };
+          const inqDate = parseSafeIso(i?.created_at);
+          if (inqDate) {
+            const fromDate = dateRange.from.split('T')[0];
+            const toDate = dateRange.to.split('T')[0];
+            if (inqDate < fromDate || inqDate > toDate) return false;
+          }
+        }
+
+        const text = i?.raw_text || '';
+        const parsed = parseInquiryText(text, i);
+        const name = (parsed.companyName || i?.customer_name || i?.sender_name || '').toLowerCase();
+        const phone = (parsed.customerPhone || i?.sender_phone || i?.customer_phone || '').toLowerCase();
+        const itemsSummary = (
+          (parsed.lineItems || []).map((li: LineItemDetail) => `${li.sku_text} ${li.dimensions || ''} ${li.quantity} ${li.unit || ''}`).join(' ') +
+          ' ' + (parsed.productType || '')
+        ).toLowerCase();
+
+        const formattedDate = i?.created_at ? new Date(i.created_at).toLocaleString('en-IN').toLowerCase() : '';
+        const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
+        const isoDate = (i?.created_at || '').toLowerCase();
+        const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
+        const dealIdStr = (linkedDealForSearch?.id ? `inq-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `inq-${i.id.substring(0, 6)}` : '')).toLowerCase();
+        const dealLegacyIdStr = (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : '')).toLowerCase();
+        const altInqIdStr = (i.id ? `inq-${i.id.substring(0, 6)}` : '').toLowerCase();
+
+        const s = searchTerm.toLowerCase().trim();
+        const matchesSearch =
+          !s ||
+          name.includes(s) ||
+          dealIdStr.includes(s) ||
+          dealLegacyIdStr.includes(s) ||
+          altInqIdStr.includes(s) ||
+          itemsSummary.includes(s) ||
+          formattedDate.includes(s) ||
+          dateOnly.includes(s) ||
+          isoDate.includes(s) ||
+          phone.includes(s) ||
+          text.toLowerCase().includes(s);
+
+        return matchesSearch;
+      } catch {
+        return true;
+      }
+    });
+
+    return sortNewestFirst(list);
+  }, [activeInquiryList, dateRange, searchTerm, rawDeals]);
+
   const stageCounts = useMemo(() => {
     const counts = {
-      all: activeInquiryList.length,
+      all: periodInquiries.length,
       new_inquiry: 0,
       quoted: 0,
       negotiation: 0,
@@ -2434,7 +2571,7 @@ export default function InquiriesPage() {
       won: 0,
       lost: 0,
     };
-    activeInquiryList.forEach(inq => {
+    periodInquiries.forEach(inq => {
       const parsed = parseInquiryText(inq.raw_text || '', inq);
       const stageKey = getInquiryDealStageKey(inq, parsed.companyName);
       const normKey = (stageKey === 'qualified' || stageKey === 'saved' || stageKey === 'confirmed') ? 'quoted' : (stageKey === 'hold' ? 'on_hold' : stageKey);
@@ -2443,7 +2580,7 @@ export default function InquiriesPage() {
       }
     });
     return counts;
-  }, [activeInquiryList, rawDeals]);
+  }, [periodInquiries, rawDeals]);
 
   const filtered = useMemo(() => {
     const list = activeInquiryList.filter(i => {
@@ -2583,8 +2720,7 @@ export default function InquiriesPage() {
     return board;
   }, [filtered, rawDeals]);
 
-  // All-time Total Inquiries count
-  const totalInquiriesCount = activeInquiryList.length;
+  const totalInquiriesCount = periodInquiries.length;
 
 
 
@@ -2840,7 +2976,7 @@ export default function InquiriesPage() {
       ) : (
         /* Standard Inquiries Table View */
         <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
             <table className="w-full table-fixed text-left border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider shadow-2xs">
                 <tr>
@@ -2860,13 +2996,7 @@ export default function InquiriesPage() {
                   Loading monthly inquiries...
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                  No product inquiries found for this period.
-                </td>
-              </tr>
-            ) : (
+            ) : filtered.length === 0 ? null : (
               paginatedInquiries.map((inq, idx) => {
                 const globalIdx = startIndex + idx + 1;
                 const details = (() => {
@@ -3112,6 +3242,11 @@ export default function InquiriesPage() {
             )}
           </tbody>
         </table>
+        {!loading && filtered.length === 0 && (
+          <div className="flex-1 flex items-center justify-center px-4 text-center text-xs text-slate-400">
+            No product inquiries found for this period.
+          </div>
+        )}
         </div>
 
         {/* Pagination Bar */}
@@ -3713,32 +3848,50 @@ export default function InquiriesPage() {
               {(() => {
                 const currentDrawerDealStage = selectedInquiry ? getInquiryDealStageKey(selectedInquiry, editDetails?.companyName) : '';
                 const isQuotedDrawerStage = currentDrawerDealStage === 'quoted' || currentDrawerDealStage === 'qualified';
-                if (!isQuotedDrawerStage) return null;
+                if (!selectedInquiry || !isQuotedDrawerStage) return null;
+
+                const shareAgain =
+                  ['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) ||
+                  isQuotationSent;
+                const lastSharedLabel = shareAgain
+                  ? formatLastSharedLabel(
+                      lastSharedById[selectedInquiry.id] ||
+                        (selectedInquiry.ai_extraction_json as any)?.quotation_shared_at,
+                    )
+                  : '';
 
                 return (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShareInquiry(selectedInquiry);
-                      setShareDetails(editDetails);
-                      setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
-                      setShowQuotationModal(true);
-                    }}
-                    className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                      ['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) || isQuotationSent
-                        ? 'bg-emerald-600 hover:bg-emerald-700'
-                        : 'bg-blue-600 hover:bg-blue-700'
-                    }`}>
-                    {['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) || isQuotationSent ? (
-                      <>
-                        <Check size={15} /> Quotation Sent 
-                      </>
-                    ) : (
-                      <>
-                        <Send size={15} /> Share Quotation 
-                      </>
+                  <span className="relative group">
+                    <button
+                      type="button"
+                      title={lastSharedLabel || undefined}
+                      onClick={() => {
+                        setShareInquiry(selectedInquiry);
+                        setShareDetails(editDetails);
+                        setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
+                        setShowQuotationModal(true);
+                      }}
+                      className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                        shareAgain
+                          ? 'bg-emerald-600 hover:bg-emerald-700'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      }`}>
+                      {shareAgain ? (
+                        <>
+                          <Check size={15} /> Share Again 
+                        </>
+                      ) : (
+                        <>
+                          <Send size={15} /> Share Quotation 
+                        </>
+                      )}
+                    </button>
+                    {lastSharedLabel && (
+                      <span className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden group-hover:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg">
+                        {lastSharedLabel}
+                      </span>
                     )}
-                  </button>
+                  </span>
                 );
               })()}
             </div>
@@ -3938,13 +4091,27 @@ export default function InquiriesPage() {
                       details: shareDetails
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
+                    const sharedAt =
+                      res?.data?.quotation_shared_at ||
+                      res?.data?.data?.quotation_shared_at ||
+                      new Date().toISOString();
                     setResendNotice(msg);
                     setIsQuotationSent(true);
+                    setLastSharedById(prev => ({ ...prev, [shareInquiry.id]: sharedAt }));
 
                     // 1. Optimistic live update of local state immediately
-                    setInquiries(prev => prev.map(i => i.id === shareInquiry.id ? { ...i, status: 'quoted', inquiry_type: 'quotation_sent' } : i));
+                    setInquiries(prev => prev.map(i => i.id === shareInquiry.id ? {
+                      ...i,
+                      status: 'quoted',
+                      inquiry_type: 'quotation_sent',
+                      ai_extraction_json: { ...(i.ai_extraction_json || {}), quotation_shared_at: sharedAt },
+                    } : i));
                     if (selectedInquiry && selectedInquiry.id === shareInquiry.id) {
-                      setSelectedInquiry(prev => prev ? { ...prev, status: 'quoted' } : null);
+                      setSelectedInquiry(prev => prev ? {
+                        ...prev,
+                        status: 'quoted',
+                        ai_extraction_json: { ...(prev.ai_extraction_json || {}), quotation_shared_at: sharedAt },
+                      } : null);
                     }
 
                     // Optimistically update linked deal stage to 'quoted'
