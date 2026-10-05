@@ -1467,7 +1467,7 @@ export default function VisitsPage() {
 
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
@@ -1488,15 +1488,7 @@ export default function VisitsPage() {
                     Loading visit logs...
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
-                    <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
-                    <p className="text-slate-600 font-medium">No visit logs found.</p>
-                    <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
-                  </td>
-                </tr>
-              ) : (
+              ) : filtered.length === 0 ? null : (
                 paginatedVisits.map((v, idx) => {
                   const globalIdx = startIndex + idx + 1;
                   const outcomeLower = getNormalizedOutcome(v);
@@ -1707,6 +1699,13 @@ export default function VisitsPage() {
               )}
             </tbody>
           </table>
+          {!loading && filtered.length === 0 && (
+            <div className="flex-1 flex flex-col items-center justify-center px-4 text-center text-slate-400">
+              <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
+              <p className="text-slate-600 font-medium">No visit logs found.</p>
+              <p className="text-xs text-slate-400 mt-1">Try changing date range or filters, or log a new visit.</p>
+            </div>
+          )}
         </div>
 
         {/* Pagination Controls */}

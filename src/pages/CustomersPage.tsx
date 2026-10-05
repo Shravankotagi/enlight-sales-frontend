@@ -513,7 +513,7 @@ export default function CustomersPage() {
 
       {/* 4. Customer Listing Data Table */}
       <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div className={`flex-1 min-h-0 overflow-auto ${!isLoading && filteredCustomers.length === 0 ? 'flex flex-col' : ''}`}>
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
@@ -535,15 +535,7 @@ export default function CustomersPage() {
                     Loading customer health data...
                   </td>
                 </tr>
-              ) : filteredCustomers.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
-                    <Users size={32} className="mx-auto text-slate-300 mb-2" />
-                    <p className="text-slate-600 font-medium">No customers found.</p>
-                    <p className="text-xs text-slate-400 mt-1">Try changing search query, health status, or segment filters.</p>
-                  </td>
-                </tr>
-              ) : (
+              ) : filteredCustomers.length === 0 ? null : (
                 paginatedCustomers.map((c: any, idx: number) => {
                   const serialNum = (currentPage - 1) * pageSize + idx + 1;
                   const salespersonName = getSalespersonName(c.assigned_salesperson_phone, c.assigned_salesperson_name);
@@ -646,6 +638,13 @@ export default function CustomersPage() {
               )}
             </tbody>
           </table>
+          {!isLoading && filteredCustomers.length === 0 && (
+            <div className="flex-1 flex flex-col items-center justify-center px-4 text-center text-slate-400">
+              <Users size={32} className="mx-auto text-slate-300 mb-2" />
+              <p className="text-slate-600 font-medium">No customers found.</p>
+              <p className="text-xs text-slate-400 mt-1">Try changing search query, health status, or segment filters.</p>
+            </div>
+          )}
         </div>
 
         {/* Pagination Controls */}
