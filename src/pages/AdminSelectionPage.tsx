@@ -260,10 +260,57 @@ export default function AdminSelectionPage() {
         handleCloseModal();
       }, 1800);
     } catch (err: any) {
-      setFormError(err.message);
+      setFormError(extractErrorMessage(err));
     } finally {
       setFormLoading(false);
     }
+  };
+
+  const extractErrorMessage = (err: any): string => {
+    const serverMsg =
+      err?.response?.data?.error ||
+      err?.response?.data?.message ||
+      err?.message ||
+      'An unexpected error occurred.';
+
+    const lower = typeof serverMsg === 'string' ? serverMsg.toLowerCase() : '';
+
+    if (
+      lower.includes('employees_phone_key') ||
+      (lower.includes('phone') &&
+        (lower.includes('already exists') ||
+          lower.includes('duplicate') ||
+          lower.includes('assigned to someone else') ||
+          lower.includes('already registered') ||
+          lower.includes('unique')))
+    ) {
+      return 'This phone number is already assigned to someone else. Please use a different phone number.';
+    }
+
+    if (
+      lower.includes('employees_employee_id_key') ||
+      (lower.includes('employee_id') &&
+        (lower.includes('already exists') ||
+          lower.includes('duplicate') ||
+          lower.includes('already registered') ||
+          lower.includes('in use')))
+    ) {
+      return 'This Employee ID is already in use. Please enter a different Employee ID.';
+    }
+
+    if (
+      lower.includes('employees_email_key') ||
+      (lower.includes('email') &&
+        (lower.includes('already exists') ||
+          lower.includes('duplicate') ||
+          lower.includes('already registered')))
+    ) {
+      return 'This email address is already assigned to someone else.';
+    }
+
+    return typeof serverMsg === 'string'
+      ? serverMsg
+      : 'An unexpected error occurred while saving.';
   };
 
   const handleDeactivate = async () => {
@@ -280,7 +327,7 @@ export default function AdminSelectionPage() {
         handleCloseModal();
       }, 1500);
     } catch (err: any) {
-      setFormError(err.message);
+      setFormError(extractErrorMessage(err));
     } finally {
       setFormLoading(false);
     }

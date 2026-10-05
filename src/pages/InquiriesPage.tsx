@@ -1034,23 +1034,23 @@ export function resolveLinkedDeal(inq: InquiryItem, companyName?: string, dealsL
 }
 
 export function resolveInquiryDealStageKey(inq: InquiryItem, companyName?: string, dealsList: any[] = []): string {
-  const directInqStage = (inq as any)?.stage ? String((inq as any).stage).toLowerCase().trim() : '';
-  if (directInqStage && ['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry', 'review', 'hold'].includes(directInqStage)) {
-    if (directInqStage === 'review') return 'new_inquiry';
-    if (directInqStage === 'qualified') return 'quoted';
-    if (directInqStage === 'hold') return 'on_hold';
-    return directInqStage;
-  }
-
+  // 1. If the linked deal in deals table has moved to an active pipeline stage, that deal stage is the source of truth!
   const linkedDeal = resolveLinkedDeal(inq, companyName, dealsList);
   if (linkedDeal) {
     const dealStage = (linkedDeal?.stage || '').toLowerCase().trim();
-    if (['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified', 'new_inquiry'].includes(dealStage)) {
-      if (dealStage === 'review') return 'new_inquiry';
+    if (['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified'].includes(dealStage)) {
       if (dealStage === 'qualified') return 'quoted';
       if (dealStage === 'hold') return 'on_hold';
       return dealStage;
     }
+  }
+
+  // 2. Direct inquiry stage if explicitly set beyond new_inquiry
+  const directInqStage = (inq as any)?.stage ? String((inq as any).stage).toLowerCase().trim() : '';
+  if (directInqStage && ['won', 'lost', 'negotiation', 'quoted', 'on_hold', 'qualified'].includes(directInqStage)) {
+    if (directInqStage === 'qualified') return 'quoted';
+    if (directInqStage === 'hold') return 'on_hold';
+    return directInqStage;
   }
 
   const details = parseInquiryText(inq.raw_text || '', inq);
@@ -1327,36 +1327,28 @@ export default function InquiriesPage() {
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
-    queryKey: ['customer-names-list'],
-    queryFn: async () => {
-      const custRes = await customersApi.getAll().catch(() => null);
+    queryKey: ['customer-names-list', effectivePhone, activeRole, activeMode],
+    queryFn: async (): Promise<string[]> => {
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
+
+      const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
-      const fetchedNames = cList.map((c: any) => c.customer_name || c.name || c.company_name).filter(Boolean);
+      const fetchedNames: string[] = cList
+        .map((c: any) => String(c.customer_name || c.name || c.company_name || '').trim())
+        .filter(Boolean);
 
-      const defaultNames = [
-        'Supreme Steel',
-        'Mehta Engineering',
-        'Delta Structural Steel',
-        'Ram Ratna Infrastructure Pvt. Ltd.',
-        'AVION EXIM PVT. LTD.',
-        'SB Scafform Technovert Pvt. Ltd.',
-        'Apex Metals & Engg',
-        'Bhushan Steel Works',
-        'Kirloskar Pneumatic',
-        'Vardhaman Engineering',
-        'Dynamic Industries',
-        'Mahalaxmi Steel',
-        'Rathi Steel Corp',
-      ];
-
-      const inquiryCustomerNames = (rawInquiries || []).map(i => i.customer_name || i.sender_name).filter(Boolean);
-
-      return Array.from(new Set([...fetchedNames, ...inquiryCustomerNames, ...defaultNames]));
+      return Array.from(new Set(fetchedNames)).sort((a, b) => a.localeCompare(b));
     },
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: rawEmployees = [] } = useQuery<any[]>({
@@ -1381,6 +1373,8 @@ export default function InquiriesPage() {
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
       return list;
     },
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const stageMutation = useMutation({
@@ -1729,9 +1723,7 @@ export default function InquiriesPage() {
   }, [fetchMonthlyInquiries, fetchDeals]);
 
   useEffect(() => {
-    if (Array.isArray(rawCustomers) && rawCustomers.length > 0) {
-      setExistingCustomers(rawCustomers);
-    }
+    setExistingCustomers(Array.isArray(rawCustomers) ? rawCustomers : []);
   }, [rawCustomers]);
 
   const handleOpenDrawer = (inq: InquiryItem) => {
