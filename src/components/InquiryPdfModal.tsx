@@ -517,9 +517,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               <p className="font-bold text-slate-900 text-[13px]">Notes</p>
               <p className="font-normal text-slate-800 pt-0.5">Bank Details: -</p>
               <div className="space-y-0.5 pl-0.5">
-                <p>Bank Name: <span className="font-normal text-slate-800">HDFC Bank</span></p>
-                <p>IFSC Code: <span className="font-normal text-slate-800">HDFC0002454</span></p>
-                <p>Account Number: <span className="font-normal text-slate-800">50200107323747</span></p>
+                <p>Bank Name: <span className="font-normal text-slate-800">Kotak Mahindra Bank</span></p>
+                <p>IFSC Code: <span className="font-normal text-slate-800">KKBK0001792</span></p>
+                <p>Account Number: <span className="font-normal text-slate-800">2500112233</span></p>
                 <p>Account Name: <span className="font-normal text-slate-800">Enlight Metals Private Limited</span></p>
               </div>
             </div>

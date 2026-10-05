@@ -13,11 +13,9 @@ import {
   Eye,
   UploadCloud,
   FileText,
-  ExternalLink,
-  ImageIcon,
   ChevronDown,
   Loader2,
-  Send,
+  AlertCircle,
   MoreVertical,
   RefreshCw,
   Calendar,
@@ -131,6 +129,31 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+}
+
+function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
+  if (!inputName || !inputName.trim()) return false;
+  const cleanInput = inputName.trim().toLowerCase();
+  if (assignedList.some(c => c.trim().toLowerCase() === cleanInput)) return true;
+
+  const stripSuffixes = (str: string) =>
+    str
+      .toLowerCase()
+      .replace(/\b(private\s+limited|pvt\s+ltd|pvt\s+limited|private\s+ltd|co\s+ltd|llp|limited|pvt|ltd|inc|corp)\b/gi, '')
+      .replace(/[^a-z0-9]/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const strippedInput = stripSuffixes(cleanInput);
+  if (!strippedInput) return false;
+
+  return assignedList.some(c => {
+    const strippedC = stripSuffixes(c);
+    return Boolean(
+      strippedC &&
+      (strippedC === strippedInput || strippedInput.startsWith(strippedC) || strippedC.startsWith(strippedInput)),
+    );
+  });
 }
 
 export function formatOrderSourceText(ord?: Order | null): string {
@@ -475,13 +498,6 @@ export default function OrdersPage() {
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [loadingPoId, setLoadingPoId] = useState<string | null>(null);
 
-  // Send / Share Modal
-  const [showSendModal, setShowSendModal] = useState(false);
-  const [shareOrder, setShareOrder] = useState<Order | null>(null);
-  const [sendEmail, setSendEmail] = useState('');
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [resendNotice, setResendNotice] = useState('');
-
   useEffect(() => {
     const handleOutsideClick = () => setOpenActionMenuId(null);
     document.addEventListener('click', handleOutsideClick);
@@ -490,10 +506,7 @@ export default function OrdersPage() {
 
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
-    const isAnyModalOpen =
-      showModal ||
-      showSendModal ||
-      !!poImageViewerUrl;
+    const isAnyModalOpen = showModal || !!poImageViewerUrl;
     const body = document.body;
     const docEl = document.documentElement;
     const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
@@ -518,21 +531,12 @@ export default function OrdersPage() {
         mainLayoutContainer.style.overflow = 'auto';
       }
     }
-  }, [
-    showModal,
-    showSendModal,
-    poImageViewerUrl,
-  ]);
+  }, [showModal, poImageViewerUrl]);
 
   // AI OCR Scanning state
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [poFileName, setPoFileName] = useState('');
   const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
-
-  const isPdf = (url?: string) => {
-    if (!url) return false;
-    return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
-  };
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -684,6 +688,10 @@ export default function OrdersPage() {
         el.focus();
         el.reportValidity();
       }
+      return;
+    }
+    if (activeRole !== 'admin' && !isCustomerInAssignedList(formCustomerName, rawCustomers)) {
+      toast.error('Cannot create order: Customer is not in your assigned customer list.');
       return;
     }
     if (!formPoNumber.trim()) {
@@ -842,23 +850,21 @@ export default function OrdersPage() {
     }
   };
 
-  const handleOpenSendModal = async (ord: Order) => {
-    setShareOrder(ord);
-    setSendEmail((ord as any).customer_email || '');
-    setResendNotice('');
-    setShowSendModal(true);
+  const handleViewPoDocument = async (ord: Order) => {
+    setSelectedPoOrder(ord);
+    setPoImageViewerUrl(`extracted_preview://${ord.id}`);
+    setLoadingPoId(ord.id);
 
     try {
       const res = await dealsApi.getOne(ord.id);
       const fullDeal = res?.data?.data || res?.data;
       if (fullDeal) {
-        setShareOrder(fullDeal);
-        if (fullDeal.customer_email) {
-          setSendEmail(fullDeal.customer_email);
-        }
+        setSelectedPoOrder(prev => ({ ...(prev || ord), ...fullDeal }));
       }
     } catch (e) {
-      console.warn('Non-blocking full deal load notice:', e);
+      console.warn('Could not load deal details for PO text preview:', e);
+    } finally {
+      setLoadingPoId(null);
     }
   };
 
@@ -941,44 +947,6 @@ export default function OrdersPage() {
   }, 0);
   const totalTonnageResult = calculateOrdersTotalTonnage(filtered);
   const totalTonnage = totalTonnageResult.totalMt;
-
-  const handleViewPoDocument = async (ord: Order) => {
-    setSelectedPoOrder(ord);
-
-    // 1. Direct local media check (data URI or http URL)
-    let mediaUrl = ord.media_urls?.[0];
-    if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
-      setPoImageViewerUrl(mediaUrl);
-      return;
-    }
-
-    // Immediately open modal in loading state so user sees instant feedback!
-    setLoadingPoId(ord.id);
-    setPoImageViewerUrl('loading://preview');
-
-    // 2. Fetch full deal details from database to see if document is stored in deal or linked inquiry
-    try {
-      const res = await dealsApi.getOne(ord.id);
-      const fullDeal = res?.data?.data || res?.data;
-      if (fullDeal) {
-        setSelectedPoOrder(prev => ({ ...(prev || ord), ...fullDeal }));
-        if (Array.isArray(fullDeal.media_urls) && fullDeal.media_urls.length > 0) {
-          const dbMedia = fullDeal.media_urls[0];
-          if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
-            setPoImageViewerUrl(dbMedia);
-            return;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Could not load deal document attachment from API:', e);
-    } finally {
-      setLoadingPoId(null);
-    }
-
-    // 3. If no document attachment, open the structured text viewer without error toast
-    setPoImageViewerUrl(`extracted_preview://${ord.id}`);
-  };
 
   const handleClosePoViewer = () => {
     setPoImageViewerUrl(null);
@@ -1303,16 +1271,6 @@ export default function OrdersPage() {
                                 )}
                                 <span>{loadingPoId === ord.id ? 'Opening...' : 'View PO'}</span>
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenActionMenuId(null);
-                                  handleOpenSendModal(ord);
-                                }}
-                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                                <Send size={14} className="text-slate-500 shrink-0" />
-                                <span>Send</span>
-                              </button>
                             </div>
                           )}
                         </div>
@@ -1344,170 +1302,12 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {showSendModal && shareOrder && (
-        <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => {
-            setShowSendModal(false);
-            setResendNotice('');
-          }}>
-          <div
-            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Send className="text-blue-600" size={22} />
-                Share PO
-              </h2>
-              <button
-                onClick={() => {
-                  setShowSendModal(false);
-                  setResendNotice('');
-                }}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Small Relevant Info Message */}
-            <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
-              <FileText size={18} className="text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-blue-950">Official Commercial PO</p>
-                <p className="text-blue-800 text-[11px] mt-0.5 leading-relaxed">
-                  The complete orginal PO Document for <strong>{shareOrder.customer_name || 'Customer'}</strong> will be shared.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Customer Email Address <span className="text-red-500 font-bold">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. customer@example.com"
-                  value={sendEmail}
-                  onChange={e => setSendEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
-                />
-              </div>
-
-              {resendNotice && (
-                <div className={`p-3 rounded-xl text-xs font-bold border ${
-                  resendNotice.toLowerCase().includes('dispatched') ||
-                  resendNotice.toLowerCase().includes('sent') ||
-                  resendNotice.toLowerCase().includes('generated') ||
-                  resendNotice.toLowerCase().includes('recorded') ||
-                  resendNotice.toLowerCase().includes('success')
-                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                    : 'bg-rose-50 text-rose-900 border-rose-200'
-                }`}>
-                  {resendNotice}
-                </div>
-              )}
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                disabled={sendingEmail || !sendEmail.trim()}
-                onClick={async () => {
-                  if (!shareOrder) return;
-                  const targetEmail = sendEmail.trim();
-                  if (!targetEmail || !targetEmail.includes('@')) {
-                    toast.error('Please enter a valid recipient email address');
-                    return;
-                  }
-                  try {
-                    setSendingEmail(true);
-                    setResendNotice('');
-
-                    const lineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
-                      ? shareOrder.deal_items.map((i: any) => {
-                          const rawSku = i.sku_text || 'Steel Material';
-                          const rawDims = i.dimensions || '';
-                          const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
-                          return {
-                            sku_text: materialDescription,
-                            dimensions: dimensions !== '-' && dimensions !== '-' ? dimensions : '',
-                            hsn_code: i.hsn_code || '7208',
-                            quantity: Number(i.quantity) || 0,
-                            unit: normalizeUnit(i.unit) || 'MT',
-                            rate: Number(i.rate) || 0,
-                            amount: Number(i.amount) || 0,
-                          };
-                        })
-                      : [
-                          {
-                            sku_text: 'Steel Material',
-                            dimensions: '',
-                            hsn_code: '7208',
-                            quantity: 0,
-                            unit: 'MT',
-                            rate: 0,
-                            amount: Number(shareOrder.total_amount) || 0,
-                          },
-                        ];
-
-                    const subtotal = lineItems.reduce((s: number, i: any) => s + (i.amount || 0), 0) || Number(shareOrder.total_amount) || 0;
-
-                    const payload = {
-                      customer_email: targetEmail,
-                      customer_name: shareOrder.customer_name || 'Customer',
-                      details: {
-                        companyName: shareOrder.customer_name || 'Customer',
-                        customerName: shareOrder.customer_name || 'Customer',
-                        customerPhone: shareOrder.customer_phone || '',
-                        salespersonName: (shareOrder as any).salesperson_name || 'Sales Representative',
-                        poNumber: shareOrder.po_number || '',
-                        poDate: shareOrder.po_date || new Date().toISOString().split('T')[0],
-                        deliveryLocation: shareOrder.delivery_location || '',
-                        paymentTerms: shareOrder.payment_terms || '30 Days Credit',
-                        lineItems,
-                        totalAmount: subtotal,
-                        isOrder: true,
-                        media_urls: shareOrder.media_urls || undefined,
-                      },
-                    };
-
-                    const res = await inquiriesApi.sendQuotation(shareOrder.id, payload);
-                    const msg = res?.data?.message || res?.data?.data?.message || `PO Document dispatched to ${targetEmail}!`;
-                    setResendNotice(msg);
-                    if (res?.data?.email_sent !== false) {
-                      setTimeout(() => {
-                        setShowSendModal(false);
-                        setResendNotice('');
-                      }, 2500);
-                    }
-                  } catch (err: any) {
-                    console.error('Error sending PO document:', err);
-                    const errMsg = err?.response?.data?.message || 'Failed to dispatch PO document via email';
-                    setResendNotice(errMsg);
-                    toast.error(errMsg);
-                  } finally {
-                    setSendingEmail(false);
-                  }
-                }}
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
-                {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>{sendingEmail ? 'Dispatching Email & PO...' : 'Share PO Email'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {poImageViewerUrl && (
         <div
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={handleClosePoViewer}>
           <div
-            className={`relative w-full max-h-[90vh] bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col ${
-              poImageViewerUrl.startsWith('extracted_preview://') ? 'max-w-3xl' : 'max-w-5xl'
-            }`}
+            className="relative w-full max-h-[90vh] max-w-3xl bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}>
             <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -1521,11 +1321,7 @@ export default function OrdersPage() {
                 )}
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <FileText size={18} className="text-blue-600" />
-                  {poImageViewerUrl === 'loading://preview'
-                    ? 'Purchase Order (PO) Document'
-                    : poImageViewerUrl.startsWith('extracted_preview://')
-                      ? 'Original Customer Inquiry Message'
-                      : 'Original Purchase Order (PO) Document / WhatsApp Image'}
+                  Original Customer Inquiry Message
                 </span>
               </div>
               <button
@@ -1535,87 +1331,20 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            {poImageViewerUrl === 'loading://preview' ? (
-              <div className="w-full h-[60vh] flex flex-col items-center justify-center bg-slate-50 rounded-xl p-8 border border-slate-200 space-y-4">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-sm">
-                    <FileText size={28} />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 p-1 bg-white rounded-full shadow-md">
-                    <RefreshCw size={16} className="animate-spin text-blue-600" />
-                  </div>
-                </div>
-                <div className="text-center space-y-1">
-                  <h4 className="text-sm font-bold text-slate-800">Opening Purchase Order...</h4>
-                  <p className="text-xs text-slate-500">Retrieving original PO document attachment and details</p>
-                </div>
+            <div className="w-full space-y-3">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                <span>Source Inquiry Text</span>
+                {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
+                  <span className="font-mono">
+                    Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
+                  </span>
+                )}
               </div>
-            ) : poImageViewerUrl.startsWith('extracted_preview://') ? (
-              <div className="w-full space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                  <span>Source Inquiry Text</span>
-                  {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
-                    <span className="font-mono">
-                      Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
-                    </span>
-                  )}
-                </div>
 
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
-                  {formatOrderSourceText(selectedPoOrder)}
-                </div>
-              </div>
-            ) : isPdf(poImageViewerUrl) ? (
-              <iframe
-                src={poImageViewerUrl}
-                title="Purchase Order PDF Document"
-                className="w-full h-[72vh] rounded-xl bg-white shadow-inner border border-slate-200"
-              />
-            ) : (
-              <div className="w-full h-[72vh] flex items-center justify-center bg-slate-50 rounded-xl p-2 overflow-auto border border-slate-200">
-                <img
-                  src={poImageViewerUrl}
-                  alt="Original Purchase Order Document"
-                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-md bg-white border border-slate-200"
-                  onError={e => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const fallbackDiv = document.getElementById('po-image-fallback-card');
-                    if (fallbackDiv) fallbackDiv.style.display = 'flex';
-                  }}
-                />
-              </div>
-            )}
-
-            <div
-              id="po-image-fallback-card"
-              style={{ display: 'none' }}
-              className="flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-4 max-w-md my-8 mx-auto">
-              <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
-                <ImageIcon size={40} />
-              </div>
-              <div>
-                <h3 className="text-slate-900 font-bold text-sm">Purchase Order Document Attachment</h3>
-                <p className="text-slate-500 text-xs mt-1">
-                  Attached Document Processed Live via Gemini Vision
-                </p>
-                <p className="text-slate-500 text-[11px] mt-2 leading-relaxed">
-                  The document details, item quantities, and commercial terms were extracted and synced live to this Orders tab.
-                </p>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
+                {formatOrderSourceText(selectedPoOrder)}
               </div>
             </div>
-
-            {poImageViewerUrl.startsWith('http') && (
-              <div className="flex items-center justify-center mt-3 gap-3">
-                <a
-                  href={poImageViewerUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md">
-                  <ExternalLink size={14} /> Open Original PO in New Tab
-                </a>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1743,12 +1472,25 @@ export default function OrdersPage() {
                         ))}
                       {rawCustomers.filter(c => !formCustomerName || c.toLowerCase().includes(formCustomerName.toLowerCase())).length === 0 && (
                         <div className="px-3 py-2 text-xs text-slate-400 italic">
-                          No matching company found. Typing will save as new company.
+                          {activeRole !== 'admin'
+                            ? 'This company is not in your assigned customer list.'
+                            : 'No matching company found. Typing will save as new company.'}
                         </div>
                       )}
                     </div>
                   )}
                 </div>
+                {activeRole !== 'admin' && formCustomerName.trim() && !isCustomerInAssignedList(formCustomerName, rawCustomers) && (
+                  <div className="mt-1.5 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Customer Not Assigned:</span>
+                      <p className="text-[11px] text-rose-700 mt-0.5">
+                        "{formCustomerName}" is not in your assigned customer list. You can only record orders for your assigned customers.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2074,8 +1816,12 @@ export default function OrdersPage() {
                 
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50">
+                  disabled={
+                    submitting ||
+                    isParsingDoc ||
+                    (activeRole !== 'admin' && !isCustomerInAssignedList(formCustomerName, rawCustomers))
+                  }
+                  className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                   {submitting ? 'Saving Order...' : 'Create Order'}
                 </button>
               </div>
