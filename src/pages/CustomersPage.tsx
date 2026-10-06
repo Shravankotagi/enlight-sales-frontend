@@ -132,7 +132,7 @@ export default function CustomersPage() {
         return;
       }
       toast.success(
-        `Synced with Zoho Bigin! ${data.companiesImported || 0} companies & ${data.dealsImported || 0} deals updated.`,
+        `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
       );
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
