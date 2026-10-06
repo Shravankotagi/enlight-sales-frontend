@@ -1269,18 +1269,19 @@ export default function OrdersPage() {
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
-                <th className="px-5 py-3 text-left w-[26%]">Customers</th>
-                <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
-                <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
-                <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
-                <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
+                <th className="px-5 py-3 text-left w-[23%]">Customers</th>
+                <th className="px-4 py-3 text-center w-[13%]">PO Number</th>
+                <th className="px-4 py-3 text-center w-[14%]">Reference PO</th>
+                <th className="px-4 py-3 text-center w-[11%]">Items Summary</th>
+                <th className="px-4 py-3 text-center w-[13%]">Source Channel</th>
+                <th className="px-4 py-3 text-center w-[14%]">Delivery Location</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
                 </tr>
               ) : filtered.length === 0 ? null : (
                 paginatedOrders.map((ord, idx) => {
@@ -1318,6 +1319,17 @@ export default function OrdersPage() {
                         {poNumber ? (
                           <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
                             {poNumber}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center justify-center text-slate-400 font-medium font-mono text-xs">
+                            -
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        {ord.reference_po_number?.trim() ? (
+                          <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs max-w-full truncate" title={ord.reference_po_number.trim()}>
+                            {ord.reference_po_number.trim()}
                           </span>
                         ) : (
                           <span className="inline-flex items-center justify-center text-slate-400 font-medium font-mono text-xs">
