@@ -195,6 +195,7 @@ export const inquiriesApi = {
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),
   updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
+  previewQuotation: (id: string, payload: any) => API.post(`/inquiries/quotation-preview/${id}`, payload),
   sendQuotation: (id: string, payload: any) => API.post(`/inquiries/send-quotation/${id}`, payload),
   generatePdf: (payload: any) => API.post('/inquiries/generate-pdf', payload, { responseType: 'blob' }),
   parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
