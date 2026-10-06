@@ -24,7 +24,15 @@ import {
   UserCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ordersApi, inquiriesApi, dealsApi, customersApi, zohoApi, employeesApi } from '../lib/api';
+import {
+  ordersApi,
+  inquiriesApi,
+  dealsApi,
+  customersApi,
+  zohoApi,
+  employeesApi,
+  logPoAllocationError,
+} from '../lib/api';
 import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
@@ -60,6 +68,10 @@ interface Order {
   assigned_salesperson_name?: string;
   salesperson?: string;
   po_number?: string;
+  reference_po_number?: string;
+  generated_po_number?: string;
+  po_source?: string;
+  po_status?: string;
   po_date?: string;
   total_amount?: number;
   delivery_location?: string;
@@ -163,7 +175,10 @@ export function formatOrderSourceText(ord?: Order | null): string {
   const lines: string[] = [];
   if (ord.customer_name) lines.push(`Company: ${ord.customer_name}`);
   if (ord.customer_phone) lines.push(`Phone: ${ord.customer_phone}`);
-  if (ord.po_number) lines.push(`PO Number: ${ord.po_number}`);
+  if (ord.po_number) lines.push(`System PO Number: ${ord.po_number}`);
+  if (ord.reference_po_number) {
+    lines.push(`Reference PO: ${ord.reference_po_number}`);
+  }
   if (ord.po_date) lines.push(`PO Date: ${ord.po_date}`);
   if (ord.delivery_location) lines.push(`Delivery Location: ${ord.delivery_location}`);
   if (ord.payment_terms) lines.push(`Payment Terms: ${ord.payment_terms}`);
@@ -548,6 +563,7 @@ export default function OrdersPage() {
   const [showModal, setShowModal] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [allocatingPo, setAllocatingPo] = useState(false);
 
   // Reset page when search or date range changes
   useEffect(() => {
@@ -604,6 +620,12 @@ export default function OrdersPage() {
   const [formCustomerName, setFormCustomerName] = useState('');
   const [formCustomerPhone, setFormCustomerPhone] = useState('');
   const [formPoNumber, setFormPoNumber] = useState('');
+  const [formGeneratedPoNumber, setFormGeneratedPoNumber] = useState('');
+  const [formReferencePoNumber, setFormReferencePoNumber] = useState('');
+  const [poReservationToken, setPoReservationToken] = useState('');
+  const [poConflict, setPoConflict] = useState<string | null>(null);
+  const [checkingPoAvailability, setCheckingPoAvailability] = useState(false);
+  const poInputDirtyRef = useRef(false);
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
@@ -618,6 +640,88 @@ export default function OrdersPage() {
       amount: 0,
     },
   ]);
+
+  const createPoReservationToken = () =>
+    `dashboard:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+
+  const handleOpenCreateOrder = async () => {
+    if (allocatingPo) return;
+
+    const reservationToken = createPoReservationToken();
+    poInputDirtyRef.current = false;
+    setPoReservationToken(reservationToken);
+    setFormPoNumber('');
+    setFormGeneratedPoNumber('');
+    setFormReferencePoNumber('');
+    setPoConflict(null);
+    setShowModal(false);
+    setAllocatingPo(true);
+
+    try {
+      const response = await ordersApi.allocatePo({
+        reservation_token: reservationToken,
+      });
+      const allocation = response?.data;
+      if (!allocation?.po_number) {
+        throw new Error('The system did not return a generated PO number.');
+      }
+
+      setFormPoNumber(String(allocation.po_number));
+      setFormGeneratedPoNumber(
+        String(allocation.generated_po_number || allocation.po_number),
+      );
+      setShowModal(true);
+    } catch (error: any) {
+      logPoAllocationError('Orders create form', error, reservationToken);
+      toast.error(
+        error?.response?.data?.message ||
+          'Could not generate the system PO. Please try again.',
+      );
+    } finally {
+      setAllocatingPo(false);
+    }
+  };
+
+  useEffect(() => {
+    const value = formPoNumber.trim();
+    if (!showModal || !value || !poReservationToken) {
+      setPoConflict(null);
+      setCheckingPoAvailability(false);
+      return;
+    }
+
+    let active = true;
+    setCheckingPoAvailability(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const response = await ordersApi.checkPoAvailability({
+          po_number: value,
+          reservation_token: poReservationToken,
+        });
+        if (!active) return;
+        const available = response?.data?.available !== false;
+        setPoConflict(
+          available
+            ? null
+            : response?.data?.reason ||
+                'This PO number is already allocated.',
+        );
+      } catch {
+        if (active) {
+          setPoConflict(
+            'PO availability could not be checked. Please try again.',
+          );
+        }
+      } finally {
+        if (active) setCheckingPoAvailability(false);
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [formPoNumber, poReservationToken, showModal]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | File[] } }) => {
     const file = e.target.files?.[0];
@@ -680,7 +784,7 @@ export default function OrdersPage() {
         }
 
         if (extraction.po_number) {
-          setFormPoNumber(String(extraction.po_number).trim());
+          setFormReferencePoNumber(String(extraction.po_number).trim());
         }
         if (extraction.po_date) {
           let formattedDate = String(extraction.po_date).trim();
@@ -762,6 +866,12 @@ export default function OrdersPage() {
         el.focus();
         el.reportValidity();
       }
+      return;
+    }
+    if (checkingPoAvailability || poConflict) {
+      toast.error(
+        poConflict || 'Checking PO number availability. Please wait.',
+      );
       return;
     }
     if (!formPoDate) {
@@ -848,6 +958,10 @@ export default function OrdersPage() {
         customer_name: formCustomerName.trim(),
         customer_phone: formCustomerPhone.trim() || undefined,
         po_number: formPoNumber.trim(),
+        generated_po_number:
+          formGeneratedPoNumber.trim() || formPoNumber.trim(),
+        reference_po_number: formReferencePoNumber.trim() || undefined,
+        po_reservation_token: poReservationToken || undefined,
         po_date: formPoDate,
         total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
@@ -871,6 +985,11 @@ export default function OrdersPage() {
       setFormCustomerName('');
       setFormCustomerPhone('');
       setFormPoNumber('');
+      setFormGeneratedPoNumber('');
+      setFormReferencePoNumber('');
+      setPoReservationToken('');
+      setPoConflict(null);
+      poInputDirtyRef.current = false;
       setFormPoDate(new Date().toISOString().split('T')[0]);
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
@@ -906,6 +1025,12 @@ export default function OrdersPage() {
       await fetchOrders();
     } catch (err: any) {
       console.error('Error creating order:', err);
+      if (err?.response?.status === 409) {
+        setPoConflict(
+          err?.response?.data?.message ||
+            'This PO number is already allocated.',
+        );
+      }
       toast.error(err?.response?.data?.message || 'Failed to create order. Please try again.');
     } finally {
       setSubmitting(false);
@@ -1094,10 +1219,11 @@ export default function OrdersPage() {
             </button>
 
             <button
-              onClick={() => setShowModal(true)}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
-              <Plus size={15} />
-              Create New Order
+              onClick={handleOpenCreateOrder}
+              disabled={allocatingPo}
+              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
+              {allocatingPo ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+              {allocatingPo ? 'Generating PO…' : 'Create New Order'}
             </button>
           </div>
         </div>
@@ -1236,6 +1362,7 @@ export default function OrdersPage() {
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
                 <th className="px-5 py-3 text-left w-[26%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
+                <th className="px-4 py-3 text-center w-[14%]">Reference PO</th>
                 <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
                 <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
@@ -1245,7 +1372,7 @@ export default function OrdersPage() {
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
                 </tr>
               ) : filtered.length === 0 ? null : (
                 paginatedOrders.map((ord, idx) => {
@@ -1257,6 +1384,7 @@ export default function OrdersPage() {
                     : '';
                   const itemCount = ordLineItems.length > 0 ? ordLineItems.length : 1;
                   const poNumber = ord.po_number?.trim() || '';
+                  const referencePoNumber = ord.reference_po_number?.trim() || '';
                   const repName = canViewSalesperson ? getOrderRepName(ord) : '';
 
                   return (
@@ -1293,6 +1421,17 @@ export default function OrdersPage() {
                           </span>
                         ) : (
                           <span className="inline-flex items-center justify-center text-slate-400 font-medium font-mono text-xs">
+                            -
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        {referencePoNumber ? (
+                          <span className="font-mono text-xs font-medium text-slate-700">
+                            {referencePoNumber}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-xs font-medium text-slate-400">
                             -
                           </span>
                         )}
@@ -1394,7 +1533,7 @@ export default function OrdersPage() {
                 )}
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <FileText size={18} className="text-blue-600" />
-                  Original Customer Inquiry Message
+                  Order PO Details &amp; Source
                 </span>
               </div>
               <button
@@ -1405,6 +1544,24 @@ export default function OrdersPage() {
             </div>
 
             <div className="w-full space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500">
+                    System PO
+                  </p>
+                  <p className="mt-1 text-xs font-mono font-bold text-slate-900">
+                    {selectedPoOrder?.po_number || '-'}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500">
+                    Reference PO
+                  </p>
+                  <p className="mt-1 text-xs font-mono font-medium text-slate-700">
+                    {selectedPoOrder?.reference_po_number || '-'}
+                  </p>
+                </div>
+              </div>
               <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                 <span>Source Inquiry Text</span>
                 {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
@@ -1566,18 +1723,52 @@ export default function OrdersPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    PO Number <span className="text-red-500 font-bold">*</span>
+                    System PO Number <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
                     id="form-po-number"
                     type="text"
                     required
-                    placeholder="e.g. PO-2026-0042"
+                    placeholder="EM/PO/1"
                     value={formPoNumber}
-                    onChange={e => setFormPoNumber(e.target.value)}
+                    onChange={e => {
+                      poInputDirtyRef.current = true;
+                      setFormPoNumber(e.target.value);
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal ${
+                      poConflict ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
+                  />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Generated automatically and editable before confirmation.
+                  </p>
+                  {checkingPoAvailability && (
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      Checking availability…
+                    </p>
+                  )}
+                  {poConflict && (
+                    <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                      {poConflict}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Reference PO{' '}
+                    <span className="text-[10px] font-medium text-slate-400">
+                      (optional)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Customer PO from document/text"
+                    value={formReferencePoNumber}
+                    onChange={e => setFormReferencePoNumber(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
