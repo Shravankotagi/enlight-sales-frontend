@@ -1159,10 +1159,49 @@ export default function InquiriesPage() {
   const [shareInquiry, setShareInquiry] = useState<InquiryItem | null>(null);
   const [shareDetails, setShareDetails] = useState<ExtractedDetails | null>(null);
   const [quotationEmail, setQuotationEmail] = useState('');
+  const [quotationSubject, setQuotationSubject] = useState('');
+  const [quotationBody, setQuotationBody] = useState('');
+  const [quotationCc, setQuotationCc] = useState<string[]>([]);
+  const [quotationReference, setQuotationReference] = useState('');
+  const [quotationSenderEmail, setQuotationSenderEmail] = useState('');
+  const [quotationPreviewLoading, setQuotationPreviewLoading] = useState(false);
+  const [quotationPreviewError, setQuotationPreviewError] = useState('');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
   const [lastSharedById, setLastSharedById] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!showQuotationModal || !shareInquiry || !shareDetails) return;
+    let cancelled = false;
+    setQuotationPreviewLoading(true);
+    setQuotationPreviewError('');
+    inquiriesApi.previewQuotation(shareInquiry.id, {
+      customer_email: quotationEmail.trim(),
+      customer_name: shareDetails.companyName,
+      details: shareDetails,
+    }).then((res) => {
+      if (cancelled) return;
+      const preview = res?.data?.data || res?.data;
+      setQuotationSubject(preview?.subject || '');
+      setQuotationBody(preview?.body || '');
+      setQuotationCc(Array.isArray(preview?.cc) ? preview.cc : []);
+      setQuotationReference(preview?.quotation_reference || '');
+      setQuotationSenderEmail(preview?.sender_email || '');
+    }).catch((err: any) => {
+      if (cancelled) return;
+      setQuotationPreviewError(
+        err?.response?.data?.message ||
+          'Unable to prepare the quotation email. Please try again.',
+      );
+      setQuotationSenderEmail('');
+    }).finally(() => {
+      if (!cancelled) setQuotationPreviewLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showQuotationModal, shareInquiry?.id]);
 
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
@@ -4052,6 +4091,61 @@ export default function InquiriesPage() {
                 />
               </div>
 
+              {quotationPreviewLoading && (
+                <div className="text-xs text-slate-500 flex items-center gap-2">
+                  <RefreshCw size={13} className="animate-spin" /> Preparing email preview…
+                </div>
+              )}
+              {quotationPreviewError && (
+                <div className="p-3 rounded-xl text-xs font-bold border bg-rose-50 text-rose-900 border-rose-200">
+                  {quotationPreviewError}
+                </div>
+              )}
+              {quotationSenderEmail && (
+                <div className="text-[11px] text-slate-500">
+                  From: <span className="font-semibold text-slate-700">{quotationSenderEmail}</span>
+                  {quotationReference && (
+                    <> · Reference: <span className="font-semibold text-slate-700">{quotationReference}</span></>
+                  )}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  CC
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={quotationCc.join(', ')}
+                  placeholder="Resolved after preview"
+                  className="w-full px-3.5 py-2.5 border border-slate-200 bg-slate-50 rounded-xl text-xs font-semibold outline-none text-slate-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Subject <span className="text-red-500 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={quotationSubject}
+                  onChange={e => setQuotationSubject(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Email Body <span className="text-red-500 font-bold">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={10}
+                  value={quotationBody}
+                  onChange={e => setQuotationBody(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium leading-relaxed outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800 resize-y"
+                />
+              </div>
+
               {resendNotice && (
                 <div className={`p-3 rounded-xl text-xs font-bold border ${
                   resendNotice.toLowerCase().includes('dispatched') ||
@@ -4082,7 +4176,15 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
-                disabled={sendingQuotation || !quotationEmail.trim()}
+                disabled={
+                  sendingQuotation ||
+                  quotationPreviewLoading ||
+                  !quotationEmail.trim() ||
+                  !quotationSubject.trim() ||
+                  !quotationBody.trim() ||
+                  !quotationSenderEmail ||
+                  Boolean(quotationPreviewError)
+                }
                 onClick={async () => {
                   const targetEmail = quotationEmail.trim();
                   if (!targetEmail || !targetEmail.includes('@')) {
@@ -4095,7 +4197,10 @@ export default function InquiriesPage() {
                     const res = await inquiriesApi.sendQuotation(shareInquiry.id, {
                       customer_email: targetEmail,
                       customer_name: shareDetails.companyName,
-                      details: shareDetails
+                      details: shareDetails,
+                      email_subject: quotationSubject,
+                      email_body: quotationBody,
+                      quotation_reference: quotationReference,
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
                     const sharedAt =

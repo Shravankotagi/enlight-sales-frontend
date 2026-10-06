@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { dealsApi } from '../lib/api';
-import { useEffect, useState } from 'react';
+import { dealsApi, logPoAllocationError } from '../lib/api';
+import { useEffect, useRef, useState } from 'react';
 import {
   X,
   Package, IndianRupee, Clock,
@@ -52,6 +52,12 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   const [lostReason, setLostReason] = useState('');
   const [showWonModal, setShowWonModal] = useState(false);
   const [wonPoNumber, setWonPoNumber] = useState('');
+  const [wonGeneratedPoNumber, setWonGeneratedPoNumber] = useState('');
+  const [wonReferencePoNumber, setWonReferencePoNumber] = useState('');
+  const [wonPoReservationToken, setWonPoReservationToken] = useState('');
+  const [wonPoConflict, setWonPoConflict] = useState<string | null>(null);
+  const [wonPoChecking, setWonPoChecking] = useState(false);
+  const wonPoDirtyRef = useRef(false);
   const [wonPoDate, setWonPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -73,16 +79,25 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   }, [refetch]);
 
   const deal = dealData;
+  const legacyReferencePo =
+    deal?.po_number &&
+    !deal?.generated_po_number &&
+    !/^EM\/PO\/\d+$/i.test(String(deal.po_number).trim())
+      ? String(deal.po_number).trim()
+      : '';
 
   // Initialize PO details if deal already has them
   useEffect(() => {
-    if (deal?.po_number) {
-      setWonPoNumber(deal.po_number);
+    if (showWonModal || wonPoDirtyRef.current) return;
+    if (deal?.generated_po_number) {
+      setWonPoNumber(deal.generated_po_number);
+      setWonGeneratedPoNumber(deal.generated_po_number);
     }
+    setWonReferencePoNumber(deal?.reference_po_number || legacyReferencePo);
     if (deal?.po_date) {
       setWonPoDate(deal.po_date);
     }
-  }, [deal]);
+  }, [deal, showWonModal]);
 
   // Close on Escape
   useEffect(() => {
@@ -94,8 +109,33 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
   }, [onClose]);
 
   const stageMutation = useMutation({
-    mutationFn: ({ stage, reason, po_number, po_date }: { stage: string; reason?: string; po_number?: string; po_date?: string }) =>
-      dealsApi.updateStage(dealId!, stage, reason, po_number, po_date),
+    mutationFn: ({
+      stage,
+      reason,
+      po_number,
+      po_date,
+      reference_po_number,
+      generated_po_number,
+      po_reservation_token,
+    }: {
+      stage: string;
+      reason?: string;
+      po_number?: string;
+      po_date?: string;
+      reference_po_number?: string;
+      generated_po_number?: string;
+      po_reservation_token?: string;
+    }) =>
+      dealsApi.updateStage(
+        dealId!,
+        stage,
+        reason,
+        po_number,
+        po_date,
+        reference_po_number,
+        generated_po_number,
+        po_reservation_token,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['deal', dealId] });
@@ -108,9 +148,96 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
       setShowWonModal(false);
     },
     onError: (err: any) => {
+      if (err?.response?.status === 409) {
+        setWonPoConflict(err?.response?.data?.message || 'This PO number is already allocated.');
+      }
       toast.error(err?.response?.data?.message || 'Failed to update stage');
     },
   });
+
+  const openWonModal = async () => {
+    const reservationToken = `drawer-won:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+    const existingGenerated = String(
+      deal?.generated_po_number ||
+      (
+        /^EM\/PO\/\d+$/i.test(String(deal?.po_number || '').trim())
+          ? deal.po_number
+          : ''
+      ),
+    ).trim();
+    wonPoDirtyRef.current = false;
+    let generatedPoNumber = existingGenerated;
+    let poNumber = existingGenerated;
+    let allocationToast: string | undefined;
+
+    if (!existingGenerated) {
+      allocationToast = toast.loading('Generating system PO…');
+    }
+    try {
+      if (!existingGenerated) {
+        const response = await dealsApi.allocatePo({
+          reservation_token: reservationToken,
+          deal_id: dealId || undefined,
+        });
+        const allocation = response?.data;
+        if (!allocation?.po_number) {
+          throw new Error('The system did not return a generated PO number.');
+        }
+        poNumber = String(allocation.po_number);
+        generatedPoNumber = String(allocation.generated_po_number || allocation.po_number);
+      }
+      if (allocationToast) toast.dismiss(allocationToast);
+      setWonPoReservationToken(reservationToken);
+      setWonPoNumber(poNumber);
+      setWonGeneratedPoNumber(generatedPoNumber);
+      setWonReferencePoNumber(String(deal?.reference_po_number || legacyReferencePo).trim());
+      setWonPoConflict(null);
+      setWonPoChecking(false);
+      setShowWonModal(true);
+    } catch (error: any) {
+      if (allocationToast) toast.dismiss(allocationToast);
+      logPoAllocationError(
+        'Deal Detail Won modal',
+        error,
+        reservationToken,
+        dealId || undefined,
+      );
+      toast.error(error?.response?.data?.message || 'Could not generate the system PO. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    const value = wonPoNumber.trim();
+    if (!showWonModal || !value || !wonPoReservationToken) return;
+
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      setWonPoChecking(true);
+      try {
+        const response = await dealsApi.checkPoAvailability({
+          po_number: value,
+          reservation_token: wonPoReservationToken,
+          deal_id: dealId || undefined,
+        });
+        if (active) {
+          setWonPoConflict(
+            response?.data?.available === false
+              ? (response?.data?.reason || 'This PO number is already allocated.')
+              : null,
+          );
+        }
+      } catch {
+        if (active) setWonPoConflict('PO availability could not be checked. Please try again.');
+      } finally {
+        if (active) setWonPoChecking(false);
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [dealId, showWonModal, wonPoNumber, wonPoReservationToken]);
 
   const deleteMutation = useMutation({
     mutationFn: () => dealsApi.delete(dealId!),
@@ -131,7 +258,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
     if (stage === 'lost') {
       setShowLostModal(true);
     } else if (stage === 'won') {
-      setShowWonModal(true);
+      void openWonModal();
     } else {
       stageMutation.mutate({ stage });
     }
@@ -568,35 +695,68 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
         </div>
       )}
 
-      {/* Won Modal - Ask for PO Number */}
+      {/* Won Modal - Confirm editable system PO */}
       {showWonModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl p-6 w-96 max-w-sm shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-base font-bold text-slate-900 mb-1">Mark as Won</h3>
-            <p className="text-xs text-slate-500 mb-4">Enter Purchase Order (PO) details to confirm this order</p>
+            <p className="text-xs text-slate-500 mb-4">Confirm the generated system PO before creating this order</p>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!wonPoNumber.trim()) {
-                  toast.error('PO Number is required');
+                  toast.error('System PO number is required');
                   return;
                 }
-                stageMutation.mutate({ stage: 'won', po_number: wonPoNumber.trim(), po_date: wonPoDate });
+                if (wonPoChecking || wonPoConflict) {
+                  toast.error(wonPoConflict || 'Checking PO number availability. Please wait.');
+                  return;
+                }
+                stageMutation.mutate({
+                  stage: 'won',
+                  po_number: wonPoNumber.trim(),
+                  po_date: wonPoDate,
+                  reference_po_number: wonReferencePoNumber.trim() || undefined,
+                  generated_po_number: wonGeneratedPoNumber.trim() || wonPoNumber.trim(),
+                  po_reservation_token: wonPoReservationToken,
+                });
               }}
               className="space-y-3.5"
             >
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PO Number <span className="text-rose-500">*</span>
+                  System PO Number <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   autoFocus
                   required
-                  placeholder="e.g. PO-9842"
+                  placeholder="EM/PO/1"
                   value={wonPoNumber}
-                  onChange={(e) => setWonPoNumber(e.target.value)}
+                  onChange={(e) => {
+                    wonPoDirtyRef.current = true;
+                    setWonPoNumber(e.target.value);
+                    setWonPoConflict(null);
+                  }}
+                  className={`w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    wonPoConflict ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                  }`}
+                />
+                <p className="mt-1 text-[10px] text-slate-500">Generated automatically and editable before confirmation.</p>
+                {wonPoChecking && <p className="mt-1 text-[10px] text-slate-500">Checking availability…</p>}
+                {wonPoConflict && <p className="mt-1 text-[10px] font-semibold text-rose-600">{wonPoConflict}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Reference PO <span className="text-[10px] font-medium text-slate-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Customer PO from document/text"
+                  value={wonReferencePoNumber}
+                  onChange={(e) => setWonReferencePoNumber(e.target.value)}
                   className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -623,7 +783,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
                 </button>
                 <button
                   type="submit"
-                  disabled={!wonPoNumber.trim() || stageMutation.isPending}
+                  disabled={!wonPoNumber.trim() || !!wonPoConflict || wonPoChecking || stageMutation.isPending}
                   className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50"
                 >
                   {stageMutation.isPending ? 'Updating...' : 'Confirm Won'}
