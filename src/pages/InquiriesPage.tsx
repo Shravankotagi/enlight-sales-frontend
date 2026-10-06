@@ -1523,6 +1523,39 @@ export default function InquiriesPage() {
     onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to update deal'),
   });
 
+  const releaseWonPoReservation = (
+    reservationToken: string,
+    poNumber?: string,
+    dealId?: string,
+  ) => {
+    if (!reservationToken) return;
+    void dealsApi
+      .releasePoReservation({
+        reservation_token: reservationToken,
+        po_number: poNumber?.trim() || undefined,
+        deal_id: dealId,
+      })
+      .catch(error => {
+        console.error('[SystemPO] Inquiry Won modal release failed', {
+          reservationToken,
+          poNumber,
+          dealId,
+          error,
+        });
+      });
+  };
+
+  const handleCancelWon = () => {
+    if (!wonModal) return;
+    const { poReservationToken, generatedPoNumber, poNumber, dealId } = wonModal;
+    setWonModal(null);
+    releaseWonPoReservation(
+      poReservationToken,
+      generatedPoNumber || poNumber,
+      dealId,
+    );
+  };
+
   const openWonModalForDeal = async (details: {
     dealId: string;
     inqId: string;
@@ -1593,6 +1626,11 @@ export default function InquiriesPage() {
       });
     } catch (error: any) {
       if (allocationToast) toast.dismiss(allocationToast);
+      releaseWonPoReservation(
+        reservationToken,
+        generatedPoNumber || poNumber || undefined,
+        details.dealId,
+      );
       logPoAllocationError(
         'Inquiry Won modal',
         error,
@@ -4889,7 +4927,7 @@ export default function InquiriesPage() {
               <div className="flex gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setWonModal(null)}
+                  onClick={handleCancelWon}
                   className="flex-1 px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer">
                   Cancel
                 </button>
