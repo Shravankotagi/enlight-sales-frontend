@@ -190,6 +190,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         customerAddress,
         customerGstin,
         salespersonName: salesperson,
+        senderName: viewingAs?.name || employee?.name || '',
         lineItems,
       });
 
