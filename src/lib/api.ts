@@ -95,6 +95,8 @@ export const dealsApi = {
     ),
   checkPoAvailability: (params: { po_number: string; reservation_token?: string; deal_id?: string }) =>
     API.get('/deals/po/availability', { params }),
+  releasePoReservation: (data: { reservation_token: string; po_number?: string; deal_id?: string }) =>
+    API.post('/deals/po/release', data),
   updateStage: (
     id: string,
     stage: string,
@@ -185,6 +187,8 @@ export const ordersApi = {
     ),
   checkPoAvailability: (params: { po_number: string; reservation_token?: string; deal_id?: string }) =>
     API.get('/deals/po/availability', { params }),
+  releasePoReservation: (data: { reservation_token: string; po_number?: string; deal_id?: string }) =>
+    API.post('/deals/po/release', data),
   delete: (id: string) => API.delete(`/deals/${id}`),
 };
 

@@ -644,6 +644,32 @@ export default function OrdersPage() {
   const createPoReservationToken = () =>
     `dashboard:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
 
+  const releaseOrderPoReservation = (token: string, poNumber?: string) => {
+    if (!token) return;
+    void ordersApi
+      .releasePoReservation({
+        reservation_token: token,
+        po_number: poNumber?.trim() || undefined,
+      })
+      .catch(error => {
+        console.error('[SystemPO] Orders create form release failed', {
+          reservationToken: token,
+          poNumber,
+          error,
+        });
+      });
+  };
+
+  const handleCancelCreateOrder = () => {
+    const token = poReservationToken;
+    const poNumber = formGeneratedPoNumber || formPoNumber;
+    setShowModal(false);
+    setPoReservationToken('');
+    setPoConflict(null);
+    poInputDirtyRef.current = false;
+    releaseOrderPoReservation(token, poNumber);
+  };
+
   const handleOpenCreateOrder = async () => {
     if (allocatingPo) return;
 
@@ -672,6 +698,7 @@ export default function OrdersPage() {
       );
       setShowModal(true);
     } catch (error: any) {
+      releaseOrderPoReservation(reservationToken);
       logPoAllocationError('Orders create form', error, reservationToken);
       toast.error(
         error?.response?.data?.message ||
@@ -1588,7 +1615,7 @@ export default function OrdersPage() {
                 Record New Order
               </h2>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={handleCancelCreateOrder}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
                 <X size={20} />
               </button>
