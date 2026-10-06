@@ -190,6 +190,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         customerAddress,
         customerGstin,
         salespersonName: salesperson,
+        senderName: viewingAs?.name || employee?.name || '',
         lineItems,
       });
 
@@ -364,9 +365,8 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               
             </div>
 
-            {/* Addresses & Supply Section: Bill To, Ship To, Place of Supply (Left) & Order Date, Salesperson (Right) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-1 pb-1">
-              {/* Left Column: Bill To, Ship To, Place of Supply */}
+            {/* Addresses & Supply Section: Bill To, Ship To, then Place of Supply and Order Date on one line */}
+            <div className="pt-1 pb-1">
               <div className="space-y-3 text-slate-700 text-[12px]">
                 {/* Bill To */}
                 <div className="space-y-0.5">
@@ -395,21 +395,14 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   ) : null}
                 </div>
 
-                {/* Place Of Supply */}
-                <div className="pt-1">
+                <div className="flex items-baseline justify-between gap-6 pt-1">
                   <p className="font-medium text-slate-800 text-[12px]">
                     Place Of Supply: <span className="font-normal text-slate-700">Maharashtra (27)</span>
                   </p>
-                </div>
-              </div>
-
-              {/* Right Column: Order Date & Salesperson (Neatly aligned one below the other) */}
-              <div className="flex flex-col items-start sm:items-end justify-end pb-1">
-                <div className="grid grid-cols-[85px_auto] gap-x-3 gap-y-1.5 text-[12px]">
-                  <span className="font-normal text-slate-700">Order Date :</span>
-                  <span className="font-normal text-slate-900">{createdDate}</span>
-                  <span className="font-normal text-slate-700">Sales person :</span>
-                  <span className="font-normal text-slate-900 capitalize">{salesperson}</span>
+                  <div className="grid shrink-0 grid-cols-[85px_auto] gap-x-3 text-[12px]">
+                    <span className="font-normal text-slate-700">Order Date :</span>
+                    <span className="font-normal text-slate-900">{createdDate}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -540,10 +533,16 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </div>
 
             {/* Authorized Signature */}
-            <div className="pt-12 flex justify-start items-center">
-              <div>
-                <p className="font-bold text-slate-800 text-[13px]">Authorized Signature</p>
-              </div>
+            <div className="pt-12">
+              <p className="font-bold text-slate-800 text-[13px]">Authorized Signature</p>
+              {(viewingAs?.name || employee?.name) && (
+                <>
+                  <p className="text-[13px] font-semibold text-slate-900 mt-3">
+                    {viewingAs?.name || employee?.name}
+                  </p>
+                  <div className="mt-8 h-px w-40 bg-slate-900" />
+                </>
+              )}
             </div>
           </div>
 

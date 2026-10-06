@@ -250,6 +250,10 @@ export const kbApi = {
   deleteDocument: (id: string) => API.delete(`/chat/kb/documents/${id}`),
 };
 
+export const zohoApi = {
+  pullInitialSync: () => API.post('/zoho/pull-initial-sync'),
+};
+
 export const activityLogsApi = {
   getAll: (params?: {
     from?: string;

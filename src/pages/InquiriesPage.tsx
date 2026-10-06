@@ -4,17 +4,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, MoreVertical, Loader2,
+  ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, UserCheck, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, ArrowLeft
 } from 'lucide-react';
-import {
-  inquiriesApi,
-  customersApi,
-  employeesApi,
-  dealsApi,
-  activityLogsApi,
-  logPoAllocationError,
-} from '../lib/api';
+import { inquiriesApi, customersApi, employeesApi, dealsApi, activityLogsApi } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -47,10 +40,6 @@ export interface InquiryItem {
   stage?: string;
   total_amount?: number;
   po_number?: string;
-  reference_po_number?: string;
-  generated_po_number?: string;
-  po_source?: string;
-  po_status?: string;
   po_date?: string;
   won_at?: string;
   lost_reason?: string;
@@ -1114,7 +1103,8 @@ export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs, activeRole, activeMode } = useAuth();
+  const { effectivePhone, employee, viewingAs, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const canViewSalesperson = isAdmin || isSalesManager;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1183,12 +1173,11 @@ export default function InquiriesPage() {
 
   useEffect(() => {
     if (!showQuotationModal || !shareInquiry || !shareDetails) return;
-    const customerEmail = quotationEmail.trim();
     let cancelled = false;
     setQuotationPreviewLoading(true);
     setQuotationPreviewError('');
     inquiriesApi.previewQuotation(shareInquiry.id, {
-      customer_email: customerEmail,
+      customer_email: quotationEmail.trim(),
       customer_name: shareDetails.companyName,
       details: shareDetails,
     }).then((res) => {
@@ -1241,14 +1230,8 @@ export default function InquiriesPage() {
     companyName: string;
     dealCode: string;
     poNumber: string;
-    generatedPoNumber: string;
-    referencePoNumber: string;
     poDate: string;
-    poReservationToken: string;
-    poConflict?: string | null;
-    checkingPo?: boolean;
   } | null>(null);
-  const wonPoDirtyRef = useRef(false);
 
   useEffect(() => {
     const inquiry = selectedInquiry;
@@ -1523,113 +1506,6 @@ export default function InquiriesPage() {
     onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to update deal'),
   });
 
-  const openWonModalForDeal = async (details: {
-    dealId: string;
-    inqId: string;
-    companyName: string;
-    dealCode: string;
-    existingDeal?: any;
-  }) => {
-    const reservationToken = `dashboard-won:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
-    const existingGenerated = String(
-      details.existingDeal?.generated_po_number ||
-      (
-        /^EM\/PO\/\d+$/i.test(String(details.existingDeal?.po_number || '').trim())
-          ? details.existingDeal.po_number
-          : ''
-      ),
-    ).trim();
-    const legacyReferencePo =
-      !existingGenerated &&
-      details.existingDeal?.po_number &&
-      !/^EM\/PO\/\d+$/i.test(String(details.existingDeal.po_number).trim())
-        ? String(details.existingDeal.po_number).trim()
-        : '';
-    wonPoDirtyRef.current = false;
-    let generatedPoNumber = existingGenerated;
-    let poNumber = existingGenerated;
-    let allocationToast: string | undefined;
-
-    if (!existingGenerated) {
-      allocationToast = toast.loading('Generating system PO…');
-    }
-    try {
-      if (!existingGenerated) {
-        const response = await dealsApi.allocatePo({
-          reservation_token: reservationToken,
-          deal_id: details.dealId,
-        });
-        const allocation = response?.data;
-        if (!allocation?.po_number) {
-          throw new Error('The system did not return a generated PO number.');
-        }
-        poNumber = String(allocation.po_number);
-        generatedPoNumber = String(allocation.generated_po_number || allocation.po_number);
-      }
-      if (allocationToast) toast.dismiss(allocationToast);
-      setWonModal({
-        dealId: details.dealId,
-        inqId: details.inqId,
-        companyName: details.companyName,
-        dealCode: details.dealCode,
-        poNumber,
-        generatedPoNumber,
-        referencePoNumber: String(details.existingDeal?.reference_po_number || legacyReferencePo).trim(),
-        poDate: details.existingDeal?.po_date || new Date().toISOString().split('T')[0],
-        poReservationToken: reservationToken,
-        poConflict: null,
-        checkingPo: false,
-      });
-    } catch (error: any) {
-      if (allocationToast) toast.dismiss(allocationToast);
-      logPoAllocationError(
-        'Inquiry Won modal',
-        error,
-        reservationToken,
-        details.dealId,
-      );
-      toast.error(error?.response?.data?.message || 'Could not generate the system PO. Please try again.');
-    }
-  };
-
-  useEffect(() => {
-    const poNumber = wonModal?.poNumber?.trim();
-    if (!wonModal || !poNumber) return;
-
-    let active = true;
-    const timeoutId = window.setTimeout(async () => {
-      setWonModal(prev => prev ? { ...prev, checkingPo: true } : null);
-      try {
-        const response = await dealsApi.checkPoAvailability({
-          po_number: poNumber,
-          reservation_token: wonModal.poReservationToken,
-          deal_id: wonModal.dealId,
-        });
-        if (!active) return;
-        setWonModal(prev => prev ? {
-          ...prev,
-          poConflict: response?.data?.available === false
-            ? (response?.data?.reason || 'This PO number is already allocated.')
-            : null,
-          checkingPo: false,
-        } : null);
-      } catch {
-        if (active) {
-          setWonModal(prev => prev ? {
-            ...prev,
-            poConflict: 'PO availability could not be checked. Please try again.',
-            checkingPo: false,
-          } : null);
-        }
-      }
-    }, 300);
-
-    return () => {
-      active = false;
-      window.clearTimeout(timeoutId);
-    };
-  }, [wonModal?.poNumber, wonModal?.poReservationToken, wonModal?.dealId]);
-
   const deleteDealMutation = useMutation({
     mutationFn: (id: string) => dealsApi.delete(id),
     onSuccess: () => {
@@ -1659,12 +1535,13 @@ export default function InquiriesPage() {
       const targetDeal = rawDeals?.find((d: any) => d.id === id);
       const targetId = targetDeal?.inquiry_id || id;
       const cleanId = (targetId.startsWith('DEAL-') || targetId.startsWith('INQ-') ? targetId.replace(/^(?:DEAL|INQ)-/, '') : targetId.substring(0, 6)).toUpperCase();
-      void openWonModalForDeal({
+      setWonModal({
         dealId: id,
         inqId: targetDeal?.inquiry_id || id,
         companyName: targetDeal?.customer_name || 'Customer',
         dealCode: `#INQ-${cleanId}`,
-        existingDeal: targetDeal,
+        poNumber: targetDeal?.po_number || '',
+        poDate: new Date().toISOString().split('T')[0],
       });
     } else {
       stageMutation.mutate({ id, stage });
@@ -1753,12 +1630,13 @@ export default function InquiriesPage() {
     if (targetStage === 'won') {
       const targetId = linked.inquiry_id || linked.id;
       const cleanId = (targetId.startsWith('DEAL-') || targetId.startsWith('INQ-') ? targetId.replace(/^(?:DEAL|INQ)-/, '') : targetId.substring(0, 6)).toUpperCase();
-      void openWonModalForDeal({
+      setWonModal({
         dealId: linked.id,
         inqId: inq.id,
         companyName: details.companyName || inq.sender_name || 'Customer',
         dealCode: `#INQ-${cleanId}`,
-        existingDeal: linked,
+        poNumber: linked.po_number || '',
+        poDate: new Date().toISOString().split('T')[0],
       });
       return;
     }
@@ -1785,37 +1663,13 @@ export default function InquiriesPage() {
     if (!wonModal || !wonModal.dealId) return;
     const cleanPo = (wonModal.poNumber || '').trim();
     if (!cleanPo) {
-      toast.error('System PO number is required.');
-      return;
-    }
-    if (wonModal.checkingPo || wonModal.poConflict) {
-      toast.error(wonModal.poConflict || 'Checking PO number availability. Please wait.');
+      toast.error('Purchase Order (PO) number is required.');
       return;
     }
 
     try {
-      const availability = await dealsApi.checkPoAvailability({
-        po_number: cleanPo,
-        reservation_token: wonModal.poReservationToken,
-        deal_id: wonModal.dealId,
-      });
-      if (availability?.data?.available === false) {
-        const reason = availability?.data?.reason || 'This PO number is already allocated.';
-        setWonModal(prev => prev ? { ...prev, poConflict: reason } : null);
-        toast.error(reason);
-        return;
-      }
       const toastId = toast.loading('Marking deal as Won and adding to Orders...');
-      await dealsApi.updateStage(
-        wonModal.dealId,
-        'won',
-        undefined,
-        cleanPo,
-        wonModal.poDate,
-        wonModal.referencePoNumber.trim() || undefined,
-        wonModal.generatedPoNumber.trim() || cleanPo,
-        wonModal.poReservationToken,
-      );
+      await dealsApi.updateStage(wonModal.dealId, 'won', undefined, cleanPo, wonModal.poDate);
       toast.dismiss(toastId);
       toast.success(`Inquiry marked as Won and added to Orders module (PO: ${cleanPo})!`);
       setWonModal(null);
@@ -1828,10 +1682,6 @@ export default function InquiriesPage() {
       queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
       fetchMonthlyInquiries();
     } catch (err: any) {
-      if (err?.response?.status === 409) {
-        const reason = err?.response?.data?.message || 'This PO number is already allocated.';
-        setWonModal(prev => prev ? { ...prev, poConflict: reason } : null);
-      }
       toast.error(err?.response?.data?.message || 'Failed to mark deal as won.');
     }
   };
@@ -3271,6 +3121,12 @@ export default function InquiriesPage() {
                       <div className="text-xs text-slate-500 mt-0.5 font-mono">
                         {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
+                      {canViewSalesperson && details.salespersonName && (
+                        <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                          <UserCheck size={12} className="text-slate-400 shrink-0" />
+                          Rep: {details.salespersonName}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {dealIdDisplay}
@@ -3621,7 +3477,7 @@ export default function InquiriesPage() {
                           Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                          Rate (₹)/QTY <span className="text-red-500 font-bold">*</span>
+                          Rate (₹)/ QTY <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
                         <th className="px-2 py-3 text-center w-[4%]"></th>
@@ -4068,11 +3924,11 @@ export default function InquiriesPage() {
                       }`}>
                       {shareAgain ? (
                         <>
-                          <Check size={15} /> Share Again
+                          <Check size={15} /> Share Again 
                         </>
                       ) : (
                         <>
-                          <Send size={15} /> Share Quotation
+                          <Send size={15} /> Share Quotation 
                         </>
                       )}
                     </button>
@@ -4703,7 +4559,7 @@ export default function InquiriesPage() {
 
       {/* Loss Modal - Exact Match to img2 */}
       {lostModal && (
-        <div
+        <div 
           onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 w-[360px] max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -4755,7 +4611,7 @@ export default function InquiriesPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900">Mark Inquiry as Won</h3>
-                <p className="text-xs text-slate-500">Confirm the generated system PO before creating the Order</p>
+                <p className="text-xs text-slate-500">Enter PO details to convert this to an active Order</p>
               </div>
             </div>
 
@@ -4775,36 +4631,15 @@ export default function InquiriesPage() {
             <form onSubmit={(e) => { e.preventDefault(); handleConfirmWon(); }} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  System PO Number <span className="text-rose-500">*</span>
+                  Purchase Order (PO) Number <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   autoFocus
                   required
-                  placeholder="EM/PO/1"
+                  placeholder="e.g. PO-9842 or PO/2026/041"
                   value={wonModal.poNumber}
-                  onChange={(e) => {
-                    wonPoDirtyRef.current = true;
-                    setWonModal(prev => prev ? { ...prev, poNumber: e.target.value, poConflict: null } : null);
-                  }}
-                  className={`w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
-                    wonModal.poConflict ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
-                  }`}
-                />
-                <p className="mt-1 text-[10px] text-slate-500">Generated automatically and editable before confirmation.</p>
-                {wonModal.checkingPo && <p className="mt-1 text-[10px] text-slate-500">Checking availability…</p>}
-                {wonModal.poConflict && <p className="mt-1 text-[10px] font-semibold text-rose-600">{wonModal.poConflict}</p>}
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Reference PO <span className="text-[10px] font-medium text-slate-400">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Customer PO from document/text"
-                  value={wonModal.referencePoNumber}
-                  onChange={(e) => setWonModal(prev => prev ? { ...prev, referencePoNumber: e.target.value } : null)}
+                  onChange={(e) => setWonModal(prev => prev ? { ...prev, poNumber: e.target.value } : null)}
                   className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
@@ -4830,7 +4665,7 @@ export default function InquiriesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!wonModal.poNumber.trim() || !!wonModal.poConflict || !!wonModal.checkingPo}
+                  disabled={!wonModal.poNumber.trim()}
                   className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                   <CheckCircle size={14} />
                   Confirm &amp; Create Order

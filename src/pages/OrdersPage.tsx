@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -21,15 +21,10 @@ import {
   Calendar,
   Layers,
   ArrowLeft,
+  UserCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import {
-  ordersApi,
-  inquiriesApi,
-  dealsApi,
-  customersApi,
-  logPoAllocationError,
-} from '../lib/api';
+import { ordersApi, inquiriesApi, dealsApi, customersApi, zohoApi, employeesApi } from '../lib/api';
 import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
@@ -65,10 +60,6 @@ interface Order {
   assigned_salesperson_name?: string;
   salesperson?: string;
   po_number?: string;
-  reference_po_number?: string;
-  generated_po_number?: string;
-  po_source?: string;
-  po_status?: string;
   po_date?: string;
   total_amount?: number;
   delivery_location?: string;
@@ -172,8 +163,7 @@ export function formatOrderSourceText(ord?: Order | null): string {
   const lines: string[] = [];
   if (ord.customer_name) lines.push(`Company: ${ord.customer_name}`);
   if (ord.customer_phone) lines.push(`Phone: ${ord.customer_phone}`);
-  if (ord.po_number) lines.push(`System PO Number: ${ord.po_number}`);
-  if (ord.reference_po_number) lines.push(`Reference PO: ${ord.reference_po_number}`);
+  if (ord.po_number) lines.push(`PO Number: ${ord.po_number}`);
   if (ord.po_date) lines.push(`PO Date: ${ord.po_date}`);
   if (ord.delivery_location) lines.push(`Delivery Location: ${ord.delivery_location}`);
   if (ord.payment_terms) lines.push(`Payment Terms: ${ord.payment_terms}`);
@@ -366,7 +356,32 @@ export default function OrdersPage() {
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const queryClient = useQueryClient();
-  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const { effectivePhone, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const canViewSalesperson = isAdmin || isSalesManager;
+  const [isSyncingZoho, setIsSyncingZoho] = useState(false);
+
+  const handleTriggerZohoSync = async () => {
+    try {
+      setIsSyncingZoho(true);
+      const res = await zohoApi.pullInitialSync();
+      const data = res?.data?.data || res?.data || {};
+      const notice = Array.isArray(data.errors) ? data.errors[0] : '';
+      if (data.success === false || (notice && !data.companiesImported && !data.dealsImported)) {
+        toast.error(notice || 'Could not sync with Zoho Bigin');
+        return;
+      }
+      toast.success(
+        `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
+    } finally {
+      setIsSyncingZoho(false);
+    }
+  };
 
   const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -491,13 +506,48 @@ export default function OrdersPage() {
     refetchOnWindowFocus: true,
   });
 
+  const { data: rawEmployees = [] } = useQuery<any[]>({
+    queryKey: ['employees-list-orders'],
+    queryFn: async () => {
+      const res = await employeesApi.getAll().catch(() => null);
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    },
+    enabled: canViewSalesperson,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const employeeNameByPhone = useMemo(() => {
+    const map = new Map<string, string>();
+    rawEmployees.forEach((emp: any) => {
+      const phone = String(emp?.phone || '').replace(/\D/g, '').slice(-10);
+      const name = String(emp?.name || '').trim();
+      if (phone && name) map.set(phone, name);
+    });
+    return map;
+  }, [rawEmployees]);
+
+  const getOrderRepName = (ord: Order) => {
+    const named = String(ord.salesperson_name || ord.assigned_salesperson_name || ord.salesperson || '').trim();
+    if (
+      named &&
+      named !== 'Sales Representative' &&
+      named !== 'Sales Team' &&
+      named !== 'Sales Operations Team' &&
+      named !== 'Unknown'
+    ) {
+      return named;
+    }
+    const phone = String(ord.salesperson_phone || '').replace(/\D/g, '').slice(-10);
+    return (phone && employeeNameByPhone.get(phone)) || '';
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
   const [showModal, setShowModal] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [allocatingPo, setAllocatingPo] = useState(false);
 
   // Reset page when search or date range changes
   useEffect(() => {
@@ -554,12 +604,6 @@ export default function OrdersPage() {
   const [formCustomerName, setFormCustomerName] = useState('');
   const [formCustomerPhone, setFormCustomerPhone] = useState('');
   const [formPoNumber, setFormPoNumber] = useState('');
-  const [formGeneratedPoNumber, setFormGeneratedPoNumber] = useState('');
-  const [formReferencePoNumber, setFormReferencePoNumber] = useState('');
-  const [poReservationToken, setPoReservationToken] = useState('');
-  const [poConflict, setPoConflict] = useState<string | null>(null);
-  const [checkingPoAvailability, setCheckingPoAvailability] = useState(false);
-  const poInputDirtyRef = useRef(false);
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
@@ -574,76 +618,6 @@ export default function OrdersPage() {
       amount: 0,
     },
   ]);
-
-  const createPoReservationToken = () =>
-    `dashboard:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
-
-  const handleOpenCreateOrder = async () => {
-    if (allocatingPo) return;
-
-    const reservationToken = createPoReservationToken();
-    poInputDirtyRef.current = false;
-    setPoReservationToken(reservationToken);
-    setFormPoNumber('');
-    setFormGeneratedPoNumber('');
-    setPoConflict(null);
-    setShowModal(false);
-    setAllocatingPo(true);
-
-    try {
-      const response = await ordersApi.allocatePo({
-        reservation_token: reservationToken,
-      });
-      const allocation = response?.data;
-      if (!allocation?.po_number) {
-        throw new Error('The system did not return a generated PO number.');
-      }
-      setFormPoNumber(String(allocation.po_number));
-      setFormGeneratedPoNumber(String(allocation.generated_po_number || allocation.po_number));
-      setShowModal(true);
-    } catch (error: any) {
-      logPoAllocationError(
-        'Orders create form',
-        error,
-        reservationToken,
-      );
-      toast.error(error?.response?.data?.message || 'Could not generate the system PO. Please try again.');
-    } finally {
-      setAllocatingPo(false);
-    }
-  };
-
-  useEffect(() => {
-    const value = formPoNumber.trim();
-    if (!showModal || !value || !poReservationToken) {
-      setPoConflict(null);
-      setCheckingPoAvailability(false);
-      return;
-    }
-
-    let active = true;
-    setCheckingPoAvailability(true);
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        const response = await ordersApi.checkPoAvailability({
-          po_number: value,
-          reservation_token: poReservationToken,
-        });
-        if (!active) return;
-        const available = response?.data?.available !== false;
-        setPoConflict(available ? null : (response?.data?.reason || 'This PO number is already allocated.'));
-      } catch {
-        if (active) setPoConflict('PO availability could not be checked. Please try again.');
-      } finally {
-        if (active) setCheckingPoAvailability(false);
-      }
-    }, 300);
-
-    return () => {
-      active = false;
-      window.clearTimeout(timeoutId);
-    };
-  }, [formPoNumber, poReservationToken, showModal]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | File[] } }) => {
     const file = e.target.files?.[0];
@@ -706,7 +680,7 @@ export default function OrdersPage() {
         }
 
         if (extraction.po_number) {
-          setFormReferencePoNumber(String(extraction.po_number).trim());
+          setFormPoNumber(String(extraction.po_number).trim());
         }
         if (extraction.po_date) {
           let formattedDate = String(extraction.po_date).trim();
@@ -731,7 +705,7 @@ export default function OrdersPage() {
             const q = Number(i.quantity) || 0;
             const r = Number(i.rate) || 0;
             const amt = Number(i.amount) || Math.round(q * r);
-
+            
             // Protect against OCR hallucinating product names (e.g. 'Plates', 'Sheets', 'Coils') as units when document specifies MT
             if (
               /^(?:plate|plates|sheet|sheets|coil|coils|beam|channel|pipe)$/i.test(rawUnit) &&
@@ -788,10 +762,6 @@ export default function OrdersPage() {
         el.focus();
         el.reportValidity();
       }
-      return;
-    }
-    if (checkingPoAvailability || poConflict) {
-      toast.error(poConflict || 'Checking PO number availability. Please wait.');
       return;
     }
     if (!formPoDate) {
@@ -878,9 +848,6 @@ export default function OrdersPage() {
         customer_name: formCustomerName.trim(),
         customer_phone: formCustomerPhone.trim() || undefined,
         po_number: formPoNumber.trim(),
-        generated_po_number: formGeneratedPoNumber.trim() || formPoNumber.trim(),
-        reference_po_number: formReferencePoNumber.trim() || undefined,
-        po_reservation_token: poReservationToken || undefined,
         po_date: formPoDate,
         total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
@@ -904,11 +871,6 @@ export default function OrdersPage() {
       setFormCustomerName('');
       setFormCustomerPhone('');
       setFormPoNumber('');
-      setFormGeneratedPoNumber('');
-      setFormReferencePoNumber('');
-      setPoReservationToken('');
-      setPoConflict(null);
-      poInputDirtyRef.current = false;
       setFormPoDate(new Date().toISOString().split('T')[0]);
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
@@ -944,12 +906,6 @@ export default function OrdersPage() {
       await fetchOrders();
     } catch (err: any) {
       console.error('Error creating order:', err);
-      if (err?.response?.status === 409) {
-        setPoConflict(
-          err?.response?.data?.message ||
-            'This PO number is already allocated. Please choose another number.',
-        );
-      }
       toast.error(err?.response?.data?.message || 'Failed to create order. Please try again.');
     } finally {
       setSubmitting(false);
@@ -1117,6 +1073,16 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            {activeRole === 'admin' && (
+              <button
+                type="button"
+                disabled={isSyncingZoho}
+                onClick={handleTriggerZohoSync}
+                className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
+                <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 fetchOrders();
@@ -1128,11 +1094,10 @@ export default function OrdersPage() {
             </button>
 
             <button
-              onClick={handleOpenCreateOrder}
-              disabled={allocatingPo}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
-              {allocatingPo ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-              {allocatingPo ? 'Generating PO…' : 'Create New Order'}
+              onClick={() => setShowModal(true)}
+              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
+              <Plus size={15} />
+              Create New Order
             </button>
           </div>
         </div>
@@ -1165,7 +1130,7 @@ export default function OrdersPage() {
               <p className="text-2xl font-bold text-indigo-600 mt-1">
                 {totalTonnage.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} MT
               </p>
-
+              
             </div>
             <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
               <Truck size={22} />
@@ -1269,19 +1234,18 @@ export default function OrdersPage() {
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
-                <th className="px-5 py-3 text-left w-[23%]">Customers</th>
-                <th className="px-4 py-3 text-center w-[13%]">PO Number</th>
-                <th className="px-4 py-3 text-center w-[14%]">Reference PO</th>
-                <th className="px-4 py-3 text-center w-[11%]">Items Summary</th>
-                <th className="px-4 py-3 text-center w-[13%]">Source Channel</th>
-                <th className="px-4 py-3 text-center w-[14%]">Delivery Location</th>
+                <th className="px-5 py-3 text-left w-[26%]">Customers</th>
+                <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
+                <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
+                <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
+                <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
                 </tr>
               ) : filtered.length === 0 ? null : (
                 paginatedOrders.map((ord, idx) => {
@@ -1293,6 +1257,7 @@ export default function OrdersPage() {
                     : '';
                   const itemCount = ordLineItems.length > 0 ? ordLineItems.length : 1;
                   const poNumber = ord.po_number?.trim() || '';
+                  const repName = canViewSalesperson ? getOrderRepName(ord) : '';
 
                   return (
                     <tr
@@ -1314,22 +1279,17 @@ export default function OrdersPage() {
                                   : (ord.po_date || '-'))}
                           </span>
                         </div>
+                        {repName && (
+                          <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                            <UserCheck size={12} className="text-slate-400 shrink-0" />
+                            Rep: {repName}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-center">
                         {poNumber ? (
                           <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
                             {poNumber}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center justify-center text-slate-400 font-medium font-mono text-xs">
-                            -
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        {ord.reference_po_number?.trim() ? (
-                          <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs max-w-full truncate" title={ord.reference_po_number.trim()}>
-                            {ord.reference_po_number.trim()}
                           </span>
                         ) : (
                           <span className="inline-flex items-center justify-center text-slate-400 font-medium font-mono text-xs">
@@ -1434,7 +1394,7 @@ export default function OrdersPage() {
                 )}
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <FileText size={18} className="text-blue-600" />
-                  Order PO Details &amp; Source
+                  Original Customer Inquiry Message
                 </span>
               </div>
               <button
@@ -1444,21 +1404,7 @@ export default function OrdersPage() {
               </button>
             </div>
 
-              <div className="w-full space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5">
-                    <p className="text-[10px] uppercase tracking-wide font-bold text-blue-700">System PO</p>
-                    <p className="mt-1 font-mono text-sm font-bold text-slate-900">
-                      {selectedPoOrder?.po_number || '-'}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2.5">
-                    <p className="text-[10px] uppercase tracking-wide font-bold text-amber-700">Reference PO</p>
-                    <p className="mt-1 font-mono text-sm font-bold text-slate-900">
-                      {selectedPoOrder?.reference_po_number || '-'}
-                    </p>
-                  </div>
-                </div>
+            <div className="w-full space-y-3">
               <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                 <span>Source Inquiry Text</span>
                 {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
@@ -1620,45 +1566,18 @@ export default function OrdersPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    System PO Number <span className="text-red-500 font-bold">*</span>
+                    PO Number <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
                     id="form-po-number"
                     type="text"
                     required
-                    placeholder="EM/PO/1"
+                    placeholder="e.g. PO-2026-0042"
                     value={formPoNumber}
-                    onChange={e => {
-                      poInputDirtyRef.current = true;
-                      setFormPoNumber(e.target.value);
-                    }}
-                    className={`w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal ${
-                      poConflict ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
-                    }`}
-                  />
-                  <p className="mt-1 text-[10px] text-slate-500">
-                    Generated automatically and editable before confirmation.
-                  </p>
-                  {checkingPoAvailability && (
-                    <p className="mt-1 text-[10px] text-slate-500">Checking availability…</p>
-                  )}
-                  {poConflict && (
-                    <p className="mt-1 text-[10px] font-semibold text-rose-600">{poConflict}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Reference PO <span className="text-[10px] font-medium text-slate-400">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Customer PO from document/text"
-                    value={formReferencePoNumber}
-                    onChange={e => setFormReferencePoNumber(e.target.value)}
+                    onChange={e => setFormPoNumber(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
@@ -1967,7 +1886,7 @@ export default function OrdersPage() {
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
-
+                
                 <button
                   type="submit"
                   disabled={

@@ -1,6 +1,6 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { customersApi, employeesApi } from '../lib/api';
+import { customersApi, employeesApi, zohoApi } from '../lib/api';
 import { useEffect, useState, useMemo } from 'react';
 import {
   Users,
@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
+import toast from 'react-hot-toast';
 
 function HealthBadge({ risk }: { risk: string }) {
   const r = (risk || '').toLowerCase();
@@ -118,6 +119,30 @@ export default function CustomersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone, isSalesManager, isAdmin, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
+  const [isSyncingZoho, setIsSyncingZoho] = useState(false);
+
+  const handleTriggerZohoSync = async () => {
+    try {
+      setIsSyncingZoho(true);
+      const res = await zohoApi.pullInitialSync();
+      const data = res?.data?.data || res?.data || {};
+      const notice = Array.isArray(data.errors) ? data.errors[0] : '';
+      if (data.success === false || (notice && !data.companiesImported && !data.dealsImported)) {
+        toast.error(notice || 'Could not sync with Zoho Bigin');
+        return;
+      }
+      toast.success(
+        `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
+    } finally {
+      setIsSyncingZoho(false);
+    }
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterHealth, setFilterHealth] = useState<string>('all');
@@ -348,6 +373,16 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            {activeRole === 'admin' && (
+              <button
+                type="button"
+                disabled={isSyncingZoho}
+                onClick={handleTriggerZohoSync}
+                className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
+                <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
+              </button>
+            )}
             <button
               onClick={handleRefresh}
               disabled={isFetching || manualRefreshing}
