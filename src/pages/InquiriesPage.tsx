@@ -3431,7 +3431,7 @@ export default function InquiriesPage() {
                           Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                          Rate (₹)/QTY <span className="text-red-500 font-bold">*</span>
+                          Rate (₹)/ QTY <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
                         <th className="px-2 py-3 text-center w-[4%]"></th>
