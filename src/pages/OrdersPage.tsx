@@ -23,7 +23,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
+import { ordersApi, inquiriesApi, dealsApi, customersApi, zohoApi } from '../lib/api';
 import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
@@ -356,6 +356,30 @@ export default function OrdersPage() {
 
   const queryClient = useQueryClient();
   const { effectivePhone, activeRole, activeMode } = useAuth();
+  const [isSyncingZoho, setIsSyncingZoho] = useState(false);
+
+  const handleTriggerZohoSync = async () => {
+    try {
+      setIsSyncingZoho(true);
+      const res = await zohoApi.pullInitialSync();
+      const data = res?.data?.data || res?.data || {};
+      const notice = Array.isArray(data.errors) ? data.errors[0] : '';
+      if (data.success === false || (notice && !data.companiesImported && !data.dealsImported)) {
+        toast.error(notice || 'Could not sync with Zoho Bigin');
+        return;
+      }
+      toast.success(
+        `Synced with Zoho Bigin! ${data.companiesImported || 0} companies & ${data.dealsImported || 0} deals updated.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
+    } finally {
+      setIsSyncingZoho(false);
+    }
+  };
 
   const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -1011,6 +1035,16 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            {activeRole === 'admin' && (
+              <button
+                type="button"
+                disabled={isSyncingZoho}
+                onClick={handleTriggerZohoSync}
+                className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
+                <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 fetchOrders();

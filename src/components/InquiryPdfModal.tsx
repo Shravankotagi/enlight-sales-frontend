@@ -403,13 +403,11 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 </div>
               </div>
 
-              {/* Right Column: Order Date & Salesperson (Neatly aligned one below the other) */}
+              {/* Right Column: Order Date */}
               <div className="flex flex-col items-start sm:items-end justify-end pb-1">
                 <div className="grid grid-cols-[85px_auto] gap-x-3 gap-y-1.5 text-[12px]">
                   <span className="font-normal text-slate-700">Order Date :</span>
                   <span className="font-normal text-slate-900">{createdDate}</span>
-                  <span className="font-normal text-slate-700">Sales person :</span>
-                  <span className="font-normal text-slate-900 capitalize">{salesperson}</span>
                 </div>
               </div>
             </div>
@@ -540,10 +538,16 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </div>
 
             {/* Authorized Signature */}
-            <div className="pt-12 flex justify-start items-center">
-              <div>
-                <p className="font-bold text-slate-800 text-[13px]">Authorized Signature</p>
-              </div>
+            <div className="pt-12">
+              <p className="font-bold text-slate-800 text-[13px]">Authorized Signature</p>
+              {(viewingAs?.name || employee?.name) && (
+                <>
+                  <p className="text-[13px] font-semibold text-slate-900 mt-3">
+                    {viewingAs?.name || employee?.name}
+                  </p>
+                  <div className="mt-8 h-px w-40 bg-slate-900" />
+                </>
+              )}
             </div>
           </div>
 
