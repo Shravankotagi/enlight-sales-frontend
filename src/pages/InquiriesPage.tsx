@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, MoreVertical, Loader2,
+  ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, UserCheck, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, ArrowLeft
 } from 'lucide-react';
 import { inquiriesApi, customersApi, employeesApi, dealsApi, activityLogsApi } from '../lib/api';
@@ -1103,7 +1103,8 @@ export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs, activeRole, activeMode } = useAuth();
+  const { effectivePhone, employee, viewingAs, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const canViewSalesperson = isAdmin || isSalesManager;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -3081,6 +3082,12 @@ export default function InquiriesPage() {
                       <div className="text-xs text-slate-500 mt-0.5 font-mono">
                         {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
+                      {canViewSalesperson && details.salespersonName && (
+                        <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                          <UserCheck size={12} className="text-slate-400 shrink-0" />
+                          Rep: {details.salespersonName}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {dealIdDisplay}

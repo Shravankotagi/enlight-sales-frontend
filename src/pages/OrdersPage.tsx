@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -21,9 +21,10 @@ import {
   Calendar,
   Layers,
   ArrowLeft,
+  UserCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ordersApi, inquiriesApi, dealsApi, customersApi, zohoApi } from '../lib/api';
+import { ordersApi, inquiriesApi, dealsApi, customersApi, zohoApi, employeesApi } from '../lib/api';
 import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
@@ -355,7 +356,8 @@ export default function OrdersPage() {
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const queryClient = useQueryClient();
-  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const { effectivePhone, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const canViewSalesperson = isAdmin || isSalesManager;
   const [isSyncingZoho, setIsSyncingZoho] = useState(false);
 
   const handleTriggerZohoSync = async () => {
@@ -369,7 +371,7 @@ export default function OrdersPage() {
         return;
       }
       toast.success(
-        `Synced with Zoho Bigin! ${data.companiesImported || 0} companies & ${data.dealsImported || 0} deals updated.`,
+        `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
       );
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
@@ -503,6 +505,42 @@ export default function OrdersPage() {
     refetchInterval: 15000,
     refetchOnWindowFocus: true,
   });
+
+  const { data: rawEmployees = [] } = useQuery<any[]>({
+    queryKey: ['employees-list-orders'],
+    queryFn: async () => {
+      const res = await employeesApi.getAll().catch(() => null);
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    },
+    enabled: canViewSalesperson,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const employeeNameByPhone = useMemo(() => {
+    const map = new Map<string, string>();
+    rawEmployees.forEach((emp: any) => {
+      const phone = String(emp?.phone || '').replace(/\D/g, '').slice(-10);
+      const name = String(emp?.name || '').trim();
+      if (phone && name) map.set(phone, name);
+    });
+    return map;
+  }, [rawEmployees]);
+
+  const getOrderRepName = (ord: Order) => {
+    const named = String(ord.salesperson_name || ord.assigned_salesperson_name || ord.salesperson || '').trim();
+    if (
+      named &&
+      named !== 'Sales Representative' &&
+      named !== 'Sales Team' &&
+      named !== 'Sales Operations Team' &&
+      named !== 'Unknown'
+    ) {
+      return named;
+    }
+    const phone = String(ord.salesperson_phone || '').replace(/\D/g, '').slice(-10);
+    return (phone && employeeNameByPhone.get(phone)) || '';
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -1219,6 +1257,7 @@ export default function OrdersPage() {
                     : '';
                   const itemCount = ordLineItems.length > 0 ? ordLineItems.length : 1;
                   const poNumber = ord.po_number?.trim() || '';
+                  const repName = canViewSalesperson ? getOrderRepName(ord) : '';
 
                   return (
                     <tr
@@ -1240,6 +1279,12 @@ export default function OrdersPage() {
                                   : (ord.po_date || '-'))}
                           </span>
                         </div>
+                        {repName && (
+                          <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                            <UserCheck size={12} className="text-slate-400 shrink-0" />
+                            Rep: {repName}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-center">
                         {poNumber ? (
