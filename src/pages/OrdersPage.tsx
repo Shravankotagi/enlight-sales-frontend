@@ -1184,13 +1184,7 @@ export default function OrdersPage() {
                     ? `(${ordTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
                     : '';
                   const itemCount = ordLineItems.length > 0 ? ordLineItems.length : 1;
-                  const orderInqId = (() => {
-                    const raw = ord.inquiry_id || ord.id || '';
-                    if (!raw) return '-';
-                    if (raw.startsWith('INQ-')) return raw;
-                    if (raw.startsWith('DEAL-')) return raw.replace(/^DEAL-/, 'INQ-');
-                    return `INQ-${raw.substring(0, 6).toUpperCase()}`;
-                  })();
+                  const poNumber = ord.po_number?.trim() || '';
 
                   return (
                     <tr
@@ -1214,13 +1208,13 @@ export default function OrdersPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        {ord.po_number ? (
+                        {poNumber ? (
                           <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
-                            PO: {ord.po_number}
+                            {poNumber}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center justify-center bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold font-mono text-xs shadow-2xs">
-                            #{orderInqId}
+                          <span className="inline-flex items-center justify-center text-slate-400 font-medium font-mono text-xs">
+                            -
                           </span>
                         )}
                       </td>
