@@ -4,6 +4,7 @@ import { X, Download, Check, Copy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { customersApi, inquiriesApi } from '../lib/api';
 import {
+  calculateLineItem,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
@@ -46,6 +47,7 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+  isManualAmount?: boolean;
 }
 
 interface ExtractedDetails {
@@ -98,7 +100,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const customerGstin = (details as any)?.gstin || matchedCustomer?.gstin || matchedCustomer?.gst_number || (inquiry as any)?.customer_gstin || (inquiry as any)?.ai_extraction_json?.gstin || (inquiry as any)?.ai_extraction_json?.gst_number || '';
 
   // Build line items list - prefer dynamic lineItems, fall back to single item
-  const lineItems: LineItemDetail[] =
+  const rawLineItems: LineItemDetail[] =
     details.lineItems && details.lineItems.length > 0
       ? details.lineItems
       : [
@@ -115,6 +117,14 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             amount: details.totalAmount,
           },
         ];
+
+  const lineItems: LineItemDetail[] = rawLineItems.map(item => {
+    const calc = calculateLineItem(item);
+    return {
+      ...item,
+      amount: item.amount ? Number(item.amount) : calc.amount,
+    };
+  });
 
   // totalAmount = base pre-GST value; calculate GST breakdown
   const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || details.totalAmount || 0;
@@ -291,8 +301,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               PI
             </div>
             <div>
-              <h3 className="font-bold text-white text-sm leading-tight">Invoice Preview</h3>
-              <p className="text-xs text-slate-400">PI Number: {piNumber} • {details.companyName || 'Quotation'}</p>
+              <h3 className="font-bold text-white text-sm leading-tight">Quotation Preview</h3>
             </div>
           </div>
 
@@ -300,9 +309,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             <button
               type="button"
               onClick={handleCopyRef}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700 transition-colors">
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700 transition-colors"
+            >
               {copiedRef ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-              {copiedRef ? 'Copied!' : 'Copy PI#'}
+              {copiedRef ? 'Copied!' : 'Copy PI'}
             </button>
 
             <button
@@ -424,7 +434,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   {lineItems.map((item, idx) => {
                     const qty = Number(item.quantity) || 0;
                     const rate = Number(item.rate) || 0;
-                    const amt = Number(item.amount) || (qty * rate) || 0;
+                    const amt = Number(item.amount) || calculateLineItem(item).amount || 0;
                     const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
                     const unit = item.unit || 'MT';
 
@@ -463,7 +473,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
               <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
                 <div>
-                  <span>Items in Total <strong className="font-bold">{totalTonnage.formattedText}</strong></span>
+                  <span><strong className="font-bold">Items in Total = </strong><strong className="font-bold">{totalTonnage.formattedText}</strong></span>
                 </div>
                 {details.paymentTerms && (
                   <div>

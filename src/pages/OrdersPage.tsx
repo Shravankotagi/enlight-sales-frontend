@@ -42,6 +42,7 @@ import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   calculateOrdersTotalTonnage,
+  formatLineItemWeightMt,
   getOrderTonnage,
   normalizeUnit,
 } from '../utils/pricingEngine';
@@ -145,6 +146,9 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+  isManualAmount?: boolean;
+  converted_mt?: number | string;
+  is_manual_mt?: boolean;
 }
 
 function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
@@ -974,6 +978,8 @@ export default function OrdersPage() {
           unit: i.unit || 'MT',
           rate: Number(i.rate) || 0,
           amount: Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0)),
+          converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
+          is_manual_mt: i.is_manual_mt || undefined,
         })),
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
@@ -1037,18 +1043,26 @@ export default function OrdersPage() {
   };
 
   const handleViewPoDocument = async (ord: Order) => {
-    setSelectedPoOrder(ord);
-    setPoImageViewerUrl(`extracted_preview://${ord.id}`);
+    // If order already has complete raw_text, open immediately with full details (0ms latency)
+    if (ord.raw_text) {
+      setSelectedPoOrder(ord);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
+      return;
+    }
+
+    // Otherwise, fetch full deal details first before opening modal so user directly sees complete Image 2 details
     setLoadingPoId(ord.id);
 
     try {
       const res = await dealsApi.getOne(ord.id);
       const fullDeal = res?.data?.data || res?.data;
-      if (fullDeal) {
-        setSelectedPoOrder(prev => ({ ...(prev || ord), ...fullDeal }));
-      }
+      const completeOrder = fullDeal ? { ...ord, ...fullDeal } : ord;
+      setSelectedPoOrder(completeOrder);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
     } catch (e) {
       console.warn('Could not load deal details for PO text preview:', e);
+      setSelectedPoOrder(ord);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
     } finally {
       setLoadingPoId(null);
     }
@@ -1828,21 +1842,21 @@ export default function OrdersPage() {
                 <table className="w-full text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center">#</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[32%]">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center">
                         HSN/SAC <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
-                        Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[23%] text-center">
+                        Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                        Rate (₹) <span className="text-red-500 font-bold">*</span>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center min-w-[95px]">
+                        Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
-                      <th className="px-2 py-3 text-center w-[4%]"></th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
+                      <th className="px-2 py-3 text-center w-[3%]"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -1921,8 +1935,8 @@ export default function OrdersPage() {
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
-                        <td className="px-3 py-3.5 border-r border-slate-200">
-                          <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                        <td className="px-2.5 py-3.5 border-r border-slate-200">
+                          <div className="flex items-center gap-1.5 w-full min-w-[170px]">
                             <input
                               id={`form-item-qty-${idx}`}
                               type="number"
@@ -1935,24 +1949,34 @@ export default function OrdersPage() {
                                 const rawQ = val === '' ? 0 : parseFloat(val);
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
-                                const currentItem = { ...updated[idx], quantity: safeQ };
+                                let currentItem = { ...updated[idx], quantity: safeQ };
+                                if (normalizeUnit(currentItem.unit) === 'MT') {
+                                  currentItem.converted_mt = safeQ;
+                                }
                                 const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                 updated[idx] = { ...currentItem, amount: calc.amount };
                                 setFormLineItems(updated);
                               }}
                               placeholder="0"
-                              className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                              className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                             />
                             <select
                               value={normalizeUnit(item.unit) || 'MT'}
                               onChange={(e) => {
+                                const newUnit = e.target.value;
                                 const updated = [...formLineItems];
-                                const currentItem = { ...updated[idx], unit: e.target.value };
+                                let currentItem = { ...updated[idx], unit: newUnit };
+                                if (newUnit === 'MT') {
+                                  currentItem.converted_mt = currentItem.quantity;
+                                } else if (currentItem.is_manual_mt && (currentItem.converted_mt === undefined || currentItem.converted_mt === 0)) {
+                                  delete currentItem.converted_mt;
+                                  delete currentItem.is_manual_mt;
+                                }
                                 const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                 updated[idx] = { ...currentItem, amount: calc.amount };
                                 setFormLineItems(updated);
                               }}
-                              className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
                               <option value="Pcs">Pcs</option>
@@ -1961,9 +1985,59 @@ export default function OrdersPage() {
                               <option value="Plates">Plates</option>
                               <option value="Coils">Coils</option>
                             </select>
+                            {(() => {
+                              const itemWeight = formatLineItemWeightMt(item);
+                              const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+                              const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                                ? item.converted_mt
+                                : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
+                              const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
+
+                              return (
+                                <div
+                                  className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                    hasWeight
+                                      ? 'bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                      : 'bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                  }`}
+                                  title="Weight in MT (Editable - Amount calculates as MT × Rate)">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    value={displayMt ?? ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const updated = [...formLineItems];
+                                      let currentItem = { ...updated[idx] };
+
+                                      if (val === '') {
+                                        delete currentItem.converted_mt;
+                                        delete currentItem.is_manual_mt;
+                                      } else {
+                                        const rawMt = parseFloat(val);
+                                        const safeMt = isNaN(rawMt) || rawMt < 0 ? 0 : rawMt;
+                                        currentItem.converted_mt = val;
+                                        currentItem.is_manual_mt = true;
+                                        if (normalizeUnit(currentItem.unit) === 'MT') {
+                                          currentItem.quantity = safeMt;
+                                        }
+                                      }
+
+                                      const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                      updated[idx] = { ...currentItem, amount: calc.amount };
+                                      setFormLineItems(updated);
+                                    }}
+                                    placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
+                                    className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                  />
+                                  <span className="text-[10px] font-mono font-bold text-blue-700/80 select-none ml-0.5">MT</span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
-                        <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
                           <input
                             id={`form-item-rate-${idx}`}
                             type="number"
@@ -1982,10 +2056,10 @@ export default function OrdersPage() {
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
-                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                           />
                         </td>
-                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
+                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
                           <input
                             type="number"
                             min="0"
@@ -1995,11 +2069,11 @@ export default function OrdersPage() {
                               const rawA = val === '' ? 0 : parseFloat(val);
                               const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                               const updated = [...formLineItems];
-                              updated[idx] = { ...updated[idx], amount: safeA };
+                              updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
-                            className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                            className="w-full min-w-[90px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
                         <td className="px-2 py-3.5 text-center">
@@ -2048,8 +2122,9 @@ export default function OrdersPage() {
 
                   return (
                     <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                      <div className="text-xs font-semibold text-slate-700 pt-1">
-                        Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      <div className="text-xs text-slate-700 pt-1">
+                        <span className="font-bold text-slate-900">Items in Total = </span>
+                        <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
                       </div>
 
                       <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">

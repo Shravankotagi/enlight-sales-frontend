@@ -27,6 +27,7 @@ import {
   calculateSubtotal,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
+  formatLineItemWeightMt,
   normalizeUnit,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -74,6 +75,9 @@ export interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+  isManualAmount?: boolean;
+  converted_mt?: number | string;
+  is_manual_mt?: boolean;
 }
 
 export interface ExtractedDetails {
@@ -805,6 +809,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
       unit: rawUnit,
       rate: item.rate,
       amount: item.amount,
+      converted_mt: (item as any).converted_mt !== undefined ? (item as any).converted_mt : undefined,
+      is_manual_mt: (item as any).is_manual_mt !== undefined ? (item as any).is_manual_mt : undefined,
     };
   });
 
@@ -2107,7 +2113,8 @@ export default function InquiriesPage() {
           rate: rate,
           dimensions: itemDim,
           sku_text: skuText,
-          amount: item.amount,
+          isManualAmount: item.isManualAmount,
+          amount: item.isManualAmount ? item.amount : 0,
         });
 
         return {
@@ -2122,13 +2129,13 @@ export default function InquiriesPage() {
           unit: rawUnit,
           rate: rate,
           amount: calc.amount,
+          converted_mt: (item as any).converted_mt !== undefined ? (item as any).converted_mt : undefined,
+          is_manual_mt: (item as any).is_manual_mt !== undefined ? (item as any).is_manual_mt : undefined,
         };
       });
       activeItems = frozenLineItems;
-      const frozenTotal = ai.total_amount || ai.totalAmount ||
-        (frozenLineItems.length > 0
-          ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
-          : 0);
+      const lineItemsSum = frozenLineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0);
+      const frozenTotal = lineItemsSum > 0 ? lineItemsSum : (ai.total_amount || ai.totalAmount || 0);
 
       const parsed = parseInquiryText(inq.raw_text || '', inq);
 
@@ -3697,21 +3704,21 @@ export default function InquiriesPage() {
                   <table className="w-full text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                        <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[32%]">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center">
                           HSN/SAC <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
-                          Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[23%] text-center">
+                          Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                          Rate (₹)/ QTY <span className="text-red-500 font-bold">*</span>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center min-w-[95px]">
+                          Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
-                        <th className="px-2 py-3 text-center w-[4%]"></th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
+                        <th className="px-2 py-3 text-center w-[3%]"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
@@ -3832,8 +3839,8 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`hsn_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 border-r border-slate-200">
-                            <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                          <td className="px-2.5 py-3.5 border-r border-slate-200">
+                            <div className="flex items-center gap-1.5 w-full min-w-[170px]">
                               <input
                                 type="number"
                                 min="0"
@@ -3843,7 +3850,10 @@ export default function InquiriesPage() {
                                   const rawQ = val === '' ? 0 : parseFloat(val);
                                   const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  const currentItem = { ...updated[idx], quantity: safeQ };
+                                  let currentItem = { ...updated[idx], quantity: safeQ };
+                                  if (normalizeUnit(currentItem.unit) === 'MT') {
+                                    currentItem.converted_mt = safeQ;
+                                  }
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                   updated[idx] = { ...currentItem, amount: calc.amount };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
@@ -3855,7 +3865,7 @@ export default function InquiriesPage() {
                                   }
                                 }}
                                 placeholder="0"
-                                className={`flex-1 min-w-[65px] px-2 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
+                                className={`flex-1 min-w-[42px] px-1.5 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
                                   fieldErrors[`qty_${idx}`]
                                     ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
                                     : 'border border-slate-300 focus:ring-blue-500'
@@ -3864,8 +3874,15 @@ export default function InquiriesPage() {
                               <select
                                 value={normalizeUnit(item.unit) || 'MT'}
                                 onChange={(e) => {
+                                  const newUnit = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  const currentItem = { ...updated[idx], unit: e.target.value };
+                                  let currentItem = { ...updated[idx], unit: newUnit };
+                                  if (newUnit === 'MT') {
+                                    currentItem.converted_mt = currentItem.quantity;
+                                  } else if (currentItem.is_manual_mt && (currentItem.converted_mt === undefined || currentItem.converted_mt === 0)) {
+                                    delete currentItem.converted_mt;
+                                    delete currentItem.is_manual_mt;
+                                  }
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                   updated[idx] = { ...currentItem, amount: calc.amount };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
@@ -3873,7 +3890,7 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                 }}
-                                className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
                                 <option value="Pcs">Pcs</option>
@@ -3882,12 +3899,65 @@ export default function InquiriesPage() {
                                 <option value="Plates">Plates</option>
                                 <option value="Coils">Coils</option>
                               </select>
+                              {(() => {
+                                const itemWeight = formatLineItemWeightMt(item);
+                                const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+                                const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                                  ? item.converted_mt
+                                  : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
+                                const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
+
+                                return (
+                                  <div
+                                    className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                      hasWeight
+                                        ? 'bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                        : 'bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                    }`}
+                                    title="Weight in MT (Editable - Amount calculates as MT × Rate)">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      value={displayMt ?? ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        const updated = [...(editDetails.lineItems || [])];
+                                        let currentItem = { ...updated[idx] };
+
+                                        if (val === '') {
+                                          delete currentItem.converted_mt;
+                                          delete currentItem.is_manual_mt;
+                                        } else {
+                                          const rawMt = parseFloat(val);
+                                          const safeMt = isNaN(rawMt) || rawMt < 0 ? 0 : rawMt;
+                                          currentItem.converted_mt = val;
+                                          currentItem.is_manual_mt = true;
+                                          if (normalizeUnit(currentItem.unit) === 'MT') {
+                                            currentItem.quantity = safeMt;
+                                          }
+                                        }
+
+                                        const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                        updated[idx] = { ...currentItem, amount: calc.amount };
+                                        const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                        const totalTons = calculateTotalTonnageMt(updated).totalMt;
+                                        setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
+                                        setSaveSuccess(false);
+                                      }}
+                                      placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
+                                      className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                    />
+                                    <span className="text-[10px] font-mono font-bold text-blue-700/80 select-none ml-0.5">MT</span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                             {fieldErrors[`qty_${idx}`] && (
                               <span className="text-[10px] text-red-600 font-bold block text-center mt-0.5">{fieldErrors[`qty_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
                             <input
                               type="number"
                               min="0"
@@ -3909,7 +3979,7 @@ export default function InquiriesPage() {
                                 }
                               }}
                               placeholder="0"
-                              className={`w-full px-2 py-1.5 bg-white rounded font-bold text-xs font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900 transition-all ${
+                              className={`w-full px-2.5 py-1.5 bg-white rounded font-bold text-xs font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900 transition-all ${
                                 fieldErrors[`rate_${idx}`]
                                   ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
                                   : 'border border-slate-300 focus:ring-blue-500'
@@ -3919,7 +3989,7 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block mt-0.5">{fieldErrors[`rate_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
+                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
                             <input
                               type="number"
                               min="0"
@@ -3929,13 +3999,13 @@ export default function InquiriesPage() {
                                 const rawA = val === '' ? 0 : parseFloat(val);
                                 const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                                 const updated = [...(editDetails.lineItems || [])];
-                                updated[idx] = { ...updated[idx], amount: safeA };
+                                updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
                                 setSaveSuccess(false);
                               }}
                               placeholder="0"
-                              className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                             />
                           </td>
                           <td className="px-2 py-3.5 text-center">
@@ -3992,11 +4062,25 @@ export default function InquiriesPage() {
 
                     const totalTonnage = calculateTotalTonnageMt(activeLineItems);
                     const formattedItemsInTotal = totalTonnage.formattedText;
+                    const quantityLabel = (totalTonnage.summaryText || '').replace(/, /g, ' | ');
+                    const estimateParts = formattedItemsInTotal.split('Est. Total Weight:');
+                    const weightLabel = formattedItemsInTotal.includes('Weight conversion unavailable')
+                      ? 'Weight conversion unavailable'
+                      : estimateParts.length > 1
+                        ? estimateParts[1].trim()
+                        : formattedItemsInTotal;
 
                     return (
                       <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                        <div className="text-xs font-semibold text-slate-700 pt-1">
-                          Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        <div className="pt-1 text-xs leading-snug text-slate-900">
+                          <p>
+                            <span className="font-bold">Total Quantities: </span>
+                            <span className="font-mono font-bold">{quantityLabel}</span>
+                          </p>
+                          <p className="mt-1">
+                            <span className="font-bold">Est. Total Weight: </span>
+                            <span className="font-mono font-bold">{weightLabel}</span>
+                          </p>
                         </div>
 
                         <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
