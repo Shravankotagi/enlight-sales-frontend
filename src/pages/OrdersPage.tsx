@@ -80,6 +80,9 @@ interface Order {
   created_at: string;
   won_at?: string;
   media_urls?: string[];
+  source_media_urls?: string[];
+  source_original_text?: string | null;
+  source_extracted_text?: string | null;
   deal_items?: DealItem[];
   raw_text?: string;
   source_channel?: string;
@@ -169,71 +172,40 @@ function isCustomerInAssignedList(inputName: string, assignedList: string[]): bo
   });
 }
 
+const GENERATED_SOURCE_PLACEHOLDER = /^\[(?:Inquiry Attachment|PO Document Attached|PO Document):/i;
+
+export function getOrderOriginalSourceText(ord?: Order | null): string | null {
+  if (!ord) return null;
+  const candidate = String(
+    ord.source_original_text ?? ord.raw_text ?? '',
+  ).trim();
+  if (!candidate || GENERATED_SOURCE_PLACEHOLDER.test(candidate)) return null;
+  return candidate;
+}
+
+export function getOrderSourceDocuments(ord?: Order | null): string[] {
+  if (!ord) return [];
+  const urls = ord.source_media_urls || ord.media_urls || [];
+  return urls.filter(
+    url =>
+      typeof url === 'string' &&
+      (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')),
+  );
+}
+
 export function formatOrderSourceText(ord?: Order | null): string {
-  if (!ord) return 'No source document or text available for this order.';
+  const originalText = getOrderOriginalSourceText(ord);
+  if (originalText) return `Original Source Message:\n${originalText}`;
 
-  const lines: string[] = [];
-  if (ord.customer_name) lines.push(`Company: ${ord.customer_name}`);
-  if (ord.customer_phone) lines.push(`Phone: ${ord.customer_phone}`);
-  if (ord.po_number) lines.push(`System PO Number: ${ord.po_number}`);
-  if (ord.reference_po_number) {
-    lines.push(`Reference PO: ${ord.reference_po_number}`);
-  }
-  if (ord.po_date) lines.push(`PO Date: ${ord.po_date}`);
-  if (ord.delivery_location) lines.push(`Delivery Location: ${ord.delivery_location}`);
-  if (ord.payment_terms) lines.push(`Payment Terms: ${ord.payment_terms}`);
-
-  const items = ord.deal_items || [];
-  if (Array.isArray(items) && items.length > 0) {
-    lines.push('\nLine Items:');
-    let subtotal = 0;
-    items.forEach((item: any, idx: number) => {
-      const name = item.sku_text || item.description || item.name || item.sku || 'Product';
-      const spec = item.dimensions || item.spec || item.specification || '';
-      const qty = item.quantity ?? item.qty ?? 0;
-      const unit = item.unit || 'MT';
-      const rate = Number(item.rate ?? item.unit_price ?? item.quoted_price ?? item.price_per_mt ?? 0);
-      const amount = Number(item.amount ?? 0) || (qty * rate);
-      if (amount > 0) subtotal += amount;
-      const hsn = item.hsn_code || item.hsn || detectHsnCode(name) || '';
-
-      let itemStr = `${idx + 1}. ${name}`;
-      if (spec) itemStr += ` (${spec})`;
-      itemStr += ` | ${qty} ${unit}`;
-      if (rate > 0) itemStr += ` | ₹${rate.toLocaleString('en-IN')}/${unit}`;
-      if (amount > 0) itemStr += ` | Line Total: ₹${amount.toLocaleString('en-IN')}`;
-      if (hsn) itemStr += ` [HSN: ${hsn}]`;
-      lines.push(itemStr);
-    });
-
-    if (subtotal > 0) {
-      const gst = Math.round(subtotal * 0.18);
-      const total = subtotal + gst;
-      lines.push(`\nSubtotal: ₹${subtotal.toLocaleString('en-IN')}`);
-      lines.push(`GST (18%): ₹${gst.toLocaleString('en-IN')}`);
-      lines.push(`Total Order Value: ₹${total.toLocaleString('en-IN')}`);
-    }
+  if (ord?.source_extracted_text?.trim()) {
+    return `Extracted Text from PDF:\n${ord.source_extracted_text.trim()}`;
   }
 
-  // If raw_text is present, meaningful and not just a document placeholder, include it as source reference
-  if (
-    ord.raw_text &&
-    typeof ord.raw_text === 'string' &&
-    ord.raw_text.trim() &&
-    !ord.raw_text.trim().startsWith('[Inquiry Attachment:') &&
-    !ord.raw_text.trim().startsWith('[PO Document:')
-  ) {
-    if (lines.length > 0) {
-      lines.push('\nOriginal Source Message:');
-    }
-    lines.push(ord.raw_text.trim());
+  if (getOrderSourceDocuments(ord).length > 0) {
+    return 'Original source is an attached document. Use the document preview above.';
   }
 
-  if (lines.length === 0) {
-    return 'No source document or text available for this order.';
-  }
-
-  return lines.join('\n');
+  return 'No original source text or document is available for this order.';
 }
 
 export function formatDeliveryLocation(raw?: string): string {
@@ -1590,13 +1562,49 @@ export default function OrdersPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                <span>Source Inquiry Text</span>
+                <span>Original Source</span>
                 {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
                   <span className="font-mono">
                     Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
                   </span>
                 )}
               </div>
+
+              {getOrderSourceDocuments(selectedPoOrder).slice(0, 1).map(sourceUrl => {
+                const isPdf =
+                  sourceUrl.toLowerCase().startsWith('data:application/pdf') ||
+                  /\.pdf(?:$|[?#])/i.test(sourceUrl);
+                return (
+                  <div key={sourceUrl} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-700">
+                        Original Source Document
+                      </span>
+                      <a
+                        href={sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={isPdf ? 'original-po.pdf' : undefined}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+                        Open document
+                      </a>
+                    </div>
+                    {isPdf ? (
+                      <iframe
+                        title="Original PO document"
+                        src={sourceUrl}
+                        className="w-full h-[42vh] rounded-lg border border-slate-200 bg-white"
+                      />
+                    ) : (
+                      <img
+                        src={sourceUrl}
+                        alt="Original PO document"
+                        className="max-h-[42vh] w-full object-contain rounded-lg border border-slate-200 bg-white"
+                      />
+                    )}
+                  </div>
+                );
+              })}
 
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
                 {formatOrderSourceText(selectedPoOrder)}
