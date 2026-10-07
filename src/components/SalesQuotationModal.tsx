@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Printer, Copy, Check } from 'lucide-react';
 import {
+  calculateLineItem,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
@@ -45,7 +46,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
 
   if (!deal) return null;
 
-  const items: DealItem[] = (deal.deal_items && deal.deal_items.length > 0)
+  const rawItems: DealItem[] = (deal.deal_items && deal.deal_items.length > 0)
     ? deal.deal_items
     : (deal.items && deal.items.length > 0)
     ? deal.items
@@ -61,12 +62,19 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
         },
       ];
 
-  const computedSubtotal = items.reduce((s, i) => {
-    const q = Number(i.quantity) || 0;
-    const r = Number(i.rate || i.quoted_price || i.price_per_mt) || 0;
-    const a = Number(i.amount) || (q * r) || 0;
-    return s + a;
-  }, 0) || Number(deal.total_amount || 0);
+  const items = rawItems.map((item: any) => {
+    const calc = calculateLineItem({
+      ...item,
+      rate: item.rate || item.quoted_price || item.price_per_mt || 0,
+    });
+    return {
+      ...item,
+      rate: calc.rate,
+      amount: item.amount ? Number(item.amount) : calc.amount,
+    };
+  });
+
+  const computedSubtotal = items.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0) || Number(deal.total_amount || 0);
 
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
   const totalTonnage = calculateTotalTonnageMt(items);
@@ -213,7 +221,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                 {items.map((item, idx) => {
                   const qty = Number(item.quantity || 0);
                   const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
-                  const amt = Number(item.amount || (qty * rate) || 0);
+                  const amt = Number(item.amount) || calculateLineItem({ ...item, rate }).amount || 0;
                   const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
                   const unit = item.unit || 'MT';
 
@@ -248,8 +256,8 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
           <div className="flex flex-col sm:flex-row justify-between items-start pt-1 gap-6">
             
             {/* Bottom Left: Items in Total */}
-            <div className="text-xs font-semibold text-slate-700 pt-1">
-              <span>Items in Total {totalTonnage.formattedText}</span>
+            <div className="text-xs text-slate-700 pt-1">
+              <span><strong className="font-bold text-slate-900">Items in Total = </strong><span className="font-mono font-bold text-slate-900">{totalTonnage.formattedText}</span></span>
               
               <div className="text-[11px] text-slate-500 mt-4 space-y-1">
                 <p className="font-semibold text-slate-700">Commercial Terms &amp; Notes:</p>

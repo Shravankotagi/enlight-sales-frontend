@@ -27,6 +27,7 @@ import {
   calculateSubtotal,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
+  formatLineItemWeightMt,
   normalizeUnit,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -74,6 +75,7 @@ export interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+  isManualAmount?: boolean;
 }
 
 export interface ExtractedDetails {
@@ -2107,7 +2109,8 @@ export default function InquiriesPage() {
           rate: rate,
           dimensions: itemDim,
           sku_text: skuText,
-          amount: item.amount,
+          isManualAmount: item.isManualAmount,
+          amount: item.isManualAmount ? item.amount : 0,
         });
 
         return {
@@ -2125,10 +2128,8 @@ export default function InquiriesPage() {
         };
       });
       activeItems = frozenLineItems;
-      const frozenTotal = ai.total_amount || ai.totalAmount ||
-        (frozenLineItems.length > 0
-          ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
-          : 0);
+      const lineItemsSum = frozenLineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0);
+      const frozenTotal = lineItemsSum > 0 ? lineItemsSum : (ai.total_amount || ai.totalAmount || 0);
 
       const parsed = parseInquiryText(inq.raw_text || '', inq);
 
@@ -3698,19 +3699,19 @@ export default function InquiriesPage() {
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
                         <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                        <th className="px-4 py-3 border-r border-slate-700 w-[25%]">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center">
                           HSN/SAC <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
-                          Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                          Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                          Rate (₹)/ QTY <span className="text-red-500 font-bold">*</span>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[18%] text-center min-w-[105px]">
+                          Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[18%] text-left">Amount (₹)</th>
                         <th className="px-2 py-3 text-center w-[4%]"></th>
                       </tr>
                     </thead>
@@ -3832,8 +3833,8 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`hsn_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 border-r border-slate-200">
-                            <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                          <td className="px-2.5 py-3.5 border-r border-slate-200">
+                            <div className="flex items-center gap-1.5 w-full min-w-[165px]">
                               <input
                                 type="number"
                                 min="0"
@@ -3855,7 +3856,7 @@ export default function InquiriesPage() {
                                   }
                                 }}
                                 placeholder="0"
-                                className={`flex-1 min-w-[65px] px-2 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
+                                className={`flex-1 min-w-[45px] px-1.5 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
                                   fieldErrors[`qty_${idx}`]
                                     ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
                                     : 'border border-slate-300 focus:ring-blue-500'
@@ -3873,7 +3874,7 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                 }}
-                                className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                className="w-[56px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
                                 <option value="Pcs">Pcs</option>
@@ -3882,12 +3883,31 @@ export default function InquiriesPage() {
                                 <option value="Plates">Plates</option>
                                 <option value="Coils">Coils</option>
                               </select>
+                              {(() => {
+                                const itemWeight = formatLineItemWeightMt(item);
+                                const isCalculated = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+                                return (
+                                  <div
+                                    className={`shrink-0 px-1.5 py-1.5 rounded text-[11px] font-mono font-bold text-center select-none border min-w-[58px] transition-colors ${
+                                      isCalculated
+                                        ? 'bg-blue-50/80 border-blue-200 text-blue-900'
+                                        : 'bg-slate-100 border-slate-200 text-slate-400'
+                                    }`}
+                                    title={
+                                      isCalculated
+                                        ? `Total converted weight: ${itemWeight.text}${itemWeight.isApprox ? ' (estimated from specs)' : ''}`
+                                        : 'Total weight in MT (specify dimensions for Nos/Sheets to calculate)'
+                                    }>
+                                    {itemWeight.text}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             {fieldErrors[`qty_${idx}`] && (
                               <span className="text-[10px] text-red-600 font-bold block text-center mt-0.5">{fieldErrors[`qty_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[105px]">
                             <input
                               type="number"
                               min="0"
@@ -3909,7 +3929,7 @@ export default function InquiriesPage() {
                                 }
                               }}
                               placeholder="0"
-                              className={`w-full px-2 py-1.5 bg-white rounded font-bold text-xs font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900 transition-all ${
+                              className={`w-full px-2.5 py-1.5 bg-white rounded font-bold text-xs font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900 transition-all ${
                                 fieldErrors[`rate_${idx}`]
                                   ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
                                   : 'border border-slate-300 focus:ring-blue-500'
@@ -3929,7 +3949,7 @@ export default function InquiriesPage() {
                                 const rawA = val === '' ? 0 : parseFloat(val);
                                 const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                                 const updated = [...(editDetails.lineItems || [])];
-                                updated[idx] = { ...updated[idx], amount: safeA };
+                                updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
                                 setSaveSuccess(false);
@@ -3992,11 +4012,25 @@ export default function InquiriesPage() {
 
                     const totalTonnage = calculateTotalTonnageMt(activeLineItems);
                     const formattedItemsInTotal = totalTonnage.formattedText;
+                    const quantityLabel = (totalTonnage.summaryText || '').replace(/, /g, ' | ');
+                    const estimateParts = formattedItemsInTotal.split('Est. Total Weight:');
+                    const weightLabel = formattedItemsInTotal.includes('Weight conversion unavailable')
+                      ? 'Weight conversion unavailable'
+                      : estimateParts.length > 1
+                        ? estimateParts[1].trim()
+                        : formattedItemsInTotal;
 
                     return (
                       <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                        <div className="text-xs font-semibold text-slate-700 pt-1">
-                          Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        <div className="pt-1 text-xs leading-snug text-slate-900">
+                          <p>
+                            <span className="font-bold">Total Quantities: </span>
+                            <span className="font-mono font-bold">{quantityLabel}</span>
+                          </p>
+                          <p className="mt-1">
+                            <span className="font-bold">Est. Total Weight: </span>
+                            <span className="font-mono font-bold">{weightLabel}</span>
+                          </p>
                         </div>
 
                         <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">

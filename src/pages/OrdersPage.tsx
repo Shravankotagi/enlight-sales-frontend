@@ -42,6 +42,7 @@ import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   calculateOrdersTotalTonnage,
+  formatLineItemWeightMt,
   getOrderTonnage,
   normalizeUnit,
 } from '../utils/pricingEngine';
@@ -142,6 +143,7 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+  isManualAmount?: boolean;
 }
 
 function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
@@ -1065,18 +1067,26 @@ export default function OrdersPage() {
   };
 
   const handleViewPoDocument = async (ord: Order) => {
-    setSelectedPoOrder(ord);
-    setPoImageViewerUrl(`extracted_preview://${ord.id}`);
+    // If order already has complete raw_text, open immediately with full details (0ms latency)
+    if (ord.raw_text) {
+      setSelectedPoOrder(ord);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
+      return;
+    }
+
+    // Otherwise, fetch full deal details first before opening modal so user directly sees complete Image 2 details
     setLoadingPoId(ord.id);
 
     try {
       const res = await dealsApi.getOne(ord.id);
       const fullDeal = res?.data?.data || res?.data;
-      if (fullDeal) {
-        setSelectedPoOrder(prev => ({ ...(prev || ord), ...fullDeal }));
-      }
+      const completeOrder = fullDeal ? { ...ord, ...fullDeal } : ord;
+      setSelectedPoOrder(completeOrder);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
     } catch (e) {
       console.warn('Could not load deal details for PO text preview:', e);
+      setSelectedPoOrder(ord);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
     } finally {
       setLoadingPoId(null);
     }
@@ -1821,19 +1831,19 @@ export default function OrdersPage() {
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
                       <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                      <th className="px-4 py-3 border-r border-slate-700 w-[25%]">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center">
                         HSN/SAC <span className="text-red-500 font-bold">*</span>
                       </th>
                       <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
-                        Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                        Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                        Rate (₹) <span className="text-red-500 font-bold">*</span>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[18%] text-center min-w-[105px]">
+                        Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[18%] text-left">Amount (₹)</th>
                       <th className="px-2 py-3 text-center w-[4%]"></th>
                     </tr>
                   </thead>
@@ -1913,8 +1923,8 @@ export default function OrdersPage() {
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
-                        <td className="px-3 py-3.5 border-r border-slate-200">
-                          <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                        <td className="px-2.5 py-3.5 border-r border-slate-200">
+                          <div className="flex items-center gap-1.5 w-full min-w-[165px]">
                             <input
                               id={`form-item-qty-${idx}`}
                               type="number"
@@ -1933,7 +1943,7 @@ export default function OrdersPage() {
                                 setFormLineItems(updated);
                               }}
                               placeholder="0"
-                              className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                              className="flex-1 min-w-[45px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                             />
                             <select
                               value={normalizeUnit(item.unit) || 'MT'}
@@ -1944,7 +1954,7 @@ export default function OrdersPage() {
                                 updated[idx] = { ...currentItem, amount: calc.amount };
                                 setFormLineItems(updated);
                               }}
-                              className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              className="w-[56px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
                               <option value="Pcs">Pcs</option>
@@ -1953,9 +1963,28 @@ export default function OrdersPage() {
                               <option value="Plates">Plates</option>
                               <option value="Coils">Coils</option>
                             </select>
+                            {(() => {
+                              const itemWeight = formatLineItemWeightMt(item);
+                              const isCalculated = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+                              return (
+                                <div
+                                  className={`shrink-0 px-1.5 py-1.5 rounded text-[11px] font-mono font-bold text-center select-none border min-w-[58px] transition-colors ${
+                                    isCalculated
+                                      ? 'bg-blue-50/80 border-blue-200 text-blue-900'
+                                      : 'bg-slate-100 border-slate-200 text-slate-400'
+                                  }`}
+                                  title={
+                                    isCalculated
+                                      ? `Total converted weight: ${itemWeight.text}${itemWeight.isApprox ? ' (estimated from specs)' : ''}`
+                                      : 'Total weight in MT (specify dimensions for Nos/Sheets to calculate)'
+                                  }>
+                                  {itemWeight.text}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
-                        <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[105px]">
                           <input
                             id={`form-item-rate-${idx}`}
                             type="number"
@@ -1974,7 +2003,7 @@ export default function OrdersPage() {
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
-                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                           />
                         </td>
                         <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
@@ -1987,7 +2016,7 @@ export default function OrdersPage() {
                               const rawA = val === '' ? 0 : parseFloat(val);
                               const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                               const updated = [...formLineItems];
-                              updated[idx] = { ...updated[idx], amount: safeA };
+                              updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
@@ -2040,8 +2069,9 @@ export default function OrdersPage() {
 
                   return (
                     <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                      <div className="text-xs font-semibold text-slate-700 pt-1">
-                        Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      <div className="text-xs text-slate-700 pt-1">
+                        <span className="font-bold text-slate-900">Items in Total = </span>
+                        <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
                       </div>
 
                       <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">

@@ -4,6 +4,7 @@ import { X, Download, Check, Copy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { customersApi, inquiriesApi } from '../lib/api';
 import {
+  calculateLineItem,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
@@ -46,6 +47,7 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+  isManualAmount?: boolean;
 }
 
 interface ExtractedDetails {
@@ -98,7 +100,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const customerGstin = (details as any)?.gstin || matchedCustomer?.gstin || matchedCustomer?.gst_number || (inquiry as any)?.customer_gstin || (inquiry as any)?.ai_extraction_json?.gstin || (inquiry as any)?.ai_extraction_json?.gst_number || '';
 
   // Build line items list - prefer dynamic lineItems, fall back to single item
-  const lineItems: LineItemDetail[] =
+  const rawLineItems: LineItemDetail[] =
     details.lineItems && details.lineItems.length > 0
       ? details.lineItems
       : [
@@ -115,6 +117,14 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             amount: details.totalAmount,
           },
         ];
+
+  const lineItems: LineItemDetail[] = rawLineItems.map(item => {
+    const calc = calculateLineItem(item);
+    return {
+      ...item,
+      amount: item.amount ? Number(item.amount) : calc.amount,
+    };
+  });
 
   // totalAmount = base pre-GST value; calculate GST breakdown
   const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || details.totalAmount || 0;
@@ -424,7 +434,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   {lineItems.map((item, idx) => {
                     const qty = Number(item.quantity) || 0;
                     const rate = Number(item.rate) || 0;
-                    const amt = Number(item.amount) || (qty * rate) || 0;
+                    const amt = Number(item.amount) || calculateLineItem(item).amount || 0;
                     const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
                     const unit = item.unit || 'MT';
 
@@ -463,7 +473,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
               <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
                 <div>
-                  <span>Items in Total <strong className="font-bold">{totalTonnage.formattedText}</strong></span>
+                  <span><strong className="font-bold">Items in Total = </strong><strong className="font-bold">{totalTonnage.formattedText}</strong></span>
                 </div>
                 {details.paymentTerms && (
                   <div>
