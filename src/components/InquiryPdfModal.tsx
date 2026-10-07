@@ -291,8 +291,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               PI
             </div>
             <div>
-              <h3 className="font-bold text-white text-sm leading-tight">Invoice Preview</h3>
-              <p className="text-xs text-slate-400">PI Number: {piNumber} • {details.companyName || 'Quotation'}</p>
+              <h3 className="font-bold text-white text-sm leading-tight">Quotation Preview</h3>
             </div>
           </div>
 
@@ -300,9 +299,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             <button
               type="button"
               onClick={handleCopyRef}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700 transition-colors">
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700 transition-colors"
+            >
               {copiedRef ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-              {copiedRef ? 'Copied!' : 'Copy PI#'}
+              {copiedRef ? 'Copied!' : 'Copy PI'}
             </button>
 
             <button
