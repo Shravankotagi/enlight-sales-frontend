@@ -37,6 +37,7 @@ import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
+import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
 import {
   calculateLineItem,
   calculateQuotationBreakdown,
@@ -158,31 +159,6 @@ interface LineItemDetail {
   final_amount?: number;
 }
 
-function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
-  if (!inputName || !inputName.trim()) return false;
-  const cleanInput = inputName.trim().toLowerCase();
-  if (assignedList.some(c => c.trim().toLowerCase() === cleanInput)) return true;
-
-  const stripSuffixes = (str: string) =>
-    str
-      .toLowerCase()
-      .replace(/\b(private\s+limited|pvt\s+ltd|pvt\s+limited|private\s+ltd|co\s+ltd|llp|limited|pvt|ltd|inc|corp)\b/gi, '')
-      .replace(/[^a-z0-9]/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-  const strippedInput = stripSuffixes(cleanInput);
-  if (!strippedInput) return false;
-
-  return assignedList.some(c => {
-    const strippedC = stripSuffixes(c);
-    return Boolean(
-      strippedC &&
-      (strippedC === strippedInput || strippedInput.startsWith(strippedC) || strippedC.startsWith(strippedInput)),
-    );
-  });
-}
-
 const GENERATED_SOURCE_PLACEHOLDER = /^\[(?:Inquiry Attachment|PO Document Attached|PO Document):/i;
 
 export function getOrderOriginalSourceText(ord?: Order | null): string | null {
@@ -190,8 +166,20 @@ export function getOrderOriginalSourceText(ord?: Order | null): string | null {
   const candidate = String(
     ord.source_original_text ?? ord.raw_text ?? '',
   ).trim();
-  if (!candidate || GENERATED_SOURCE_PLACEHOLDER.test(candidate)) return null;
-  return candidate;
+  if (!candidate) return null;
+
+  const strippedContent = candidate
+    .replace(
+      /^\[(?:Inquiry Attachment|PO Document Attached|PO Document):[^\n]*\](?:\s*-\s*[^\n]*)?\n*/i,
+      '',
+    )
+    .trim();
+
+  const isPurePlaceholder =
+    GENERATED_SOURCE_PLACEHOLDER.test(candidate) && !strippedContent;
+
+  if (isPurePlaceholder) return null;
+  return strippedContent || candidate;
 }
 
 export function getOrderSourceDocuments(ord?: Order | null): string[] {
@@ -354,7 +342,7 @@ export default function OrdersPage() {
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const queryClient = useQueryClient();
-  const { effectivePhone, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const { effectivePhone, employee, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
   const canViewSalesperson = isAdmin || isSalesManager;
   const [isSyncingZoho, setIsSyncingZoho] = useState(false);
 
@@ -611,6 +599,11 @@ export default function OrdersPage() {
   const poInputDirtyRef = useRef(false);
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
+  const extractedCustomerExtrasRef = useRef<{ contactPerson: string; gstin: string }>({
+    contactPerson: '',
+    gstin: '',
+  });
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
   const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
     {
@@ -804,9 +797,15 @@ export default function OrdersPage() {
           }
           setFormPoDate(formattedDate);
         }
-        if (extraction.delivery_location) {
-          setFormDeliveryLocation(String(extraction.delivery_location).trim());
+        if (extraction.delivery_location || extraction.customer_address || extraction.address) {
+          setFormDeliveryLocation(String(extraction.delivery_location || extraction.customer_address || extraction.address).trim());
         }
+        extractedCustomerExtrasRef.current = {
+          contactPerson: String(
+            extraction.contact_person || extraction.contact_name || extraction.customer?.contact_person || '',
+          ).trim(),
+          gstin: String(extraction.customer_gst || extraction.gstin || extraction.gst || '').trim(),
+        };
         if (extraction.payment_terms) {
           setFormPaymentTerms(String(extraction.payment_terms).trim());
         }
@@ -871,7 +870,7 @@ export default function OrdersPage() {
       }
       return;
     }
-    if (activeRole !== 'admin' && !isCustomerInAssignedList(formCustomerName, rawCustomers)) {
+    if (!isCustomerInAssignedList(formCustomerName, rawCustomers)) {
       toast.error('Cannot create order: Customer is not in your assigned customer list.');
       return;
     }
@@ -1068,14 +1067,18 @@ export default function OrdersPage() {
   };
 
   const handleViewPoDocument = async (ord: Order) => {
-    // If order already has complete raw_text, open immediately with full details (0ms latency)
-    if (ord.raw_text) {
+    // Check if order already has genuine renderable documents or genuine source text
+    const hasRenderableDoc = getOrderSourceDocuments(ord).length > 0;
+    const hasOriginalText = Boolean(getOrderOriginalSourceText(ord));
+
+    // If order already has renderable doc or genuine original text, open immediately (0ms latency)
+    if (hasRenderableDoc || hasOriginalText) {
       setSelectedPoOrder(ord);
       setPoImageViewerUrl(`extracted_preview://${ord.id}`);
       return;
     }
 
-    // Otherwise, fetch full deal details first before opening modal so user directly sees complete Image 2 details
+    // Otherwise, fetch full deal details first before opening modal so user directly sees complete document preview and text
     setLoadingPoId(ord.id);
 
     try {
@@ -1776,22 +1779,26 @@ export default function OrdersPage() {
                         ))}
                       {rawCustomers.filter(c => !formCustomerName || c.toLowerCase().includes(formCustomerName.toLowerCase())).length === 0 && (
                         <div className="px-3 py-2 text-xs text-slate-400 italic">
-                          {activeRole !== 'admin'
-                            ? 'This company is not in your assigned customer list.'
-                            : 'No matching company found. Typing will save as new company.'}
+                          This company is not in your assigned customer list.
                         </div>
                       )}
                     </div>
                   )}
                 </div>
-                {activeRole !== 'admin' && formCustomerName.trim() && !isCustomerInAssignedList(formCustomerName, rawCustomers) && (
+                {formCustomerName.trim() && !isCustomerInAssignedList(formCustomerName, rawCustomers) && (
                   <div className="mt-1.5 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">
                     <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
-                    <div>
+                    <div className="flex-1">
                       <span className="font-bold">Customer Not Assigned:</span>
                       <p className="text-[11px] text-rose-700 mt-0.5">
                         "{formCustomerName}" is not in your assigned customer list. You can only record orders for your assigned customers.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCustomer(true)}
+                        className="mt-2 px-3 py-1.5 bg-white border border-rose-300 text-rose-800 rounded-lg text-[11px] font-bold hover:bg-rose-100">
+                        Add this customer
+                      </button>
                     </div>
                   </div>
                 )}
@@ -2337,7 +2344,7 @@ export default function OrdersPage() {
                   disabled={
                     submitting ||
                     isParsingDoc ||
-                    (activeRole !== 'admin' && !isCustomerInAssignedList(formCustomerName, rawCustomers))
+                    !isCustomerInAssignedList(formCustomerName, rawCustomers)
                   }
                   className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                   {submitting ? 'Saving Order...' : 'Create Order'}
@@ -2347,6 +2354,33 @@ export default function OrdersPage() {
           </div>
         </div>
       )}
+      <AddAssignedCustomerDialog
+        open={showAddCustomer}
+        assignPhone={effectivePhone || employee?.phone || ''}
+        seed={{
+          companyName: formCustomerName.trim(),
+          contactPerson: extractedCustomerExtrasRef.current.contactPerson,
+          mobile: formCustomerPhone.trim(),
+          deliveryLocation: formDeliveryLocation.trim(),
+          gstin: extractedCustomerExtrasRef.current.gstin,
+        }}
+        onClose={() => setShowAddCustomer(false)}
+        onSaved={(saved) => {
+          setFormCustomerName(saved.companyName);
+          setFormCustomerPhone(saved.mobile);
+          setFormDeliveryLocation(saved.deliveryLocation);
+          setShowAddCustomer(false);
+          queryClient.setQueryData<string[]>(
+            ['customer-names-list-orders', effectivePhone, activeRole, activeMode],
+            (prev) => {
+              const list = Array.isArray(prev) ? prev : [];
+              if (list.some(c => c.trim().toLowerCase() === saved.companyName.trim().toLowerCase())) return list;
+              return [...list, saved.companyName].sort((a, b) => a.localeCompare(b));
+            },
+          );
+          queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+        }}
+      />
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
-  Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  Calendar, Save, Check, UploadCloud, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, UserCheck, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, ArrowLeft, AlertCircle, AlertTriangle
 } from 'lucide-react';
@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
+import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
 import PaginationControl from '../components/PaginationControl';
 import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
@@ -1477,8 +1478,8 @@ export default function InquiriesPage() {
 
   // Form state for Manual Log & File Upload
   const [formCustomerName, setFormCustomerName] = useState('');
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
-  const [formProductSKU, setFormProductSKU] = useState('');
   const [formPreferredMake, setFormPreferredMake] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
@@ -1490,6 +1491,55 @@ export default function InquiriesPage() {
   const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
   const formExtractedJsonRef = useRef<any>(null);
+  const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
+    {
+      sku_text: '',
+      dimensions: '',
+      hsn_code: '72083840',
+      quantity: 0,
+      unit: 'MT',
+      rate: 0,
+      amount: 0,
+      cgst_rate: 9,
+      cgst_amount: 0,
+      sgst_rate: 9,
+      sgst_amount: 0,
+      total_gst: 0,
+      final_amount: 0,
+    },
+  ]);
+
+  const handleCancelCreateInquiry = () => {
+    setShowModal(false);
+    setFormCustomerName('');
+    setShowCompanyDropdown(false);
+    setFormPhone('');
+    setFormPreferredMake('');
+    setFormDeliveryLocation('');
+    setFormPaymentTerms('');
+    setFormRequirement('');
+    setFormInquiryType('Product Requirement');
+    setPoFileName('');
+    setPoFileBase64(null);
+    formExtractedJsonRef.current = null;
+    setFormLineItems([
+      {
+        sku_text: '',
+        dimensions: '',
+        hsn_code: '72083840',
+        quantity: 0,
+        unit: 'MT',
+        rate: 0,
+        amount: 0,
+        cgst_rate: 9,
+        cgst_amount: 0,
+        sgst_rate: 9,
+        sgst_amount: 0,
+        total_gst: 0,
+        final_amount: 0,
+      },
+    ]);
+  };
 
   const isPdf = (url: string) => {
     if (!url) return false;
@@ -2487,9 +2537,6 @@ export default function InquiriesPage() {
             ? String(rawName).trim()
             : '';
           setFormCustomerName(cleanCustomer);
-          if (cleanCustomer) {
-            setExistingCustomers(prev => Array.from(new Set([cleanCustomer, ...prev])));
-          }
 
           // Phone: fill if detected (10 digits), keep blank if not
           const rawPhone = extracted.customer_phone || extracted.contact_phone || extracted.customer?.phone || extracted.phone || '';
@@ -2497,23 +2544,52 @@ export default function InquiriesPage() {
           const validPhone = (cleanPhone.length >= 10 && !SYSTEM_EMPLOYEE_PHONES.has(cleanPhone)) ? cleanPhone : '';
           setFormPhone(validPhone);
 
-          // Product Description / SKU: Formatted numbered serial list matching document
+          // Structured Line Items auto-fill
           if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
-            const mappedSkus = extracted.line_items
-              .map((li: any, idx: number) => {
-                const sku = li.sku_text || li.sku || li.material || li.description || 'Material';
-                const dims = li.dimensions ? ` (${li.dimensions})` : '';
-                const qty = (li.quantity !== undefined && li.quantity !== null && li.quantity !== '')
-                  ? ` - ${li.quantity} ${li.unit || 'Nos'}`
-                  : '';
-                const rate = li.rate ? ` @ ₹${li.rate}` : '';
-                return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
-              })
-              .filter(Boolean)
-              .join('\n');
-            if (mappedSkus) setFormProductSKU(mappedSkus);
+            const mappedItems: LineItemDetail[] = extracted.line_items.map((i: any) => {
+              const skuText = i.sku_text || i.sku || i.material || i.description || 'Material';
+              const dims = i.dimensions || [i.thickness, i.width, i.length].filter(Boolean).join(' x ') || '';
+              const q = Number(i.quantity ?? i.qty) || 0;
+              const rawUnit = i.unit || 'MT';
+              const r = Number(i.rate ?? i.unit_price ?? i.price_per_mt) || 0;
+              const amt = Number(i.amount) || 0;
+              const detectedHsn = (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '72083840').trim();
+
+              const calc = calculateLineItem({
+                sku_text: skuText,
+                dimensions: dims,
+                hsn_code: detectedHsn,
+                quantity: q,
+                unit: normalizeUnit(rawUnit) || 'MT',
+                rate: r,
+                amount: amt,
+              });
+
+              return {
+                ...calc,
+                sku_text: skuText,
+                hsn_code: detectedHsn,
+              };
+            });
+            if (mappedItems.length > 0) {
+              setFormLineItems(mappedItems);
+            }
           } else if (extracted.sku_text || extracted.product_type) {
-            setFormProductSKU(extracted.sku_text || extracted.product_type);
+            const skuText = extracted.sku_text || extracted.product_type || 'Material';
+            const dims = extracted.dimensions || '';
+            const detectedHsn = detectHsnCode(skuText, dims) || '72083840';
+            const q = Number(extracted.quantity) || 0;
+            const r = Number(extracted.rate) || 0;
+            const calc = calculateLineItem({
+              sku_text: skuText,
+              dimensions: dims,
+              hsn_code: detectedHsn,
+              quantity: q,
+              unit: normalizeUnit(extracted.unit) || 'MT',
+              rate: r,
+              amount: 0,
+            });
+            setFormLineItems([{ ...calc, sku_text: skuText, hsn_code: detectedHsn }]);
           }
 
           // Additional Notes: Only non-product notes, remarks, delivery timeline, contact details (never line items)
@@ -2535,6 +2611,10 @@ export default function InquiriesPage() {
           if (extracted.delivery_location) {
             setFormDeliveryLocation(extracted.delivery_location);
           }
+
+          toast.success('Inquiry Document parsed! Details auto-filled.');
+        } else {
+          toast.error('Could not auto-extract inquiry details. You can enter the fields manually.');
         }
 
         setIsExtractingPo(false);
@@ -2571,148 +2651,154 @@ export default function InquiriesPage() {
 
     if (!customerName) {
       toast.error('Please enter Company Name');
+      const el = document.getElementById('form-company-name') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
-    if (!formProductSKU.trim()) {
-      toast.error('Please enter Product Description / SKU');
+
+    if (!isCustomerInAssignedList(customerName, rawCustomers)) {
+      toast.error('Cannot save inquiry: Customer is not in your assigned customer list.');
       return;
     }
-    if (!formPaymentTerms.trim()) {
-      toast.error('Please enter Payment Terms');
+
+    if (formLineItems.length === 0) {
+      toast.error('Please add at least one line item');
       return;
     }
+
+    for (let i = 0; i < formLineItems.length; i++) {
+      const item = formLineItems[i];
+      if (!item.sku_text.trim()) {
+        const el = document.getElementById(`form-item-sku-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+      if (!item.dimensions?.trim()) {
+        const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+      if (!item.hsn_code || !item.hsn_code.trim()) {
+        const el = document.getElementById(`form-item-hsn-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+      if (!item.quantity || Number(item.quantity) <= 0) {
+        const el = document.getElementById(`form-item-qty-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+    }
+
     if (!formDeliveryLocation.trim()) {
-      toast.error('Please enter Delivery Location');
+      const el = document.getElementById('form-delivery-location') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
+
+    if (!formPaymentTerms.trim()) {
+      const el = document.getElementById('form-payment-terms') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
+      return;
+    }
+
+    const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
+    const totalTonnage = calculateTotalTonnageMt(formLineItems);
 
     try {
       setSubmitting(true);
 
-      // If no document extraction was pre-loaded, automatically extract line items & terms with Gemini AI
-      if (!extractedJson && formProductSKU.trim()) {
-        try {
-          const fullTextToParse = [
-            `Company: ${customerName}`,
-            `Products & Requirement: ${formProductSKU.trim()}`,
-            formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
-            formDeliveryLocation.trim() ? `Delivery Location: ${formDeliveryLocation.trim()}` : '',
-            formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
-            formRequirement.trim() ? `Additional Notes: ${formRequirement.trim()}` : '',
-          ].filter(Boolean).join('\n');
-
-          const res = await inquiriesApi.parseText({ text: fullTextToParse });
-          const data = res?.data?.data || res?.data;
-          if (data && (Array.isArray(data.line_items) || data.sku_text || data.product_type)) {
-            extractedJson = data;
-          }
-        } catch (geminiErr) {
-          console.warn('Gemini AI parsing fallback:', geminiErr);
-        }
-      }
-
-      // Build ai_extraction_json from the structured extraction or deterministic local parser
-      let aiExtractionJson: any = null;
-
-      if (extractedJson && Array.isArray(extractedJson.line_items) && extractedJson.line_items.length > 0) {
-        // Normalize line_items to match Review & Edit popup expectations
-        const lineItems = extractedJson.line_items.map((li: any) => {
-          const skuText = li.sku_text || li.description || li.material || li.sku || 'Material';
-          const liDim = li.dimensions || '';
-          return {
-            sku_text: skuText,
-            dimensions: liDim,
-            hsn_code:
-              (li.hsn_code && li.hsn_code.trim()) ||
-              li.hsn ||
-              detectHsnCode(skuText, liDim) ||
-              '72083840',
-            quantity: Number(li.quantity) || 0,
-            unit: li.unit || 'MT',
-            rate: Number(li.rate) || 0,
-            amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
-          };
-        });
-        const totalAmount = extractedJson.total_amount || lineItems.reduce((s: number, i: any) => s + i.amount, 0);
-        aiExtractionJson = {
-          ...extractedJson,
-          customer: {
-            name: customerName,
-            phone: finalCustomerPhone,
-            gst: extractedJson.customer_gst || null,
-            address: extractedJson.customer_address || formDeliveryLocation.trim() || null,
-          },
-          companyName: customerName,
-          customer_name: customerName,
-          customerPhone: finalCustomerPhone,
-          customer_phone: finalCustomerPhone,
-          salespersonName: activeSalespersonName,
-          line_items: lineItems,
-          lineItems: lineItems,
-          total_amount: totalAmount > 0 ? totalAmount : 0,
-          totalAmount: totalAmount > 0 ? totalAmount : 0,
-          delivery_location: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
-          deliveryLocation: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
-          payment_terms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
-          paymentTerms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
-          preferred_make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
-          make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
+      const lineItemsPayload = formLineItems.map(i => {
+        const baseAmt = Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0));
+        const cgstAmt = i.cgst_amount !== undefined ? Number(i.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+        const sgstAmt = i.sgst_amount !== undefined ? Number(i.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+        const totalGst = Math.round((cgstAmt + sgstAmt) * 100) / 100;
+        const finalAmt = i.final_amount !== undefined && Number(i.final_amount) > 0 ? Number(i.final_amount) : Math.round((baseAmt + totalGst) * 100) / 100;
+        return {
+          sku_text: i.sku_text.trim(),
+          dimensions: i.dimensions ? i.dimensions.trim() : '',
+          hsn_code: i.hsn_code ? i.hsn_code.trim() : (detectHsnCode(i.sku_text, i.dimensions) || '72083840'),
+          quantity: Number(i.quantity) || 0,
+          unit: normalizeUnit(i.unit) || 'MT',
+          rate: Number(i.rate) || 0,
+          amount: baseAmt,
+          cgst_rate: 9,
+          cgst_amount: cgstAmt,
+          sgst_rate: 9,
+          sgst_amount: sgstAmt,
+          total_gst: totalGst,
+          final_amount: finalAmt,
+          converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
+          is_manual_mt: i.is_manual_mt || undefined,
         };
-      } else {
-        const fullText = (formProductSKU || '') + ' ' + (formRequirement || '');
-        const parsedReq = parseInquiryText(fullText, {
-          customer_name: customerName,
-          raw_text: fullText,
-        });
+      });
 
-        const lineItems = (parsedReq.lineItems && parsedReq.lineItems.length > 0)
-          ? parsedReq.lineItems.map(i => ({
-              ...i,
-              hsn_code:
-                (i.hsn_code && i.hsn_code.trim()) ||
-                detectHsnCode(i.sku_text, i.dimensions) ||
-                '72083840',
-            }))
-          : (formProductSKU.trim() ? [{
-              sku_text: formProductSKU.trim(),
-              dimensions: '',
-              hsn_code: detectHsnCode(formProductSKU.trim(), '') || '72083840',
-              quantity: parsedReq.quantityTons || 1,
-              unit: parsedReq.lineItems?.[0]?.unit || 'MT',
-              rate: parsedReq.unitPrice || 0,
-              amount: parsedReq.totalAmount || 0,
-            }] : []);
+      const aiExtractionJson: any = {
+        ...(extractedJson || {}),
+        customer: {
+          name: customerName,
+          phone: finalCustomerPhone,
+          gst: extractedJson?.customer_gst || null,
+          address: formDeliveryLocation.trim() || null,
+        },
+        companyName: customerName,
+        customer_name: customerName,
+        customerPhone: finalCustomerPhone,
+        customer_phone: finalCustomerPhone,
+        salespersonName: activeSalespersonName,
+        productType: lineItemsPayload[0]?.sku_text || 'Hot Rolled',
+        quantityTons: totalTonnage.totalMt || lineItemsPayload[0]?.quantity || 0,
+        unitPrice: lineItemsPayload[0]?.rate || 0,
+        total_amount: qBreakdown.grandTotal > 0 ? qBreakdown.grandTotal : 0,
+        totalAmount: qBreakdown.grandTotal > 0 ? qBreakdown.grandTotal : 0,
+        subtotal: qBreakdown.subtotal,
+        cgst_amount: qBreakdown.CGST,
+        sgst_amount: qBreakdown.SGST,
+        rounding: qBreakdown.rounding,
+        delivery_location: formDeliveryLocation.trim(),
+        deliveryLocation: formDeliveryLocation.trim(),
+        payment_terms: formPaymentTerms.trim(),
+        paymentTerms: formPaymentTerms.trim(),
+        preferred_make: formPreferredMake.trim(),
+        make: formPreferredMake.trim(),
+        line_items: lineItemsPayload,
+        lineItems: lineItemsPayload,
+        additional_notes: formRequirement.trim(),
+        notes: formRequirement.trim(),
+      };
 
-        const subtotal = lineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0);
-
-        aiExtractionJson = {
-          customer: {
-            name: customerName,
-            phone: finalCustomerPhone,
-          },
-          companyName: customerName,
-          customer_name: customerName,
-          customerPhone: finalCustomerPhone,
-          customer_phone: finalCustomerPhone,
-          salespersonName: activeSalespersonName,
-          productType: formProductSKU.trim() || parsedReq.productType,
-          quantityTons: parsedReq.quantityTons,
-          unitPrice: parsedReq.unitPrice,
-          totalAmount: subtotal > 0 ? subtotal : parsedReq.totalAmount,
-          total_amount: subtotal > 0 ? subtotal : parsedReq.totalAmount,
-          delivery_location: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
-          deliveryLocation: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
-          payment_terms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
-          paymentTerms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
-          preferred_make: formPreferredMake.trim() || (parsedReq as any).preferredMake || '',
-          make: formPreferredMake.trim() || (parsedReq as any).preferredMake || '',
-          line_items: lineItems,
-          lineItems: lineItems,
-        };
-      }
+      const itemStrs = lineItemsPayload.map((item, idx) => {
+        const sku = item.sku_text || 'Item';
+        const dims = item.dimensions ? ` (${item.dimensions})` : '';
+        const qty = item.quantity ? ` - ${item.quantity} ${item.unit || 'MT'}` : '';
+        const rate = Number(item.rate) > 0 ? ` @ ₹${item.rate}/${item.unit || 'MT'}` : '';
+        return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
+      }).filter(Boolean);
 
       const reqDetails = [
-        formProductSKU.trim() ? `Material:\n${formProductSKU.trim()}` : '',
+        itemStrs.length > 0 ? `Material:\n${itemStrs.join('\n')}` : '',
         formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
         formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : '',
         formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
@@ -2721,7 +2807,7 @@ export default function InquiriesPage() {
 
       const rawText = poFileName
         ? `[Inquiry Attachment: ${poFileName}]\n${reqDetails || 'Inquiry'}`
-        : reqDetails || formProductSKU.trim() || 'Inquiry';
+        : reqDetails || 'Inquiry';
 
       const createRes = await inquiriesApi.create({
         sender_name: customerName,
@@ -2752,19 +2838,8 @@ export default function InquiriesPage() {
         created_at: new Date().toISOString(),
       };
 
-      setShowModal(false);
-      setFormCustomerName('');
-      setShowCompanyDropdown(false);
-      setFormPhone('');
-      setFormProductSKU('');
-      setFormPreferredMake('');
-      setFormDeliveryLocation('');
-      setFormPaymentTerms('');
-      setFormRequirement('');
-      setFormInquiryType('Product Requirement');
-      setPoFileName('');
-      setPoFileBase64(null);
-      formExtractedJsonRef.current = null;
+      toast.success('Inquiry logged successfully!');
+      handleCancelCreateInquiry();
 
       // Prepend local inquiry so it appears immediately with full ai_extraction_json
       setInquiries(prev => [newInquiry, ...(Array.isArray(prev) ? prev : [])]);
@@ -4879,67 +4954,84 @@ export default function InquiriesPage() {
 
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overscroll-contain animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto my-auto overscroll-contain">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <FileText className="text-blue-600" size={22} />
+                <FileText className="text-blue-600" size={20} />
                 Log New Inquiry
               </h2>
               <button
-                onClick={() => setShowModal(false)}
+                type="button"
+                onClick={handleCancelCreateInquiry}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
                 <X size={20} />
               </button>
             </div>
 
             {/* Upload Inquiry Document Section */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                <span className="flex items-center gap-1.5 text-slate-800">
-                  <UploadCloud size={14} className="text-blue-600" />
-                  Or Upload Inquiry Document (PDF, JPEG, PNG)
+            <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between text-xs text-blue-900 font-bold">
+                <span className="flex items-center gap-1.5">
+                  <UploadCloud size={15} className="text-blue-600" />
+                  Upload Inquiry Document (Auto-Fill via Gemini)
                 </span>
-                <span className="text-slate-400 font-normal">PDF, JPEG, PNG</span>
+                <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
               </div>
-              <div className="relative flex items-center justify-center border border-dashed border-slate-300 rounded-lg p-2.5 bg-white hover:bg-slate-50 transition-all cursor-pointer">
+
+              <label
+                htmlFor="inquiry-doc-file-upload"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const files = e.dataTransfer.files;
+                  if (files && files.length > 0) {
+                    handleFileUpload({ target: { files } } as any);
+                  }
+                }}
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
                 <input
+                  id="inquiry-doc-file-upload"
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  accept="image/*,application/pdf"
                   onChange={handleFileUpload}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  className="hidden"
                 />
-                <div className="text-center">
-                  {isExtractingPo ? (
-                    <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
-                      <RefreshCw size={14} className="animate-spin text-blue-600" />
-                      Extracting Document...
-                    </div>
-                  ) : poFileName ? (
-                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
-                      <FileCheck size={16} />
-                      {poFileName} (Details Extracted &amp; Pre-filled!)
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-600 font-medium">
-                      Drop document here, or <span className="text-blue-600 underline font-bold">Browse File</span>
-                    </p>
-                  )}
-                </div>
-              </div>
+                {isExtractingPo ? (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 animate-pulse py-1">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>AI Extracting inquiry details from document...</span>
+                  </div>
+                ) : poFileBase64 ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
+                    <CheckCircle size={15} className="text-emerald-600 shrink-0" />
+                    <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
+                    <span className="text-[10px] text-blue-600 underline ml-1">Change</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-600 font-medium py-1">
+                    Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
+                  </p>
+                )}
+              </label>
             </div>
 
-            <form onSubmit={handleCreateInquiry} className="space-y-3.5">
+            <form onSubmit={handleCreateInquiry} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Company Name <span className="text-red-500 font-bold">*</span>
                 </label>
                 <div className="relative">
                   <div className="relative flex items-center">
                     <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
                     <input
-                      required
+                      id="form-company-name"
                       type="text"
+                      required
                       placeholder="Type or select company name..."
                       value={formCustomerName}
                       onChange={e => {
@@ -4947,7 +5039,7 @@ export default function InquiriesPage() {
                         setShowCompanyDropdown(true);
                       }}
                       onFocus={() => setShowCompanyDropdown(true)}
-                      className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                      className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                     />
                     <button
                       type="button"
@@ -4985,26 +5077,493 @@ export default function InquiriesPage() {
                         ))}
                       {existingCustomers.filter(c => !formCustomerName || c.toLowerCase().includes(formCustomerName.toLowerCase())).length === 0 && (
                         <div className="px-3 py-2 text-xs text-slate-400 italic">
-                          No matching company found. Typing will save as new company.
+                          This company is not in your assigned customer list.
                         </div>
                       )}
                     </div>
                   )}
                 </div>
+                {formCustomerName.trim() && !isCustomerInAssignedList(formCustomerName, rawCustomers) && (
+                  <div className="mt-1.5 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="font-bold">Customer Not Assigned:</span>
+                      <p className="text-[11px] text-rose-700 mt-0.5">
+                        "{formCustomerName}" is not in your assigned customer list. Add this customer before saving the inquiry.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCustomer(true)}
+                        className="mt-2 px-3 py-1.5 bg-white border border-rose-300 text-rose-800 rounded-lg text-[11px] font-bold hover:bg-rose-100">
+                        Add this customer
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Product Description / SKU <span className="text-red-500 font-bold">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="e.g. HR Coil, MS Plate, SS 304 Pipe, TMT Rebar..."
-                  value={formProductSKU}
-                  onChange={e => setFormProductSKU(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal max-h-36 overflow-y-auto resize-y leading-relaxed"
-                />
+              {/* Structured Line Items Table matching Image 3 / Orders */}
+              <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
+                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                  <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
+                    <tr>
+                      <th rowSpan={2} className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th rowSpan={2} className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
+                        Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
+                        HSN/SAC <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
+                        Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
+                        Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th colSpan={2} className="px-3 py-1.5 border-r border-b border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest">
+                        18% GST
+                      </th>
+                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                        Amount (₹)
+                      </th>
+                      <th rowSpan={2} className="px-2 py-3 text-center w-[3%] align-middle"></th>
+                    </tr>
+                    <tr>
+                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
+                        CGST (9%)
+                      </th>
+                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
+                        SGST (9%)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {formLineItems.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-blue-50/30">
+                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td className="px-4 py-3.5 border-r border-slate-200">
+                          <div className="space-y-1">
+                            <input
+                              id={`form-item-sku-${idx}`}
+                              type="text"
+                              required
+                              value={item.sku_text || ''}
+                              onChange={(e) => {
+                                const newSku = e.target.value;
+                                const updated = [...formLineItems];
+                                const currentHsn = updated[idx]?.hsn_code || '';
+                                const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions);
+                                const newAutoHsn = detectHsnCode(newSku, item.dimensions);
+
+                                let finalHsn = currentHsn;
+                                if (!currentHsn || currentHsn === prevAutoHsn) {
+                                  finalHsn = newAutoHsn;
+                                }
+
+                                const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
+                                setFormLineItems(updated);
+                              }}
+                              className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                              placeholder="Product Name / Description"
+                            />
+                            <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                              <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
+                              <input
+                                id={`form-item-spec-${idx}`}
+                                type="text"
+                                required
+                                value={item.dimensions || ''}
+                                onChange={(e) => {
+                                  const newDim = e.target.value;
+                                  const updated = [...formLineItems];
+                                  const currentHsn = updated[idx]?.hsn_code || '';
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions);
+                                  const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
+
+                                  let finalHsn = currentHsn;
+                                  if (!currentHsn || currentHsn === prevAutoHsn) {
+                                    finalHsn = newAutoHsn;
+                                  }
+
+                                  const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
+                                  setFormLineItems(updated);
+                                }}
+                                className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                                placeholder="e.g. 8X6000X1500"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                          <input
+                            id={`form-item-hsn-${idx}`}
+                            type="text"
+                            required
+                            value={item.hsn_code || ''}
+                            onChange={(e) => {
+                              const updated = [...formLineItems];
+                              updated[idx] = { ...updated[idx], hsn_code: e.target.value };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="e.g. 72083730"
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          />
+                        </td>
+                        <td className="px-2.5 py-3.5 border-r border-slate-200">
+                          <div className="flex items-center gap-1.5 w-full min-w-[170px]">
+                            <input
+                              id={`form-item-qty-${idx}`}
+                              type="number"
+                              required
+                              min="0.001"
+                              step="any"
+                              value={item.quantity === 0 ? '' : item.quantity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rawQ = val === '' ? 0 : parseFloat(val);
+                                const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
+                                const updated = [...formLineItems];
+                                let currentItem = { ...updated[idx], quantity: safeQ };
+                                if (normalizeUnit(currentItem.unit) === 'MT') {
+                                  currentItem.converted_mt = safeQ;
+                                }
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
+                                setFormLineItems(updated);
+                              }}
+                              placeholder="0"
+                              className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                            />
+                            <select
+                              value={normalizeUnit(item.unit) || 'MT'}
+                              onChange={(e) => {
+                                const newUnit = e.target.value;
+                                const updated = [...formLineItems];
+                                const currentItem = { ...updated[idx], unit: newUnit };
+                                delete currentItem.is_manual_mt;
+                                if (newUnit === 'MT') {
+                                  currentItem.converted_mt = currentItem.quantity;
+                                } else {
+                                  delete currentItem.converted_mt;
+                                }
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
+                                setFormLineItems(updated);
+                              }}
+                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              <option value="MT">MT</option>
+                              <option value="Nos">Nos</option>
+                              <option value="KG">KG</option>
+                            </select>
+                            {(() => {
+                              const itemWeight = formatLineItemWeightMt(item);
+                              const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+                              const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                                ? item.converted_mt
+                                : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
+                              const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
+
+                              return (
+                                <div
+                                  className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                    hasWeight
+                                      ? 'bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                      : 'bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                  }`}
+                                  title="Weight in MT (Editable - Amount calculates as MT × Rate)">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    value={displayMt ?? ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const updated = [...formLineItems];
+                                      const currentItem = { ...updated[idx] };
+
+                                      if (val === '') {
+                                        delete currentItem.converted_mt;
+                                        delete currentItem.is_manual_mt;
+                                      } else {
+                                        const rawMt = parseFloat(val);
+                                        const safeMt = isNaN(rawMt) || rawMt < 0 ? 0 : rawMt;
+                                        currentItem.converted_mt = val;
+                                        currentItem.is_manual_mt = true;
+                                        if (normalizeUnit(currentItem.unit) === 'MT') {
+                                          currentItem.quantity = safeMt;
+                                        }
+                                      }
+
+                                      const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                      updated[idx] = {
+                                        ...currentItem,
+                                        amount: calc.amount,
+                                        cgst_rate: calc.cgst_rate,
+                                        cgst_amount: calc.cgst_amount,
+                                        sgst_rate: calc.sgst_rate,
+                                        sgst_amount: calc.sgst_amount,
+                                        total_gst: calc.total_gst,
+                                        final_amount: calc.final_amount,
+                                      };
+                                      setFormLineItems(updated);
+                                    }}
+                                    placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
+                                    className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                  />
+                                  <span className="text-[10px] font-mono font-bold text-blue-700/80 select-none ml-0.5">MT</span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </td>
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
+                          <input
+                            id={`form-item-rate-${idx}`}
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={item.rate === 0 ? '' : item.rate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const rawR = val === '' ? 0 : parseFloat(val);
+                              const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
+                              const updated = [...formLineItems];
+                              const currentItem = { ...updated[idx], rate: safeR };
+                              const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                              updated[idx] = {
+                                ...currentItem,
+                                amount: calc.amount,
+                                cgst_rate: calc.cgst_rate,
+                                cgst_amount: calc.cgst_amount,
+                                sgst_rate: calc.sgst_rate,
+                                sgst_amount: calc.sgst_amount,
+                                total_gst: calc.total_gst,
+                                final_amount: calc.final_amount,
+                              };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="0"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                          />
+                        </td>
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                          {(() => {
+                            const baseAmt = Number(item.amount) || 0;
+                            const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                            return (
+                              <input
+                                type="text"
+                                readOnly
+                                tabIndex={-1}
+                                value={formatIndianCurrency(cgst, true)}
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
+                              />
+                            );
+                          })()}
+                        </td>
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                          {(() => {
+                            const baseAmt = Number(item.amount) || 0;
+                            const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                            return (
+                              <input
+                                type="text"
+                                readOnly
+                                tabIndex={-1}
+                                value={formatIndianCurrency(sgst, true)}
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
+                              />
+                            );
+                          })()}
+                        </td>
+                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
+                          {(() => {
+                            const baseAmt = Number(item.amount) || 0;
+                            const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                            const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                            const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst) * 100) / 100;
+                            return (
+                              <input
+                                id={`form-item-amount-${idx}`}
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={finalAmt === 0 ? '' : finalAmt}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const rawA = val === '' ? 0 : parseFloat(val);
+                                  const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                                  const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
+                                  const cgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                  const sgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                  const updated = [...formLineItems];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    amount: safeBase,
+                                    isManualAmount: true,
+                                    cgst_rate: 9,
+                                    cgst_amount: cgstA,
+                                    sgst_rate: 9,
+                                    sgst_amount: sgstA,
+                                    total_gst: Math.round((cgstA + sgstA) * 100) / 100,
+                                    final_amount: safeFinal,
+                                  };
+                                  setFormLineItems(updated);
+                                }}
+                                placeholder="0"
+                                className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              />
+                            );
+                          })()}
+                        </td>
+                        <td className="px-2 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {formLineItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = formLineItems.filter((_, i) => i !== idx);
+                                  setFormLineItems(updated);
+                                }}
+                                className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                                title="Remove line item">
+                                <Minus size={15} />
+                              </button>
+                            )}
+                            {idx === formLineItems.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [
+                                    ...formLineItems,
+                                    { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
+                                  ];
+                                  setFormLineItems(updated);
+                                }}
+                                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
+                                title="Add line item">
+                                <Plus size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Standard Quotation Pricing Breakdown Layout */}
+                {(() => {
+                  const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                  const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
+
+                  const totalTonnage = calculateTotalTonnageMt(formLineItems);
+                  const formattedItemsInTotal = totalTonnage.formattedText;
+
+                  return (
+                    <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
+                      <div className="text-xs text-slate-700 pt-1">
+                        <span className="font-bold text-slate-900">Items in Total = </span>
+                        <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      </div>
+
+                      <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Sub Total</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">CGST (9%)</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">SGST (9%)</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Rounding</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                          <span className="font-bold">Total</span>
+                          <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Delivery Location <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    id="form-delivery-location"
+                    type="text"
+                    required
+                    placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
+                    value={formDeliveryLocation}
+                    onChange={e => setFormDeliveryLocation(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Payment Terms <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    id="form-payment-terms"
+                    type="text"
+                    required
+                    placeholder="e.g. 30 Days Credit, 100% Advance"
+                    value={formPaymentTerms}
+                    onChange={e => setFormPaymentTerms(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -5015,61 +5574,33 @@ export default function InquiriesPage() {
                     placeholder="e.g. JSW, AM/NS, Tata, SAIL, or Any"
                     value={formPreferredMake}
                     onChange={e => setFormPreferredMake(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Payment Terms <span className="text-red-500 font-bold">*</span>
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes</label>
                   <input
-                    required
                     type="text"
-                    placeholder="e.g. 30 Days Credit, 100% Advance"
-                    value={formPaymentTerms}
-                    onChange={e => setFormPaymentTerms(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                    placeholder="Special instructions, delivery timeline, or logistics notes"
+                    value={formRequirement}
+                    onChange={e => setFormRequirement(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Delivery Location <span className="text-red-500 font-bold">*</span>
-                </label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. Chakan Industrial Area, Pune"
-                  value={formDeliveryLocation}
-                  onChange={e => setFormDeliveryLocation(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes</label>
-                <textarea
-                  rows={2}
-                  placeholder="Special instructions, delivery timeline, or logistics notes"
-                  value={formRequirement}
-                  onChange={e => setFormRequirement(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
-                />
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={handleCancelCreateInquiry}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold">
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || isExtractingPo}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2">
+                  disabled={submitting || isExtractingPo || (formCustomerName.trim().length > 0 && !isCustomerInAssignedList(formCustomerName, rawCustomers))}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
                   {submitting ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                   {submitting ? 'Saving Inquiry...' : 'Save Inquiry'}
                 </button>
@@ -5078,6 +5609,52 @@ export default function InquiriesPage() {
           </div>
         </div>
       )}
+
+      <AddAssignedCustomerDialog
+        open={showAddCustomer}
+        assignPhone={effectivePhone || employee?.phone || ''}
+        seed={{
+          companyName: formCustomerName.trim(),
+          contactPerson: String(
+            formExtractedJsonRef.current?.contact_person
+            || formExtractedJsonRef.current?.contact_name
+            || formExtractedJsonRef.current?.customer?.contact_person
+            || '',
+          ).trim(),
+          mobile: formPhone.trim(),
+          deliveryLocation: (
+            formDeliveryLocation.trim()
+            || String(
+              formExtractedJsonRef.current?.delivery_location
+              || formExtractedJsonRef.current?.customer_address
+              || formExtractedJsonRef.current?.address
+              || '',
+            )
+          ).trim(),
+          gstin: String(
+            formExtractedJsonRef.current?.customer_gst
+            || formExtractedJsonRef.current?.gstin
+            || formExtractedJsonRef.current?.gst
+            || '',
+          ).trim(),
+        }}
+        onClose={() => setShowAddCustomer(false)}
+        onSaved={(saved) => {
+          setFormCustomerName(saved.companyName);
+          setFormPhone(saved.mobile);
+          setFormDeliveryLocation(saved.deliveryLocation);
+          setShowAddCustomer(false);
+          queryClient.setQueryData<string[]>(
+            ['customer-names-list', effectivePhone, activeRole, activeMode],
+            (prev) => {
+              const list = Array.isArray(prev) ? prev : [];
+              if (list.some(c => c.trim().toLowerCase() === saved.companyName.trim().toLowerCase())) return list;
+              return [...list, saved.companyName].sort((a, b) => a.localeCompare(b));
+            },
+          );
+          queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
+        }}
+      />
 
       {/* Pipeline Mark as Lost Modal */}
       {pipelineLostModal && (
