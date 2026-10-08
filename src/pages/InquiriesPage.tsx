@@ -29,6 +29,7 @@ import {
   calculateTotalTonnageMt,
   formatLineItemWeightMt,
   normalizeUnit,
+  formatIndianCurrency,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
 
@@ -78,6 +79,12 @@ export interface LineItemDetail {
   isManualAmount?: boolean;
   converted_mt?: number | string;
   is_manual_mt?: boolean;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  total_gst?: number;
+  final_amount?: number;
 }
 
 export interface ExtractedDetails {
@@ -797,6 +804,12 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
     const itemDim = item.dimensions || '';
     const rawQty = Number((item as any).original_quantity ?? item.quantity ?? (item as any).qty) || 0;
     const rawUnit = normalizeUnit((item as any).original_unit || item.unit) || 'MT';
+    const baseA = Number(item.amount) || 0;
+    const cgstA = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseA * 0.09 * 100) / 100;
+    const sgstA = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseA * 0.09 * 100) / 100;
+    const totalG = item.total_gst !== undefined ? Number(item.total_gst) : Math.round((cgstA + sgstA) * 100) / 100;
+    const finalA = item.final_amount !== undefined ? Number(item.final_amount) : Math.round((baseA + totalG) * 100) / 100;
+
     return {
       sku_text: skuText,
       dimensions: itemDim,
@@ -809,6 +822,12 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
       unit: rawUnit,
       rate: item.rate,
       amount: item.amount,
+      cgst_rate: item.cgst_rate ?? 9,
+      cgst_amount: cgstA,
+      sgst_rate: item.sgst_rate ?? 9,
+      sgst_amount: sgstA,
+      total_gst: totalG,
+      final_amount: finalA,
       converted_mt: (item as any).converted_mt !== undefined ? (item as any).converted_mt : undefined,
       is_manual_mt: (item as any).is_manual_mt !== undefined ? (item as any).is_manual_mt : undefined,
     };
@@ -821,19 +840,37 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   ) {
     const multiItems = extractMultiItemsFromText(textRaw);
     if (multiItems.length > 0) {
-      rawLineItems = multiItems.map(m => ({
-        ...m,
-        hsn_code:
-          (m.hsn_code && m.hsn_code.trim()) ||
-          detectHsnCode(m.sku_text, m.dimensions) ||
-          '72083840',
-      }));
+      rawLineItems = multiItems.map(m => {
+        const calc = calculateLineItem(m);
+        return {
+          ...m,
+          hsn_code:
+            (m.hsn_code && m.hsn_code.trim()) ||
+            detectHsnCode(m.sku_text, m.dimensions) ||
+            '72083840',
+          cgst_rate: calc.cgst_rate,
+          cgst_amount: calc.cgst_amount,
+          sgst_rate: calc.sgst_rate,
+          sgst_amount: calc.sgst_amount,
+          total_gst: calc.total_gst,
+          final_amount: calc.final_amount,
+        };
+      });
     }
   }
 
   if (rawLineItems.length === 0 && (productType || quantityTons > 0)) {
     const defaultSku = productType || 'Hot Rolled';
     const defaultDim = [thickness, width, length].filter(Boolean).join(' x ') || '';
+    const baseAmt = totalAmount || Math.round((quantityTons || 0) * (unitPrice || 0));
+    const calc = calculateLineItem({
+      sku_text: defaultSku,
+      dimensions: defaultDim,
+      quantity: quantityTons || 0,
+      unit: 'MT',
+      rate: unitPrice || 0,
+      amount: baseAmt,
+    });
     rawLineItems.push({
       sku_text: defaultSku,
       dimensions: defaultDim,
@@ -841,7 +878,13 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
       quantity: quantityTons || 0,
       unit: 'MT',
       rate: unitPrice || 0,
-      amount: totalAmount || Math.round((quantityTons || 0) * (unitPrice || 0)),
+      amount: baseAmt,
+      cgst_rate: calc.cgst_rate,
+      cgst_amount: calc.cgst_amount,
+      sgst_rate: calc.sgst_rate,
+      sgst_amount: calc.sgst_amount,
+      total_gst: calc.total_gst,
+      final_amount: calc.final_amount,
     });
   }
 
@@ -2232,7 +2275,7 @@ export default function InquiriesPage() {
       setSubmitting(true);
 
       const baseAmt = itemsToSave.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
-      const qBreakdown = calculateQuotationBreakdown(baseAmt);
+      const qBreakdown = calculateQuotationBreakdown(baseAmt, itemsToSave);
 
       let summaryRequirement = '';
       if (itemsToSave.length > 0) {
@@ -3565,7 +3608,7 @@ export default function InquiriesPage() {
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overscroll-contain animate-in fade-in duration-150"
           onClick={handleCloseDrawer}>
           <div
-            className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
+            className="bg-white rounded-2xl max-w-7xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={e => e.stopPropagation()}>
             {/* Drawer Header (Fixed Top) */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
@@ -3711,25 +3754,38 @@ export default function InquiriesPage() {
                 </div>
 
                 {/* Structured Inquiry Table Layout */}
-                <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
-                  <table className="w-full text-left text-xs text-slate-800 border-collapse">
+                <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
+                  <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[32%]">
+                        <th rowSpan={2} className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                        <th rowSpan={2} className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center">
+                        <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
                           HSN/SAC <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[23%] text-center">
+                        <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[20%] text-center align-middle">
                           Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center min-w-[95px]">
+                        <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
                           Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
-                        <th className="px-2 py-3 text-center w-[3%]"></th>
+                        <th colSpan={2} className="px-3 py-1.5 border-r border-b border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest">
+                          18% GST
+                        </th>
+                        <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                          Amount (₹)
+                        </th>
+                        <th rowSpan={2} className="px-2 py-3 text-center w-[3%] align-middle"></th>
+                      </tr>
+                      <tr>
+                        <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
+                          CGST (9%)
+                        </th>
+                        <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
+                          SGST (9%)
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
@@ -3758,7 +3814,16 @@ export default function InquiriesPage() {
 
                                   const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3799,7 +3864,16 @@ export default function InquiriesPage() {
 
                                     const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
                                     const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                    updated[idx] = { ...currentItem, amount: calc.amount };
+                                    updated[idx] = {
+                                      ...currentItem,
+                                      amount: calc.amount,
+                                      cgst_rate: calc.cgst_rate,
+                                      cgst_amount: calc.cgst_amount,
+                                      sgst_rate: calc.sgst_rate,
+                                      sgst_amount: calc.sgst_amount,
+                                      total_gst: calc.total_gst,
+                                      final_amount: calc.final_amount,
+                                    };
                                     const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                     const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                     setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3866,7 +3940,16 @@ export default function InquiriesPage() {
                                     currentItem.converted_mt = safeQ;
                                   }
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3888,14 +3971,23 @@ export default function InquiriesPage() {
                                   const newUnit = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
                                   let currentItem = { ...updated[idx], unit: newUnit };
+                                  delete currentItem.is_manual_mt;
                                   if (newUnit === 'MT') {
                                     currentItem.converted_mt = currentItem.quantity;
-                                  } else if (currentItem.is_manual_mt && (currentItem.converted_mt === undefined || currentItem.converted_mt === 0)) {
+                                  } else {
                                     delete currentItem.converted_mt;
-                                    delete currentItem.is_manual_mt;
                                   }
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3904,11 +3996,10 @@ export default function InquiriesPage() {
                                 className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
-                                <option value="Pcs">Pcs</option>
                                 <option value="KG">KG</option>
-                                <option value="Sheets">Sheets</option>
-                                <option value="Plates">Plates</option>
-                                <option value="Coils">Coils</option>
+                                {['Pcs', 'Sheets', 'Plates', 'Coils'].includes(normalizeUnit(item.unit) || '') && (
+                                  <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
+                                )}
                               </select>
                               {(() => {
                                 const itemWeight = formatLineItemWeightMt(item);
@@ -3950,7 +4041,16 @@ export default function InquiriesPage() {
                                         }
 
                                         const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                        updated[idx] = { ...currentItem, amount: calc.amount };
+                                        updated[idx] = {
+                                          ...currentItem,
+                                          amount: calc.amount,
+                                          cgst_rate: calc.cgst_rate,
+                                          cgst_amount: calc.cgst_amount,
+                                          sgst_rate: calc.sgst_rate,
+                                          sgst_amount: calc.sgst_amount,
+                                          total_gst: calc.total_gst,
+                                          final_amount: calc.final_amount,
+                                        };
                                         const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                         const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                         setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3984,7 +4084,16 @@ export default function InquiriesPage() {
                                 }
                                 const currentItem = { ...updated[idx], rate: safeR };
                                 const calc = calculateLineItem({ ...currentItem, rate: typeof safeR === 'number' ? safeR : 0, amount: 0 });
-                                updated[idx] = { ...currentItem, amount: calc.amount };
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons, unitPrice: Number(updated[0]?.rate) || 0 });
@@ -4004,24 +4113,76 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block mt-0.5">{fieldErrors[`rate_${idx}`]}</span>
                             )}
                           </td>
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                            {(() => {
+                              const baseAmt = Number(item.amount) || 0;
+                              const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                              return (
+                                <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(cgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
+                                  />
+                              );
+                            })()}
+                          </td>
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                            {(() => {
+                              const baseAmt = Number(item.amount) || 0;
+                              const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                              return (
+                                <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(sgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
+                                  />
+                              );
+                            })()}
+                          </td>
                           <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
-                            <input
-                              type="number"
-                              min="0"
-                              value={item.amount === 0 ? '' : item.amount}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const rawA = val === '' ? 0 : parseFloat(val);
-                                const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
-                                const updated = [...(editDetails.lineItems || [])];
-                                updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
-                                const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
-                                setSaveSuccess(false);
-                              }}
-                              placeholder="0"
-                              className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                            />
+                            {(() => {
+                              const baseAmt = Number(item.amount) || 0;
+                              const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                              const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                              const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst) * 100) / 100;
+                              return (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={finalAmt === 0 ? '' : finalAmt}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const rawA = val === '' ? 0 : parseFloat(val);
+                                    const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                                    const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
+                                    const cgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                    const sgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                    const updated = [...(editDetails.lineItems || [])];
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      amount: safeBase,
+                                      isManualAmount: true,
+                                      cgst_rate: 9,
+                                      cgst_amount: cgstA,
+                                      sgst_rate: 9,
+                                      sgst_amount: sgstA,
+                                      total_gst: Math.round((cgstA + sgstA) * 100) / 100,
+                                      final_amount: safeFinal,
+                                    };
+                                    const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                    setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
+                                    setSaveSuccess(false);
+                                  }}
+                                  placeholder="0"
+                                  className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                                />
+                              );
+                            })()}
                           </td>
                           <td className="px-2 py-3.5 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -4049,7 +4210,7 @@ export default function InquiriesPage() {
                                       : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                                     const updated = [
                                       ...current,
-                                      { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                      { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
                                     ];
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
@@ -4073,7 +4234,7 @@ export default function InquiriesPage() {
                       : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
 
                     const subtotal = activeLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                    const qBreakdown = calculateQuotationBreakdown(subtotal);
+                    const qBreakdown = calculateQuotationBreakdown(subtotal, activeLineItems);
 
                     const totalTonnage = calculateTotalTonnageMt(activeLineItems);
                     const formattedItemsInTotal = totalTonnage.formattedText;
