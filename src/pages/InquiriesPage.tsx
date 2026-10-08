@@ -5,7 +5,7 @@ import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, UserCheck, MoreVertical, Loader2,
-  LayoutDashboard, IndianRupee, Trash2, ArrowLeft
+  LayoutDashboard, IndianRupee, Trash2, ArrowLeft, AlertCircle, AlertTriangle
 } from 'lucide-react';
 import {
   inquiriesApi,
@@ -73,7 +73,7 @@ export interface LineItemDetail {
   hsn_code?: string;
   quantity: number;
   unit?: string;
-  rate: number;
+  rate: number | string;
   amount: number;
   isManualAmount?: boolean;
   converted_mt?: number | string;
@@ -1169,6 +1169,8 @@ export default function InquiriesPage() {
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [showEditCompanyDropdown, setShowEditCompanyDropdown] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
+  const [showZeroRateConfirmModal, setShowZeroRateConfirmModal] = useState(false);
+  const [pendingSaveItems, setPendingSaveItems] = useState<LineItemDetail[]>([]);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
   const [pdfModalDetails, setPdfModalDetails] = useState<ExtractedDetails | null>(null);
@@ -2039,8 +2041,7 @@ export default function InquiriesPage() {
               };
             });
 
-            const hasValidRates = frozenLineItems.length > 0 && frozenLineItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
-            const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((freshItem.status || '').toLowerCase()) && hasValidRates;
+            const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((freshItem.status || '').toLowerCase());
             setSaveSuccess(isConfirmedState);
           } else {
             setEditDetails(prev => {
@@ -2097,7 +2098,6 @@ export default function InquiriesPage() {
     const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
     const resolvedSp = getSalespersonName(inq);
 
-    let activeItems: any[] = [];
     if (lineItemsSrc.length > 0) {
       // Has structured line items in ai_extraction_json - use directly for ALL inquiries (review, confirmed, etc.)
       const frozenLineItems = lineItemsSrc.map((item: any) => {
@@ -2133,7 +2133,6 @@ export default function InquiriesPage() {
           is_manual_mt: (item as any).is_manual_mt !== undefined ? (item as any).is_manual_mt : undefined,
         };
       });
-      activeItems = frozenLineItems;
       const lineItemsSum = frozenLineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0);
       const frozenTotal = lineItemsSum > 0 ? lineItemsSum : (ai.total_amount || ai.totalAmount || 0);
 
@@ -2162,19 +2161,14 @@ export default function InquiriesPage() {
     } else {
       // True fallback: no structured line items in ai_extraction_json, parse raw text
       const parsed = parseInquiryText(inq.raw_text || '', inq);
-      activeItems = parsed.lineItems || [];
       setEditDetails({
         ...parsed,
         salespersonName: resolvedSp,
       });
     }
 
-    // A deal/inquiry is ONLY in Saved/Confirmed state if all line items have valid Rate > 0 and Quantity > 0
-    const hasValidRates = activeItems.length > 0 && activeItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
-    const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
-    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
-
-    setSaveSuccess(isConfirmedState || isQuotedState);
+    const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
+    setSaveSuccess(isConfirmedState);
     setFieldErrors({});
   };
 
@@ -2232,95 +2226,20 @@ export default function InquiriesPage() {
     }
   }, [inquiries, location.search]);
 
-  const handleSaveDrawerDetails = async () => {
+  const executeSaveDrawerDetails = async (itemsToSave: LineItemDetail[]) => {
     if (!selectedInquiry || !editDetails) return;
-    if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
-
-    const errors: { [key: string]: string } = {};
-
-    // 1. Company Name validation
-    if (!editDetails.companyName || !editDetails.companyName.trim()) {
-      errors['companyName'] = 'Company Name is required.';
-    }
-
-    // 2. Line Items validation (Rate > 0, Quantity > 0, Description required, HSN/SAC required)
-    const rawItems = editDetails.lineItems && editDetails.lineItems.length > 0
-      ? editDetails.lineItems
-      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
-
-    // Filter out completely blank trailing rows added via '+' but left unfilled
-    let currentItems = rawItems.filter((item) => {
-      const hasSku = Boolean(item.sku_text && item.sku_text.trim());
-      const hasDim = Boolean(item.dimensions && item.dimensions.trim());
-      const hasQty = Number(item.quantity) > 0;
-      const hasRate = Number(item.rate) > 0;
-      return hasSku || hasDim || hasQty || hasRate;
-    });
-
-    if (currentItems.length === 0) {
-      currentItems = rawItems;
-    }
-
-    if (currentItems.length === 0) {
-      errors['lineItems'] = 'Please add at least one line item.';
-    }
-
-    for (let i = 0; i < currentItems.length; i++) {
-      const item = currentItems[i];
-      if (!item.sku_text || !item.sku_text.trim()) {
-        errors[`sku_${i}`] = 'Description is required.';
-      }
-      if (!item.dimensions || !item.dimensions.trim()) {
-        errors[`dim_${i}`] = 'Specification is required.';
-      }
-      if (!item.hsn_code || !item.hsn_code.trim()) {
-        errors[`hsn_${i}`] = 'HSN/SAC is required.';
-      }
-      if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
-        errors[`qty_${i}`] = 'Quantity must be > 0.';
-      }
-      if (item.rate === null || item.rate === undefined || Number(item.rate) <= 0 || isNaN(Number(item.rate))) {
-        errors[`rate_${i}`] = 'Rate is required (must be > 0).';
-      }
-    }
-
-    // 3. Delivery Address validation
-    if (!editDetails.deliveryLocation || !editDetails.deliveryLocation.trim()) {
-      errors['deliveryLocation'] = 'Delivery Address is required.';
-    }
-
-    // 4. Payment Terms validation
-    if (!editDetails.paymentTerms || !editDetails.paymentTerms.trim()) {
-      errors['paymentTerms'] = 'Payment Terms is required.';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setSaveSuccess(false);
-
-      // Scroll to first invalid field
-      setTimeout(() => {
-        const firstErrEl = document.querySelector('.field-error-border');
-        if (firstErrEl) {
-          firstErrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 50);
-      return;
-    }
-
-    setFieldErrors({});
     try {
       setSubmitting(true);
 
-      const baseAmt = currentItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
+      const baseAmt = itemsToSave.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
       const qBreakdown = calculateQuotationBreakdown(baseAmt);
 
       let summaryRequirement = '';
-      if (currentItems.length > 0) {
-        const itemStrs = currentItems.map(item => `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}: ${item.quantity} ${item.unit || 'MT'} @ ₹${item.rate}/${item.unit || 'MT'}`);
+      if (itemsToSave.length > 0) {
+        const itemStrs = itemsToSave.map(item => `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}: ${item.quantity} ${item.unit || 'MT'} @ ₹${Number(item.rate) || 0}/${item.unit || 'MT'}`);
         summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       } else {
-        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${(Number(editDetails.unitPrice) || 0).toLocaleString('en-IN')}/MT. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       }
 
       const mediaUrlsPayload = drawerFileBase64 ? [drawerFileBase64] : (selectedInquiry.media_urls || []);
@@ -2335,8 +2254,8 @@ export default function InquiriesPage() {
         delivery_location: editDetails.deliveryLocation,
         paymentTerms: editDetails.paymentTerms,
         payment_terms: editDetails.paymentTerms,
-        lineItems: currentItems,
-        line_items: currentItems,
+        lineItems: itemsToSave,
+        line_items: itemsToSave,
         requirement: summaryRequirement,
         totalAmount: baseAmt,
         total_amount: baseAmt,
@@ -2381,12 +2300,104 @@ export default function InquiriesPage() {
 
       // Update in-memory inquiries list so item stays in list immediately
       setInquiries(prev => (Array.isArray(prev) ? prev.map(item => item.id === selectedInquiry.id ? updatedObj : item) : []));
-    } catch (err) {
+      toast.success('Inquiry saved successfully.');
+    } catch (err: any) {
       console.error('Error saving inquiry details:', err);
-      toast.error('Failed to save inquiry changes.');
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to save inquiry changes.';
+      toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to save inquiry changes.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSaveDrawerDetails = async () => {
+    if (!selectedInquiry || !editDetails) return;
+    if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
+
+    const errors: { [key: string]: string } = {};
+
+    // 1. Company Name validation
+    if (!editDetails.companyName || !editDetails.companyName.trim()) {
+      errors['companyName'] = 'Company Name is required.';
+    }
+
+    // 2. Line Items validation (Quantity > 0, Description required, HSN/SAC required)
+    const rawItems = editDetails.lineItems && editDetails.lineItems.length > 0
+      ? editDetails.lineItems
+      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+
+    // Filter out completely blank trailing rows added via '+' but left unfilled
+    let currentItems = rawItems.filter((item) => {
+      const hasSku = Boolean(item.sku_text && item.sku_text.trim());
+      const hasDim = Boolean(item.dimensions && item.dimensions.trim());
+      const hasQty = Number(item.quantity) > 0;
+      const hasRate = item.rate !== '' && item.rate !== null && item.rate !== undefined && Number(item.rate) > 0;
+      return hasSku || hasDim || hasQty || hasRate;
+    });
+
+    if (currentItems.length === 0) {
+      currentItems = rawItems;
+    }
+
+    if (currentItems.length === 0) {
+      errors['lineItems'] = 'Please add at least one line item.';
+    }
+
+    for (let i = 0; i < currentItems.length; i++) {
+      const item = currentItems[i];
+      if (!item.sku_text || !item.sku_text.trim()) {
+        errors[`sku_${i}`] = 'Description is required.';
+      }
+      if (!item.dimensions || !item.dimensions.trim()) {
+        errors[`dim_${i}`] = 'Specification is required.';
+      }
+      if (!item.hsn_code || !item.hsn_code.trim()) {
+        errors[`hsn_${i}`] = 'HSN/SAC is required.';
+      }
+      if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
+        errors[`qty_${i}`] = 'Quantity must be > 0.';
+      }
+    }
+
+    // 3. Delivery Address validation
+    if (!editDetails.deliveryLocation || !editDetails.deliveryLocation.trim()) {
+      errors['deliveryLocation'] = 'Delivery Address is required.';
+    }
+
+    // 4. Payment Terms validation
+    if (!editDetails.paymentTerms || !editDetails.paymentTerms.trim()) {
+      errors['paymentTerms'] = 'Payment Terms is required.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setSaveSuccess(false);
+
+      // Scroll to first invalid field
+      setTimeout(() => {
+        const firstErrEl = document.querySelector('.field-error-border');
+        if (firstErrEl) {
+          firstErrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
+      return;
+    }
+
+    setFieldErrors({});
+
+    // Check if any product has rate set to 0 or left blank
+    const unpricedItems = currentItems.filter((item) => {
+      const r = item.rate;
+      return r === null || r === undefined || r === '' || isNaN(Number(r)) || Number(r) <= 0;
+    });
+
+    if (unpricedItems.length > 0) {
+      setPendingSaveItems(currentItems);
+      setShowZeroRateConfirmModal(true);
+      return;
+    }
+
+    await executeSaveDrawerDetails(currentItems);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3961,18 +3972,22 @@ export default function InquiriesPage() {
                             <input
                               type="number"
                               min="0"
-                              value={item.rate === 0 ? '' : item.rate}
+                              step="any"
+                              value={item.rate === '' || item.rate === undefined || item.rate === null ? '' : item.rate}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                const rawR = val === '' ? 0 : parseFloat(val);
-                                const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
                                 const updated = [...(editDetails.lineItems || [])];
+                                let safeR: number | string = '';
+                                if (val !== '') {
+                                  const parsed = parseFloat(val);
+                                  safeR = isNaN(parsed) || parsed < 0 ? 0 : parsed;
+                                }
                                 const currentItem = { ...updated[idx], rate: safeR };
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, rate: typeof safeR === 'number' ? safeR : 0, amount: 0 });
                                 updated[idx] = { ...currentItem, amount: calc.amount };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 const totalTons = calculateTotalTonnageMt(updated).totalMt;
-                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons, unitPrice: updated[0]?.rate || 0 });
+                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons, unitPrice: Number(updated[0]?.rate) || 0 });
                                 setSaveSuccess(false);
                                 if (fieldErrors[`rate_${idx}`]) {
                                   setFieldErrors(prev => { const n = { ...prev }; delete n[`rate_${idx}`]; return n; });
@@ -4358,6 +4373,71 @@ export default function InquiriesPage() {
         </div>
       )}
 
+      {/* 0 / Blank Rate Save Confirmation Modal */}
+      {showZeroRateConfirmModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl shrink-0">
+                <AlertCircle size={24} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900">
+                  Confirm Save with 0 / Blank Rates
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  This inquiry contains products with 0/blank rates. Do you still want to proceed?
+                </p>
+              </div>
+            </div>
+
+            {/* List the unpriced products */}
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 max-h-40 overflow-y-auto">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Products with 0 / Blank Rate:
+              </span>
+              {pendingSaveItems
+                .filter(i => i.rate === null || i.rate === undefined || i.rate === '' || isNaN(Number(i.rate)) || Number(i.rate) <= 0)
+                .map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs py-0.5">
+                    <span className="font-semibold text-slate-800 truncate mr-2">
+                      {item.sku_text || 'Item'} {item.dimensions ? `(${item.dimensions})` : ''}
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-amber-600 shrink-0 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Rate: {item.rate === '' || item.rate === null || item.rate === undefined ? 'Blank' : '₹0'}
+                    </span>
+                  </div>
+                ))}
+            </div>
+
+            <p className="text-[11px] text-slate-500 italic">
+              Note: Products with 0 or blank rates will be saved with this inquiry but automatically excluded from the quotation PDF.
+            </p>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowZeroRateConfirmModal(false);
+                  setPendingSaveItems([]);
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
+                Review Rates
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowZeroRateConfirmModal(false);
+                  await executeSaveDrawerDetails(pendingSaveItems);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-sm">
+                Proceed &amp; Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Send Official Quotation Email Modal (Resend API Integration) */}
       {showQuotationModal && shareDetails && shareInquiry && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
@@ -4390,6 +4470,51 @@ export default function InquiriesPage() {
                 </p>
               </div>
             </div>
+
+            {/* Banner: Unpriced Products Automatically Excluded from PDF */}
+            {(() => {
+              const items = shareDetails.lineItems || [];
+              const zeroItems = items.filter(
+                i => i.rate === null || i.rate === undefined || i.rate === '' || isNaN(Number(i.rate)) || Number(i.rate) <= 0
+              );
+              if (zeroItems.length === 0) return null;
+
+              return (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1.5">
+                  <div className="flex items-center gap-2 font-bold text-amber-950">
+                    <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                    <span>Unpriced Products Automatically Excluded</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    <strong>{zeroItems.length} product(s)</strong> with empty or 0 rates are automatically removed from this quotation PDF to ensure accuracy and clarity:
+                  </p>
+                  <ul className="text-[11px] font-medium text-amber-900 list-disc list-inside space-y-0.5 pl-1">
+                    {zeroItems.map((z, idx) => (
+                      <li key={idx} className="truncate">
+                        {z.sku_text || 'Item'}{z.dimensions ? ` (${z.dimensions})` : ''} — {z.quantity} {z.unit || 'MT'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+
+            {/* Warning if all items are unpriced */}
+            {(() => {
+              const items = shareDetails.lineItems || [];
+              const validItems = items.filter(
+                i => i.rate !== null && i.rate !== undefined && i.rate !== '' && !isNaN(Number(i.rate)) && Number(i.rate) > 0
+              );
+              if (items.length > 0 && validItems.length === 0) {
+                return (
+                  <div className="p-3 rounded-xl text-xs font-bold border bg-rose-50 text-rose-900 border-rose-200 flex items-center gap-2">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                    Cannot send quotation: All products have 0 or blank rates. Please specify prices before dispatching.
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             <div className="space-y-3">
               <div>
@@ -4498,7 +4623,11 @@ export default function InquiriesPage() {
                   !quotationSubject.trim() ||
                   !quotationBody.trim() ||
                   !quotationSenderEmail ||
-                  Boolean(quotationPreviewError)
+                  Boolean(quotationPreviewError) ||
+                  ((shareDetails.lineItems || []).length > 0 &&
+                    !(shareDetails.lineItems || []).some(
+                      i => i.rate !== null && i.rate !== undefined && i.rate !== '' && !isNaN(Number(i.rate)) && Number(i.rate) > 0
+                    ))
                 }
                 onClick={async () => {
                   const targetEmail = quotationEmail.trim();
@@ -4509,10 +4638,17 @@ export default function InquiriesPage() {
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
+                    const pricedItems = (shareDetails.lineItems || []).filter(
+                      i => i.rate !== null && i.rate !== undefined && i.rate !== '' && !isNaN(Number(i.rate)) && Number(i.rate) > 0
+                    );
+                    const filteredDetails = {
+                      ...shareDetails,
+                      lineItems: pricedItems.length > 0 ? pricedItems : shareDetails.lineItems,
+                    };
                     const res = await inquiriesApi.sendQuotation(shareInquiry.id, {
                       customer_email: targetEmail,
                       customer_name: shareDetails.companyName,
-                      details: shareDetails,
+                      details: filteredDetails,
                       email_subject: quotationSubject,
                       email_body: quotationBody,
                       quotation_reference: quotationReference,
