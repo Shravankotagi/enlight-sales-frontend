@@ -45,6 +45,7 @@ import {
   formatLineItemWeightMt,
   getOrderTonnage,
   normalizeUnit,
+  formatIndianCurrency,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
 
@@ -149,6 +150,12 @@ interface LineItemDetail {
   isManualAmount?: boolean;
   converted_mt?: number | string;
   is_manual_mt?: boolean;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  total_gst?: number;
+  final_amount?: number;
 }
 
 function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
@@ -821,7 +828,7 @@ export default function OrdersPage() {
               rawUnit = 'MT';
             }
 
-            return {
+            const calc = calculateLineItem({
               sku_text: skuText,
               dimensions: dims,
               hsn_code: (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '').trim(),
@@ -829,6 +836,11 @@ export default function OrdersPage() {
               unit: normalizeUnit(rawUnit) || 'MT',
               rate: r,
               amount: amt,
+            });
+
+            return {
+              ...calc,
+              hsn_code: (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '').trim(),
             };
           });
           setFormLineItems(mappedItems);
@@ -953,7 +965,7 @@ export default function OrdersPage() {
     }
 
     const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    const qBreakdown = calculateQuotationBreakdown(subtotal);
+    const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
 
     try {
       setSubmitting(true);
@@ -970,17 +982,30 @@ export default function OrdersPage() {
         delivery_location: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim() || undefined,
         source_channel: 'web_dashboard',
-        line_items: formLineItems.map(i => ({
-          sku_text: i.sku_text.trim(),
-          dimensions: i.dimensions ? i.dimensions.trim() : undefined,
-          hsn_code: i.hsn_code ? i.hsn_code.trim() : undefined,
-          quantity: Number(i.quantity) || 0,
-          unit: i.unit || 'MT',
-          rate: Number(i.rate) || 0,
-          amount: Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0)),
-          converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
-          is_manual_mt: i.is_manual_mt || undefined,
-        })),
+        line_items: formLineItems.map(i => {
+          const baseAmt = Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0));
+          const cgstAmt = i.cgst_amount !== undefined ? Number(i.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+          const sgstAmt = i.sgst_amount !== undefined ? Number(i.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+          const totalGst = Math.round((cgstAmt + sgstAmt) * 100) / 100;
+          const finalAmt = i.final_amount !== undefined ? Number(i.final_amount) : Math.round((baseAmt + totalGst) * 100) / 100;
+          return {
+            sku_text: i.sku_text.trim(),
+            dimensions: i.dimensions ? i.dimensions.trim() : undefined,
+            hsn_code: i.hsn_code ? i.hsn_code.trim() : undefined,
+            quantity: Number(i.quantity) || 0,
+            unit: i.unit || 'MT',
+            rate: Number(i.rate) || 0,
+            amount: baseAmt,
+            cgst_rate: 9,
+            cgst_amount: cgstAmt,
+            sgst_rate: 9,
+            sgst_amount: sgstAmt,
+            total_gst: totalGst,
+            final_amount: finalAmt,
+            converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
+            is_manual_mt: i.is_manual_mt || undefined,
+          };
+        }),
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
 
@@ -1838,25 +1863,38 @@ export default function OrdersPage() {
               </div>
 
               {/* Structured Line Items Table matching Img 2 */}
-              <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs text-slate-800 border-collapse">
+              <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
+                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center">#</th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[32%]">
+                      <th rowSpan={2} className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th rowSpan={2} className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center">
+                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
                         HSN/SAC <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[23%] text-center">
+                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
                         Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center min-w-[95px]">
+                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
                         Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
-                      <th className="px-2 py-3 text-center w-[3%]"></th>
+                      <th colSpan={2} className="px-3 py-1.5 border-r border-b border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest">
+                        18% GST
+                      </th>
+                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                        Amount (₹)
+                      </th>
+                      <th rowSpan={2} className="px-2 py-3 text-center w-[3%] align-middle"></th>
+                    </tr>
+                    <tr>
+                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
+                        CGST (9%)
+                      </th>
+                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
+                        SGST (9%)
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -1884,7 +1922,16 @@ export default function OrdersPage() {
 
                                 const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
                                 const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                updated[idx] = { ...currentItem, amount: calc.amount };
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
                                 setFormLineItems(updated);
                               }}
                               className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
@@ -1911,7 +1958,16 @@ export default function OrdersPage() {
 
                                   const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
                                   setFormLineItems(updated);
                                 }}
                                 className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
@@ -1954,7 +2010,16 @@ export default function OrdersPage() {
                                   currentItem.converted_mt = safeQ;
                                 }
                                 const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                updated[idx] = { ...currentItem, amount: calc.amount };
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
                                 setFormLineItems(updated);
                               }}
                               placeholder="0"
@@ -1966,24 +2031,32 @@ export default function OrdersPage() {
                                 const newUnit = e.target.value;
                                 const updated = [...formLineItems];
                                 let currentItem = { ...updated[idx], unit: newUnit };
+                                delete currentItem.is_manual_mt;
                                 if (newUnit === 'MT') {
                                   currentItem.converted_mt = currentItem.quantity;
-                                } else if (currentItem.is_manual_mt && (currentItem.converted_mt === undefined || currentItem.converted_mt === 0)) {
+                                } else {
                                   delete currentItem.converted_mt;
-                                  delete currentItem.is_manual_mt;
                                 }
                                 const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                updated[idx] = { ...currentItem, amount: calc.amount };
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
                                 setFormLineItems(updated);
                               }}
                               className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
-                              <option value="Pcs">Pcs</option>
                               <option value="KG">KG</option>
-                              <option value="Sheets">Sheets</option>
-                              <option value="Plates">Plates</option>
-                              <option value="Coils">Coils</option>
+                              {['Pcs', 'Sheets', 'Plates', 'Coils'].includes(normalizeUnit(item.unit) || '') && (
+                                <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
+                              )}
                             </select>
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
@@ -2025,7 +2098,16 @@ export default function OrdersPage() {
                                       }
 
                                       const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                      updated[idx] = { ...currentItem, amount: calc.amount };
+                                      updated[idx] = {
+                                        ...currentItem,
+                                        amount: calc.amount,
+                                        cgst_rate: calc.cgst_rate,
+                                        cgst_amount: calc.cgst_amount,
+                                        sgst_rate: calc.sgst_rate,
+                                        sgst_amount: calc.sgst_amount,
+                                        total_gst: calc.total_gst,
+                                        final_amount: calc.final_amount,
+                                      };
                                       setFormLineItems(updated);
                                     }}
                                     placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
@@ -2052,29 +2134,91 @@ export default function OrdersPage() {
                               const updated = [...formLineItems];
                               const currentItem = { ...updated[idx], rate: safeR };
                               const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                              updated[idx] = { ...currentItem, amount: calc.amount };
+                              updated[idx] = {
+                                ...currentItem,
+                                amount: calc.amount,
+                                cgst_rate: calc.cgst_rate,
+                                cgst_amount: calc.cgst_amount,
+                                sgst_rate: calc.sgst_rate,
+                                sgst_amount: calc.sgst_amount,
+                                total_gst: calc.total_gst,
+                                final_amount: calc.final_amount,
+                              };
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                           />
                         </td>
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                          {(() => {
+                            const baseAmt = Number(item.amount) || 0;
+                            const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                            return (
+                              <input
+                                type="text"
+                                readOnly
+                                tabIndex={-1}
+                                value={formatIndianCurrency(cgst, true)}
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
+                              />
+                            );
+                          })()}
+                        </td>
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                          {(() => {
+                            const baseAmt = Number(item.amount) || 0;
+                            const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                            return (
+                              <input
+                                type="text"
+                                readOnly
+                                tabIndex={-1}
+                                value={formatIndianCurrency(sgst, true)}
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
+                              />
+                            );
+                          })()}
+                        </td>
                         <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
-                          <input
-                            type="number"
-                            min="0"
-                            value={item.amount === 0 ? '' : item.amount}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const rawA = val === '' ? 0 : parseFloat(val);
-                              const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
-                              const updated = [...formLineItems];
-                              updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
-                              setFormLineItems(updated);
-                            }}
-                            placeholder="0"
-                            className="w-full min-w-[90px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                          />
+                          {(() => {
+                            const baseAmt = Number(item.amount) || 0;
+                            const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                            const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                            const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst) * 100) / 100;
+                            return (
+                              <input
+                                id={`form-item-amount-${idx}`}
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={finalAmt === 0 ? '' : finalAmt}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const rawA = val === '' ? 0 : parseFloat(val);
+                                  const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                                  const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
+                                  const cgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                  const sgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                  const updated = [...formLineItems];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    amount: safeBase,
+                                    isManualAmount: true,
+                                    cgst_rate: 9,
+                                    cgst_amount: cgstA,
+                                    sgst_rate: 9,
+                                    sgst_amount: sgstA,
+                                    total_gst: Math.round((cgstA + sgstA) * 100) / 100,
+                                    final_amount: safeFinal,
+                                  };
+                                  setFormLineItems(updated);
+                                }}
+                                placeholder="0"
+                                className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              />
+                            );
+                          })()}
                         </td>
                         <td className="px-2 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1">
@@ -2096,7 +2240,7 @@ export default function OrdersPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                    { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
                                   ];
                                   setFormLineItems(updated);
                                 }}
@@ -2115,7 +2259,7 @@ export default function OrdersPage() {
                 {/* Standard Quotation Pricing Breakdown Layout */}
                 {(() => {
                   const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                  const qBreakdown = calculateQuotationBreakdown(subtotal);
+                  const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
 
                   const totalTonnage = calculateTotalTonnageMt(formLineItems);
                   const formattedItemsInTotal = totalTonnage.formattedText;

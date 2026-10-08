@@ -328,8 +328,8 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
           </div>
         </div>
 
-        {/* Notice banner: unpriced products excluded from PDF */}
-        {zeroPriceItems.length > 0 && (
+        {/* Notice banner: unpriced products excluded from PDF (only show when there are also priced items to avoid duplicate warnings) */}
+        {zeroPriceItems.length > 0 && pricedLineItems.length > 0 && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 text-xs text-amber-900 flex items-center justify-between gap-3 no-print shrink-0">
             <div className="flex items-center gap-2">
               <AlertTriangle size={15} className="text-amber-600 shrink-0" />
