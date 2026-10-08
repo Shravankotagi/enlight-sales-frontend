@@ -28,6 +28,7 @@ import {
   Clock,
   ChevronDown,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   RefreshCw,
   Trophy,
@@ -154,7 +155,12 @@ export default function HomePage() {
   };
 
   const handleSwitchToExecutive = () => {
-    if (isAdmin && viewingAs?.original_role === 'sales_manager') {
+    if (isAdmin) {
+      clearViewingAs();
+      navigate('/home');
+      return;
+    }
+    if (viewingAs?.original_role === 'sales_manager') {
       setViewingAs({
         ...viewingAs,
         role: 'sales_manager',
@@ -163,6 +169,7 @@ export default function HomePage() {
       });
     } else {
       clearViewingAs();
+      navigate('/admin');
     }
   };
 
@@ -770,9 +777,23 @@ export default function HomePage() {
 
       {/* ── Greeting & Dual-Role Switcher ─────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-          {greeting}, {(viewingAs ? viewingAs.name : employee?.name)?.split(' ')[0] || 'Sales Executive'}
-        </h1>
+        <div className="flex items-center gap-3">
+          {viewingAs && isAdmin && (
+            <button
+              onClick={() => {
+                clearViewingAs();
+                navigate('/admin');
+              }}
+              className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
+              title="Return to Admin Control Center"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            {greeting}, {(viewingAs ? viewingAs.name : employee?.name)?.split(' ')[0] || 'Sales Executive'}
+          </h1>
+        </div>
 
         {canSwitchRole && (
           <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -796,7 +817,7 @@ export default function HomePage() {
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
                 title={
                   (viewingAs?.original_role || employee?.role) === 'admin'
-                    ? 'Switch to Company-Wide Admin Dashboard'
+                    ? 'Switch to Admin Overview Dashboard'
                     : 'Switch to Sales Manager Team Dashboard'
                 }
               >
@@ -806,7 +827,7 @@ export default function HomePage() {
                   <Users size={14} />
                 )}
                 {(viewingAs?.original_role || employee?.role) === 'admin'
-                  ? 'View as Admin'
+                  ? 'Admin Overview'
                   : 'View as Sales Manager'}
               </button>
             ) : (

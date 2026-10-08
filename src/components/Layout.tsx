@@ -51,48 +51,67 @@ function EmployeeFooter() {
     navigate('/admin');
   };
 
-  const roleLabel = viewingAs
-    ? viewingAs.role === 'sales_manager' || viewingAs.role === 'manager'
+  // Always reflect the user's own true identity & role (never overridden by impersonated user's role)
+  const ownRoleLabel = isAdmin
+    ? 'Admin'
+    : isSalesManager
       ? 'Sales Manager'
-      : viewingAs.role === 'admin'
-        ? 'Admin'
-        : 'Salesperson'
-    : isAdmin
-      ? 'Admin'
-      : isSalesManager
-        ? 'Sales Manager'
-        : 'Salesperson';
+      : 'Salesperson';
 
-  const viewingRoleLabel = viewingAs
-    ? viewingAs.role === 'sales_manager' || viewingAs.role === 'manager'
-      ? 'Sales Manager'
-      : viewingAs.role === 'admin'
-        ? 'Admin'
-        : 'Salesperson'
-    : '';
+  // Only true impersonation of ANOTHER employee should show "Viewing as"
+  const isImpersonatingOther = Boolean(
+    viewingAs &&
+    employee &&
+    viewingAs.id !== employee.id &&
+    viewingAs.phone?.replace(/\D/g, '').slice(-10) !== employee.phone?.replace(/\D/g, '').slice(-10)
+  );
 
   return (
-    <div className="space-y-2">
-      {isSalesManager && !isAdmin && (
+    <div className="space-y-2.5">
+      {/* Impersonation Status Widget - ONLY SHOWN WHEN IMPERSONATING ANOTHER EMPLOYEE */}
+      {isImpersonatingOther && (
+        <div className="bg-blue-950/70 border border-blue-500/40 rounded-xl p-2.5 space-y-1.5 shadow-sm">
+          <div className="text-[11px] text-blue-300 font-medium leading-tight">
+            Viewing as:
+            <span className="text-white font-bold block truncate text-xs mt-0.5">
+              {viewingAs?.name}
+            </span>
+          </div>
+          <button
+            onClick={handleBackToAdmin}
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+            title="Exit impersonation and return to Admin Control Center"
+          >
+            <ShieldAlert size={12} />
+            Exit to Control Center
+          </button>
+        </div>
+      )}
+
+      {/* Non-impersonating Sales Manager Team Members Switcher */}
+      {isSalesManager && !isAdmin && !isImpersonatingOther && (
         <button
           onClick={handleBackToAdmin}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 hover:text-white rounded-xl border border-blue-500/40 text-xs font-bold transition-all shadow-xs"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 hover:text-white rounded-xl border border-blue-500/40 text-xs font-bold transition-all shadow-xs cursor-pointer"
           title="Select Team Member"
         >
           <Users size={14} />
-          {viewingAs
-            ? `Viewing: ${viewingAs.name} (${viewingRoleLabel})`
-            : 'Team Members'}
+          Team Members
         </button>
       )}
-      <p className="text-xs text-white font-medium">{employee?.name}</p>
-      <p className="text-xs text-slate-400">
-        {employee?.employee_id} ·{' '}
-        <span className="font-semibold text-blue-400">{roleLabel}</span>
-      </p>
+
+      {/* User's Own Permanent Identity (Dhananjay Goel / EMP001 · Admin) */}
+      <div className="pt-0.5">
+        <p className="text-xs text-white font-medium">{employee?.name}</p>
+        <p className="text-xs text-slate-400">
+          {employee?.employee_id} ·{' '}
+          <span className="font-semibold text-blue-400">{ownRoleLabel}</span>
+        </p>
+      </div>
+
       <button
         onClick={handleLogout}
-        className="text-xs text-red-400 hover:text-red-300 transition-colors"
+        className="text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer"
       >
         Logout
       </button>
@@ -103,9 +122,16 @@ function EmployeeFooter() {
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { viewingAs, isAdmin } = useAuth();
+  const { employee, viewingAs, isAdmin } = useAuth();
 
-  const showAdminTab = isAdmin && !viewingAs;
+  const isImpersonatingOther = Boolean(
+    viewingAs &&
+    employee &&
+    viewingAs.id !== employee.id &&
+    viewingAs.phone?.replace(/\D/g, '').slice(-10) !== employee.phone?.replace(/\D/g, '').slice(-10)
+  );
+
+  const showAdminTab = isAdmin && !isImpersonatingOther;
   const visibleItems = [
     ...(showAdminTab
       ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }]

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Download, Check, Copy } from 'lucide-react';
+import { X, Download, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { customersApi, inquiriesApi } from '../lib/api';
 import {
@@ -45,7 +45,7 @@ interface LineItemDetail {
   hsn_code?: string;
   quantity: number;
   unit?: string;
-  rate: number;
+  rate: number | string;
   amount: number;
   isManualAmount?: boolean;
 }
@@ -76,7 +76,6 @@ interface InquiryPdfModalProps {
 
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
   const { employee, viewingAs } = useAuth();
-  const [copiedRef, setCopiedRef] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
   const { data: customerList = [] } = useQuery({
@@ -118,7 +117,17 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
           },
         ];
 
-  const lineItems: LineItemDetail[] = rawLineItems.map(item => {
+  // Exclude unpriced products (rate 0 or blank) from the quotation PDF
+  const zeroPriceItems = rawLineItems.filter(
+    item => item.rate === null || item.rate === undefined || item.rate === '' || isNaN(Number(item.rate)) || Number(item.rate) <= 0
+  );
+  const pricedLineItems = rawLineItems.filter(
+    item => item.rate !== null && item.rate !== undefined && item.rate !== '' && !isNaN(Number(item.rate)) && Number(item.rate) > 0
+  );
+
+  const activePdfItems = pricedLineItems.length > 0 ? pricedLineItems : [];
+
+  const lineItems: LineItemDetail[] = activePdfItems.map(item => {
     const calc = calculateLineItem(item);
     return {
       ...item,
@@ -127,7 +136,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   });
 
   // totalAmount = base pre-GST value; calculate GST breakdown
-  const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || details.totalAmount || 0;
+  const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
   const totalTonnage = calculateTotalTonnageMt(lineItems);
 
@@ -174,12 +183,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   })();
 
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-
-  const handleCopyRef = () => {
-    navigator.clipboard.writeText(piNumber);
-    setCopiedRef(true);
-    setTimeout(() => setCopiedRef(false), 2000);
-  };
 
   const handlePrintDownload = async () => {
     try {
@@ -306,14 +309,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCopyRef}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700 transition-colors"
-            >
-              {copiedRef ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-              {copiedRef ? 'Copied!' : 'Copy PI'}
-            </button>
+            
 
             <button
               type="button"
@@ -331,6 +327,30 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </button>
           </div>
         </div>
+
+        {/* Notice banner: unpriced products excluded from PDF */}
+        {zeroPriceItems.length > 0 && (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 text-xs text-amber-900 flex items-center justify-between gap-3 no-print shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+              <span>
+                <strong>Notice:</strong> {zeroPriceItems.length} product(s) with empty or 0 rates ({zeroPriceItems.map(i => i.sku_text).join(', ')}) are automatically excluded from this quotation PDF.
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded shrink-0">
+              {pricedLineItems.length} priced item(s) included
+            </span>
+          </div>
+        )}
+
+        {pricedLineItems.length === 0 && (
+          <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 text-xs text-rose-900 flex items-center gap-2 no-print shrink-0">
+            <AlertCircle size={15} className="text-rose-600 shrink-0" />
+            <span>
+              <strong>No priced items:</strong> All products in this inquiry have 0 or blank rates. Specify prices in the inquiry form to generate an itemized commercial quotation.
+            </span>
+          </div>
+        )}
 
         {/* Printable PDF Document Body - Exact Reference Match */}
         <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-8 sm:p-12 space-y-4 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
