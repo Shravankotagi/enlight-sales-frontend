@@ -14,4 +14,13 @@
 | Bot | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `GEMINI_API_KEY`, `ASSEMBLYAI_API_KEY`, `SALES_LEAD_PHONE` |
 | Frontend | `VITE_BACKEND_URL`, `VITE_BOT_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 
+## Dokploy frontend deployments
+
+Vite embeds `VITE_*` values during the Docker build; setting them only as runtime container variables is too late. Configure build arguments/environment variables separately in each Dokploy application:
+
+- Dev branch: use the dev backend URL, `https://supabase-dev.enlightmetals.com`, and the dev Supabase anon key. Set `VITE_BOT_URL` to the dev bot URL when the bot is deployed separately.
+- Main branch: use the production backend URL, production Supabase URL, production anon key, and production bot URL when applicable.
+
+The frontend Docker build requires `VITE_BACKEND_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`; it intentionally has no production defaults. `VITE_BOT_URL` is optional because the client falls back to the configured backend URL when the bot is served through that backend. A missing required value must fail the image build instead of silently selecting another environment.
+
 Do not copy values from `.env` into documentation, tests, commits, or logs. Use the `.env.example` files as the safe configuration contract.
