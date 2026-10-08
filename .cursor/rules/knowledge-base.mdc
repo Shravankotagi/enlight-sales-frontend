@@ -1,0 +1,8 @@
+---
+description: Locate and maintain Enlight Metals OS knowledge and agent workflows.
+alwaysApply: true
+---
+
+Read `knowledge/README.md` before working in an unfamiliar module. Apply the relevant skill in `.cursor/skills/` for QA, logging, backend APIs, bot flows, frontend pages, Supabase schema work, debugging, and knowledge updates.
+
+Use the knowledge docs as an implementation map, then verify details in code. Keep documentation in sync with changed module interfaces, tables, cross-app flows, tests, and conventions. Never add secrets or sensitive payloads to knowledge docs or logs.
