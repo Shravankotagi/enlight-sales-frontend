@@ -35,15 +35,32 @@ const API = axios.create({
   timeout: 30000,
 });
 
+function unwrapApiResponse<T>(response: { data?: any }): { data: T } {
+  const envelope = response?.data;
+  return {
+    data:
+      envelope &&
+      typeof envelope === 'object' &&
+      Object.prototype.hasOwnProperty.call(envelope, 'data')
+        ? envelope.data
+        : envelope,
+  };
+}
+
 // Attach JWT token and salesperson filter to every request
 API.interceptors.request.use((config) => {
   const token = sessionStorage.getItem('enlight_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Never attach impersonation scoping parameters to employee directory / admin management endpoints
+  const url = config.url || '';
+  const isEmployeeDirectory = url.startsWith('/employees') || url.includes('/employees');
+
   // Add salesperson_phone filter if admin is viewing a specific salesperson
   const viewingAs = sessionStorage.getItem('enlight_viewing_as');
-  if (viewingAs) {
+  if (viewingAs && !isEmployeeDirectory) {
     const emp = JSON.parse(viewingAs);
     const isPersonalMode =
       emp.mode === 'personal' ||
@@ -77,11 +94,57 @@ export const dealsApi = {
   getPipeline: (params?: any) => API.get('/deals/pipeline', { params }),
   getAll: (params?: any) => API.get('/deals', { params }),
   getOne: (id: string) => API.get(`/deals/${id}`),
-  updateStage: (id: string, stage: string, lost_reason?: string, po_number?: string, po_date?: string) =>
-    API.patch(`/deals/${id}/stage`, { stage, lost_reason, po_number, po_date }),
+  allocatePo: (params?: { reservation_token?: string; deal_id?: string }) =>
+    API.get('/deals/po/allocate', { params }).then((response) =>
+      unwrapApiResponse<any>(response),
+    ),
+  checkPoAvailability: (params: { po_number: string; reservation_token?: string; deal_id?: string }) =>
+    API.get('/deals/po/availability', { params }),
+  releasePoReservation: (data: { reservation_token: string; po_number?: string; deal_id?: string }) =>
+    API.post('/deals/po/release', data),
+  updateStage: (
+    id: string,
+    stage: string,
+    lost_reason?: string,
+    po_number?: string,
+    po_date?: string,
+    reference_po_number?: string,
+    generated_po_number?: string,
+    po_reservation_token?: string,
+  ) =>
+    API.patch(`/deals/${id}/stage`, {
+      stage,
+      lost_reason,
+      po_number,
+      po_date,
+      reference_po_number,
+      generated_po_number,
+      po_reservation_token,
+    }),
   processPo: (data: any) => API.post('/deals/process-po', data),
   delete: (id: string) => API.delete(`/deals/${id}`),
 };
+
+export function logPoAllocationError(
+  context: string,
+  error: unknown,
+  reservationToken?: string,
+  dealId?: string,
+) {
+  const apiError = error as any;
+  const token = String(reservationToken || '');
+  console.error(`[SystemPO] ${context} allocation failed`, {
+    reservationToken: token
+      ? `${token.slice(0, 24)}${token.length > 24 ? '…' : ''}`
+      : null,
+    dealId: dealId || null,
+    message: apiError?.message || null,
+    status: apiError?.response?.status || null,
+    responseData: apiError?.response?.data || null,
+    requestUrl: apiError?.config?.url || null,
+    requestMethod: apiError?.config?.method || null,
+  });
+}
 
 export const customersApi = {
   getAll: (params?: any) => API.get('/customers', { params }),
@@ -123,6 +186,14 @@ export const ordersApi = {
   getOne: (id: string) => API.get(`/deals/${id}`),
   create: (data: any) => API.post('/deals/order', data),
   processPo: (data: any) => API.post('/deals/process-po', data),
+  allocatePo: (params?: { reservation_token?: string; deal_id?: string }) =>
+    API.get('/deals/po/allocate', { params }).then((response) =>
+      unwrapApiResponse<any>(response),
+    ),
+  checkPoAvailability: (params: { po_number: string; reservation_token?: string; deal_id?: string }) =>
+    API.get('/deals/po/availability', { params }),
+  releasePoReservation: (data: { reservation_token: string; po_number?: string; deal_id?: string }) =>
+    API.post('/deals/po/release', data),
   delete: (id: string) => API.delete(`/deals/${id}`),
 };
 
@@ -133,6 +204,7 @@ export const inquiriesApi = {
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
   create: (data: any) => API.post('/inquiries', data),
   updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
+  previewQuotation: (id: string, payload: any) => API.post(`/inquiries/quotation-preview/${id}`, payload),
   sendQuotation: (id: string, payload: any) => API.post(`/inquiries/send-quotation/${id}`, payload),
   generatePdf: (payload: any) => API.post('/inquiries/generate-pdf', payload, { responseType: 'blob' }),
   parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
@@ -185,6 +257,12 @@ export const kbApi = {
   extractText: (data: { fileBase64: string; fileName?: string }) =>
     API.post('/chat/kb/extract-text', data),
   deleteDocument: (id: string) => API.delete(`/chat/kb/documents/${id}`),
+};
+
+export const zohoApi = {
+  pullInitialSync: () => API.post('/zoho/pull-initial-sync'),
+  sync: () => API.post('/zoho/sync'),
+  getStatus: () => API.get('/zoho/status'),
 };
 
 export const activityLogsApi = {

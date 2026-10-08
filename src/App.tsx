@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
@@ -22,8 +22,18 @@ import AssistantPage from './pages/AssistantPage';
 import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
-  const { isAuthenticated, employee } = useAuth();
+  const { isAuthenticated, employee, clearViewingAs } = useAuth();
+  const location = useLocation();
   const isAdmin = employee?.role === 'admin';
+
+  const prevPathRef = useRef(location.pathname);
+  useEffect(() => {
+    // Only clear impersonation if we navigate TO /admin from a different page
+    if (location.pathname === '/admin' && prevPathRef.current !== '/admin') {
+      clearViewingAs();
+    }
+    prevPathRef.current = location.pathname;
+  }, [location.pathname, clearViewingAs]);
 
   return (
     <Routes>

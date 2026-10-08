@@ -430,7 +430,7 @@ export default function LogsPage() {
           <p className="text-xs text-slate-500 font-medium">Loading activity stream...</p>
         </div>
       ) : !activityLogsData || activityLogsData.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-2xs">
+        <div className="min-h-[calc(100vh-16rem)] bg-white border border-slate-200 rounded-2xl px-6 shadow-2xs flex flex-col items-center justify-center text-center">
           <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center mx-auto mb-3">
             <RefreshCw size={22} className="rotate-45" />
           </div>

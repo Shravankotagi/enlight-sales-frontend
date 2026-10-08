@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,19 +13,26 @@ import {
   Eye,
   UploadCloud,
   FileText,
-  ExternalLink,
-  ImageIcon,
   ChevronDown,
   Loader2,
-  Send,
+  AlertCircle,
   MoreVertical,
   RefreshCw,
   Calendar,
   Layers,
   ArrowLeft,
+  UserCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ordersApi, inquiriesApi, dealsApi, customersApi } from '../lib/api';
+import {
+  ordersApi,
+  inquiriesApi,
+  dealsApi,
+  customersApi,
+  zohoApi,
+  employeesApi,
+  logPoAllocationError,
+} from '../lib/api';
 import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
@@ -35,6 +42,7 @@ import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   calculateOrdersTotalTonnage,
+  formatLineItemWeightMt,
   getOrderTonnage,
   normalizeUnit,
 } from '../utils/pricingEngine';
@@ -61,6 +69,10 @@ interface Order {
   assigned_salesperson_name?: string;
   salesperson?: string;
   po_number?: string;
+  reference_po_number?: string;
+  generated_po_number?: string;
+  po_source?: string;
+  po_status?: string;
   po_date?: string;
   total_amount?: number;
   delivery_location?: string;
@@ -69,6 +81,9 @@ interface Order {
   created_at: string;
   won_at?: string;
   media_urls?: string[];
+  source_media_urls?: string[];
+  source_original_text?: string | null;
+  source_extracted_text?: string | null;
   deal_items?: DealItem[];
   raw_text?: string;
   source_channel?: string;
@@ -131,70 +146,70 @@ interface LineItemDetail {
   unit?: string;
   rate: number;
   amount: number;
+  isManualAmount?: boolean;
+  converted_mt?: number | string;
+  is_manual_mt?: boolean;
+}
+
+function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
+  if (!inputName || !inputName.trim()) return false;
+  const cleanInput = inputName.trim().toLowerCase();
+  if (assignedList.some(c => c.trim().toLowerCase() === cleanInput)) return true;
+
+  const stripSuffixes = (str: string) =>
+    str
+      .toLowerCase()
+      .replace(/\b(private\s+limited|pvt\s+ltd|pvt\s+limited|private\s+ltd|co\s+ltd|llp|limited|pvt|ltd|inc|corp)\b/gi, '')
+      .replace(/[^a-z0-9]/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const strippedInput = stripSuffixes(cleanInput);
+  if (!strippedInput) return false;
+
+  return assignedList.some(c => {
+    const strippedC = stripSuffixes(c);
+    return Boolean(
+      strippedC &&
+      (strippedC === strippedInput || strippedInput.startsWith(strippedC) || strippedC.startsWith(strippedInput)),
+    );
+  });
+}
+
+const GENERATED_SOURCE_PLACEHOLDER = /^\[(?:Inquiry Attachment|PO Document Attached|PO Document):/i;
+
+export function getOrderOriginalSourceText(ord?: Order | null): string | null {
+  if (!ord) return null;
+  const candidate = String(
+    ord.source_original_text ?? ord.raw_text ?? '',
+  ).trim();
+  if (!candidate || GENERATED_SOURCE_PLACEHOLDER.test(candidate)) return null;
+  return candidate;
+}
+
+export function getOrderSourceDocuments(ord?: Order | null): string[] {
+  if (!ord) return [];
+  const urls = ord.source_media_urls || ord.media_urls || [];
+  return urls.filter(
+    url =>
+      typeof url === 'string' &&
+      (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')),
+  );
 }
 
 export function formatOrderSourceText(ord?: Order | null): string {
-  if (!ord) return 'No source document or text available for this order.';
+  const originalText = getOrderOriginalSourceText(ord);
+  if (originalText) return `Original Source Message:\n${originalText}`;
 
-  const lines: string[] = [];
-  if (ord.customer_name) lines.push(`Company: ${ord.customer_name}`);
-  if (ord.customer_phone) lines.push(`Phone: ${ord.customer_phone}`);
-  if (ord.po_number) lines.push(`PO Number: ${ord.po_number}`);
-  if (ord.po_date) lines.push(`PO Date: ${ord.po_date}`);
-  if (ord.delivery_location) lines.push(`Delivery Location: ${ord.delivery_location}`);
-  if (ord.payment_terms) lines.push(`Payment Terms: ${ord.payment_terms}`);
-
-  const items = ord.deal_items || [];
-  if (Array.isArray(items) && items.length > 0) {
-    lines.push('\nLine Items:');
-    let subtotal = 0;
-    items.forEach((item: any, idx: number) => {
-      const name = item.sku_text || item.description || item.name || item.sku || 'Product';
-      const spec = item.dimensions || item.spec || item.specification || '';
-      const qty = item.quantity ?? item.qty ?? 0;
-      const unit = item.unit || 'MT';
-      const rate = Number(item.rate ?? item.unit_price ?? item.quoted_price ?? item.price_per_mt ?? 0);
-      const amount = Number(item.amount ?? 0) || (qty * rate);
-      if (amount > 0) subtotal += amount;
-      const hsn = item.hsn_code || item.hsn || detectHsnCode(name) || '';
-
-      let itemStr = `${idx + 1}. ${name}`;
-      if (spec) itemStr += ` (${spec})`;
-      itemStr += ` | ${qty} ${unit}`;
-      if (rate > 0) itemStr += ` | ₹${rate.toLocaleString('en-IN')}/${unit}`;
-      if (amount > 0) itemStr += ` | Line Total: ₹${amount.toLocaleString('en-IN')}`;
-      if (hsn) itemStr += ` [HSN: ${hsn}]`;
-      lines.push(itemStr);
-    });
-
-    if (subtotal > 0) {
-      const gst = Math.round(subtotal * 0.18);
-      const total = subtotal + gst;
-      lines.push(`\nSubtotal: ₹${subtotal.toLocaleString('en-IN')}`);
-      lines.push(`GST (18%): ₹${gst.toLocaleString('en-IN')}`);
-      lines.push(`Total Order Value: ₹${total.toLocaleString('en-IN')}`);
-    }
+  if (ord?.source_extracted_text?.trim()) {
+    return `Extracted Text from PDF:\n${ord.source_extracted_text.trim()}`;
   }
 
-  // If raw_text is present, meaningful and not just a document placeholder, include it as source reference
-  if (
-    ord.raw_text &&
-    typeof ord.raw_text === 'string' &&
-    ord.raw_text.trim() &&
-    !ord.raw_text.trim().startsWith('[Inquiry Attachment:') &&
-    !ord.raw_text.trim().startsWith('[PO Document:')
-  ) {
-    if (lines.length > 0) {
-      lines.push('\nOriginal Source Message:');
-    }
-    lines.push(ord.raw_text.trim());
+  if (getOrderSourceDocuments(ord).length > 0) {
+    return 'Original source is an attached document. Use the document preview above.';
   }
 
-  if (lines.length === 0) {
-    return 'No source document or text available for this order.';
-  }
-
-  return lines.join('\n');
+  return 'No original source text or document is available for this order.';
 }
 
 export function formatDeliveryLocation(raw?: string): string {
@@ -332,7 +347,32 @@ export default function OrdersPage() {
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const queryClient = useQueryClient();
-  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const { effectivePhone, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const canViewSalesperson = isAdmin || isSalesManager;
+  const [isSyncingZoho, setIsSyncingZoho] = useState(false);
+
+  const handleTriggerZohoSync = async () => {
+    try {
+      setIsSyncingZoho(true);
+      const res = await zohoApi.pullInitialSync();
+      const data = res?.data?.data || res?.data || {};
+      const notice = Array.isArray(data.errors) ? data.errors[0] : '';
+      if (data.success === false || (notice && !data.companiesImported && !data.dealsImported)) {
+        toast.error(notice || 'Could not sync with Zoho Bigin');
+        return;
+      }
+      toast.success(
+        `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
+    } finally {
+      setIsSyncingZoho(false);
+    }
+  };
 
   const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -438,34 +478,60 @@ export default function OrdersPage() {
   }, [fetchOrders]);
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
-    queryKey: ['customer-names-list-orders'],
-    queryFn: async () => {
-      const custRes = await customersApi.getAll().catch(() => null);
+    queryKey: ['customer-names-list-orders', effectivePhone, activeRole, activeMode],
+    queryFn: async (): Promise<string[]> => {
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
+
+      const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
-      const fetchedNames = cList.map((c: any) => c.customer_name || c.name || c.company_name).filter(Boolean);
+      const fetchedNames: string[] = cList
+        .map((c: any) => String(c.customer_name || c.name || c.company_name || '').trim())
+        .filter(Boolean);
 
-      const defaultNames = [
-        'Supreme Steel',
-        'Mehta Engineering',
-        'Delta Structural Steel',
-        'Ram Ratna Infrastructure Pvt. Ltd.',
-        'AVION EXIM PVT. LTD.',
-        'SB Scafform Technovert Pvt. Ltd.',
-        'Apex Metals & Engg',
-        'Bhushan Steel Works',
-        'Kirloskar Pneumatic',
-        'Vardhaman Engineering',
-        'Dynamic Industries',
-        'Mahalaxmi Steel',
-        'Rathi Steel Corp',
-      ];
-
-      const orderCustomerNames = rawOrders.map((o: any) => o.customer_name).filter(Boolean);
-
-      return Array.from(new Set([...fetchedNames, ...orderCustomerNames, ...defaultNames]));
+      return Array.from(new Set(fetchedNames)).sort((a: string, b: string) => a.localeCompare(b));
     },
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
+
+  const { data: rawEmployees = [] } = useQuery<any[]>({
+    queryKey: ['employees-list-orders'],
+    queryFn: async () => {
+      const res = await employeesApi.getAll().catch(() => null);
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    },
+    enabled: canViewSalesperson,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const employeeNameByPhone = useMemo(() => {
+    const map = new Map<string, string>();
+    rawEmployees.forEach((emp: any) => {
+      const phone = String(emp?.phone || '').replace(/\D/g, '').slice(-10);
+      const name = String(emp?.name || '').trim();
+      if (phone && name) map.set(phone, name);
+    });
+    return map;
+  }, [rawEmployees]);
+
+  const getOrderRepName = (ord: Order) => {
+    const named = String(ord.salesperson_name || ord.assigned_salesperson_name || ord.salesperson || '').trim();
+    if (
+      named &&
+      named !== 'Sales Representative' &&
+      named !== 'Sales Team' &&
+      named !== 'Sales Operations Team' &&
+      named !== 'Unknown'
+    ) {
+      return named;
+    }
+    const phone = String(ord.salesperson_phone || '').replace(/\D/g, '').slice(-10);
+    return (phone && employeeNameByPhone.get(phone)) || '';
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -473,6 +539,7 @@ export default function OrdersPage() {
   const [showModal, setShowModal] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [allocatingPo, setAllocatingPo] = useState(false);
 
   // Reset page when search or date range changes
   useEffect(() => {
@@ -485,13 +552,6 @@ export default function OrdersPage() {
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [loadingPoId, setLoadingPoId] = useState<string | null>(null);
 
-  // Send / Share Modal
-  const [showSendModal, setShowSendModal] = useState(false);
-  const [shareOrder, setShareOrder] = useState<Order | null>(null);
-  const [sendEmail, setSendEmail] = useState('');
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [resendNotice, setResendNotice] = useState('');
-
   useEffect(() => {
     const handleOutsideClick = () => setOpenActionMenuId(null);
     document.addEventListener('click', handleOutsideClick);
@@ -500,10 +560,7 @@ export default function OrdersPage() {
 
   // Prevent background scrolling when any modal or drawer is open
   useEffect(() => {
-    const isAnyModalOpen =
-      showModal ||
-      showSendModal ||
-      !!poImageViewerUrl;
+    const isAnyModalOpen = showModal || !!poImageViewerUrl;
     const body = document.body;
     const docEl = document.documentElement;
     const mainLayoutContainer = document.querySelector('.flex-1.overflow-auto') as HTMLElement | null;
@@ -528,26 +585,23 @@ export default function OrdersPage() {
         mainLayoutContainer.style.overflow = 'auto';
       }
     }
-  }, [
-    showModal,
-    showSendModal,
-    poImageViewerUrl,
-  ]);
+  }, [showModal, poImageViewerUrl]);
 
   // AI OCR Scanning state
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [poFileName, setPoFileName] = useState('');
   const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
 
-  const isPdf = (url?: string) => {
-    if (!url) return false;
-    return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
-  };
-
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
   const [formCustomerPhone, setFormCustomerPhone] = useState('');
   const [formPoNumber, setFormPoNumber] = useState('');
+  const [formGeneratedPoNumber, setFormGeneratedPoNumber] = useState('');
+  const [formReferencePoNumber, setFormReferencePoNumber] = useState('');
+  const [poReservationToken, setPoReservationToken] = useState('');
+  const [poConflict, setPoConflict] = useState<string | null>(null);
+  const [checkingPoAvailability, setCheckingPoAvailability] = useState(false);
+  const poInputDirtyRef = useRef(false);
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
@@ -562,6 +616,115 @@ export default function OrdersPage() {
       amount: 0,
     },
   ]);
+
+  const createPoReservationToken = () =>
+    `dashboard:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+
+  const releaseOrderPoReservation = (token: string, poNumber?: string) => {
+    if (!token) return;
+    void ordersApi
+      .releasePoReservation({
+        reservation_token: token,
+        po_number: poNumber?.trim() || undefined,
+      })
+      .catch(error => {
+        console.error('[SystemPO] Orders create form release failed', {
+          reservationToken: token,
+          poNumber,
+          error,
+        });
+      });
+  };
+
+  const handleCancelCreateOrder = () => {
+    const token = poReservationToken;
+    const poNumber = formGeneratedPoNumber || formPoNumber;
+    setShowModal(false);
+    setPoReservationToken('');
+    setPoConflict(null);
+    poInputDirtyRef.current = false;
+    releaseOrderPoReservation(token, poNumber);
+  };
+
+  const handleOpenCreateOrder = async () => {
+    if (allocatingPo) return;
+
+    const reservationToken = createPoReservationToken();
+    poInputDirtyRef.current = false;
+    setPoReservationToken(reservationToken);
+    setFormPoNumber('');
+    setFormGeneratedPoNumber('');
+    setFormReferencePoNumber('');
+    setPoConflict(null);
+    setShowModal(false);
+    setAllocatingPo(true);
+
+    try {
+      const response = await ordersApi.allocatePo({
+        reservation_token: reservationToken,
+      });
+      const allocation = response?.data;
+      if (!allocation?.po_number) {
+        throw new Error('The system did not return a generated PO number.');
+      }
+
+      setFormPoNumber(String(allocation.po_number));
+      setFormGeneratedPoNumber(
+        String(allocation.generated_po_number || allocation.po_number),
+      );
+      setShowModal(true);
+    } catch (error: any) {
+      releaseOrderPoReservation(reservationToken);
+      logPoAllocationError('Orders create form', error, reservationToken);
+      toast.error(
+        error?.response?.data?.message ||
+          'Could not generate the system PO. Please try again.',
+      );
+    } finally {
+      setAllocatingPo(false);
+    }
+  };
+
+  useEffect(() => {
+    const value = formPoNumber.trim();
+    if (!showModal || !value || !poReservationToken) {
+      setPoConflict(null);
+      setCheckingPoAvailability(false);
+      return;
+    }
+
+    let active = true;
+    setCheckingPoAvailability(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const response = await ordersApi.checkPoAvailability({
+          po_number: value,
+          reservation_token: poReservationToken,
+        });
+        if (!active) return;
+        const available = response?.data?.available !== false;
+        setPoConflict(
+          available
+            ? null
+            : response?.data?.reason ||
+                'This PO number is already allocated.',
+        );
+      } catch {
+        if (active) {
+          setPoConflict(
+            'PO availability could not be checked. Please try again.',
+          );
+        }
+      } finally {
+        if (active) setCheckingPoAvailability(false);
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [formPoNumber, poReservationToken, showModal]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | File[] } }) => {
     const file = e.target.files?.[0];
@@ -624,7 +787,7 @@ export default function OrdersPage() {
         }
 
         if (extraction.po_number) {
-          setFormPoNumber(String(extraction.po_number).trim());
+          setFormReferencePoNumber(String(extraction.po_number).trim());
         }
         if (extraction.po_date) {
           let formattedDate = String(extraction.po_date).trim();
@@ -696,12 +859,22 @@ export default function OrdersPage() {
       }
       return;
     }
+    if (activeRole !== 'admin' && !isCustomerInAssignedList(formCustomerName, rawCustomers)) {
+      toast.error('Cannot create order: Customer is not in your assigned customer list.');
+      return;
+    }
     if (!formPoNumber.trim()) {
       const el = document.getElementById('form-po-number') as HTMLInputElement;
       if (el) {
         el.focus();
         el.reportValidity();
       }
+      return;
+    }
+    if (checkingPoAvailability || poConflict) {
+      toast.error(
+        poConflict || 'Checking PO number availability. Please wait.',
+      );
       return;
     }
     if (!formPoDate) {
@@ -788,6 +961,10 @@ export default function OrdersPage() {
         customer_name: formCustomerName.trim(),
         customer_phone: formCustomerPhone.trim() || undefined,
         po_number: formPoNumber.trim(),
+        generated_po_number:
+          formGeneratedPoNumber.trim() || formPoNumber.trim(),
+        reference_po_number: formReferencePoNumber.trim() || undefined,
+        po_reservation_token: poReservationToken || undefined,
         po_date: formPoDate,
         total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
@@ -801,6 +978,8 @@ export default function OrdersPage() {
           unit: i.unit || 'MT',
           rate: Number(i.rate) || 0,
           amount: Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0)),
+          converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
+          is_manual_mt: i.is_manual_mt || undefined,
         })),
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
@@ -811,6 +990,11 @@ export default function OrdersPage() {
       setFormCustomerName('');
       setFormCustomerPhone('');
       setFormPoNumber('');
+      setFormGeneratedPoNumber('');
+      setFormReferencePoNumber('');
+      setPoReservationToken('');
+      setPoConflict(null);
+      poInputDirtyRef.current = false;
       setFormPoDate(new Date().toISOString().split('T')[0]);
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
@@ -846,29 +1030,41 @@ export default function OrdersPage() {
       await fetchOrders();
     } catch (err: any) {
       console.error('Error creating order:', err);
+      if (err?.response?.status === 409) {
+        setPoConflict(
+          err?.response?.data?.message ||
+            'This PO number is already allocated.',
+        );
+      }
       toast.error(err?.response?.data?.message || 'Failed to create order. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleOpenSendModal = async (ord: Order) => {
-    setShareOrder(ord);
-    setSendEmail((ord as any).customer_email || '');
-    setResendNotice('');
-    setShowSendModal(true);
+  const handleViewPoDocument = async (ord: Order) => {
+    // If order already has complete raw_text, open immediately with full details (0ms latency)
+    if (ord.raw_text) {
+      setSelectedPoOrder(ord);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
+      return;
+    }
+
+    // Otherwise, fetch full deal details first before opening modal so user directly sees complete Image 2 details
+    setLoadingPoId(ord.id);
 
     try {
       const res = await dealsApi.getOne(ord.id);
       const fullDeal = res?.data?.data || res?.data;
-      if (fullDeal) {
-        setShareOrder(fullDeal);
-        if (fullDeal.customer_email) {
-          setSendEmail(fullDeal.customer_email);
-        }
-      }
+      const completeOrder = fullDeal ? { ...ord, ...fullDeal } : ord;
+      setSelectedPoOrder(completeOrder);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
     } catch (e) {
-      console.warn('Non-blocking full deal load notice:', e);
+      console.warn('Could not load deal details for PO text preview:', e);
+      setSelectedPoOrder(ord);
+      setPoImageViewerUrl(`extracted_preview://${ord.id}`);
+    } finally {
+      setLoadingPoId(null);
     }
   };
 
@@ -952,44 +1148,6 @@ export default function OrdersPage() {
   const totalTonnageResult = calculateOrdersTotalTonnage(filtered);
   const totalTonnage = totalTonnageResult.totalMt;
 
-  const handleViewPoDocument = async (ord: Order) => {
-    setSelectedPoOrder(ord);
-
-    // 1. Direct local media check (data URI or http URL)
-    let mediaUrl = ord.media_urls?.[0];
-    if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http'))) {
-      setPoImageViewerUrl(mediaUrl);
-      return;
-    }
-
-    // Immediately open modal in loading state so user sees instant feedback!
-    setLoadingPoId(ord.id);
-    setPoImageViewerUrl('loading://preview');
-
-    // 2. Fetch full deal details from database to see if document is stored in deal or linked inquiry
-    try {
-      const res = await dealsApi.getOne(ord.id);
-      const fullDeal = res?.data?.data || res?.data;
-      if (fullDeal) {
-        setSelectedPoOrder(prev => ({ ...(prev || ord), ...fullDeal }));
-        if (Array.isArray(fullDeal.media_urls) && fullDeal.media_urls.length > 0) {
-          const dbMedia = fullDeal.media_urls[0];
-          if (dbMedia && (dbMedia.startsWith('data:') || dbMedia.startsWith('http'))) {
-            setPoImageViewerUrl(dbMedia);
-            return;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Could not load deal document attachment from API:', e);
-    } finally {
-      setLoadingPoId(null);
-    }
-
-    // 3. If no document attachment, open the structured text viewer without error toast
-    setPoImageViewerUrl(`extracted_preview://${ord.id}`);
-  };
-
   const handleClosePoViewer = () => {
     setPoImageViewerUrl(null);
     setSelectedPoOrder(null);
@@ -1053,6 +1211,16 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            {activeRole === 'admin' && (
+              <button
+                type="button"
+                disabled={isSyncingZoho}
+                onClick={handleTriggerZohoSync}
+                className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
+                <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 fetchOrders();
@@ -1064,10 +1232,11 @@ export default function OrdersPage() {
             </button>
 
             <button
-              onClick={() => setShowModal(true)}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
-              <Plus size={15} />
-              Create New Order
+              onClick={handleOpenCreateOrder}
+              disabled={allocatingPo}
+              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
+              {allocatingPo ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+              {allocatingPo ? 'Generating PO…' : 'Create New Order'}
             </button>
           </div>
         </div>
@@ -1199,13 +1368,14 @@ export default function OrdersPage() {
 
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
                 <th className="px-5 py-3 text-left w-[26%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
+                <th className="px-4 py-3 text-center w-[14%]">Reference PO</th>
                 <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
                 <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
@@ -1215,13 +1385,9 @@ export default function OrdersPage() {
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">Loading orders data...</td>
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">No orders found.</td>
-                </tr>
-              ) : (
+              ) : filtered.length === 0 ? null : (
                 paginatedOrders.map((ord, idx) => {
                   const globalIdx = startIndex + idx + 1;
                   const ordLineItems = (ord?.deal_items && ord.deal_items.length > 0) ? ord.deal_items : [];
@@ -1230,13 +1396,9 @@ export default function OrdersPage() {
                     ? `(${ordTonnage.totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
                     : '';
                   const itemCount = ordLineItems.length > 0 ? ordLineItems.length : 1;
-                  const orderInqId = (() => {
-                    const raw = ord.inquiry_id || ord.id || '';
-                    if (!raw) return '-';
-                    if (raw.startsWith('INQ-')) return raw;
-                    if (raw.startsWith('DEAL-')) return raw.replace(/^DEAL-/, 'INQ-');
-                    return `INQ-${raw.substring(0, 6).toUpperCase()}`;
-                  })();
+                  const poNumber = ord.po_number?.trim() || '';
+                  const referencePoNumber = ord.reference_po_number?.trim() || '';
+                  const repName = canViewSalesperson ? getOrderRepName(ord) : '';
 
                   return (
                     <tr
@@ -1258,15 +1420,32 @@ export default function OrdersPage() {
                                   : (ord.po_date || '-'))}
                           </span>
                         </div>
+                        {repName && (
+                          <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                            <UserCheck size={12} className="text-slate-400 shrink-0" />
+                            Rep: {repName}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        {ord.po_number ? (
+                        {poNumber ? (
                           <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
-                            PO: {ord.po_number}
+                            {poNumber}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center justify-center bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold font-mono text-xs shadow-2xs">
-                            #{orderInqId}
+                          <span className="inline-flex items-center justify-center text-slate-400 font-medium font-mono text-xs">
+                            -
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        {referencePoNumber ? (
+                          <span className="font-mono text-xs font-medium text-slate-700">
+                            {referencePoNumber}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-xs font-medium text-slate-400">
+                            -
                           </span>
                         )}
                       </td>
@@ -1317,16 +1496,6 @@ export default function OrdersPage() {
                                 )}
                                 <span>{loadingPoId === ord.id ? 'Opening...' : 'View PO'}</span>
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenActionMenuId(null);
-                                  handleOpenSendModal(ord);
-                                }}
-                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                                <Send size={14} className="text-slate-500 shrink-0" />
-                                <span>Send</span>
-                              </button>
                             </div>
                           )}
                         </div>
@@ -1337,6 +1506,11 @@ export default function OrdersPage() {
               )}
             </tbody>
           </table>
+          {!loading && filtered.length === 0 && (
+            <div className="flex-1 flex items-center justify-center px-4 text-center text-sm text-slate-400">
+              No orders found.
+            </div>
+          )}
         </div>
 
         {/* Pagination Bar */}
@@ -1353,170 +1527,12 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {showSendModal && shareOrder && (
-        <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => {
-            setShowSendModal(false);
-            setResendNotice('');
-          }}>
-          <div
-            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Send className="text-blue-600" size={22} />
-                Share PO
-              </h2>
-              <button
-                onClick={() => {
-                  setShowSendModal(false);
-                  setResendNotice('');
-                }}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Small Relevant Info Message */}
-            <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
-              <FileText size={18} className="text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-blue-950">Official Commercial PO</p>
-                <p className="text-blue-800 text-[11px] mt-0.5 leading-relaxed">
-                  The complete orginal PO Document for <strong>{shareOrder.customer_name || 'Customer'}</strong> will be shared.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Customer Email Address <span className="text-red-500 font-bold">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. customer@example.com"
-                  value={sendEmail}
-                  onChange={e => setSendEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
-                />
-              </div>
-
-              {resendNotice && (
-                <div className={`p-3 rounded-xl text-xs font-bold border ${
-                  resendNotice.toLowerCase().includes('dispatched') ||
-                  resendNotice.toLowerCase().includes('sent') ||
-                  resendNotice.toLowerCase().includes('generated') ||
-                  resendNotice.toLowerCase().includes('recorded') ||
-                  resendNotice.toLowerCase().includes('success')
-                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                    : 'bg-rose-50 text-rose-900 border-rose-200'
-                }`}>
-                  {resendNotice}
-                </div>
-              )}
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                disabled={sendingEmail || !sendEmail.trim()}
-                onClick={async () => {
-                  if (!shareOrder) return;
-                  const targetEmail = sendEmail.trim();
-                  if (!targetEmail || !targetEmail.includes('@')) {
-                    toast.error('Please enter a valid recipient email address');
-                    return;
-                  }
-                  try {
-                    setSendingEmail(true);
-                    setResendNotice('');
-
-                    const lineItems = (shareOrder.deal_items && shareOrder.deal_items.length > 0)
-                      ? shareOrder.deal_items.map((i: any) => {
-                          const rawSku = i.sku_text || 'Steel Material';
-                          const rawDims = i.dimensions || '';
-                          const { materialDescription, dimensions } = extractCleanProductAndSpecs(rawSku, rawDims);
-                          return {
-                            sku_text: materialDescription,
-                            dimensions: dimensions !== '-' && dimensions !== '-' ? dimensions : '',
-                            hsn_code: i.hsn_code || '7208',
-                            quantity: Number(i.quantity) || 0,
-                            unit: normalizeUnit(i.unit) || 'MT',
-                            rate: Number(i.rate) || 0,
-                            amount: Number(i.amount) || 0,
-                          };
-                        })
-                      : [
-                          {
-                            sku_text: 'Steel Material',
-                            dimensions: '',
-                            hsn_code: '7208',
-                            quantity: 0,
-                            unit: 'MT',
-                            rate: 0,
-                            amount: Number(shareOrder.total_amount) || 0,
-                          },
-                        ];
-
-                    const subtotal = lineItems.reduce((s: number, i: any) => s + (i.amount || 0), 0) || Number(shareOrder.total_amount) || 0;
-
-                    const payload = {
-                      customer_email: targetEmail,
-                      customer_name: shareOrder.customer_name || 'Customer',
-                      details: {
-                        companyName: shareOrder.customer_name || 'Customer',
-                        customerName: shareOrder.customer_name || 'Customer',
-                        customerPhone: shareOrder.customer_phone || '',
-                        salespersonName: (shareOrder as any).salesperson_name || 'Sales Representative',
-                        poNumber: shareOrder.po_number || '',
-                        poDate: shareOrder.po_date || new Date().toISOString().split('T')[0],
-                        deliveryLocation: shareOrder.delivery_location || '',
-                        paymentTerms: shareOrder.payment_terms || '30 Days Credit',
-                        lineItems,
-                        totalAmount: subtotal,
-                        isOrder: true,
-                        media_urls: shareOrder.media_urls || undefined,
-                      },
-                    };
-
-                    const res = await inquiriesApi.sendQuotation(shareOrder.id, payload);
-                    const msg = res?.data?.message || res?.data?.data?.message || `PO Document dispatched to ${targetEmail}!`;
-                    setResendNotice(msg);
-                    if (res?.data?.email_sent !== false) {
-                      setTimeout(() => {
-                        setShowSendModal(false);
-                        setResendNotice('');
-                      }, 2500);
-                    }
-                  } catch (err: any) {
-                    console.error('Error sending PO document:', err);
-                    const errMsg = err?.response?.data?.message || 'Failed to dispatch PO document via email';
-                    setResendNotice(errMsg);
-                    toast.error(errMsg);
-                  } finally {
-                    setSendingEmail(false);
-                  }
-                }}
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
-                {sendingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>{sendingEmail ? 'Dispatching Email & PO...' : 'Share PO Email'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {poImageViewerUrl && (
         <div
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={handleClosePoViewer}>
           <div
-            className={`relative w-full max-h-[90vh] bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col ${
-              poImageViewerUrl.startsWith('extracted_preview://') ? 'max-w-3xl' : 'max-w-5xl'
-            }`}
+            className="relative w-full max-h-[90vh] max-w-3xl bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}>
             <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -1530,11 +1546,7 @@ export default function OrdersPage() {
                 )}
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <FileText size={18} className="text-blue-600" />
-                  {poImageViewerUrl === 'loading://preview'
-                    ? 'Purchase Order (PO) Document'
-                    : poImageViewerUrl.startsWith('extracted_preview://')
-                      ? 'Original Customer Inquiry Message'
-                      : 'Original Purchase Order (PO) Document / WhatsApp Image'}
+                  Order PO Details &amp; Source
                 </span>
               </div>
               <button
@@ -1544,87 +1556,74 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            {poImageViewerUrl === 'loading://preview' ? (
-              <div className="w-full h-[60vh] flex flex-col items-center justify-center bg-slate-50 rounded-xl p-8 border border-slate-200 space-y-4">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-sm">
-                    <FileText size={28} />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 p-1 bg-white rounded-full shadow-md">
-                    <RefreshCw size={16} className="animate-spin text-blue-600" />
-                  </div>
+            <div className="w-full space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500">
+                    System PO
+                  </p>
+                  <p className="mt-1 text-xs font-mono font-bold text-slate-900">
+                    {selectedPoOrder?.po_number || '-'}
+                  </p>
                 </div>
-                <div className="text-center space-y-1">
-                  <h4 className="text-sm font-bold text-slate-800">Opening Purchase Order...</h4>
-                  <p className="text-xs text-slate-500">Retrieving original PO document attachment and details</p>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500">
+                    Reference PO
+                  </p>
+                  <p className="mt-1 text-xs font-mono font-medium text-slate-700">
+                    {selectedPoOrder?.reference_po_number || '-'}
+                  </p>
                 </div>
               </div>
-            ) : poImageViewerUrl.startsWith('extracted_preview://') ? (
-              <div className="w-full space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                  <span>Source Inquiry Text</span>
-                  {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
-                    <span className="font-mono">
-                      Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
-                    </span>
-                  )}
-                </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                <span>Original Source</span>
+                {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
+                  <span className="font-mono">
+                    Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
+                  </span>
+                )}
+              </div>
 
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
-                  {formatOrderSourceText(selectedPoOrder)}
-                </div>
-              </div>
-            ) : isPdf(poImageViewerUrl) ? (
-              <iframe
-                src={poImageViewerUrl}
-                title="Purchase Order PDF Document"
-                className="w-full h-[72vh] rounded-xl bg-white shadow-inner border border-slate-200"
-              />
-            ) : (
-              <div className="w-full h-[72vh] flex items-center justify-center bg-slate-50 rounded-xl p-2 overflow-auto border border-slate-200">
-                <img
-                  src={poImageViewerUrl}
-                  alt="Original Purchase Order Document"
-                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-md bg-white border border-slate-200"
-                  onError={e => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const fallbackDiv = document.getElementById('po-image-fallback-card');
-                    if (fallbackDiv) fallbackDiv.style.display = 'flex';
-                  }}
-                />
-              </div>
-            )}
+              {getOrderSourceDocuments(selectedPoOrder).slice(0, 1).map(sourceUrl => {
+                const isPdf =
+                  sourceUrl.toLowerCase().startsWith('data:application/pdf') ||
+                  /\.pdf(?:$|[?#])/i.test(sourceUrl);
+                return (
+                  <div key={sourceUrl} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-700">
+                        Original Source Document
+                      </span>
+                      <a
+                        href={sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={isPdf ? 'original-po.pdf' : undefined}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+                        Open document
+                      </a>
+                    </div>
+                    {isPdf ? (
+                      <iframe
+                        title="Original PO document"
+                        src={sourceUrl}
+                        className="w-full h-[42vh] rounded-lg border border-slate-200 bg-white"
+                      />
+                    ) : (
+                      <img
+                        src={sourceUrl}
+                        alt="Original PO document"
+                        className="max-h-[42vh] w-full object-contain rounded-lg border border-slate-200 bg-white"
+                      />
+                    )}
+                  </div>
+                );
+              })}
 
-            <div
-              id="po-image-fallback-card"
-              style={{ display: 'none' }}
-              className="flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-4 max-w-md my-8 mx-auto">
-              <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
-                <ImageIcon size={40} />
-              </div>
-              <div>
-                <h3 className="text-slate-900 font-bold text-sm">Purchase Order Document Attachment</h3>
-                <p className="text-slate-500 text-xs mt-1">
-                  Attached Document Processed Live via Gemini Vision
-                </p>
-                <p className="text-slate-500 text-[11px] mt-2 leading-relaxed">
-                  The document details, item quantities, and commercial terms were extracted and synced live to this Orders tab.
-                </p>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
+                {formatOrderSourceText(selectedPoOrder)}
               </div>
             </div>
-
-            {poImageViewerUrl.startsWith('http') && (
-              <div className="flex items-center justify-center mt-3 gap-3">
-                <a
-                  href={poImageViewerUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md">
-                  <ExternalLink size={14} /> Open Original PO in New Tab
-                </a>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1638,7 +1637,7 @@ export default function OrdersPage() {
                 Record New Order
               </h2>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={handleCancelCreateOrder}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
                 <X size={20} />
               </button>
@@ -1752,26 +1751,73 @@ export default function OrdersPage() {
                         ))}
                       {rawCustomers.filter(c => !formCustomerName || c.toLowerCase().includes(formCustomerName.toLowerCase())).length === 0 && (
                         <div className="px-3 py-2 text-xs text-slate-400 italic">
-                          No matching company found. Typing will save as new company.
+                          {activeRole !== 'admin'
+                            ? 'This company is not in your assigned customer list.'
+                            : 'No matching company found. Typing will save as new company.'}
                         </div>
                       )}
                     </div>
                   )}
                 </div>
+                {activeRole !== 'admin' && formCustomerName.trim() && !isCustomerInAssignedList(formCustomerName, rawCustomers) && (
+                  <div className="mt-1.5 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Customer Not Assigned:</span>
+                      <p className="text-[11px] text-rose-700 mt-0.5">
+                        "{formCustomerName}" is not in your assigned customer list. You can only record orders for your assigned customers.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    PO Number <span className="text-red-500 font-bold">*</span>
+                    System PO Number <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
                     id="form-po-number"
                     type="text"
                     required
-                    placeholder="e.g. PO-2026-0042"
+                    placeholder="EM/PO/1"
                     value={formPoNumber}
-                    onChange={e => setFormPoNumber(e.target.value)}
+                    onChange={e => {
+                      poInputDirtyRef.current = true;
+                      setFormPoNumber(e.target.value);
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal ${
+                      poConflict ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
+                  />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Generated automatically and editable before confirmation.
+                  </p>
+                  {checkingPoAvailability && (
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      Checking availability…
+                    </p>
+                  )}
+                  {poConflict && (
+                    <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                      {poConflict}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Reference PO{' '}
+                    <span className="text-[10px] font-medium text-slate-400">
+                      (optional)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Customer PO from document/text"
+                    value={formReferencePoNumber}
+                    onChange={e => setFormReferencePoNumber(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                   />
                 </div>
@@ -1796,21 +1842,21 @@ export default function OrdersPage() {
                 <table className="w-full text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center">#</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[32%]">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center">
                         HSN/SAC <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
-                        Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[23%] text-center">
+                        Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                        Rate (₹) <span className="text-red-500 font-bold">*</span>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center min-w-[95px]">
+                        Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
-                      <th className="px-2 py-3 text-center w-[4%]"></th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
+                      <th className="px-2 py-3 text-center w-[3%]"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -1889,8 +1935,8 @@ export default function OrdersPage() {
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
-                        <td className="px-3 py-3.5 border-r border-slate-200">
-                          <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                        <td className="px-2.5 py-3.5 border-r border-slate-200">
+                          <div className="flex items-center gap-1.5 w-full min-w-[170px]">
                             <input
                               id={`form-item-qty-${idx}`}
                               type="number"
@@ -1903,24 +1949,34 @@ export default function OrdersPage() {
                                 const rawQ = val === '' ? 0 : parseFloat(val);
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
-                                const currentItem = { ...updated[idx], quantity: safeQ };
+                                let currentItem = { ...updated[idx], quantity: safeQ };
+                                if (normalizeUnit(currentItem.unit) === 'MT') {
+                                  currentItem.converted_mt = safeQ;
+                                }
                                 const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                 updated[idx] = { ...currentItem, amount: calc.amount };
                                 setFormLineItems(updated);
                               }}
                               placeholder="0"
-                              className="flex-1 min-w-[65px] px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                              className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                             />
                             <select
                               value={normalizeUnit(item.unit) || 'MT'}
                               onChange={(e) => {
+                                const newUnit = e.target.value;
                                 const updated = [...formLineItems];
-                                const currentItem = { ...updated[idx], unit: e.target.value };
+                                let currentItem = { ...updated[idx], unit: newUnit };
+                                if (newUnit === 'MT') {
+                                  currentItem.converted_mt = currentItem.quantity;
+                                } else if (currentItem.is_manual_mt && (currentItem.converted_mt === undefined || currentItem.converted_mt === 0)) {
+                                  delete currentItem.converted_mt;
+                                  delete currentItem.is_manual_mt;
+                                }
                                 const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                 updated[idx] = { ...currentItem, amount: calc.amount };
                                 setFormLineItems(updated);
                               }}
-                              className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
                               <option value="Pcs">Pcs</option>
@@ -1929,9 +1985,59 @@ export default function OrdersPage() {
                               <option value="Plates">Plates</option>
                               <option value="Coils">Coils</option>
                             </select>
+                            {(() => {
+                              const itemWeight = formatLineItemWeightMt(item);
+                              const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+                              const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                                ? item.converted_mt
+                                : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
+                              const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
+
+                              return (
+                                <div
+                                  className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                    hasWeight
+                                      ? 'bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                      : 'bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                  }`}
+                                  title="Weight in MT (Editable - Amount calculates as MT × Rate)">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    value={displayMt ?? ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const updated = [...formLineItems];
+                                      let currentItem = { ...updated[idx] };
+
+                                      if (val === '') {
+                                        delete currentItem.converted_mt;
+                                        delete currentItem.is_manual_mt;
+                                      } else {
+                                        const rawMt = parseFloat(val);
+                                        const safeMt = isNaN(rawMt) || rawMt < 0 ? 0 : rawMt;
+                                        currentItem.converted_mt = val;
+                                        currentItem.is_manual_mt = true;
+                                        if (normalizeUnit(currentItem.unit) === 'MT') {
+                                          currentItem.quantity = safeMt;
+                                        }
+                                      }
+
+                                      const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                      updated[idx] = { ...currentItem, amount: calc.amount };
+                                      setFormLineItems(updated);
+                                    }}
+                                    placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
+                                    className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                  />
+                                  <span className="text-[10px] font-mono font-bold text-blue-700/80 select-none ml-0.5">MT</span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
-                        <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
                           <input
                             id={`form-item-rate-${idx}`}
                             type="number"
@@ -1950,10 +2056,10 @@ export default function OrdersPage() {
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
-                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                           />
                         </td>
-                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
+                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
                           <input
                             type="number"
                             min="0"
@@ -1963,11 +2069,11 @@ export default function OrdersPage() {
                               const rawA = val === '' ? 0 : parseFloat(val);
                               const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                               const updated = [...formLineItems];
-                              updated[idx] = { ...updated[idx], amount: safeA };
+                              updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
-                            className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                            className="w-full min-w-[90px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
                         <td className="px-2 py-3.5 text-center">
@@ -2016,8 +2122,9 @@ export default function OrdersPage() {
 
                   return (
                     <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                      <div className="text-xs font-semibold text-slate-700 pt-1">
-                        Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      <div className="text-xs text-slate-700 pt-1">
+                        <span className="font-bold text-slate-900">Items in Total = </span>
+                        <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
                       </div>
 
                       <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
@@ -2083,8 +2190,12 @@ export default function OrdersPage() {
                 
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50">
+                  disabled={
+                    submitting ||
+                    isParsingDoc ||
+                    (activeRole !== 'admin' && !isCustomerInAssignedList(formCustomerName, rawCustomers))
+                  }
+                  className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                   {submitting ? 'Saving Order...' : 'Create Order'}
                 </button>
               </div>

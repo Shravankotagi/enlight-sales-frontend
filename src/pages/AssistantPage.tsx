@@ -20,6 +20,7 @@ import {
   Users,
   Search,
   Paperclip,
+  FileText,
   MapPin,
   X,
   Loader2,
@@ -205,13 +206,18 @@ export default function AssistantPage() {
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isPdf = file.type === 'application/pdf';
+    if (!file.type.startsWith('image/') && !isPdf) {
+      setError('Please attach an image or PDF document.');
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
       setSelectedPhoto({
         file,
-        previewUrl: URL.createObjectURL(file),
+        previewUrl: isPdf ? '' : URL.createObjectURL(file),
         base64,
       });
       focusInput();
@@ -219,7 +225,7 @@ export default function AssistantPage() {
     reader.readAsDataURL(file);
 
     // Automatically capture GPS location from browser geolocation
-    if ('geolocation' in navigator) {
+    if (!isPdf && 'geolocation' in navigator) {
       setGpsStatus('acquiring');
       setGpsStatusText('Acquiring GPS location...');
       navigator.geolocation.getCurrentPosition(
@@ -242,9 +248,14 @@ export default function AssistantPage() {
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
-    } else {
+    } else if (!isPdf) {
       setGpsStatus('error');
       setGpsStatusText('Geolocation not supported');
+      focusInput();
+    } else {
+      setGpsLocation(null);
+      setGpsStatus('idle');
+      setGpsStatusText('');
       focusInput();
     }
   };
@@ -348,7 +359,10 @@ export default function AssistantPage() {
     let textToSend = promptTextOverride || inputText.trim();
     if ((!textToSend && !selectedPhoto) || loading) return;
 
-    let userDisplayText = displayTitle || formatUserDisplayMessage(textToSend) || (selectedPhoto ? 'Attached image' : '');
+    const isPdfAttachment = selectedPhoto?.file.type === 'application/pdf';
+    let userDisplayText = displayTitle ||
+      formatUserDisplayMessage(textToSend) ||
+      (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : '');
 
     // Parity with WhatsApp list selection: if user typed a menu number (1–10) while looking at the Catalog Menu
     if (!promptTextOverride && textToSend) {
@@ -789,7 +803,16 @@ export default function AssistantPage() {
                         {isUser ? (
                           <div className="space-y-2">
                             {(() => {
+                              const isPdf = msg.image?.mimeType === 'application/pdf';
                               const imgSrc = getImageSource(msg.image);
+                              if (isPdf) {
+                                return (
+                                  <div className="flex items-center gap-2 p-2 rounded-lg border border-blue-400 bg-blue-500/20">
+                                    <FileText size={18} />
+                                    <span>PDF document attached</span>
+                                  </div>
+                                );
+                              }
                               return imgSrc ? (
                                 <div className="rounded-lg overflow-hidden border border-blue-400 max-w-sm">
                                   <img
@@ -877,17 +900,25 @@ export default function AssistantPage() {
             {/* Selected Photo & GPS Tag Preview Chip */}
             {selectedPhoto && (
               <div className="flex items-center gap-3 p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl mb-3 text-xs">
-                <img
-                  src={selectedPhoto.previewUrl}
-                  alt="Attachment preview"
-                  className="w-12 h-12 rounded-lg object-cover border border-blue-300 shrink-0"
-                />
+                {selectedPhoto.file.type === 'application/pdf' ? (
+                  <div className="w-12 h-12 rounded-lg bg-white border border-blue-300 flex items-center justify-center shrink-0">
+                    <FileText size={20} className="text-red-600" />
+                  </div>
+                ) : (
+                  <img
+                    src={selectedPhoto.previewUrl}
+                    alt="Attachment preview"
+                    className="w-12 h-12 rounded-lg object-cover border border-blue-300 shrink-0"
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-gray-800 truncate">
                     {selectedPhoto.file.name}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 mt-0.5">
-                    {gpsStatus === 'acquiring' && (
+                    {selectedPhoto.file.type === 'application/pdf' ? (
+                      <span className="text-gray-600">PDF document ready to send</span>
+                    ) : gpsStatus === 'acquiring' && (
                       <>
                         <Loader2 size={13} className="animate-spin text-blue-600 shrink-0" />
                         <span className="text-blue-600">Acquiring GPS location...</span>
@@ -930,14 +961,14 @@ export default function AssistantPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
                 className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-200/60 rounded-lg transition-all shrink-0"
-                title="Attach image"
+                title="Attach image or PDF"
               >
                 <Paperclip size={18} />
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,.pdf,application/pdf"
                 className="hidden"
                 onChange={handlePhotoSelect}
               />
@@ -946,7 +977,7 @@ export default function AssistantPage() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder={selectedPhoto ? "Add notes for this image..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
+                placeholder={selectedPhoto ? "Add notes for this attachment..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
                 className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />

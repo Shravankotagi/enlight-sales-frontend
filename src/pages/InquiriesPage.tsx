@@ -4,10 +4,17 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
   Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
-  ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, MoreVertical, Loader2,
-  LayoutDashboard, IndianRupee, Trash2, ArrowLeft
+  ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, UserCheck, MoreVertical, Loader2,
+  LayoutDashboard, IndianRupee, Trash2, ArrowLeft, AlertCircle, AlertTriangle
 } from 'lucide-react';
-import { inquiriesApi, customersApi, employeesApi, dealsApi } from '../lib/api';
+import {
+  inquiriesApi,
+  customersApi,
+  employeesApi,
+  dealsApi,
+  activityLogsApi,
+  logPoAllocationError,
+} from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
@@ -20,6 +27,7 @@ import {
   calculateSubtotal,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
+  formatLineItemWeightMt,
   normalizeUnit,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -41,6 +49,10 @@ export interface InquiryItem {
   total_amount?: number;
   po_number?: string;
   po_date?: string;
+  reference_po_number?: string;
+  generated_po_number?: string;
+  po_source?: string;
+  po_status?: string;
   won_at?: string;
   lost_reason?: string;
   raw_text?: string;
@@ -61,8 +73,11 @@ export interface LineItemDetail {
   hsn_code?: string;
   quantity: number;
   unit?: string;
-  rate: number;
+  rate: number | string;
   amount: number;
+  isManualAmount?: boolean;
+  converted_mt?: number | string;
+  is_manual_mt?: boolean;
 }
 
 export interface ExtractedDetails {
@@ -83,6 +98,20 @@ export interface ExtractedDetails {
   deliveryDate: string;
   lineItems: LineItemDetail[];
 }
+
+const formatLastSharedLabel = (iso?: string | null): string => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const formatted = date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `Last Shared - ${formatted}`;
+};
 
 const cleanProductType = (pt: string): string => {
   if (!pt) return 'HR Coil';
@@ -780,6 +809,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
       unit: rawUnit,
       rate: item.rate,
       amount: item.amount,
+      converted_mt: (item as any).converted_mt !== undefined ? (item as any).converted_mt : undefined,
+      is_manual_mt: (item as any).is_manual_mt !== undefined ? (item as any).is_manual_mt : undefined,
     };
   });
 
@@ -1089,7 +1120,8 @@ export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs, activeRole, activeMode } = useAuth();
+  const { effectivePhone, employee, viewingAs, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const canViewSalesperson = isAdmin || isSalesManager;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1137,6 +1169,8 @@ export default function InquiriesPage() {
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [showEditCompanyDropdown, setShowEditCompanyDropdown] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
+  const [showZeroRateConfirmModal, setShowZeroRateConfirmModal] = useState(false);
+  const [pendingSaveItems, setPendingSaveItems] = useState<LineItemDetail[]>([]);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalInquiry, setPdfModalInquiry] = useState<InquiryItem | null>(null);
   const [pdfModalDetails, setPdfModalDetails] = useState<ExtractedDetails | null>(null);
@@ -1144,9 +1178,49 @@ export default function InquiriesPage() {
   const [shareInquiry, setShareInquiry] = useState<InquiryItem | null>(null);
   const [shareDetails, setShareDetails] = useState<ExtractedDetails | null>(null);
   const [quotationEmail, setQuotationEmail] = useState('');
+  const [quotationSubject, setQuotationSubject] = useState('');
+  const [quotationBody, setQuotationBody] = useState('');
+  const [quotationCc, setQuotationCc] = useState<string[]>([]);
+  const [quotationReference, setQuotationReference] = useState('');
+  const [quotationSenderEmail, setQuotationSenderEmail] = useState('');
+  const [quotationPreviewLoading, setQuotationPreviewLoading] = useState(false);
+  const [quotationPreviewError, setQuotationPreviewError] = useState('');
   const [sendingQuotation, setSendingQuotation] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [isQuotationSent, setIsQuotationSent] = useState(false);
+  const [lastSharedById, setLastSharedById] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!showQuotationModal || !shareInquiry || !shareDetails) return;
+    let cancelled = false;
+    setQuotationPreviewLoading(true);
+    setQuotationPreviewError('');
+    inquiriesApi.previewQuotation(shareInquiry.id, {
+      customer_email: quotationEmail.trim(),
+      customer_name: shareDetails.companyName,
+      details: shareDetails,
+    }).then((res) => {
+      if (cancelled) return;
+      const preview = res?.data?.data || res?.data;
+      setQuotationSubject(preview?.subject || '');
+      setQuotationBody(preview?.body || '');
+      setQuotationCc(Array.isArray(preview?.cc) ? preview.cc : []);
+      setQuotationReference(preview?.quotation_reference || '');
+      setQuotationSenderEmail(preview?.sender_email || '');
+    }).catch((err: any) => {
+      if (cancelled) return;
+      setQuotationPreviewError(
+        err?.response?.data?.message ||
+          'Unable to prepare the quotation email. Please try again.',
+      );
+      setQuotationSenderEmail('');
+    }).finally(() => {
+      if (!cancelled) setQuotationPreviewLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showQuotationModal, shareInquiry?.id]);
 
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
@@ -1175,8 +1249,71 @@ export default function InquiriesPage() {
     companyName: string;
     dealCode: string;
     poNumber: string;
+    generatedPoNumber: string;
+    referencePoNumber: string;
     poDate: string;
+    poReservationToken: string;
+    poConflict?: string | null;
+    checkingPo?: boolean;
   } | null>(null);
+  const wonPoDirtyRef = useRef(false);
+
+  useEffect(() => {
+    const inquiry = selectedInquiry;
+    if (!inquiry?.id) return;
+    const stored =
+      lastSharedById[inquiry.id] ||
+      (inquiry.ai_extraction_json as any)?.quotation_shared_at;
+    if (stored) return;
+    const status = (inquiry.status || '').toLowerCase();
+    const alreadyShared =
+      status === 'quoted' ||
+      status === 'won' ||
+      status === 'quotation_sent' ||
+      inquiry.inquiry_type === 'quotation_sent' ||
+      isQuotationSent;
+    if (!alreadyShared) return;
+
+    let cancelled = false;
+    const name = (
+      inquiry.customer_name ||
+      inquiry.sender_name ||
+      editDetails?.companyName ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+
+    activityLogsApi
+      .getAll({ module: 'Inquiries', search: 'Quotation sent', limit: 200 })
+      .then((response) => {
+        if (cancelled) return;
+        const raw = response?.data;
+        const rows = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.data)
+            ? raw.data
+            : Array.isArray(raw?.data?.data)
+              ? raw.data.data
+              : [];
+        const match = rows.find((log: any) => {
+          const description = String(log?.description || '').toLowerCase();
+          if (!description.startsWith('quotation sent')) return false;
+          if (log?.entity_id) return String(log.entity_id) === String(inquiry.id);
+          return Boolean(name) && description.includes(name);
+        });
+        const iso = match?.timestamp || match?.created_at;
+        if (!iso) return;
+        setLastSharedById((prev) =>
+          prev[inquiry.id] ? prev : { ...prev, [inquiry.id]: iso },
+        );
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedInquiry, editDetails?.companyName, isQuotationSent, lastSharedById]);
 
   const LOST_REASONS = [
     'Price',
@@ -1332,33 +1469,23 @@ export default function InquiriesPage() {
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
-    queryKey: ['customer-names-list'],
-    queryFn: async () => {
-      const custRes = await customersApi.getAll().catch(() => null);
+    queryKey: ['customer-names-list', effectivePhone, activeRole, activeMode],
+    queryFn: async (): Promise<string[]> => {
+      const params: any = {};
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
+
+      const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
-      const fetchedNames = cList.map((c: any) => c.customer_name || c.name || c.company_name).filter(Boolean);
+      const fetchedNames: string[] = cList
+        .map((c: any) => String(c.customer_name || c.name || c.company_name || '').trim())
+        .filter(Boolean);
 
-      const defaultNames = [
-        'Supreme Steel',
-        'Mehta Engineering',
-        'Delta Structural Steel',
-        'Ram Ratna Infrastructure Pvt. Ltd.',
-        'AVION EXIM PVT. LTD.',
-        'SB Scafform Technovert Pvt. Ltd.',
-        'Apex Metals & Engg',
-        'Bhushan Steel Works',
-        'Kirloskar Pneumatic',
-        'Vardhaman Engineering',
-        'Dynamic Industries',
-        'Mahalaxmi Steel',
-        'Rathi Steel Corp',
-      ];
-
-      const inquiryCustomerNames = (rawInquiries || []).map(i => i.customer_name || i.sender_name).filter(Boolean);
-
-      return Array.from(new Set([...fetchedNames, ...inquiryCustomerNames, ...defaultNames]));
+      return Array.from(new Set(fetchedNames)).sort((a, b) => a.localeCompare(b));
     },
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: rawEmployees = [] } = useQuery<any[]>({
@@ -1404,6 +1531,183 @@ export default function InquiriesPage() {
     onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to update deal'),
   });
 
+  const releaseWonPoReservation = (
+    reservationToken: string,
+    poNumber?: string,
+    dealId?: string,
+  ) => {
+    if (!reservationToken) return;
+    void dealsApi
+      .releasePoReservation({
+        reservation_token: reservationToken,
+        po_number: poNumber?.trim() || undefined,
+        deal_id: dealId,
+      })
+      .catch(error => {
+        console.error('[SystemPO] Inquiry Won modal release failed', {
+          reservationToken,
+          poNumber,
+          dealId,
+          error,
+        });
+      });
+  };
+
+  const handleCancelWon = () => {
+    if (!wonModal) return;
+    const { poReservationToken, generatedPoNumber, poNumber, dealId } = wonModal;
+    setWonModal(null);
+    releaseWonPoReservation(
+      poReservationToken,
+      generatedPoNumber || poNumber,
+      dealId,
+    );
+  };
+
+  const openWonModalForDeal = async (details: {
+    dealId: string;
+    inqId: string;
+    companyName: string;
+    dealCode: string;
+    existingDeal?: any;
+  }) => {
+    const reservationToken = `dashboard-won:${Date.now()}:${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+    const existingGenerated = String(
+      details.existingDeal?.generated_po_number ||
+        (/^EM\/PO\/\d+$/i.test(
+          String(details.existingDeal?.po_number || '').trim(),
+        )
+          ? details.existingDeal.po_number
+          : ''),
+    ).trim();
+    const legacyReferencePo =
+      !existingGenerated &&
+      details.existingDeal?.po_number &&
+      !/^EM\/PO\/\d+$/i.test(String(details.existingDeal.po_number).trim())
+        ? String(details.existingDeal.po_number).trim()
+        : '';
+
+    wonPoDirtyRef.current = false;
+    let generatedPoNumber = existingGenerated;
+    let poNumber = existingGenerated;
+    let allocationToast: string | undefined;
+
+    if (!existingGenerated) {
+      allocationToast = toast.loading('Generating system PO…');
+    }
+
+    try {
+      if (!existingGenerated) {
+        const response = await dealsApi.allocatePo({
+          reservation_token: reservationToken,
+          deal_id: details.dealId,
+        });
+        const allocation = response?.data;
+        if (!allocation?.po_number) {
+          throw new Error('The system did not return a generated PO number.');
+        }
+        poNumber = String(allocation.po_number);
+        generatedPoNumber = String(
+          allocation.generated_po_number || allocation.po_number,
+        );
+      }
+
+      if (allocationToast) toast.dismiss(allocationToast);
+      setWonModal({
+        dealId: details.dealId,
+        inqId: details.inqId,
+        companyName: details.companyName,
+        dealCode: details.dealCode,
+        poNumber,
+        generatedPoNumber,
+        referencePoNumber: String(
+          details.existingDeal?.reference_po_number || legacyReferencePo,
+        ).trim(),
+        poDate:
+          details.existingDeal?.po_date ||
+          new Date().toISOString().split('T')[0],
+        poReservationToken: reservationToken,
+        poConflict: null,
+        checkingPo: false,
+      });
+    } catch (error: any) {
+      if (allocationToast) toast.dismiss(allocationToast);
+      releaseWonPoReservation(
+        reservationToken,
+        generatedPoNumber || poNumber || undefined,
+        details.dealId,
+      );
+      logPoAllocationError(
+        'Inquiry Won modal',
+        error,
+        reservationToken,
+        details.dealId,
+      );
+      toast.error(
+        error?.response?.data?.message ||
+          'Could not generate the system PO. Please try again.',
+      );
+    }
+  };
+
+  useEffect(() => {
+    const poNumber = wonModal?.poNumber?.trim();
+    if (!wonModal || !poNumber) return;
+
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      setWonModal((previous) =>
+        previous ? { ...previous, checkingPo: true } : null,
+      );
+
+      try {
+        const response = await dealsApi.checkPoAvailability({
+          po_number: poNumber,
+          reservation_token: wonModal.poReservationToken,
+          deal_id: wonModal.dealId,
+        });
+        if (!active) return;
+        setWonModal((previous) =>
+          previous
+            ? {
+                ...previous,
+                poConflict:
+                  response?.data?.available === false
+                    ? response?.data?.reason ||
+                      'This PO number is already allocated.'
+                    : null,
+                checkingPo: false,
+              }
+            : null,
+        );
+      } catch {
+        if (active) {
+          setWonModal((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  poConflict:
+                    'PO availability could not be checked. Please try again.',
+                  checkingPo: false,
+                }
+              : null,
+          );
+        }
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    wonModal?.poNumber,
+    wonModal?.poReservationToken,
+    wonModal?.dealId,
+  ]);
+
   const deleteDealMutation = useMutation({
     mutationFn: (id: string) => dealsApi.delete(id),
     onSuccess: () => {
@@ -1433,13 +1737,12 @@ export default function InquiriesPage() {
       const targetDeal = rawDeals?.find((d: any) => d.id === id);
       const targetId = targetDeal?.inquiry_id || id;
       const cleanId = (targetId.startsWith('DEAL-') || targetId.startsWith('INQ-') ? targetId.replace(/^(?:DEAL|INQ)-/, '') : targetId.substring(0, 6)).toUpperCase();
-      setWonModal({
+      void openWonModalForDeal({
         dealId: id,
         inqId: targetDeal?.inquiry_id || id,
         companyName: targetDeal?.customer_name || 'Customer',
         dealCode: `#INQ-${cleanId}`,
-        poNumber: targetDeal?.po_number || '',
-        poDate: new Date().toISOString().split('T')[0],
+        existingDeal: targetDeal,
       });
     } else {
       stageMutation.mutate({ id, stage });
@@ -1528,13 +1831,12 @@ export default function InquiriesPage() {
     if (targetStage === 'won') {
       const targetId = linked.inquiry_id || linked.id;
       const cleanId = (targetId.startsWith('DEAL-') || targetId.startsWith('INQ-') ? targetId.replace(/^(?:DEAL|INQ)-/, '') : targetId.substring(0, 6)).toUpperCase();
-      setWonModal({
+      void openWonModalForDeal({
         dealId: linked.id,
         inqId: inq.id,
         companyName: details.companyName || inq.sender_name || 'Customer',
         dealCode: `#INQ-${cleanId}`,
-        poNumber: linked.po_number || '',
-        poDate: new Date().toISOString().split('T')[0],
+        existingDeal: linked,
       });
       return;
     }
@@ -1561,13 +1863,44 @@ export default function InquiriesPage() {
     if (!wonModal || !wonModal.dealId) return;
     const cleanPo = (wonModal.poNumber || '').trim();
     if (!cleanPo) {
-      toast.error('Purchase Order (PO) number is required.');
+      toast.error('System PO number is required.');
+      return;
+    }
+    if (wonModal.checkingPo || wonModal.poConflict) {
+      toast.error(
+        wonModal.poConflict ||
+          'Checking PO number availability. Please wait.',
+      );
       return;
     }
 
     try {
+      const availability = await dealsApi.checkPoAvailability({
+        po_number: cleanPo,
+        reservation_token: wonModal.poReservationToken,
+        deal_id: wonModal.dealId,
+      });
+      if (availability?.data?.available === false) {
+        const reason =
+          availability?.data?.reason ||
+          'This PO number is already allocated.';
+        setWonModal((previous) =>
+          previous ? { ...previous, poConflict: reason } : null,
+        );
+        toast.error(reason);
+        return;
+      }
       const toastId = toast.loading('Marking deal as Won and adding to Orders...');
-      await dealsApi.updateStage(wonModal.dealId, 'won', undefined, cleanPo, wonModal.poDate);
+      await dealsApi.updateStage(
+        wonModal.dealId,
+        'won',
+        undefined,
+        cleanPo,
+        wonModal.poDate,
+        wonModal.referencePoNumber.trim() || undefined,
+        wonModal.generatedPoNumber.trim() || cleanPo,
+        wonModal.poReservationToken,
+      );
       toast.dismiss(toastId);
       toast.success(`Inquiry marked as Won and added to Orders module (PO: ${cleanPo})!`);
       setWonModal(null);
@@ -1580,6 +1913,14 @@ export default function InquiriesPage() {
       queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
       fetchMonthlyInquiries();
     } catch (err: any) {
+      if (err?.response?.status === 409) {
+        const reason =
+          err?.response?.data?.message ||
+          'This PO number is already allocated.';
+        setWonModal((previous) =>
+          previous ? { ...previous, poConflict: reason } : null,
+        );
+      }
       toast.error(err?.response?.data?.message || 'Failed to mark deal as won.');
     }
   };
@@ -1700,8 +2041,7 @@ export default function InquiriesPage() {
               };
             });
 
-            const hasValidRates = frozenLineItems.length > 0 && frozenLineItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
-            const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((freshItem.status || '').toLowerCase()) && hasValidRates;
+            const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((freshItem.status || '').toLowerCase());
             setSaveSuccess(isConfirmedState);
           } else {
             setEditDetails(prev => {
@@ -1733,9 +2073,7 @@ export default function InquiriesPage() {
   }, [fetchMonthlyInquiries, fetchDeals]);
 
   useEffect(() => {
-    if (Array.isArray(rawCustomers) && rawCustomers.length > 0) {
-      setExistingCustomers(rawCustomers);
-    }
+    setExistingCustomers(Array.isArray(rawCustomers) ? rawCustomers : []);
   }, [rawCustomers]);
 
   const handleOpenDrawer = (inq: InquiryItem) => {
@@ -1760,7 +2098,6 @@ export default function InquiriesPage() {
     const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
     const resolvedSp = getSalespersonName(inq);
 
-    let activeItems: any[] = [];
     if (lineItemsSrc.length > 0) {
       // Has structured line items in ai_extraction_json - use directly for ALL inquiries (review, confirmed, etc.)
       const frozenLineItems = lineItemsSrc.map((item: any) => {
@@ -1776,7 +2113,8 @@ export default function InquiriesPage() {
           rate: rate,
           dimensions: itemDim,
           sku_text: skuText,
-          amount: item.amount,
+          isManualAmount: item.isManualAmount,
+          amount: item.isManualAmount ? item.amount : 0,
         });
 
         return {
@@ -1791,13 +2129,12 @@ export default function InquiriesPage() {
           unit: rawUnit,
           rate: rate,
           amount: calc.amount,
+          converted_mt: (item as any).converted_mt !== undefined ? (item as any).converted_mt : undefined,
+          is_manual_mt: (item as any).is_manual_mt !== undefined ? (item as any).is_manual_mt : undefined,
         };
       });
-      activeItems = frozenLineItems;
-      const frozenTotal = ai.total_amount || ai.totalAmount ||
-        (frozenLineItems.length > 0
-          ? frozenLineItems.reduce((s: number, i: any) => s + i.amount, 0)
-          : 0);
+      const lineItemsSum = frozenLineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0);
+      const frozenTotal = lineItemsSum > 0 ? lineItemsSum : (ai.total_amount || ai.totalAmount || 0);
 
       const parsed = parseInquiryText(inq.raw_text || '', inq);
 
@@ -1824,19 +2161,14 @@ export default function InquiriesPage() {
     } else {
       // True fallback: no structured line items in ai_extraction_json, parse raw text
       const parsed = parseInquiryText(inq.raw_text || '', inq);
-      activeItems = parsed.lineItems || [];
       setEditDetails({
         ...parsed,
         salespersonName: resolvedSp,
       });
     }
 
-    // A deal/inquiry is ONLY in Saved/Confirmed state if all line items have valid Rate > 0 and Quantity > 0
-    const hasValidRates = activeItems.length > 0 && activeItems.every((i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0 && !!i.sku_text?.trim());
-    const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
-    const isQuotedState = ['quoted', 'won'].includes((inq.status || '').toLowerCase()) && hasValidRates;
-
-    setSaveSuccess(isConfirmedState || isQuotedState);
+    const isConfirmedState = ['confirmed', 'quoted', 'won'].includes((inq.status || '').toLowerCase());
+    setSaveSuccess(isConfirmedState);
     setFieldErrors({});
   };
 
@@ -1894,95 +2226,20 @@ export default function InquiriesPage() {
     }
   }, [inquiries, location.search]);
 
-  const handleSaveDrawerDetails = async () => {
+  const executeSaveDrawerDetails = async (itemsToSave: LineItemDetail[]) => {
     if (!selectedInquiry || !editDetails) return;
-    if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
-
-    const errors: { [key: string]: string } = {};
-
-    // 1. Company Name validation
-    if (!editDetails.companyName || !editDetails.companyName.trim()) {
-      errors['companyName'] = 'Company Name is required.';
-    }
-
-    // 2. Line Items validation (Rate > 0, Quantity > 0, Description required, HSN/SAC required)
-    const rawItems = editDetails.lineItems && editDetails.lineItems.length > 0
-      ? editDetails.lineItems
-      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
-
-    // Filter out completely blank trailing rows added via '+' but left unfilled
-    let currentItems = rawItems.filter((item) => {
-      const hasSku = Boolean(item.sku_text && item.sku_text.trim());
-      const hasDim = Boolean(item.dimensions && item.dimensions.trim());
-      const hasQty = Number(item.quantity) > 0;
-      const hasRate = Number(item.rate) > 0;
-      return hasSku || hasDim || hasQty || hasRate;
-    });
-
-    if (currentItems.length === 0) {
-      currentItems = rawItems;
-    }
-
-    if (currentItems.length === 0) {
-      errors['lineItems'] = 'Please add at least one line item.';
-    }
-
-    for (let i = 0; i < currentItems.length; i++) {
-      const item = currentItems[i];
-      if (!item.sku_text || !item.sku_text.trim()) {
-        errors[`sku_${i}`] = 'Description is required.';
-      }
-      if (!item.dimensions || !item.dimensions.trim()) {
-        errors[`dim_${i}`] = 'Specification is required.';
-      }
-      if (!item.hsn_code || !item.hsn_code.trim()) {
-        errors[`hsn_${i}`] = 'HSN/SAC is required.';
-      }
-      if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
-        errors[`qty_${i}`] = 'Quantity must be > 0.';
-      }
-      if (item.rate === null || item.rate === undefined || Number(item.rate) <= 0 || isNaN(Number(item.rate))) {
-        errors[`rate_${i}`] = 'Rate is required (must be > 0).';
-      }
-    }
-
-    // 3. Delivery Address validation
-    if (!editDetails.deliveryLocation || !editDetails.deliveryLocation.trim()) {
-      errors['deliveryLocation'] = 'Delivery Address is required.';
-    }
-
-    // 4. Payment Terms validation
-    if (!editDetails.paymentTerms || !editDetails.paymentTerms.trim()) {
-      errors['paymentTerms'] = 'Payment Terms is required.';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setSaveSuccess(false);
-
-      // Scroll to first invalid field
-      setTimeout(() => {
-        const firstErrEl = document.querySelector('.field-error-border');
-        if (firstErrEl) {
-          firstErrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 50);
-      return;
-    }
-
-    setFieldErrors({});
     try {
       setSubmitting(true);
 
-      const baseAmt = currentItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
+      const baseAmt = itemsToSave.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
       const qBreakdown = calculateQuotationBreakdown(baseAmt);
 
       let summaryRequirement = '';
-      if (currentItems.length > 0) {
-        const itemStrs = currentItems.map(item => `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}: ${item.quantity} ${item.unit || 'MT'} @ ₹${item.rate}/${item.unit || 'MT'}`);
+      if (itemsToSave.length > 0) {
+        const itemStrs = itemsToSave.map(item => `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}: ${item.quantity} ${item.unit || 'MT'} @ ₹${Number(item.rate) || 0}/${item.unit || 'MT'}`);
         summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       } else {
-        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${editDetails.unitPrice.toLocaleString('en-IN')}/MT. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+        summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${(Number(editDetails.unitPrice) || 0).toLocaleString('en-IN')}/MT. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       }
 
       const mediaUrlsPayload = drawerFileBase64 ? [drawerFileBase64] : (selectedInquiry.media_urls || []);
@@ -1997,8 +2254,8 @@ export default function InquiriesPage() {
         delivery_location: editDetails.deliveryLocation,
         paymentTerms: editDetails.paymentTerms,
         payment_terms: editDetails.paymentTerms,
-        lineItems: currentItems,
-        line_items: currentItems,
+        lineItems: itemsToSave,
+        line_items: itemsToSave,
         requirement: summaryRequirement,
         totalAmount: baseAmt,
         total_amount: baseAmt,
@@ -2043,12 +2300,104 @@ export default function InquiriesPage() {
 
       // Update in-memory inquiries list so item stays in list immediately
       setInquiries(prev => (Array.isArray(prev) ? prev.map(item => item.id === selectedInquiry.id ? updatedObj : item) : []));
-    } catch (err) {
+      toast.success('Inquiry saved successfully.');
+    } catch (err: any) {
       console.error('Error saving inquiry details:', err);
-      toast.error('Failed to save inquiry changes.');
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to save inquiry changes.';
+      toast.error(typeof errMsg === 'string' ? errMsg : 'Failed to save inquiry changes.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSaveDrawerDetails = async () => {
+    if (!selectedInquiry || !editDetails) return;
+    if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
+
+    const errors: { [key: string]: string } = {};
+
+    // 1. Company Name validation
+    if (!editDetails.companyName || !editDetails.companyName.trim()) {
+      errors['companyName'] = 'Company Name is required.';
+    }
+
+    // 2. Line Items validation (Quantity > 0, Description required, HSN/SAC required)
+    const rawItems = editDetails.lineItems && editDetails.lineItems.length > 0
+      ? editDetails.lineItems
+      : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '') || '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+
+    // Filter out completely blank trailing rows added via '+' but left unfilled
+    let currentItems = rawItems.filter((item) => {
+      const hasSku = Boolean(item.sku_text && item.sku_text.trim());
+      const hasDim = Boolean(item.dimensions && item.dimensions.trim());
+      const hasQty = Number(item.quantity) > 0;
+      const hasRate = item.rate !== '' && item.rate !== null && item.rate !== undefined && Number(item.rate) > 0;
+      return hasSku || hasDim || hasQty || hasRate;
+    });
+
+    if (currentItems.length === 0) {
+      currentItems = rawItems;
+    }
+
+    if (currentItems.length === 0) {
+      errors['lineItems'] = 'Please add at least one line item.';
+    }
+
+    for (let i = 0; i < currentItems.length; i++) {
+      const item = currentItems[i];
+      if (!item.sku_text || !item.sku_text.trim()) {
+        errors[`sku_${i}`] = 'Description is required.';
+      }
+      if (!item.dimensions || !item.dimensions.trim()) {
+        errors[`dim_${i}`] = 'Specification is required.';
+      }
+      if (!item.hsn_code || !item.hsn_code.trim()) {
+        errors[`hsn_${i}`] = 'HSN/SAC is required.';
+      }
+      if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
+        errors[`qty_${i}`] = 'Quantity must be > 0.';
+      }
+    }
+
+    // 3. Delivery Address validation
+    if (!editDetails.deliveryLocation || !editDetails.deliveryLocation.trim()) {
+      errors['deliveryLocation'] = 'Delivery Address is required.';
+    }
+
+    // 4. Payment Terms validation
+    if (!editDetails.paymentTerms || !editDetails.paymentTerms.trim()) {
+      errors['paymentTerms'] = 'Payment Terms is required.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setSaveSuccess(false);
+
+      // Scroll to first invalid field
+      setTimeout(() => {
+        const firstErrEl = document.querySelector('.field-error-border');
+        if (firstErrEl) {
+          firstErrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
+      return;
+    }
+
+    setFieldErrors({});
+
+    // Check if any product has rate set to 0 or left blank
+    const unpricedItems = currentItems.filter((item) => {
+      const r = item.rate;
+      return r === null || r === undefined || r === '' || isNaN(Number(r)) || Number(r) <= 0;
+    });
+
+    if (unpricedItems.length > 0) {
+      setPendingSaveItems(currentItems);
+      setShowZeroRateConfirmModal(true);
+      return;
+    }
+
+    await executeSaveDrawerDetails(currentItems);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2436,9 +2785,74 @@ export default function InquiriesPage() {
     return sortNewestFirst(combined);
   }, [rawInquiries, inquiries]);
 
+  // Date range and search only. Status stays on the table and Kanban so the dropdown can still show every stage in the period.
+  const periodInquiries = useMemo(() => {
+    const list = activeInquiryList.filter(i => {
+      try {
+        if (dateRange.from && dateRange.to) {
+          const parseSafeIso = (dStr?: string) => {
+            if (!dStr) return '';
+            try {
+              const trimmed = String(dStr).trim();
+              if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+              const d = new Date(trimmed);
+              if (isNaN(d.getTime())) return '';
+              return d.toISOString().split('T')[0];
+            } catch {
+              return '';
+            }
+          };
+          const inqDate = parseSafeIso(i?.created_at);
+          if (inqDate) {
+            const fromDate = dateRange.from.split('T')[0];
+            const toDate = dateRange.to.split('T')[0];
+            if (inqDate < fromDate || inqDate > toDate) return false;
+          }
+        }
+
+        const text = i?.raw_text || '';
+        const parsed = parseInquiryText(text, i);
+        const name = (parsed.companyName || i?.customer_name || i?.sender_name || '').toLowerCase();
+        const phone = (parsed.customerPhone || i?.sender_phone || i?.customer_phone || '').toLowerCase();
+        const itemsSummary = (
+          (parsed.lineItems || []).map((li: LineItemDetail) => `${li.sku_text} ${li.dimensions || ''} ${li.quantity} ${li.unit || ''}`).join(' ') +
+          ' ' + (parsed.productType || '')
+        ).toLowerCase();
+
+        const formattedDate = i?.created_at ? new Date(i.created_at).toLocaleString('en-IN').toLowerCase() : '';
+        const dateOnly = i?.created_at ? new Date(i.created_at).toLocaleDateString('en-IN').toLowerCase() : '';
+        const isoDate = (i?.created_at || '').toLowerCase();
+        const linkedDealForSearch = getLinkedDeal(i, parsed.companyName);
+        const dealIdStr = (linkedDealForSearch?.id ? `inq-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `inq-${i.id.substring(0, 6)}` : '')).toLowerCase();
+        const dealLegacyIdStr = (linkedDealForSearch?.id ? `deal-${linkedDealForSearch.id.substring(0, 6)}` : (i.id ? `deal-${i.id.substring(0, 6)}` : '')).toLowerCase();
+        const altInqIdStr = (i.id ? `inq-${i.id.substring(0, 6)}` : '').toLowerCase();
+
+        const s = searchTerm.toLowerCase().trim();
+        const matchesSearch =
+          !s ||
+          name.includes(s) ||
+          dealIdStr.includes(s) ||
+          dealLegacyIdStr.includes(s) ||
+          altInqIdStr.includes(s) ||
+          itemsSummary.includes(s) ||
+          formattedDate.includes(s) ||
+          dateOnly.includes(s) ||
+          isoDate.includes(s) ||
+          phone.includes(s) ||
+          text.toLowerCase().includes(s);
+
+        return matchesSearch;
+      } catch {
+        return true;
+      }
+    });
+
+    return sortNewestFirst(list);
+  }, [activeInquiryList, dateRange, searchTerm, rawDeals]);
+
   const stageCounts = useMemo(() => {
     const counts = {
-      all: activeInquiryList.length,
+      all: periodInquiries.length,
       new_inquiry: 0,
       quoted: 0,
       negotiation: 0,
@@ -2446,7 +2860,7 @@ export default function InquiriesPage() {
       won: 0,
       lost: 0,
     };
-    activeInquiryList.forEach(inq => {
+    periodInquiries.forEach(inq => {
       const parsed = parseInquiryText(inq.raw_text || '', inq);
       const stageKey = getInquiryDealStageKey(inq, parsed.companyName);
       const normKey = (stageKey === 'qualified' || stageKey === 'saved' || stageKey === 'confirmed') ? 'quoted' : (stageKey === 'hold' ? 'on_hold' : stageKey);
@@ -2455,7 +2869,7 @@ export default function InquiriesPage() {
       }
     });
     return counts;
-  }, [activeInquiryList, rawDeals]);
+  }, [periodInquiries, rawDeals]);
 
   const filtered = useMemo(() => {
     const list = activeInquiryList.filter(i => {
@@ -2595,8 +3009,7 @@ export default function InquiriesPage() {
     return board;
   }, [filtered, rawDeals]);
 
-  // All-time Total Inquiries count
-  const totalInquiriesCount = activeInquiryList.length;
+  const totalInquiriesCount = periodInquiries.length;
 
 
 
@@ -2852,7 +3265,7 @@ export default function InquiriesPage() {
       ) : (
         /* Standard Inquiries Table View */
         <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
             <table className="w-full table-fixed text-left border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider shadow-2xs">
                 <tr>
@@ -2872,13 +3285,7 @@ export default function InquiriesPage() {
                   Loading monthly inquiries...
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                  No product inquiries found for this period.
-                </td>
-              </tr>
-            ) : (
+            ) : filtered.length === 0 ? null : (
               paginatedInquiries.map((inq, idx) => {
                 const globalIdx = startIndex + idx + 1;
                 const details = (() => {
@@ -2963,6 +3370,12 @@ export default function InquiriesPage() {
                       <div className="text-xs text-slate-500 mt-0.5 font-mono">
                         {inq.created_at ? new Date(inq.created_at).toLocaleString('en-IN') : '-'}
                       </div>
+                      {canViewSalesperson && details.salespersonName && (
+                        <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                          <UserCheck size={12} className="text-slate-400 shrink-0" />
+                          Rep: {details.salespersonName}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {dealIdDisplay}
@@ -3124,6 +3537,11 @@ export default function InquiriesPage() {
             )}
           </tbody>
         </table>
+        {!loading && filtered.length === 0 && (
+          <div className="flex-1 flex items-center justify-center px-4 text-center text-xs text-slate-400">
+            No product inquiries found for this period.
+          </div>
+        )}
         </div>
 
         {/* Pagination Bar */}
@@ -3297,21 +3715,21 @@ export default function InquiriesPage() {
                   <table className="w-full text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[4%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[27%]">
+                        <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[32%]">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center">
                           HSN/SAC <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center">
-                          Quantity &amp; Unit <span className="text-red-500 font-bold">*</span>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[23%] text-center">
+                          Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center">
-                          Rate (₹) <span className="text-red-500 font-bold">*</span>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center min-w-[95px]">
+                          Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[19%] text-left">Amount (₹)</th>
-                        <th className="px-2 py-3 text-center w-[4%]"></th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
+                        <th className="px-2 py-3 text-center w-[3%]"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
@@ -3432,8 +3850,8 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`hsn_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 border-r border-slate-200">
-                            <div className="flex items-center gap-1.5 w-full min-w-[135px]">
+                          <td className="px-2.5 py-3.5 border-r border-slate-200">
+                            <div className="flex items-center gap-1.5 w-full min-w-[170px]">
                               <input
                                 type="number"
                                 min="0"
@@ -3443,7 +3861,10 @@ export default function InquiriesPage() {
                                   const rawQ = val === '' ? 0 : parseFloat(val);
                                   const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  const currentItem = { ...updated[idx], quantity: safeQ };
+                                  let currentItem = { ...updated[idx], quantity: safeQ };
+                                  if (normalizeUnit(currentItem.unit) === 'MT') {
+                                    currentItem.converted_mt = safeQ;
+                                  }
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                   updated[idx] = { ...currentItem, amount: calc.amount };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
@@ -3455,7 +3876,7 @@ export default function InquiriesPage() {
                                   }
                                 }}
                                 placeholder="0"
-                                className={`flex-1 min-w-[65px] px-2 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
+                                className={`flex-1 min-w-[42px] px-1.5 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
                                   fieldErrors[`qty_${idx}`]
                                     ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
                                     : 'border border-slate-300 focus:ring-blue-500'
@@ -3464,8 +3885,15 @@ export default function InquiriesPage() {
                               <select
                                 value={normalizeUnit(item.unit) || 'MT'}
                                 onChange={(e) => {
+                                  const newUnit = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  const currentItem = { ...updated[idx], unit: e.target.value };
+                                  let currentItem = { ...updated[idx], unit: newUnit };
+                                  if (newUnit === 'MT') {
+                                    currentItem.converted_mt = currentItem.quantity;
+                                  } else if (currentItem.is_manual_mt && (currentItem.converted_mt === undefined || currentItem.converted_mt === 0)) {
+                                    delete currentItem.converted_mt;
+                                    delete currentItem.is_manual_mt;
+                                  }
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                   updated[idx] = { ...currentItem, amount: calc.amount };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
@@ -3473,7 +3901,7 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                 }}
-                                className="w-[62px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
                                 <option value="Pcs">Pcs</option>
@@ -3482,34 +3910,91 @@ export default function InquiriesPage() {
                                 <option value="Plates">Plates</option>
                                 <option value="Coils">Coils</option>
                               </select>
+                              {(() => {
+                                const itemWeight = formatLineItemWeightMt(item);
+                                const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+                                const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                                  ? item.converted_mt
+                                  : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
+                                const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
+
+                                return (
+                                  <div
+                                    className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                      hasWeight
+                                        ? 'bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                        : 'bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                    }`}
+                                    title="Weight in MT (Editable - Amount calculates as MT × Rate)">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      value={displayMt ?? ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        const updated = [...(editDetails.lineItems || [])];
+                                        let currentItem = { ...updated[idx] };
+
+                                        if (val === '') {
+                                          delete currentItem.converted_mt;
+                                          delete currentItem.is_manual_mt;
+                                        } else {
+                                          const rawMt = parseFloat(val);
+                                          const safeMt = isNaN(rawMt) || rawMt < 0 ? 0 : rawMt;
+                                          currentItem.converted_mt = val;
+                                          currentItem.is_manual_mt = true;
+                                          if (normalizeUnit(currentItem.unit) === 'MT') {
+                                            currentItem.quantity = safeMt;
+                                          }
+                                        }
+
+                                        const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                        updated[idx] = { ...currentItem, amount: calc.amount };
+                                        const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                        const totalTons = calculateTotalTonnageMt(updated).totalMt;
+                                        setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
+                                        setSaveSuccess(false);
+                                      }}
+                                      placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
+                                      className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                    />
+                                    <span className="text-[10px] font-mono font-bold text-blue-700/80 select-none ml-0.5">MT</span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                             {fieldErrors[`qty_${idx}`] && (
                               <span className="text-[10px] text-red-600 font-bold block text-center mt-0.5">{fieldErrors[`qty_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 border-r border-slate-200 font-bold font-mono">
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
                             <input
                               type="number"
                               min="0"
-                              value={item.rate === 0 ? '' : item.rate}
+                              step="any"
+                              value={item.rate === '' || item.rate === undefined || item.rate === null ? '' : item.rate}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                const rawR = val === '' ? 0 : parseFloat(val);
-                                const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
                                 const updated = [...(editDetails.lineItems || [])];
+                                let safeR: number | string = '';
+                                if (val !== '') {
+                                  const parsed = parseFloat(val);
+                                  safeR = isNaN(parsed) || parsed < 0 ? 0 : parsed;
+                                }
                                 const currentItem = { ...updated[idx], rate: safeR };
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, rate: typeof safeR === 'number' ? safeR : 0, amount: 0 });
                                 updated[idx] = { ...currentItem, amount: calc.amount };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 const totalTons = calculateTotalTonnageMt(updated).totalMt;
-                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons, unitPrice: updated[0]?.rate || 0 });
+                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons, unitPrice: Number(updated[0]?.rate) || 0 });
                                 setSaveSuccess(false);
                                 if (fieldErrors[`rate_${idx}`]) {
                                   setFieldErrors(prev => { const n = { ...prev }; delete n[`rate_${idx}`]; return n; });
                                 }
                               }}
                               placeholder="0"
-                              className={`w-full px-2 py-1.5 bg-white rounded font-bold text-xs font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900 transition-all ${
+                              className={`w-full px-2.5 py-1.5 bg-white rounded font-bold text-xs font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900 transition-all ${
                                 fieldErrors[`rate_${idx}`]
                                   ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
                                   : 'border border-slate-300 focus:ring-blue-500'
@@ -3519,7 +4004,7 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block mt-0.5">{fieldErrors[`rate_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[130px]">
+                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
                             <input
                               type="number"
                               min="0"
@@ -3529,13 +4014,13 @@ export default function InquiriesPage() {
                                 const rawA = val === '' ? 0 : parseFloat(val);
                                 const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                                 const updated = [...(editDetails.lineItems || [])];
-                                updated[idx] = { ...updated[idx], amount: safeA };
+                                updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
                                 setSaveSuccess(false);
                               }}
                               placeholder="0"
-                              className="w-full min-w-[110px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                             />
                           </td>
                           <td className="px-2 py-3.5 text-center">
@@ -3592,11 +4077,25 @@ export default function InquiriesPage() {
 
                     const totalTonnage = calculateTotalTonnageMt(activeLineItems);
                     const formattedItemsInTotal = totalTonnage.formattedText;
+                    const quantityLabel = (totalTonnage.summaryText || '').replace(/, /g, ' | ');
+                    const estimateParts = formattedItemsInTotal.split('Est. Total Weight:');
+                    const weightLabel = formattedItemsInTotal.includes('Weight conversion unavailable')
+                      ? 'Weight conversion unavailable'
+                      : estimateParts.length > 1
+                        ? estimateParts[1].trim()
+                        : formattedItemsInTotal;
 
                     return (
                       <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                        <div className="text-xs font-semibold text-slate-700 pt-1">
-                          Items in Total <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        <div className="pt-1 text-xs leading-snug text-slate-900">
+                          <p>
+                            <span className="font-bold">Total Quantities: </span>
+                            <span className="font-mono font-bold">{quantityLabel}</span>
+                          </p>
+                          <p className="mt-1">
+                            <span className="font-bold">Est. Total Weight: </span>
+                            <span className="font-mono font-bold">{weightLabel}</span>
+                          </p>
                         </div>
 
                         <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
@@ -3725,32 +4224,50 @@ export default function InquiriesPage() {
               {(() => {
                 const currentDrawerDealStage = selectedInquiry ? getInquiryDealStageKey(selectedInquiry, editDetails?.companyName) : '';
                 const isQuotedDrawerStage = currentDrawerDealStage === 'quoted' || currentDrawerDealStage === 'qualified';
-                if (!isQuotedDrawerStage) return null;
+                if (!selectedInquiry || !isQuotedDrawerStage) return null;
+
+                const shareAgain =
+                  ['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) ||
+                  isQuotationSent;
+                const lastSharedLabel = shareAgain
+                  ? formatLastSharedLabel(
+                      lastSharedById[selectedInquiry.id] ||
+                        (selectedInquiry.ai_extraction_json as any)?.quotation_shared_at,
+                    )
+                  : '';
 
                 return (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShareInquiry(selectedInquiry);
-                      setShareDetails(editDetails);
-                      setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
-                      setShowQuotationModal(true);
-                    }}
-                    className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
-                      ['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) || isQuotationSent
-                        ? 'bg-emerald-600 hover:bg-emerald-700'
-                        : 'bg-blue-600 hover:bg-blue-700'
-                    }`}>
-                    {['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) || isQuotationSent ? (
-                      <>
-                        <Check size={15} /> Quotation Sent 
-                      </>
-                    ) : (
-                      <>
-                        <Send size={15} /> Share Quotation 
-                      </>
+                  <span className="relative group">
+                    <button
+                      type="button"
+                      title={lastSharedLabel || undefined}
+                      onClick={() => {
+                        setShareInquiry(selectedInquiry);
+                        setShareDetails(editDetails);
+                        setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
+                        setShowQuotationModal(true);
+                      }}
+                      className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                        shareAgain
+                          ? 'bg-emerald-600 hover:bg-emerald-700'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      }`}>
+                      {shareAgain ? (
+                        <>
+                          <Check size={15} /> Share Again 
+                        </>
+                      ) : (
+                        <>
+                          <Send size={15} /> Share Quotation 
+                        </>
+                      )}
+                    </button>
+                    {lastSharedLabel && (
+                      <span className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden group-hover:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg">
+                        {lastSharedLabel}
+                      </span>
                     )}
-                  </button>
+                  </span>
                 );
               })()}
             </div>
@@ -3856,6 +4373,71 @@ export default function InquiriesPage() {
         </div>
       )}
 
+      {/* 0 / Blank Rate Save Confirmation Modal */}
+      {showZeroRateConfirmModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl shrink-0">
+                <AlertCircle size={24} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900">
+                  Confirm Save with 0 / Blank Rates
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  This inquiry contains products with 0/blank rates. Do you still want to proceed?
+                </p>
+              </div>
+            </div>
+
+            {/* List the unpriced products */}
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 max-h-40 overflow-y-auto">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Products with 0 / Blank Rate:
+              </span>
+              {pendingSaveItems
+                .filter(i => i.rate === null || i.rate === undefined || i.rate === '' || isNaN(Number(i.rate)) || Number(i.rate) <= 0)
+                .map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs py-0.5">
+                    <span className="font-semibold text-slate-800 truncate mr-2">
+                      {item.sku_text || 'Item'} {item.dimensions ? `(${item.dimensions})` : ''}
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-amber-600 shrink-0 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Rate: {item.rate === '' || item.rate === null || item.rate === undefined ? 'Blank' : '₹0'}
+                    </span>
+                  </div>
+                ))}
+            </div>
+
+            <p className="text-[11px] text-slate-500 italic">
+              Note: Products with 0 or blank rates will be saved with this inquiry but automatically excluded from the quotation PDF.
+            </p>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowZeroRateConfirmModal(false);
+                  setPendingSaveItems([]);
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
+                Review Rates
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowZeroRateConfirmModal(false);
+                  await executeSaveDrawerDetails(pendingSaveItems);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-sm">
+                Proceed &amp; Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Send Official Quotation Email Modal (Resend API Integration) */}
       {showQuotationModal && shareDetails && shareInquiry && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
@@ -3889,6 +4471,51 @@ export default function InquiriesPage() {
               </div>
             </div>
 
+            {/* Banner: Unpriced Products Automatically Excluded from PDF */}
+            {(() => {
+              const items = shareDetails.lineItems || [];
+              const zeroItems = items.filter(
+                i => i.rate === null || i.rate === undefined || i.rate === '' || isNaN(Number(i.rate)) || Number(i.rate) <= 0
+              );
+              if (zeroItems.length === 0) return null;
+
+              return (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1.5">
+                  <div className="flex items-center gap-2 font-bold text-amber-950">
+                    <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                    <span>Unpriced Products Automatically Excluded</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    <strong>{zeroItems.length} product(s)</strong> with empty or 0 rates are automatically removed from this quotation PDF to ensure accuracy and clarity:
+                  </p>
+                  <ul className="text-[11px] font-medium text-amber-900 list-disc list-inside space-y-0.5 pl-1">
+                    {zeroItems.map((z, idx) => (
+                      <li key={idx} className="truncate">
+                        {z.sku_text || 'Item'}{z.dimensions ? ` (${z.dimensions})` : ''} — {z.quantity} {z.unit || 'MT'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+
+            {/* Warning if all items are unpriced */}
+            {(() => {
+              const items = shareDetails.lineItems || [];
+              const validItems = items.filter(
+                i => i.rate !== null && i.rate !== undefined && i.rate !== '' && !isNaN(Number(i.rate)) && Number(i.rate) > 0
+              );
+              if (items.length > 0 && validItems.length === 0) {
+                return (
+                  <div className="p-3 rounded-xl text-xs font-bold border bg-rose-50 text-rose-900 border-rose-200 flex items-center gap-2">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                    Cannot send quotation: All products have 0 or blank rates. Please specify prices before dispatching.
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -3901,6 +4528,61 @@ export default function InquiriesPage() {
                   value={quotationEmail}
                   onChange={e => setQuotationEmail(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
+                />
+              </div>
+
+              {quotationPreviewLoading && (
+                <div className="text-xs text-slate-500 flex items-center gap-2">
+                  <RefreshCw size={13} className="animate-spin" /> Preparing email preview…
+                </div>
+              )}
+              {quotationPreviewError && (
+                <div className="p-3 rounded-xl text-xs font-bold border bg-rose-50 text-rose-900 border-rose-200">
+                  {quotationPreviewError}
+                </div>
+              )}
+              {quotationSenderEmail && (
+                <div className="text-[11px] text-slate-500">
+                  From: <span className="font-semibold text-slate-700">{quotationSenderEmail}</span>
+                  {quotationReference && (
+                    <> · Reference: <span className="font-semibold text-slate-700">{quotationReference}</span></>
+                  )}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  CC
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={quotationCc.join(', ')}
+                  placeholder="Resolved after preview"
+                  className="w-full px-3.5 py-2.5 border border-slate-200 bg-slate-50 rounded-xl text-xs font-semibold outline-none text-slate-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Subject <span className="text-red-500 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={quotationSubject}
+                  onChange={e => setQuotationSubject(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Email Body <span className="text-red-500 font-bold">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={10}
+                  value={quotationBody}
+                  onChange={e => setQuotationBody(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium leading-relaxed outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800 resize-y"
                 />
               </div>
 
@@ -3934,7 +4616,19 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
-                disabled={sendingQuotation || !quotationEmail.trim()}
+                disabled={
+                  sendingQuotation ||
+                  quotationPreviewLoading ||
+                  !quotationEmail.trim() ||
+                  !quotationSubject.trim() ||
+                  !quotationBody.trim() ||
+                  !quotationSenderEmail ||
+                  Boolean(quotationPreviewError) ||
+                  ((shareDetails.lineItems || []).length > 0 &&
+                    !(shareDetails.lineItems || []).some(
+                      i => i.rate !== null && i.rate !== undefined && i.rate !== '' && !isNaN(Number(i.rate)) && Number(i.rate) > 0
+                    ))
+                }
                 onClick={async () => {
                   const targetEmail = quotationEmail.trim();
                   if (!targetEmail || !targetEmail.includes('@')) {
@@ -3944,19 +4638,43 @@ export default function InquiriesPage() {
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
+                    const pricedItems = (shareDetails.lineItems || []).filter(
+                      i => i.rate !== null && i.rate !== undefined && i.rate !== '' && !isNaN(Number(i.rate)) && Number(i.rate) > 0
+                    );
+                    const filteredDetails = {
+                      ...shareDetails,
+                      lineItems: pricedItems.length > 0 ? pricedItems : shareDetails.lineItems,
+                    };
                     const res = await inquiriesApi.sendQuotation(shareInquiry.id, {
                       customer_email: targetEmail,
                       customer_name: shareDetails.companyName,
-                      details: shareDetails
+                      details: filteredDetails,
+                      email_subject: quotationSubject,
+                      email_body: quotationBody,
+                      quotation_reference: quotationReference,
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
+                    const sharedAt =
+                      res?.data?.quotation_shared_at ||
+                      res?.data?.data?.quotation_shared_at ||
+                      new Date().toISOString();
                     setResendNotice(msg);
                     setIsQuotationSent(true);
+                    setLastSharedById(prev => ({ ...prev, [shareInquiry.id]: sharedAt }));
 
                     // 1. Optimistic live update of local state immediately
-                    setInquiries(prev => prev.map(i => i.id === shareInquiry.id ? { ...i, status: 'quoted', inquiry_type: 'quotation_sent' } : i));
+                    setInquiries(prev => prev.map(i => i.id === shareInquiry.id ? {
+                      ...i,
+                      status: 'quoted',
+                      inquiry_type: 'quotation_sent',
+                      ai_extraction_json: { ...(i.ai_extraction_json || {}), quotation_shared_at: sharedAt },
+                    } : i));
                     if (selectedInquiry && selectedInquiry.id === shareInquiry.id) {
-                      setSelectedInquiry(prev => prev ? { ...prev, status: 'quoted' } : null);
+                      setSelectedInquiry(prev => prev ? {
+                        ...prev,
+                        status: 'quoted',
+                        ai_extraction_json: { ...(prev.ai_extraction_json || {}), quotation_shared_at: sharedAt },
+                      } : null);
                     }
 
                     // Optimistically update linked deal stage to 'quoted'
@@ -4265,7 +4983,7 @@ export default function InquiriesPage() {
                 </div>
               )}
               <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
-                All line items, payment tracking records, and KRA logs tied to this deal will be permanently removed from the database and dashboard.
+                All line items, payment tracking records, and logs tied to this deal will be permanently removed from the database and dashboard.
               </p>
             </div>
 
@@ -4344,7 +5062,7 @@ export default function InquiriesPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900">Mark Inquiry as Won</h3>
-                <p className="text-xs text-slate-500">Enter PO details to convert this to an active Order</p>
+                <p className="text-xs text-slate-500">Confirm the generated system PO before creating the Order</p>
               </div>
             </div>
 
@@ -4364,15 +5082,52 @@ export default function InquiriesPage() {
             <form onSubmit={(e) => { e.preventDefault(); handleConfirmWon(); }} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Purchase Order (PO) Number <span className="text-rose-500">*</span>
+                  System PO Number <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   autoFocus
                   required
-                  placeholder="e.g. PO-9842 or PO/2026/041"
+                  placeholder="EM/PO/1"
                   value={wonModal.poNumber}
-                  onChange={(e) => setWonModal(prev => prev ? { ...prev, poNumber: e.target.value } : null)}
+                  onChange={(e) => {
+                    wonPoDirtyRef.current = true;
+                    setWonModal((previous) =>
+                      previous
+                        ? {
+                            ...previous,
+                            poNumber: e.target.value,
+                            poConflict: null,
+                          }
+                        : null,
+                    );
+                  }}
+                  className={`w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    wonModal.poConflict
+                      ? 'border-rose-400 bg-rose-50'
+                      : 'border-slate-300'
+                  }`}
+                />
+                <p className="mt-1 text-[10px] text-slate-500">Generated automatically and editable before confirmation.</p>
+                {wonModal.checkingPo && <p className="mt-1 text-[10px] text-slate-500">Checking availability…</p>}
+                {wonModal.poConflict && <p className="mt-1 text-[10px] font-semibold text-rose-600">{wonModal.poConflict}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Reference PO <span className="text-[10px] font-medium text-slate-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Customer PO from document/text"
+                  value={wonModal.referencePoNumber}
+                  onChange={(e) =>
+                    setWonModal((previous) =>
+                      previous
+                        ? { ...previous, referencePoNumber: e.target.value }
+                        : null,
+                    )
+                  }
                   className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
@@ -4392,13 +5147,13 @@ export default function InquiriesPage() {
               <div className="flex gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setWonModal(null)}
+                  onClick={handleCancelWon}
                   className="flex-1 px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer">
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={!wonModal.poNumber.trim()}
+                  disabled={!wonModal.poNumber.trim() || !!wonModal.poConflict || !!wonModal.checkingPo}
                   className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                   <CheckCircle size={14} />
                   Confirm &amp; Create Order
