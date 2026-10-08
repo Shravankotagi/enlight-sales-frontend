@@ -6,7 +6,9 @@ export function getBackendUrl(): string {
   let url = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
   if (!url) {
     if (isLocal) return 'http://localhost:3000';
-    return 'https://api.enlightmetals.com';
+    throw new Error(
+      'Missing VITE_BACKEND_URL. Configure the frontend build for its deployment environment.',
+    );
   }
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = `https://${url}`;
@@ -74,7 +76,12 @@ API.interceptors.request.use((config) => {
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestUrl = String(error.config?.url || '');
+    const isOtpAuthRequest = /\/auth\/(?:request-otp|verify-otp)(?:$|[/?])/.test(
+      requestUrl,
+    );
+
+    if (error.response?.status === 401 && !isOtpAuthRequest) {
       sessionStorage.removeItem('enlight_token');
       sessionStorage.removeItem('enlight_employee');
       sessionStorage.removeItem('enlight_viewing_as');
