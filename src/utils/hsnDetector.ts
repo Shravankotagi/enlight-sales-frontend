@@ -93,7 +93,7 @@ export function detectHsnCode(productName: string | null | undefined, dimensions
   const pName = (productName || '').toLowerCase().trim();
   const dStr = (dimensions || '').toLowerCase().trim();
   const combined = `${pName} ${dStr}`.trim();
-  if (!combined) return '72083840';
+  if (!combined) return '';
 
   const t = extractThickness(dimensions) || extractThickness(productName);
 

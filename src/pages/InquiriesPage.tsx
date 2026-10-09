@@ -1497,7 +1497,7 @@ export default function InquiriesPage() {
     {
       sku_text: '',
       dimensions: '',
-      hsn_code: '72083840',
+      hsn_code: '',
       quantity: 0,
       unit: 'MT',
       rate: 0,
@@ -1528,7 +1528,7 @@ export default function InquiriesPage() {
       {
         sku_text: '',
         dimensions: '',
-        hsn_code: '72083840',
+        hsn_code: '',
         quantity: 0,
         unit: 'MT',
         rate: 0,
@@ -2532,6 +2532,7 @@ export default function InquiriesPage() {
         setPoFileBase64(base64String);
 
         let extracted: any = null;
+        let extractError = '';
 
         // Process Document OCR via Backend Gemini Vision API Route (/inquiries/parse-document)
         try {
@@ -2539,11 +2540,22 @@ export default function InquiriesPage() {
             file_base64: cleanBase64,
             mime_type: file.type || 'image/jpeg',
           });
-          if (res.data?.success && res.data?.data) {
-            extracted = res.data.data;
+          const body = res.data;
+          const candidate = body?.data?.customer_name || body?.data?.line_items || body?.data?.customer
+            ? body.data
+            : body?.customer_name || body?.line_items || body?.customer
+              ? body
+              : body?.data?.success === false
+                ? null
+                : body?.data;
+          if (candidate && candidate.success !== false) {
+            extracted = candidate;
+          } else {
+            extractError = body?.data?.error || body?.error || body?.message || '';
           }
-        } catch (apiErr) {
+        } catch (apiErr: any) {
           console.warn('Backend parse-document failed:', apiErr);
+          extractError = apiErr?.response?.data?.message || apiErr?.message || '';
         }
 
         if (extracted) {
@@ -2573,8 +2585,22 @@ export default function InquiriesPage() {
             const mappedItems: LineItemDetail[] = extractedLines.map((i: any) => {
               const skuText = i.sku_text || i.sku || i.material || i.description || 'Material';
               const dims = i.dimensions || [i.thickness, i.width, i.length].filter(Boolean).join(' x ') || '';
-              const q = Number(i.quantity ?? i.qty) || 0;
-              const rawUnit = i.unit || 'MT';
+              let q = Number(i.quantity ?? i.qty) || 0;
+              let rawUnit = i.unit || 'KG';
+              const totalWt = Number(i.total_weight_kg ?? i.weight_kg ?? 0);
+
+              if (
+                totalWt > 0 &&
+                (!i.unit ||
+                  ['NOS', 'NO', 'PCS', 'PC', 'PIECES'].includes(
+                    String(i.unit).toUpperCase(),
+                  ) ||
+                  (q > 0 && q < totalWt / 10))
+              ) {
+                q = totalWt;
+                rawUnit = 'KG';
+              }
+
               const r = Number(i.rate ?? i.unit_price ?? i.price_per_mt) || 0;
               const amt = Number(i.amount) || 0;
               const detectedHsn = (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '72083840').trim();
@@ -2584,7 +2610,7 @@ export default function InquiriesPage() {
                 dimensions: dims,
                 hsn_code: detectedHsn,
                 quantity: q,
-                unit: normalizeUnit(rawUnit) || 'MT',
+                unit: normalizeUnit(rawUnit) || 'KG',
                 rate: r,
                 amount: amt,
               });
@@ -2593,6 +2619,7 @@ export default function InquiriesPage() {
                 ...calc,
                 sku_text: skuText,
                 hsn_code: detectedHsn,
+                converted_mt: i.weight_mt !== undefined && i.weight_mt !== null ? i.weight_mt : calc.converted_mt,
               };
             });
             if (mappedItems.length > 0) {
@@ -2603,14 +2630,27 @@ export default function InquiriesPage() {
             const skuText = extracted.sku_text || extracted.product_type || 'Material';
             const dims = extracted.dimensions || '';
             const detectedHsn = detectHsnCode(skuText, dims) || '72083840';
-            const q = Number(extracted.quantity) || 0;
+            let q = Number(extracted.quantity) || 0;
+            let rawUnit = extracted.unit || 'KG';
+            const totalWt = Number(extracted.total_weight_kg ?? extracted.weight_kg ?? 0);
+            if (
+              totalWt > 0 &&
+              (!extracted.unit ||
+                ['NOS', 'NO', 'PCS', 'PC', 'PIECES'].includes(
+                  String(extracted.unit).toUpperCase(),
+                ) ||
+                (q > 0 && q < totalWt / 10))
+            ) {
+              q = totalWt;
+              rawUnit = 'KG';
+            }
             const r = Number(extracted.rate) || 0;
             const calc = calculateLineItem({
               sku_text: skuText,
               dimensions: dims,
               hsn_code: detectedHsn,
               quantity: q,
-              unit: normalizeUnit(extracted.unit) || 'MT',
+              unit: normalizeUnit(rawUnit) || 'KG',
               rate: r,
               amount: 0,
             });
@@ -2639,13 +2679,17 @@ export default function InquiriesPage() {
             setFormDeliveryLocation(String(extractedDelivery).trim());
           }
 
+          if (cleanCustomer || extractedLines.length > 0 || extracted.preferred_make || extracted.payment_terms || extractedDelivery) {
+            filledFromDocument = true;
+          }
+
           if (filledFromDocument) {
             toast.success('Inquiry Document parsed! Details auto-filled.');
           } else {
-            toast.error('Could not auto-extract inquiry details. You can enter the fields manually.');
+            toast.error(extractError || 'Could not auto-extract inquiry details. You can enter the fields manually.');
           }
         } else {
-          toast.error('Could not auto-extract inquiry details. You can enter the fields manually.');
+          toast.error(extractError || 'Could not auto-extract inquiry details. You can enter the fields manually.');
         }
 
         setIsExtractingPo(false);
@@ -3906,7 +3950,7 @@ export default function InquiriesPage() {
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '', [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: editDetails.productType ? (detectHsnCode(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || '72083840') : '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -3923,7 +3967,9 @@ export default function InquiriesPage() {
                                   const newAutoHsn = detectHsnCode(newSku, item.dimensions);
 
                                   let finalHsn = currentHsn;
-                                  if (!currentHsn || currentHsn === prevAutoHsn) {
+                                  if (!newSku.trim()) {
+                                    finalHsn = '';
+                                  } else if (!currentHsn || currentHsn === prevAutoHsn) {
                                     finalHsn = newAutoHsn || '72083840';
                                   }
 
@@ -3973,7 +4019,9 @@ export default function InquiriesPage() {
                                     const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
 
                                     let finalHsn = currentHsn;
-                                    if (!currentHsn || currentHsn === prevAutoHsn) {
+                                    if (!String(updated[idx]?.sku_text || '').trim()) {
+                                      finalHsn = '';
+                                    } else if (!currentHsn || currentHsn === prevAutoHsn) {
                                       finalHsn = newAutoHsn || '72083840';
                                     }
 
@@ -4081,7 +4129,7 @@ export default function InquiriesPage() {
                                 }`}
                               />
                               <select
-                                value={normalizeUnit(item.unit) || 'MT'}
+                                value={normalizeUnit(item.unit) || 'KG'}
                                 onChange={(e) => {
                                   const newUnit = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
@@ -4109,9 +4157,9 @@ export default function InquiriesPage() {
                                   setSaveSuccess(false);
                                 }}
                                 className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="KG">KG</option>
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
-                                <option value="KG">KG</option>
                                 {['Pcs', 'Sheets', 'Plates', 'Coils'].includes(normalizeUnit(item.unit) || '') && (
                                   <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
                                 )}
@@ -4119,7 +4167,7 @@ export default function InquiriesPage() {
                               {(() => {
                                 const itemWeight = formatLineItemWeightMt(item);
                                 const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
-                                const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                                const displayMt = (item.is_manual_mt || normalizeUnit(item.unit) === 'MT') && item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
                                   ? item.converted_mt
                                   : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
                                 const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
@@ -4322,10 +4370,10 @@ export default function InquiriesPage() {
                                   onClick={() => {
                                     const current = editDetails.lineItems && editDetails.lineItems.length > 0
                                       ? editDetails.lineItems
-                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                                     const updated = [
                                       ...current,
-                                      { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
+                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
                                     ];
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
@@ -5196,7 +5244,9 @@ export default function InquiriesPage() {
                                 const newAutoHsn = detectHsnCode(newSku, item.dimensions);
 
                                 let finalHsn = currentHsn;
-                                if (!currentHsn || currentHsn === prevAutoHsn) {
+                                if (!newSku.trim()) {
+                                  finalHsn = '';
+                                } else if (!currentHsn || currentHsn === prevAutoHsn) {
                                   finalHsn = newAutoHsn;
                                 }
 
@@ -5306,7 +5356,7 @@ export default function InquiriesPage() {
                               className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                             />
                             <select
-                              value={normalizeUnit(item.unit) || 'MT'}
+                              value={normalizeUnit(item.unit) || 'KG'}
                               onChange={(e) => {
                                 const newUnit = e.target.value;
                                 const updated = [...formLineItems];
@@ -5331,14 +5381,14 @@ export default function InquiriesPage() {
                                 setFormLineItems(updated);
                               }}
                               className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              <option value="KG">KG</option>
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
-                              <option value="KG">KG</option>
                             </select>
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
                               const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
-                              const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                              const displayMt = (item.is_manual_mt || normalizeUnit(item.unit) === 'MT') && item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
                                 ? item.converted_mt
                                 : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
                               const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
@@ -5516,7 +5566,7 @@ export default function InquiriesPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
+                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
                                   ];
                                   setFormLineItems(updated);
                                 }}
