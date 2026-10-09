@@ -10,5 +10,8 @@ Search within the file by exported function, intent/state key, or user-visible r
 - Do not bypass stage/PO validation to make a prompt “work”.
 - Revalidate items/prices/server state on writes; user-provided state is stale or incomplete.
 - Keep response identity and field terms compatible with the UI and retrieval tools.
+- If a customer is already registered under another representative, the current draft is blocked.
+  The response preserves the ownership warning and offers only `Discard Draft`; it must not
+  invite a replacement customer name or allow arbitrary text to resume that draft.
 
 Run focused scripts under `scripts/test-*catalog*`, `test-*order*`, `test-*inquiry*`, and `test-*update*` in a safe environment after changes.
