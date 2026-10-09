@@ -25,7 +25,6 @@ export const adminApi = {
   visitsApi: { getAll: vi.fn((_params?: unknown) => ok({ data: data.visits ?? [] })) },
   complaintsApi: { getAll: vi.fn((_params?: unknown) => ok({ data: data.complaints ?? [] })) },
   dealsApi: { getAll: vi.fn((_params?: unknown) => ok({ data: data.deals ?? [] })) },
-  inquiriesApi: { getReviewQueue: vi.fn(() => ok({ data: [] })) },
   reportsApi: {
     getMonthly: vi.fn((_params?: unknown) => ok({ data: { summary: {} } })),
     getFunnel: vi.fn((_params?: unknown) => ok({ data: { stages: [] } })),
