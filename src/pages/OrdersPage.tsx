@@ -1923,7 +1923,9 @@ export default function OrdersPage() {
                                 const newAutoHsn = detectHsnCode(newSku, item.dimensions);
 
                                 let finalHsn = currentHsn;
-                                if (!currentHsn || currentHsn === prevAutoHsn) {
+                                if (!newSku.trim()) {
+                                  finalHsn = '';
+                                } else if (!currentHsn || currentHsn === prevAutoHsn) {
                                   finalHsn = newAutoHsn;
                                 }
 
@@ -2068,7 +2070,7 @@ export default function OrdersPage() {
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
                               const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
-                              const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                              const displayMt = (item.is_manual_mt || normalizeUnit(item.unit) === 'MT') && item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
                                 ? item.converted_mt
                                 : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
                               const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
@@ -2247,7 +2249,7 @@ export default function OrdersPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
+                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
                                   ];
                                   setFormLineItems(updated);
                                 }}
