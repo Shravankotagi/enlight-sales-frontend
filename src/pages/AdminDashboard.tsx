@@ -40,7 +40,7 @@ export default function AdminDashboard() {
   }, []);
 
   // Fetch employees list
-  const { data: employeesRes } = useQuery({
+  const { data: employeesRes, refetch: refetchEmployees } = useQuery({
     queryKey: ['admin-employees-list'],
     queryFn: () => employeesApi.getAll().then(r => r.data),
   });
@@ -91,14 +91,24 @@ export default function AdminDashboard() {
   });
 
   const [selectedQuotationDeal, setSelectedQuotationDeal] = useState<any | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleRefreshAll = () => {
-    refetchMonthly();
-    refetchFunnel();
-    refetchSku();
-    refetchSalesperson();
-    refetchInquiries();
-    refetchDeals();
+  const handleRefreshAll = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchEmployees(),
+        refetchMonthly(),
+        refetchFunnel(),
+        refetchSku(),
+        refetchSalesperson(),
+        refetchInquiries(),
+        refetchDeals(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const isLoading = monthlyLoading || funnelLoading || skuLoading || salespersonLoading || inquiriesLoading || dealsLoading;
@@ -193,11 +203,13 @@ export default function AdminDashboard() {
           {/* Top Actions: Refresh, Create Order */}
           <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
             <button
+              type="button"
               onClick={handleRefreshAll}
+              disabled={isRefreshing}
               title="Refresh All Dashboard Metrics"
               className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} />
             </button>
 
             <button
