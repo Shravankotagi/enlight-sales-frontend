@@ -3,6 +3,15 @@ import { Calendar, Check, ChevronDown } from 'lucide-react';
 import {
   formatLocalDate,
   getDaysAgo,
+  getFirstDayOfWeek,
+  getFirstDayOfMonth,
+  getFirstDayOfYear,
+  getFirstDayOfPreviousWeek,
+  getLastDayOfPreviousWeek,
+  getFirstDayOfPreviousMonth,
+  getLastDayOfPreviousMonth,
+  getFirstDayOfPreviousYear,
+  getLastDayOfPreviousYear,
 } from '../utils/dateUtils';
 
 export type FilterPreset =
@@ -17,7 +26,10 @@ export type FilterPreset =
   | 'this_year'
   | 'this_week'
   | '14_days'
-  | 'monthly';
+  | 'monthly'
+  | 'previous_week'
+  | 'previous_month'
+  | 'previous_year';
 
 export type DateFilterRange = {
   preset: FilterPreset;
@@ -35,7 +47,7 @@ interface DateFilterControlProps {
 }
 
 export default function DateFilterControl({ onChange, initialPreset = 'all', value, resetKey }: DateFilterControlProps) {
-  const effectivePreset = (initialPreset === 'this_month' || initialPreset === 'this_quarter' || initialPreset === 'this_year') ? 'all' : initialPreset;
+  const effectivePreset = initialPreset;
   const [preset, setPreset] = useState<FilterPreset>(value?.preset || effectivePreset);
   const [showCustom, setShowCustom] = useState((value?.preset || effectivePreset) === 'custom');
   const todayStr = formatLocalDate();
@@ -54,13 +66,12 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
 
   useEffect(() => {
     if (value && value.preset !== preset) {
-      const p = (value.preset === 'this_month' || value.preset === 'this_quarter' || value.preset === 'this_year') ? 'all' : value.preset;
-      setPreset(p);
-      setShowCustom(p === 'custom');
+      setPreset(value.preset);
+      setShowCustom(value.preset === 'custom');
       if (value.from) setCustomFrom(value.from);
       if (value.to) setCustomTo(value.to);
     }
-  }, [value]);
+  }, [value, preset]);
 
   const handleSelectPreset = (newPreset: FilterPreset) => {
     setPreset(newPreset);
@@ -83,6 +94,36 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
       const fromStr = getDaysAgo(90);
       setShowCustom(false);
       onChange({ preset: '90_days', from: fromStr, to: todayStr });
+    } else if (newPreset === 'this_week') {
+      setShowCustom(false);
+      onChange({ preset: 'this_week', from: getFirstDayOfWeek(), to: todayStr });
+    } else if (newPreset === 'previous_week') {
+      setShowCustom(false);
+      onChange({
+        preset: 'previous_week',
+        from: getFirstDayOfPreviousWeek(),
+        to: getLastDayOfPreviousWeek(),
+      });
+    } else if (newPreset === 'this_month') {
+      setShowCustom(false);
+      onChange({ preset: 'this_month', from: getFirstDayOfMonth(), to: todayStr });
+    } else if (newPreset === 'previous_month') {
+      setShowCustom(false);
+      onChange({
+        preset: 'previous_month',
+        from: getFirstDayOfPreviousMonth(),
+        to: getLastDayOfPreviousMonth(),
+      });
+    } else if (newPreset === 'this_year') {
+      setShowCustom(false);
+      onChange({ preset: 'this_year', from: getFirstDayOfYear(), to: todayStr });
+    } else if (newPreset === 'previous_year') {
+      setShowCustom(false);
+      onChange({
+        preset: 'previous_year',
+        from: getFirstDayOfPreviousYear(),
+        to: getLastDayOfPreviousYear(),
+      });
     } else if (newPreset === 'custom') {
       setShowCustom(true);
       onChange({ preset: 'custom', from: customFrom || undefined, to: customTo || undefined });
@@ -127,7 +168,7 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
       <div className="relative inline-flex items-center">
         <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
         <select
-          value={preset === 'this_month' || preset === 'this_quarter' || preset === 'this_year' ? 'all' : preset}
+          value={preset}
           onChange={(e) => handleSelectPreset(e.target.value as FilterPreset)}
           className="h-9 pl-8 pr-8 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs appearance-none cursor-pointer transition-all"
         >
@@ -136,6 +177,12 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
           <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
           <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
           <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
+          <option value="this_week" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>This Week</option>
+          <option value="previous_week" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Previous Week</option>
+          <option value="this_month" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>This Month</option>
+          <option value="previous_month" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Previous Month</option>
+          <option value="this_year" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>This Year</option>
+          <option value="previous_year" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Previous Year</option>
           <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
         </select>
         <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
