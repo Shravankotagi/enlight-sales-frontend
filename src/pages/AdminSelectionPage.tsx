@@ -495,7 +495,7 @@ export default function AdminSelectionPage() {
                   <button
                     onClick={() => {
                       clearViewingAs();
-                      navigate('/home');
+                      navigate('/admin-dashboard');
                     }}
                     className="h-9 flex items-center gap-2 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
                     title="Open Company-wide Admin Overview Dashboard"
@@ -659,7 +659,7 @@ export default function AdminSelectionPage() {
             <div
               onClick={() => {
                 clearViewingAs();
-                navigate('/home');
+                navigate('/reports');
               }}
               className="bg-white hover:bg-indigo-50/30 border border-slate-200 hover:border-indigo-300 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
             >
