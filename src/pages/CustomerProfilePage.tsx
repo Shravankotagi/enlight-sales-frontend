@@ -2,6 +2,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { customersApi, employeesApi } from '../lib/api';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useState, useMemo } from 'react';
 import {
   ChevronLeft,
@@ -303,12 +304,12 @@ function CustomerProfilePageContent() {
 
   // Fetch employees for rep mapping
   const { data: rawEmployees = [] } = useQuery<any[]>({
-    queryKey: ['employees-list-customers'],
+    queryKey: queryKeys.employeesDirectory,
     queryFn: async () => {
       const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+      return normalizeListResponse(res?.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const safeEmployees = Array.isArray(rawEmployees) ? rawEmployees : [];

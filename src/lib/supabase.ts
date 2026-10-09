@@ -45,7 +45,6 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
     debounceTimers[keyId] = setTimeout(() => {
       keys.forEach((queryKey) => {
         queryClient.invalidateQueries({ queryKey, exact: false, refetchType: 'active' });
-        queryClient.refetchQueries({ queryKey, exact: false, type: 'active' });
       });
       delete debounceTimers[keyId];
     }, delayMs);
@@ -68,7 +67,7 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
           ['kanban'],
           ['kra-dashboard'],
           ['kra-sheets'],
-          ['home-inquiries'],
+          ['home-inquiries-list'],
           ['action-queue'],
           ['reports-overview-data'],
           ['customer-names-list'],
@@ -90,7 +89,7 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
           ['kanban'],
           ['kra-dashboard'],
           ['kra-sheets'],
-          ['home-inquiries'],
+          ['home-inquiries-list'],
           ['action-queue'],
           ['reports-overview-data'],
         ]);
@@ -212,8 +211,11 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         debounceInvalidate([
           ['customers'],
           ['customer'],
+          ['customer-detail'],
           ['customers-churn'],
           ['customers-churn-home'],
+          ['customer-names-list'],
+          ['customer-names-list-orders'],
           ['reorder-queue'],
           ['churn-risk'],
           ['recurring-customers-list'],

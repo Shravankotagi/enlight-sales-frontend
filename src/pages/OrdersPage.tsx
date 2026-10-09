@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag,
   Plus,
@@ -38,6 +38,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
 import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import {
   calculateLineItem,
   calculateQuotationBreakdown,
@@ -360,7 +361,7 @@ export default function OrdersPage() {
         `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
       );
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
       queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
       fetchOrders();
     } catch (err: any) {
@@ -460,21 +461,11 @@ export default function OrdersPage() {
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
+    placeholderData: keepPreviousData,
   });
 
-  useEffect(() => {
-    const handleDbChange = (e: any) => {
-      const { table } = e.detail || {};
-      if (table === 'deals' || table === 'deal_items') {
-        fetchOrders();
-      }
-    };
-    window.addEventListener('enlight-db-change', handleDbChange);
-    return () => window.removeEventListener('enlight-db-change', handleDbChange);
-  }, [fetchOrders]);
-
   const { data: rawCustomers = [] } = useQuery<string[]>({
-    queryKey: ['customer-names-list-orders', effectivePhone, activeRole, activeMode],
+    queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
@@ -494,11 +485,10 @@ export default function OrdersPage() {
   });
 
   const { data: rawEmployees = [] } = useQuery<any[]>({
-    queryKey: ['employees-list-orders'],
+    queryKey: queryKeys.employeesDirectory,
     queryFn: async () => {
       const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      return normalizeListResponse(res?.data);
     },
     enabled: canViewSalesperson,
     staleTime: 5 * 60 * 1000,
@@ -1038,7 +1028,7 @@ export default function OrdersPage() {
       setFormUploadedBase64(null);
 
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
       queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['all-deals-list'] });
@@ -2370,14 +2360,14 @@ export default function OrdersPage() {
           setFormDeliveryLocation(saved.deliveryLocation);
           setShowAddCustomer(false);
           queryClient.setQueryData<string[]>(
-            ['customer-names-list-orders', effectivePhone, activeRole, activeMode],
+            ['customer-names-list', effectivePhone, activeRole, activeMode],
             (prev) => {
               const list = Array.isArray(prev) ? prev : [];
               if (list.some(c => c.trim().toLowerCase() === saved.companyName.trim().toLowerCase())) return list;
               return [...list, saved.companyName].sort((a, b) => a.localeCompare(b));
             },
           );
-          queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+          queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
         }}
       />
     </div>

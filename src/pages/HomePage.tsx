@@ -345,6 +345,7 @@ export default function HomePage() {
         })
         .then(r => r.data?.data || r.data || []),
     enabled: canManageTeam,
+    staleTime: 5 * 60 * 1000,
   });
 
   // 8. Visits Query
