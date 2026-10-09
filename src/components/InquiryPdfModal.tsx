@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Download, Check, Copy } from 'lucide-react';
+import { X, Download, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { customersApi, inquiriesApi } from '../lib/api';
 import {
+  calculateLineItem,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
@@ -44,8 +45,9 @@ interface LineItemDetail {
   hsn_code?: string;
   quantity: number;
   unit?: string;
-  rate: number;
+  rate: number | string;
   amount: number;
+  isManualAmount?: boolean;
 }
 
 interface ExtractedDetails {
@@ -74,7 +76,6 @@ interface InquiryPdfModalProps {
 
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
   const { employee, viewingAs } = useAuth();
-  const [copiedRef, setCopiedRef] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
   const { data: customerList = [] } = useQuery({
@@ -98,7 +99,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const customerGstin = (details as any)?.gstin || matchedCustomer?.gstin || matchedCustomer?.gst_number || (inquiry as any)?.customer_gstin || (inquiry as any)?.ai_extraction_json?.gstin || (inquiry as any)?.ai_extraction_json?.gst_number || '';
 
   // Build line items list - prefer dynamic lineItems, fall back to single item
-  const lineItems: LineItemDetail[] =
+  const rawLineItems: LineItemDetail[] =
     details.lineItems && details.lineItems.length > 0
       ? details.lineItems
       : [
@@ -116,8 +117,26 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
           },
         ];
 
+  // Exclude unpriced products (rate 0 or blank) from the quotation PDF
+  const zeroPriceItems = rawLineItems.filter(
+    item => item.rate === null || item.rate === undefined || item.rate === '' || isNaN(Number(item.rate)) || Number(item.rate) <= 0
+  );
+  const pricedLineItems = rawLineItems.filter(
+    item => item.rate !== null && item.rate !== undefined && item.rate !== '' && !isNaN(Number(item.rate)) && Number(item.rate) > 0
+  );
+
+  const activePdfItems = pricedLineItems.length > 0 ? pricedLineItems : [];
+
+  const lineItems: LineItemDetail[] = activePdfItems.map(item => {
+    const calc = calculateLineItem(item);
+    return {
+      ...item,
+      amount: item.amount ? Number(item.amount) : calc.amount,
+    };
+  });
+
   // totalAmount = base pre-GST value; calculate GST breakdown
-  const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) || details.totalAmount || 0;
+  const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const breakdown = calculateQuotationBreakdown(computedSubtotal);
   const totalTonnage = calculateTotalTonnageMt(lineItems);
 
@@ -165,12 +184,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const handleCopyRef = () => {
-    navigator.clipboard.writeText(piNumber);
-    setCopiedRef(true);
-    setTimeout(() => setCopiedRef(false), 2000);
-  };
-
   const handlePrintDownload = async () => {
     try {
       setDownloadingPdf(true);
@@ -205,7 +218,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
       window.URL.revokeObjectURL(downloadUrl);
     } catch (e) {
       console.warn('Direct PDF download fallback to print:', e);
+      const previousTitle = document.title;
+      document.title = `Quotation_${piNumber}`;
       window.print();
+      document.title = previousTitle;
     } finally {
       setDownloadingPdf(false);
     }
@@ -269,6 +285,22 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+          .quotation-print-sheet {
+            overflow: visible !important;
+            max-height: none !important;
+            height: auto !important;
+          }
+          #printable-inquiry-pdf table {
+            page-break-inside: auto;
+          }
+          #printable-inquiry-pdf thead {
+            display: table-header-group;
+          }
+          #printable-inquiry-pdf tr,
+          #printable-inquiry-pdf .quotation-summary {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
           .no-print {
             display: none !important;
           }
@@ -282,7 +314,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         }
       `}</style>
 
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
+      <div className="quotation-print-sheet bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
         
         {/* Top Actions Bar (Hidden on print) */}
         <div className="bg-slate-900 px-6 py-3.5 flex items-center justify-between no-print shrink-0 border-b border-slate-800 z-10">
@@ -291,19 +323,12 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               PI
             </div>
             <div>
-              <h3 className="font-bold text-white text-sm leading-tight">Invoice Preview</h3>
-              <p className="text-xs text-slate-400">PI Number: {piNumber} • {details.companyName || 'Quotation'}</p>
+              <h3 className="font-bold text-white text-sm leading-tight">Quotation Preview</h3>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCopyRef}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700 transition-colors">
-              {copiedRef ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-              {copiedRef ? 'Copied!' : 'Copy PI#'}
-            </button>
+            
 
             <button
               type="button"
@@ -322,8 +347,32 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
           </div>
         </div>
 
+        {/* Notice banner: unpriced products excluded from PDF (only show when there are also priced items to avoid duplicate warnings) */}
+        {zeroPriceItems.length > 0 && pricedLineItems.length > 0 && (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 text-xs text-amber-900 flex items-center justify-between gap-3 no-print shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+              <span>
+                <strong>Notice:</strong> {zeroPriceItems.length} product(s) with empty or 0 rates ({zeroPriceItems.map(i => i.sku_text).join(', ')}) are automatically excluded from this quotation PDF.
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded shrink-0">
+              {pricedLineItems.length} priced item(s) included
+            </span>
+          </div>
+        )}
+
+        {pricedLineItems.length === 0 && (
+          <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 text-xs text-rose-900 flex items-center gap-2 no-print shrink-0">
+            <AlertCircle size={15} className="text-rose-600 shrink-0" />
+            <span>
+              <strong>No priced items:</strong> All products in this inquiry have 0 or blank rates. Specify prices in the inquiry form to generate an itemized commercial quotation.
+            </span>
+          </div>
+        )}
+
         {/* Printable PDF Document Body - Exact Reference Match */}
-        <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-8 sm:p-12 space-y-4 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
+        <div id="printable-inquiry-pdf" className="quotation-print-sheet overflow-y-auto flex-1 p-8 sm:p-12 space-y-4 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
           
           {/* ================= PAGE 1 ================= */}
           <div className="space-y-4">
@@ -424,7 +473,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   {lineItems.map((item, idx) => {
                     const qty = Number(item.quantity) || 0;
                     const rate = Number(item.rate) || 0;
-                    const amt = Number(item.amount) || (qty * rate) || 0;
+                    const amt = Number(item.amount) || calculateLineItem(item).amount || 0;
                     const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
                     const unit = item.unit || 'MT';
 
@@ -459,11 +508,11 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </div>
 
             {/* Financial Totals & Summary Block - Exact Reference Style */}
-            <div className="flex flex-col sm:flex-row justify-between items-start pt-4 gap-6 border-t border-slate-200 mt-2">
+            <div className="quotation-summary flex flex-col sm:flex-row justify-between items-start pt-4 gap-6 border-t border-slate-200 mt-2">
               {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
               <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
                 <div>
-                  <span>Items in Total <strong className="font-bold">{totalTonnage.formattedText}</strong></span>
+                  <span><strong className="font-bold">Items in Total = </strong><strong className="font-bold">{totalTonnage.formattedText}</strong></span>
                 </div>
                 {details.paymentTerms && (
                   <div>

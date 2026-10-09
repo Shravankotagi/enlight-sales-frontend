@@ -55,9 +55,14 @@ API.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Never attach impersonation scoping parameters to employee directory / admin management endpoints
+  const url = config.url || '';
+  const isEmployeeDirectory = url.startsWith('/employees') || url.includes('/employees');
+
   // Add salesperson_phone filter if admin is viewing a specific salesperson
   const viewingAs = sessionStorage.getItem('enlight_viewing_as');
-  if (viewingAs) {
+  if (viewingAs && !isEmployeeDirectory) {
     const emp = JSON.parse(viewingAs);
     const isPersonalMode =
       emp.mode === 'personal' ||
@@ -209,7 +214,8 @@ export const inquiriesApi = {
   previewQuotation: (id: string, payload: any) => API.post(`/inquiries/quotation-preview/${id}`, payload),
   sendQuotation: (id: string, payload: any) => API.post(`/inquiries/send-quotation/${id}`, payload),
   generatePdf: (payload: any) => API.post('/inquiries/generate-pdf', payload, { responseType: 'blob' }),
-  parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
+  parseDocument: (payload: any) =>
+    API.post('/inquiries/parse-document', payload, { timeout: 90000 }),
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
   delete: (id: string) => API.delete(`/inquiries/${id}`),
 };
@@ -263,6 +269,8 @@ export const kbApi = {
 
 export const zohoApi = {
   pullInitialSync: () => API.post('/zoho/pull-initial-sync'),
+  sync: () => API.post('/zoho/sync'),
+  getStatus: () => API.get('/zoho/status'),
 };
 
 export const activityLogsApi = {

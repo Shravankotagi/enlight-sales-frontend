@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
 export interface Employee {
   id: string;
@@ -45,6 +45,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const saved = sessionStorage.getItem('enlight_viewing_as');
     return saved ? JSON.parse(saved) : null;
   });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (window.location.pathname === '/admin') {
+        sessionStorage.removeItem('enlight_viewing_as');
+        sessionStorage.removeItem('enlight_active_chat_session_id');
+        setViewingAsState(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const login = (newToken: string, newEmployee: Employee) => {
     sessionStorage.setItem('enlight_token', newToken);

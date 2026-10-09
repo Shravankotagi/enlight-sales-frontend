@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   reportsApi,
   inquiriesApi,
@@ -7,7 +7,6 @@ import {
   ordersApi,
   visitsApi,
   complaintsApi,
-  BOT_URL,
 } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -18,11 +17,11 @@ import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
   ArrowUpRight, Award, AlertCircle, Layers,
-  Plus, Upload, Download, Truck, Sparkles,
+  Plus, Truck, Sparkles,
   Activity, CheckCircle2, Info
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 
 const normalizePhone = (phone?: string | null) =>
   String(phone || '').replace(/\D/g, '').slice(-10);
@@ -117,12 +116,13 @@ export default function AdminDashboard() {
   }, []);
 
   // Fetch employees list
-  const { data: employeesRes } = useQuery({
-    queryKey: ['admin-employees-list'],
-    queryFn: () => employeesApi.getAll().then(r => r.data),
+  const { data: employeesRes = [], refetch: refetchEmployees } = useQuery({
+    queryKey: queryKeys.employeesDirectory,
+    queryFn: () => employeesApi.getAll().then(r => normalizeListResponse(r.data)).catch(() => []),
+    staleTime: 5 * 60 * 1000,
   });
 
-  const salespeople = (employeesRes?.data || employeesRes || []).filter(
+  const salespeople = (Array.isArray(employeesRes) ? employeesRes : []).filter(
     (e: any) => e.role === 'salesperson' || e.role === 'sales_lead'
   );
 
@@ -140,26 +140,31 @@ export default function AdminDashboard() {
   const { data: monthly, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery({
     queryKey: ['admin-monthly', selectedPhone, dateRange],
     queryFn: () => reportsApi.getMonthly(queryParams).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
     queryKey: ['admin-funnel', selectedPhone, dateRange],
     queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
     queryKey: ['admin-sku', selectedPhone, dateRange],
     queryFn: () => reportsApi.getSku(queryParams).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: inquiries, isLoading: inquiriesLoading, refetch: refetchInquiries } = useQuery({
     queryKey: ['admin-inquiries-queue'],
     queryFn: () => inquiriesApi.getReviewQueue().then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: deals, isLoading: dealsLoading, refetch: refetchDeals } = useQuery({
     queryKey: ['admin-recent-deals', selectedPhone, dateRange],
     queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: leaderboardOrders, isLoading: leaderboardOrdersLoading, refetch: refetchLeaderboardOrders } = useQuery({
@@ -198,11 +203,9 @@ export default function AdminDashboard() {
         .then(unwrapListResponse),
   });
 
-  const [isPushing, setIsPushing] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [selectedQuotationDeal, setSelectedQuotationDeal] = useState<any | null>(null);
   const [isScoreInfoOpen, setIsScoreInfoOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (!isScoreInfoOpen) return;
@@ -215,44 +218,23 @@ export default function AdminDashboard() {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isScoreInfoOpen]);
 
-  const handleRefreshAll = () => {
-    refetchMonthly();
-    refetchFunnel();
-    refetchSku();
-    refetchInquiries();
-    refetchDeals();
-    refetchLeaderboardOrders();
-    refetchLeaderboardVisits();
-    refetchLeaderboardComplaints();
-  };
-
-  const handlePushToBigin = async () => {
-    setIsPushing(true);
-    setSyncMsg(null);
+  const handleRefreshAll = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
     try {
-      await axios.get(`${BOT_URL}/bigin-sync`);
-      setSyncMsg({ text: ' Database records & live deals pushed to Zoho Bigin CRM successfully!', type: 'success' });
-      handleRefreshAll();
-    } catch (err: any) {
-      setSyncMsg({ text: ` Push failed: ${err.message || 'Error pushing to Bigin'}`, type: 'error' });
+      await Promise.all([
+        refetchEmployees(),
+        refetchMonthly(),
+        refetchFunnel(),
+        refetchSku(),
+        refetchInquiries(),
+        refetchDeals(),
+        refetchLeaderboardOrders(),
+        refetchLeaderboardVisits(),
+        refetchLeaderboardComplaints(),
+      ]);
     } finally {
-      setIsPushing(false);
-      setTimeout(() => setSyncMsg(null), 6000);
-    }
-  };
-
-  const handlePullFromBigin = async () => {
-    setIsPulling(true);
-    setSyncMsg(null);
-    try {
-      await axios.get(`${BOT_URL}/bigin-import`);
-      setSyncMsg({ text: ' Contacts & active deals pulled from Zoho Bigin CRM to Database!', type: 'success' });
-      handleRefreshAll();
-    } catch (err: any) {
-      setSyncMsg({ text: ` Pull failed: ${err.message || 'Error pulling from Bigin'}`, type: 'error' });
-    } finally {
-      setIsPulling(false);
-      setTimeout(() => setSyncMsg(null), 6000);
+      setIsRefreshing(false);
     }
   };
 
@@ -389,37 +371,16 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Top Actions: CRM Sync Pills, Refresh, Create Order */}
+          {/* Top Actions: Refresh, Create Order */}
           <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
-            {/* Both Zoho Bigin Sync Action Buttons */}
-            <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-              <button
-                onClick={handlePushToBigin}
-                disabled={isPushing || isPulling}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
-                title="Push all database contacts and live ongoing deals to Zoho Bigin CRM"
-              >
-                <Upload size={13} className={isPushing ? 'animate-spin' : ''} />
-                {isPushing ? 'Pushing...' : 'Push DB → Bigin'}
-              </button>
-
-              <button
-                onClick={handlePullFromBigin}
-                disabled={isPushing || isPulling}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
-                title="Pull all customer contacts and active deals from Zoho Bigin CRM into database"
-              >
-                <Download size={13} className={isPulling ? 'animate-spin' : ''} />
-                {isPulling ? 'Pulling...' : 'Pull Bigin → DB'}
-              </button>
-            </div>
-
             <button
+              type="button"
               onClick={handleRefreshAll}
+              disabled={isRefreshing}
               title="Refresh All Dashboard Metrics"
               className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} />
             </button>
 
             <button
@@ -454,18 +415,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-
-      {/* Sync Status Toast Banner */}
-      {syncMsg && (
-        <div className={`px-4 py-3 rounded-2xl border font-bold text-xs flex items-center justify-between shadow-xs animate-in fade-in duration-200 ${
-          syncMsg.type === 'success'
-            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-            : 'bg-red-50 text-red-800 border-red-200'
-        }`}>
-          <span className="flex items-center gap-2">{syncMsg.text}</span>
-          <button onClick={() => setSyncMsg(null)} className="font-black opacity-70 hover:opacity-100 ml-3"></button>
-        </div>
-      )}
 
       {/* Top 4 KPI Executive Stat Cards (Matching Home Dashboard Layout) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
@@ -89,6 +89,7 @@ export default function ReportsPage() {
         inquiries_count: inquiries.length || monthly.summary?.total_inquiries || monthly.summary?.total_deals || 0,
       };
     },
+    placeholderData: keepPreviousData,
     staleTime: 30000,
   });
 
