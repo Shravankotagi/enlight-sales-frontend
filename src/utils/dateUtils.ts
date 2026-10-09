@@ -32,6 +32,18 @@ export function getLastDayOfWeek(d: Date = new Date()): string {
   return formatLocalDate(target);
 }
 
+export function getFirstDayOfPreviousWeek(d: Date = new Date()): string {
+  const target = new Date(d);
+  target.setDate(target.getDate() - 7);
+  return getFirstDayOfWeek(target);
+}
+
+export function getLastDayOfPreviousWeek(d: Date = new Date()): string {
+  const currentWeekStart = new Date(getFirstDayOfWeek(d) + 'T00:00:00');
+  currentWeekStart.setDate(currentWeekStart.getDate() - 1);
+  return formatLocalDate(currentWeekStart);
+}
+
 export function getFirstDayOfMonth(d: Date = new Date()): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -43,6 +55,14 @@ export function getLastDayOfMonth(d: Date = new Date()): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   return `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+}
+
+export function getFirstDayOfPreviousMonth(d: Date = new Date()): string {
+  return formatLocalDate(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+}
+
+export function getLastDayOfPreviousMonth(d: Date = new Date()): string {
+  return formatLocalDate(new Date(d.getFullYear(), d.getMonth(), 0));
 }
 
 export function getFirstDayOfQuarter(d: Date = new Date()): string {
@@ -66,6 +86,14 @@ export function getFirstDayOfYear(d: Date = new Date()): string {
 
 export function getLastDayOfYear(d: Date = new Date()): string {
   return `${d.getFullYear()}-12-31`;
+}
+
+export function getFirstDayOfPreviousYear(d: Date = new Date()): string {
+  return `${d.getFullYear() - 1}-01-01`;
+}
+
+export function getLastDayOfPreviousYear(d: Date = new Date()): string {
+  return `${d.getFullYear() - 1}-12-31`;
 }
 
 export function getDaysAgo(days: number, fromDate: Date = new Date()): string {

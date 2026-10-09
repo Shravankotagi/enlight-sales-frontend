@@ -102,20 +102,12 @@ const buildOrderLeaderboard = (
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [selectedPhone, setSelectedPhone] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
     from: '2000-01-01',
     to: formatLocalDate(),
   });
-
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  const years = [2025, 2026, 2027];
 
   const fromDate = dateRange.from || '2000-01-01';
   const toDate = dateRange.to || formatLocalDate();
@@ -140,25 +132,23 @@ export default function AdminDashboard() {
 
   const queryParams = {
     ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
-    month: dateRange.preset === 'monthly' ? dateRange.month : selectedMonth,
-    year: dateRange.preset === 'monthly' ? dateRange.year : selectedYear,
     from: fromDate,
     to: toDate,
   };
 
   // Queries with dynamic parameters
   const { data: monthly, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery({
-    queryKey: ['admin-monthly', selectedPhone, selectedMonth, selectedYear, dateRange],
+    queryKey: ['admin-monthly', selectedPhone, dateRange],
     queryFn: () => reportsApi.getMonthly(queryParams).then(r => r.data?.data || r.data),
   });
 
   const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
-    queryKey: ['admin-funnel', selectedPhone, selectedMonth, selectedYear, dateRange],
+    queryKey: ['admin-funnel', selectedPhone, dateRange],
     queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data?.data || r.data),
   });
 
   const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
-    queryKey: ['admin-sku', selectedPhone, selectedMonth, selectedYear, dateRange],
+    queryKey: ['admin-sku', selectedPhone, dateRange],
     queryFn: () => reportsApi.getSku(queryParams).then(r => r.data?.data || r.data),
   });
 
@@ -168,7 +158,7 @@ export default function AdminDashboard() {
   });
 
   const { data: deals, isLoading: dealsLoading, refetch: refetchDeals } = useQuery({
-    queryKey: ['admin-recent-deals', selectedPhone, selectedMonth, selectedYear, dateRange],
+    queryKey: ['admin-recent-deals', selectedPhone, dateRange],
     queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data?.data || r.data),
   });
 
@@ -441,32 +431,10 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Row 2: Filter Toolbar (Date range, Month/Year, Salesperson Filter) */}
+        {/* Row 2: Filter Toolbar (Date range, Salesperson Filter) */}
         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 flex-wrap">
             <DateFilterControl onChange={setDateRange} initialPreset={dateRange.preset} />
-
-            <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                {months.map((m, idx) => (
-                  <option key={m} value={idx}>{m}</option>
-                ))}
-              </select>
-
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                {years.map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 self-start sm:self-auto">
