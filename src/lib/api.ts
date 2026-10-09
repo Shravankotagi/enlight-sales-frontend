@@ -208,7 +208,7 @@ export const inquiriesApi = {
   sendQuotation: (id: string, payload: any) => API.post(`/inquiries/send-quotation/${id}`, payload),
   generatePdf: (payload: any) => API.post('/inquiries/generate-pdf', payload, { responseType: 'blob' }),
   parseDocument: (payload: any) =>
-    API.post('/inquiries/parse-document', payload, { timeout: 90000 }),
+    API.post('/inquiries/parse-document', payload, { timeout: 120000 }),
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
   delete: (id: string) => API.delete(`/inquiries/${id}`),
 };

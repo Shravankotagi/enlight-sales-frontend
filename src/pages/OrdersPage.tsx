@@ -761,9 +761,11 @@ export default function OrdersPage() {
           extraction.companyName ||
           extraction.company_name ||
           '';
+        let filledFromDocument = false;
         if (rawCust && String(rawCust).trim().length > 0) {
           const cleanCust = String(rawCust).trim();
           setFormCustomerName(cleanCust);
+          filledFromDocument = true;
         }
 
         const rawPhone =
@@ -788,8 +790,8 @@ export default function OrdersPage() {
           }
           setFormPoDate(formattedDate);
         }
-        if (extraction.delivery_location || extraction.customer_address || extraction.address) {
-          setFormDeliveryLocation(String(extraction.delivery_location || extraction.customer_address || extraction.address).trim());
+        if (extraction.delivery_location || extraction.deliveryLocation || extraction.customer_address || extraction.address || extraction.customer?.address) {
+          setFormDeliveryLocation(String(extraction.delivery_location || extraction.deliveryLocation || extraction.customer_address || extraction.address || extraction.customer?.address).trim());
         }
         extractedCustomerExtrasRef.current = {
           contactPerson: String(
@@ -797,12 +799,17 @@ export default function OrdersPage() {
           ).trim(),
           gstin: String(extraction.customer_gst || extraction.gstin || extraction.gst || '').trim(),
         };
-        if (extraction.payment_terms) {
-          setFormPaymentTerms(String(extraction.payment_terms).trim());
+        if (extraction.payment_terms || extraction.paymentTerms) {
+          setFormPaymentTerms(String(extraction.payment_terms || extraction.paymentTerms).trim());
         }
 
-        if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
-          const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
+        const extractedLines = Array.isArray(extraction.line_items)
+          ? extraction.line_items
+          : Array.isArray(extraction.lineItems)
+            ? extraction.lineItems
+            : [];
+        if (extractedLines.length > 0) {
+          const mappedItems: LineItemDetail[] = extractedLines.map((i: any) => {
             const skuText = (i.sku_text || i.description || i.product || 'Material').trim();
             const dims = (i.dimensions || '').trim();
             let rawUnit = (i.unit || 'MT').trim();
@@ -834,8 +841,12 @@ export default function OrdersPage() {
             };
           });
           setFormLineItems(mappedItems);
+          filledFromDocument = true;
         }
 
+        if (!filledFromDocument) {
+          throw new Error('Could not auto-extract PO details. You can enter the fields manually.');
+        }
         toast.success('PO Document parsed! All details auto-filled.');
       } catch (err: any) {
         console.error('Error parsing PO document:', err);

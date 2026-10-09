@@ -2550,11 +2550,12 @@ export default function InquiriesPage() {
           formExtractedJsonRef.current = extracted;
 
           // Customer name: fill ONLY if explicitly present, keep blank if not
-          const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || '';
+          const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || extracted.customer?.name || '';
           const cleanCustomer = (rawName && !isProductOrGenericName(String(rawName)))
             ? String(rawName).trim()
             : '';
           setFormCustomerName(cleanCustomer);
+          let filledFromDocument = Boolean(cleanCustomer);
 
           // Phone: fill if detected (10 digits), keep blank if not
           const rawPhone = extracted.customer_phone || extracted.contact_phone || extracted.customer?.phone || extracted.phone || '';
@@ -2563,8 +2564,13 @@ export default function InquiriesPage() {
           setFormPhone(validPhone);
 
           // Structured Line Items auto-fill
-          if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
-            const mappedItems: LineItemDetail[] = extracted.line_items.map((i: any) => {
+          const extractedLines = Array.isArray(extracted.line_items)
+            ? extracted.line_items
+            : Array.isArray(extracted.lineItems)
+              ? extracted.lineItems
+              : [];
+          if (extractedLines.length > 0) {
+            const mappedItems: LineItemDetail[] = extractedLines.map((i: any) => {
               const skuText = i.sku_text || i.sku || i.material || i.description || 'Material';
               const dims = i.dimensions || [i.thickness, i.width, i.length].filter(Boolean).join(' x ') || '';
               const q = Number(i.quantity ?? i.qty) || 0;
@@ -2591,6 +2597,7 @@ export default function InquiriesPage() {
             });
             if (mappedItems.length > 0) {
               setFormLineItems(mappedItems);
+              filledFromDocument = true;
             }
           } else if (extracted.sku_text || extracted.product_type) {
             const skuText = extracted.sku_text || extracted.product_type || 'Material';
@@ -2608,6 +2615,7 @@ export default function InquiriesPage() {
               amount: 0,
             });
             setFormLineItems([{ ...calc, sku_text: skuText, hsn_code: detectedHsn }]);
+            filledFromDocument = true;
           }
 
           // Additional Notes: Only non-product notes, remarks, delivery timeline, contact details (never line items)
@@ -2623,14 +2631,19 @@ export default function InquiriesPage() {
           if (extracted.preferred_make || extracted.make || extracted.brand) {
             setFormPreferredMake(extracted.preferred_make || extracted.make || extracted.brand);
           }
-          if (extracted.payment_terms) {
-            setFormPaymentTerms(extracted.payment_terms);
+          if (extracted.payment_terms || extracted.paymentTerms) {
+            setFormPaymentTerms(extracted.payment_terms || extracted.paymentTerms);
           }
-          if (extracted.delivery_location) {
-            setFormDeliveryLocation(extracted.delivery_location);
+          const extractedDelivery = extracted.delivery_location || extracted.deliveryLocation || extracted.customer_address || extracted.customer?.address || '';
+          if (extractedDelivery) {
+            setFormDeliveryLocation(String(extractedDelivery).trim());
           }
 
-          toast.success('Inquiry Document parsed! Details auto-filled.');
+          if (filledFromDocument) {
+            toast.success('Inquiry Document parsed! Details auto-filled.');
+          } else {
+            toast.error('Could not auto-extract inquiry details. You can enter the fields manually.');
+          }
         } else {
           toast.error('Could not auto-extract inquiry details. You can enter the fields manually.');
         }
