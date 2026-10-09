@@ -218,7 +218,10 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
       window.URL.revokeObjectURL(downloadUrl);
     } catch (e) {
       console.warn('Direct PDF download fallback to print:', e);
+      const previousTitle = document.title;
+      document.title = `Quotation_${piNumber}`;
       window.print();
+      document.title = previousTitle;
     } finally {
       setDownloadingPdf(false);
     }
@@ -282,6 +285,22 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+          .quotation-print-sheet {
+            overflow: visible !important;
+            max-height: none !important;
+            height: auto !important;
+          }
+          #printable-inquiry-pdf table {
+            page-break-inside: auto;
+          }
+          #printable-inquiry-pdf thead {
+            display: table-header-group;
+          }
+          #printable-inquiry-pdf tr,
+          #printable-inquiry-pdf .quotation-summary {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
           .no-print {
             display: none !important;
           }
@@ -295,7 +314,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         }
       `}</style>
 
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
+      <div className="quotation-print-sheet bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
         
         {/* Top Actions Bar (Hidden on print) */}
         <div className="bg-slate-900 px-6 py-3.5 flex items-center justify-between no-print shrink-0 border-b border-slate-800 z-10">
@@ -353,7 +372,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         )}
 
         {/* Printable PDF Document Body - Exact Reference Match */}
-        <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-8 sm:p-12 space-y-4 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
+        <div id="printable-inquiry-pdf" className="quotation-print-sheet overflow-y-auto flex-1 p-8 sm:p-12 space-y-4 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
           
           {/* ================= PAGE 1 ================= */}
           <div className="space-y-4">
@@ -489,7 +508,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </div>
 
             {/* Financial Totals & Summary Block - Exact Reference Style */}
-            <div className="flex flex-col sm:flex-row justify-between items-start pt-4 gap-6 border-t border-slate-200 mt-2">
+            <div className="quotation-summary flex flex-col sm:flex-row justify-between items-start pt-4 gap-6 border-t border-slate-200 mt-2">
               {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
               <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
                 <div>

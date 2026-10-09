@@ -207,7 +207,8 @@ export const inquiriesApi = {
   previewQuotation: (id: string, payload: any) => API.post(`/inquiries/quotation-preview/${id}`, payload),
   sendQuotation: (id: string, payload: any) => API.post(`/inquiries/send-quotation/${id}`, payload),
   generatePdf: (payload: any) => API.post('/inquiries/generate-pdf', payload, { responseType: 'blob' }),
-  parseDocument: (payload: any) => API.post('/inquiries/parse-document', payload),
+  parseDocument: (payload: any) =>
+    API.post('/inquiries/parse-document', payload, { timeout: 90000 }),
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
   delete: (id: string) => API.delete(`/inquiries/${id}`),
 };

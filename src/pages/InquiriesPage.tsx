@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
@@ -21,6 +21,7 @@ import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
 import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
 import PaginationControl from '../components/PaginationControl';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import {
@@ -1560,10 +1561,11 @@ export default function InquiriesPage() {
     },
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
-    queryKey: ['customer-names-list', effectivePhone, activeRole, activeMode],
+    queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
@@ -1583,11 +1585,10 @@ export default function InquiriesPage() {
   });
 
   const { data: rawEmployees = [] } = useQuery<any[]>({
-    queryKey: ['employees-list-inquiries'],
+    queryKey: queryKeys.employeesDirectory,
     queryFn: async () => {
       const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      return normalizeListResponse(res?.data);
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -1606,6 +1607,7 @@ export default function InquiriesPage() {
     },
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 
   const [isSyncingZoho, setIsSyncingZoho] = useState(false);
@@ -2180,18 +2182,6 @@ export default function InquiriesPage() {
       }
     }
   }, [rawInquiries]);
-
-  useEffect(() => {
-    const handleDbChange = (e: any) => {
-      const { table } = e.detail || {};
-      if (table === 'inquiries' || table === 'deals' || table === 'deal_items' || table === 'inquiry_items') {
-        fetchMonthlyInquiries();
-        fetchDeals();
-      }
-    };
-    window.addEventListener('enlight-db-change', handleDbChange);
-    return () => window.removeEventListener('enlight-db-change', handleDbChange);
-  }, [fetchMonthlyInquiries, fetchDeals]);
 
   useEffect(() => {
     setExistingCustomers(Array.isArray(rawCustomers) ? rawCustomers : []);

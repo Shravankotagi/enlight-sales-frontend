@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { reportsApi, inquiriesApi, dealsApi, employeesApi } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
@@ -13,6 +13,7 @@ import {
   Activity, CheckCircle2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -40,12 +41,13 @@ export default function AdminDashboard() {
   }, []);
 
   // Fetch employees list
-  const { data: employeesRes, refetch: refetchEmployees } = useQuery({
-    queryKey: ['admin-employees-list'],
-    queryFn: () => employeesApi.getAll().then(r => r.data),
+  const { data: employeesRes = [], refetch: refetchEmployees } = useQuery({
+    queryKey: queryKeys.employeesDirectory,
+    queryFn: () => employeesApi.getAll().then(r => normalizeListResponse(r.data)).catch(() => []),
+    staleTime: 5 * 60 * 1000,
   });
 
-  const salespeople = (employeesRes?.data || employeesRes || []).filter(
+  const salespeople = (Array.isArray(employeesRes) ? employeesRes : []).filter(
     (e: any) => e.role === 'salesperson' || e.role === 'sales_lead'
   );
 
@@ -63,31 +65,37 @@ export default function AdminDashboard() {
   const { data: monthly, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery({
     queryKey: ['admin-monthly', selectedPhone, selectedMonth, selectedYear, dateRange],
     queryFn: () => reportsApi.getMonthly(queryParams).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
     queryKey: ['admin-funnel', selectedPhone, selectedMonth, selectedYear, dateRange],
     queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
     queryKey: ['admin-sku', selectedPhone, selectedMonth, selectedYear, dateRange],
     queryFn: () => reportsApi.getSku(queryParams).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: salesperson, isLoading: salespersonLoading, refetch: refetchSalesperson } = useQuery({
     queryKey: ['admin-salesperson', selectedMonth, selectedYear, dateRange],
     queryFn: () => reportsApi.getSalesperson({ month: selectedMonth, year: selectedYear, from: fromDate, to: toDate }).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: inquiries, isLoading: inquiriesLoading, refetch: refetchInquiries } = useQuery({
     queryKey: ['admin-inquiries-queue'],
     queryFn: () => inquiriesApi.getReviewQueue().then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: deals, isLoading: dealsLoading, refetch: refetchDeals } = useQuery({
     queryKey: ['admin-recent-deals', selectedPhone, selectedMonth, selectedYear, dateRange],
     queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const [selectedQuotationDeal, setSelectedQuotationDeal] = useState<any | null>(null);

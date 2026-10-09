@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customersApi, employeesApi, zohoApi } from '../lib/api';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useEffect, useState, useMemo } from 'react';
 import {
   Users,
@@ -135,7 +136,7 @@ export default function CustomersPage() {
         `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
       );
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
       queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
       refetch();
     } catch (err: any) {
@@ -218,12 +219,12 @@ export default function CustomersPage() {
 
   // Fetch employees for salesperson name lookup
   const { data: rawEmployees = [] } = useQuery<{ id: string; name: string; phone: string }[]>({
-    queryKey: ['employees-list-customers'],
+    queryKey: queryKeys.employeesDirectory,
     queryFn: async () => {
       const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+      return normalizeListResponse(res?.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const employeeMap = useMemo(() => {
@@ -278,7 +279,7 @@ export default function CustomersPage() {
       await Promise.all([
         refetch(),
         queryClient.invalidateQueries({ queryKey: ['customers-churn'] }),
-        queryClient.invalidateQueries({ queryKey: ['employees-list-customers'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.employeesDirectory }),
       ]);
     } finally {
       setTimeout(() => setManualRefreshing(false), 500);
@@ -582,7 +583,7 @@ export default function CustomersPage() {
                       onMouseEnter={() => {
                         if (c.id) {
                           queryClient.prefetchQuery({
-                            queryKey: ['customer-detail', c.id],
+                            queryKey: ['customer-detail', c.id, effectivePhone],
                             queryFn: async () => {
                               const res = await customersApi.getOne(c.id);
                               return res?.data?.data || res?.data;
