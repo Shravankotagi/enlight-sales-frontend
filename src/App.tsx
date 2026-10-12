@@ -19,12 +19,12 @@ import OrdersPage from './pages/OrdersPage';
 import NotFoundPage from './pages/NotFoundPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AssistantPage from './pages/AssistantPage';
+import ProcurementPage from './pages/ProcurementPage';
 import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
-  const { isAuthenticated, employee, clearViewingAs } = useAuth();
+  const { isAuthenticated, clearViewingAs, isProcurement, isAdmin } = useAuth();
   const location = useLocation();
-  const isAdmin = employee?.role === 'admin';
 
   const prevPathRef = useRef(location.pathname);
   useEffect(() => {
@@ -52,6 +52,10 @@ function AppRoutes() {
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/pipeline" element={<Navigate to="/inquiries?view=pipeline" replace />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
+        <Route
+          path="/procurement"
+          element={isProcurement || isAdmin ? <ProcurementPage /> : <Navigate to="/inquiries" replace />}
+        />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/customers/:id" element={<CustomerProfilePage />} />

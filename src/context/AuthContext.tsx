@@ -25,10 +25,13 @@ interface AuthContextType {
   isAdmin: boolean;
   isSalesManager: boolean;
   isSalesperson: boolean;
+  isProcurement: boolean;
   isAuthenticated: boolean;
   effectivePhone: string | null;
   activeRole: string;
   activeMode?: string;
+  prototypeRole: 'admin' | 'salesperson' | 'procurement' | null;
+  setPrototypeRole: (role: 'admin' | 'salesperson' | 'procurement' | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -44,6 +47,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [viewingAs, setViewingAsState] = useState<Employee | null>(() => {
     const saved = sessionStorage.getItem('enlight_viewing_as');
     return saved ? JSON.parse(saved) : null;
+  });
+  const [prototypeRole, setPrototypeRoleState] = useState<'admin' | 'salesperson' | 'procurement' | null>(() => {
+    const saved = sessionStorage.getItem('enlight_prototype_role');
+    return saved === 'admin' || saved === 'salesperson' || saved === 'procurement' ? saved : null;
   });
 
   useEffect(() => {
@@ -90,10 +97,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setViewingAsState(null);
   };
 
-  const isAdmin = employee?.role === 'admin';
+  const setPrototypeRole = (role: 'admin' | 'salesperson' | 'procurement' | null) => {
+    if (role) sessionStorage.setItem('enlight_prototype_role', role);
+    else sessionStorage.removeItem('enlight_prototype_role');
+    setPrototypeRoleState(role);
+  };
+
+  const effectiveRole = prototypeRole || employee?.role;
+  const isAdmin = effectiveRole === 'admin';
   const isSalesManager =
-    employee?.role === 'sales_manager' || employee?.role === 'manager';
-  const isSalesperson = !isAdmin && !isSalesManager;
+    !prototypeRole && (employee?.role === 'sales_manager' || employee?.role === 'manager');
+  const isProcurement = effectiveRole === 'procurement';
+  const isSalesperson = !isAdmin && !isSalesManager && !isProcurement;
 
   // effectivePhone:
   // - If viewing someone specifically -> that person's phone
@@ -105,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? employee?.phone || null
       : null;
 
-  const activeRole = viewingAs ? viewingAs.role : (employee?.role || 'salesperson');
+  const activeRole = prototypeRole || (viewingAs ? viewingAs.role : (employee?.role || 'salesperson'));
   const activeMode =
     viewingAs?.mode ||
     (activeRole === 'salesperson' &&
@@ -133,10 +148,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isSalesManager,
         isSalesperson,
+        isProcurement,
         isAuthenticated: !!token && !!employee,
         effectivePhone,
         activeRole,
         activeMode,
+        prototypeRole,
+        setPrototypeRole,
       }}
     >
       {children}

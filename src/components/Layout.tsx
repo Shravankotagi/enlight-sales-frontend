@@ -38,6 +38,8 @@ function EmployeeFooter() {
     clearViewingAs,
     isAdmin,
     isSalesManager,
+    prototypeRole,
+    setPrototypeRole,
   } = useAuth();
   const navigate = useNavigate();
 
@@ -109,6 +111,23 @@ function EmployeeFooter() {
         </p>
       </div>
 
+      <div className="border-t border-slate-700 pt-2.5">
+        <p className="text-[10px] uppercase tracking-wider text-amber-300 font-bold">Prototype demo</p>
+        <select
+          aria-label="Prototype demo persona"
+          value={prototypeRole || ''}
+          onChange={(event) => setPrototypeRole(
+            (event.target.value || null) as 'admin' | 'salesperson' | 'procurement' | null,
+          )}
+          className="mt-1.5 w-full rounded-lg bg-slate-800 border border-slate-600 px-2 py-1.5 text-xs text-white"
+        >
+          <option value="">Live role</option>
+          <option value="salesperson">Salesperson</option>
+          <option value="procurement">Procurement</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
       <button
         onClick={handleLogout}
         className="text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer"
@@ -122,7 +141,7 @@ function EmployeeFooter() {
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { employee, viewingAs, isAdmin } = useAuth();
+  const { employee, viewingAs, isAdmin, isProcurement } = useAuth();
 
   const isImpersonatingOther = Boolean(
     viewingAs &&
@@ -136,7 +155,12 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     ...(showAdminTab
       ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }]
       : []),
-    ...navItems,
+    ...(showAdminTab
+      ? [{ path: '/procurement', label: 'Procurement', icon: ShoppingBag }]
+      : []),
+    ...(isProcurement
+      ? [{ path: '/procurement', label: 'Procurement', icon: ShoppingBag }]
+      : navItems),
   ];
 
   const isActive = (path: string) => {

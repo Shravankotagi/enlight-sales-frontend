@@ -19,6 +19,7 @@ import {
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
+import ProcurementPricingPanel from '../components/ProcurementPricingPanel';
 import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
 import PaginationControl from '../components/PaginationControl';
 import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
@@ -4505,6 +4506,31 @@ export default function InquiriesPage() {
                 </div>
               </div>
             </div>
+
+            {activeRole === 'salesperson' && (
+              <ProcurementPricingPanel
+                onSendQuotation={(pricing) => {
+                  setShareInquiry(selectedInquiry);
+                  setShareDetails({
+                    ...editDetails,
+                    unitPrice: pricing.sellRatePerMt,
+                    totalAmount: pricing.subtotal,
+                    lineItems: editDetails.lineItems?.map((item) => ({
+                      ...item,
+                      rate: pricing.sellRatePerMt,
+                      amount: (Number(item.quantity) || 0) * pricing.sellRatePerMt,
+                    })),
+                  });
+                  setQuotationEmail(
+                    (selectedInquiry as any).customer_email ||
+                    (selectedInquiry as any).sender_email ||
+                    (editDetails as any).customerEmail ||
+                    '',
+                  );
+                  setShowQuotationModal(true);
+                }}
+              />
+            )}
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
