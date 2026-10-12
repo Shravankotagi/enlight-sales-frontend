@@ -2372,7 +2372,7 @@ export default function OrdersPage() {
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                     >
                       <ExternalLink size={12} />
-                      Open SourceDocument
+                      Open Document
                     </button>
                   )}
                 </div>
