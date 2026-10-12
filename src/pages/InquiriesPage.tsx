@@ -35,6 +35,8 @@ import {
   formatIndianCurrency,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
+import SalespersonContextBanner from '../components/SalespersonContextBanner';
+import { buildInquiryScopeParams } from '../utils/inquiryScope';
 
 export interface InquiryItem {
   id: string;
@@ -1166,7 +1168,16 @@ export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const {
+    effectivePhone,
+    employee,
+    viewingAs,
+    activeRole,
+    activeMode,
+    isAdmin,
+    isSalesManager,
+    clearViewingAs,
+  } = useAuth();
   const canViewSalesperson = isAdmin || isSalesManager;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
@@ -1190,6 +1201,10 @@ export default function InquiriesPage() {
     (selectedInquiry as any)?.salesperson_name ||
     (selectedInquiry as any)?.assigned_salesperson_name ||
     'Shravan Kotagi';
+  const adminReturnPath =
+    new URLSearchParams(location.search).get('returnTo') === '/admin-dashboard'
+      ? '/admin-dashboard'
+      : null;
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('view') === 'pipeline') {
@@ -1551,9 +1566,7 @@ export default function InquiriesPage() {
   const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
     queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
     queryFn: async () => {
-      const params: any = {};
-      if (effectivePhone) params.salesperson_phone = effectivePhone;
-      if (activeMode) params.mode = activeMode;
+      const params = buildInquiryScopeParams(effectivePhone, activeMode);
 
       const res = await inquiriesApi.getAll(params);
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
@@ -1567,9 +1580,7 @@ export default function InquiriesPage() {
   const { data: rawCustomers = [] } = useQuery<string[]>({
     queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
-      const params: any = {};
-      if (effectivePhone) params.salesperson_phone = effectivePhone;
-      if (activeMode) params.mode = activeMode;
+      const params = buildInquiryScopeParams(effectivePhone, activeMode);
 
       const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
@@ -1596,9 +1607,7 @@ export default function InquiriesPage() {
   const { data: rawDeals = [], isFetching: dealsFetching, refetch: fetchDeals } = useQuery<any[]>({
     queryKey: ['deals', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: async () => {
-      const params: any = {};
-      if (effectivePhone) params.salesperson_phone = effectivePhone;
-      if (activeMode) params.mode = activeMode;
+      const params = buildInquiryScopeParams(effectivePhone, activeMode);
       if (dateRange.from) params.from = dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
       const res = await dealsApi.getAll(params).catch(() => null);
@@ -3258,6 +3267,15 @@ export default function InquiriesPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
+            {isAdmin && viewingAs?.role === 'salesperson' && adminReturnPath && (
+              <SalespersonContextBanner
+                name={viewingAs.name}
+                onBack={() => {
+                  clearViewingAs();
+                  navigate(adminReturnPath);
+                }}
+              />
+            )}
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <FileText className="text-blue-600" size={28} />
               {viewMode === 'pipeline' ? 'Sales Pipeline' : 'Inquiries & Quotations Management'}
