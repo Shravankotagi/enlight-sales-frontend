@@ -348,7 +348,7 @@ export function formatOrderSourceText(ord?: Order | null): string {
   }
 
   if (getOrderSourceDocuments(ord).length > 0) {
-    return 'Original source is an attached document. Click "Open Document" above to view the uploaded file.';
+    return 'Original source is an attached document. Click "Open Source Document" above to view the uploaded file.';
   }
 
   return 'No original source text or document is available for this order.';
@@ -1887,7 +1887,7 @@ export default function OrdersPage() {
                       }
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer">
                       <ExternalLink size={12} />
-                      Open Document
+                      Open Source Document
                     </button>
                   )}
                 </div>
