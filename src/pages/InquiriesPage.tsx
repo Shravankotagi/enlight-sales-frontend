@@ -37,6 +37,11 @@ import {
 import { detectHsnCode } from '../utils/hsnDetector';
 import SalespersonContextBanner from '../components/SalespersonContextBanner';
 import { buildInquiryScopeParams } from '../utils/inquiryScope';
+import {
+  addQuotationCcEmail,
+  isValidQuotationEmail,
+  normalizeQuotationEmail,
+} from '../utils/quotationCc';
 
 export interface InquiryItem {
   id: string;
@@ -1242,6 +1247,8 @@ export default function InquiriesPage() {
   const [quotationSubject, setQuotationSubject] = useState('');
   const [quotationBody, setQuotationBody] = useState('');
   const [quotationCc, setQuotationCc] = useState<string[]>([]);
+  const [quotationCcDraft, setQuotationCcDraft] = useState('');
+  const [quotationCcError, setQuotationCcError] = useState('');
   const [quotationReference, setQuotationReference] = useState('');
   const [quotationSenderEmail, setQuotationSenderEmail] = useState('');
   const [quotationPreviewLoading, setQuotationPreviewLoading] = useState(false);
@@ -1265,7 +1272,13 @@ export default function InquiriesPage() {
       const preview = res?.data?.data || res?.data;
       setQuotationSubject(preview?.subject || '');
       setQuotationBody(preview?.body || '');
-      setQuotationCc(Array.isArray(preview?.cc) ? preview.cc : []);
+      setQuotationCc(
+        Array.isArray(preview?.cc)
+          ? preview.cc.map((email: string) => normalizeQuotationEmail(email)).filter(isValidQuotationEmail)
+          : [],
+      );
+      setQuotationCcDraft('');
+      setQuotationCcError('');
       setQuotationReference(preview?.quotation_reference || '');
       setQuotationSenderEmail(preview?.sender_email || '');
     }).catch((err: any) => {
@@ -1282,6 +1295,17 @@ export default function InquiriesPage() {
       cancelled = true;
     };
   }, [showQuotationModal, shareInquiry?.id]);
+
+  const commitQuotationCcDraft = () => {
+    const result = addQuotationCcEmail(
+      quotationCc,
+      quotationCcDraft,
+      quotationEmail,
+    );
+    setQuotationCc(result.emails);
+    setQuotationCcError(result.error);
+    if (!result.error) setQuotationCcDraft('');
+  };
 
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
@@ -3740,6 +3764,8 @@ export default function InquiriesPage() {
                                   setShareInquiry(inq);
                                   setShareDetails(details);
                                   setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || '');
+                                  setQuotationCcDraft('');
+                                  setQuotationCcError('');
                                   setShowQuotationModal(true);
                                 }}
                                 className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer">
@@ -4524,6 +4550,33 @@ export default function InquiriesPage() {
               </div>
             </div>
 
+            {activeRole === 'salesperson' && (
+              <ProcurementPricingPanel
+                onSendQuotation={(pricing) => {
+                  setShareInquiry(selectedInquiry);
+                  setShareDetails({
+                    ...editDetails,
+                    unitPrice: pricing.sellRatePerMt,
+                    totalAmount: pricing.subtotal,
+                    lineItems: editDetails.lineItems?.map((item) => ({
+                      ...item,
+                      rate: pricing.sellRatePerMt,
+                      amount: (Number(item.quantity) || 0) * pricing.sellRatePerMt,
+                    })),
+                  });
+                  setQuotationEmail(
+                    (selectedInquiry as any).customer_email ||
+                    (selectedInquiry as any).sender_email ||
+                    (editDetails as any).customerEmail ||
+                    '',
+                  );
+                  setQuotationCcDraft('');
+                  setQuotationCcError('');
+                  setShowQuotationModal(true);
+                }}
+              />
+            )}
+
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
               <button
@@ -4587,6 +4640,8 @@ export default function InquiriesPage() {
                         setShareInquiry(selectedInquiry);
                         setShareDetails(editDetails);
                         setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
+                        setQuotationCcDraft('');
+                        setQuotationCcError('');
                         setShowQuotationModal(true);
                       }}
                       className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
@@ -4796,6 +4851,8 @@ export default function InquiriesPage() {
                   setShareInquiry(null);
                   setShareDetails(null);
                   setResendNotice('');
+                  setQuotationCcDraft('');
+                  setQuotationCcError('');
                 }}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
                 <X size={20} />
@@ -4895,13 +4952,61 @@ export default function InquiriesPage() {
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   CC
                 </label>
-                <input
-                  type="text"
-                  readOnly
-                  value={quotationCc.join(', ')}
-                  placeholder="Resolved after preview"
-                  className="w-full px-3.5 py-2.5 border border-slate-200 bg-slate-50 rounded-xl text-xs font-semibold outline-none text-slate-600"
-                />
+                <div
+                  className="min-h-[42px] w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all flex flex-wrap items-center gap-1.5 bg-white"
+                  onClick={(event) => {
+                    const input = event.currentTarget.querySelector('input');
+                    input?.focus();
+                  }}
+                >
+                  {quotationCc.map((email) => (
+                    <span
+                      key={email}
+                      className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700"
+                    >
+                      {email}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${email}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setQuotationCc((current) => current.filter((item) => item !== email));
+                        }}
+                        className="text-slate-400 hover:text-slate-700 rounded-full"
+                      >
+                        <X size={13} />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="email"
+                    value={quotationCcDraft}
+                    onChange={(event) => {
+                      setQuotationCcDraft(event.target.value);
+                      if (quotationCcError) setQuotationCcError('');
+                    }}
+                    onBlur={commitQuotationCcDraft}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ',') {
+                        event.preventDefault();
+                        commitQuotationCcDraft();
+                      } else if (
+                        event.key === 'Backspace' &&
+                        !quotationCcDraft &&
+                        quotationCc.length > 0
+                      ) {
+                        setQuotationCc((current) => current.slice(0, -1));
+                      }
+                    }}
+                    placeholder={quotationCc.length === 0 ? 'Add CC recipients' : 'Add another email'}
+                    className="min-w-[150px] flex-1 border-0 bg-transparent px-1 py-1 text-xs font-semibold outline-none text-slate-800 placeholder:text-slate-400"
+                  />
+                </div>
+                {quotationCcError && (
+                  <p className="mt-1 text-[11px] font-semibold text-rose-600">
+                    {quotationCcError}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -4951,6 +5056,8 @@ export default function InquiriesPage() {
                   setShareInquiry(null);
                   setShareDetails(null);
                   setResendNotice('');
+                  setQuotationCcDraft('');
+                  setQuotationCcError('');
                 }}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
                 Cancel
@@ -4977,6 +5084,19 @@ export default function InquiriesPage() {
                     toast.error('Please enter a valid customer email address');
                     return;
                   }
+                  const ccResult = addQuotationCcEmail(
+                    quotationCc,
+                    quotationCcDraft,
+                    targetEmail,
+                  );
+                  if (ccResult.error) {
+                    setQuotationCcError(ccResult.error);
+                    toast.error(ccResult.error);
+                    return;
+                  }
+                  const finalCc = ccResult.emails;
+                  setQuotationCc(finalCc);
+                  setQuotationCcDraft('');
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
@@ -4994,6 +5114,7 @@ export default function InquiriesPage() {
                       email_subject: quotationSubject,
                       email_body: quotationBody,
                       quotation_reference: quotationReference,
+                      cc: finalCc,
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
                     const sharedAt =
@@ -5038,6 +5159,8 @@ export default function InquiriesPage() {
                         setShareInquiry(null);
                         setShareDetails(null);
                         setResendNotice('');
+                        setQuotationCcDraft('');
+                        setQuotationCcError('');
                       }, 1200);
                     }
                   } catch (err: any) {
