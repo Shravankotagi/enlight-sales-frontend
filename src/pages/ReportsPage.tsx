@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
+import SyncBiginButton from '../components/SyncBiginButton';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3 } from 'lucide-react';
@@ -9,7 +10,7 @@ import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 
 export default function ReportsPage() {
-  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const { effectivePhone, isAdmin, employee, activeRole, activeMode } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
@@ -137,6 +138,10 @@ export default function ReportsPage() {
           </h1>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
+          <SyncBiginButton
+            show={isAdmin || employee?.role === 'salesperson'}
+            onSynced={refetchAll}
+          />
           <DateFilterControl onChange={setDateRange} />
           <button
             onClick={refetchAll}
