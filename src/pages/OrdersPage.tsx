@@ -2329,28 +2329,12 @@ export default function OrdersPage() {
                   Order PO Details &amp; Source
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                {getOrderSourceDocuments(selectedPoOrder).length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openDocumentUrl(
-                        getOrderSourceDocuments(selectedPoOrder)[0],
-                      )
-                    }
-                    className="h-8 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <ExternalLink size={14} />
-                    Open Document
-                  </button>
-                )}
-                <button
-                  onClick={handleClosePoViewer}
-                  className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer"
-                >
-                  <X size={18} /> Close
-                </button>
-              </div>
+              <button
+                onClick={handleClosePoViewer}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer"
+              >
+                <X size={18} /> Close
+              </button>
             </div>
 
             <div className="w-full space-y-3">
@@ -2388,7 +2372,7 @@ export default function OrdersPage() {
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                     >
                       <ExternalLink size={12} />
-                      Open Document
+                      Open SourceDocument
                     </button>
                   )}
                 </div>
