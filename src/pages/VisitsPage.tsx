@@ -81,6 +81,8 @@ export default function VisitsPage() {
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode, viewingAs } = useAuth();
+  const viewingAsName = viewingAs?.name;
+  const viewingAsPhone = viewingAs?.phone;
   const canViewSalesperson = isSalesManager || isAdmin;
   const canEditVisit = isAdmin || isSalesManager;
 
@@ -91,7 +93,7 @@ export default function VisitsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [filterFollowup, setFilterFollowup] = useState(() => searchParams.get('followup') || 'all');
-  const [filterSalesperson, setFilterSalesperson] = useState<string>(() => getVisitsSalespersonFilterValue(viewingAs));
+  const [filterSalesperson, setFilterSalesperson] = useState<string>(() => getVisitsSalespersonFilterValue({ name: viewingAsName }));
   const [filterCustomerType, setFilterCustomerType] = useState<string>('all');
   const [filterProbability, setFilterProbability] = useState<string>('all');
   const [filterVisitType, setFilterVisitType] = useState<string>('all');
@@ -110,8 +112,8 @@ export default function VisitsPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    setFilterSalesperson(getVisitsSalespersonFilterValue(viewingAs));
-  }, [viewingAs?.name, viewingAs?.phone]);
+    setFilterSalesperson(getVisitsSalespersonFilterValue({ name: viewingAsName }));
+  }, [viewingAsName, viewingAsPhone]);
 
   // Date Filter Presets (Matching Inquiry tab pattern)
   const [dayPreset, setDayPreset] = useState<string>('all');
