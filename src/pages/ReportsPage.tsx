@@ -312,8 +312,8 @@ export default function ReportsPage() {
                 <ShoppingBag size={16} className="text-blue-600" /> Top Customers
               </h3>
               <div className="space-y-2">
-                {(overview?.by_customer || []).slice(0, 6).map((c: any) => (
-                  <div key={c.customer || c.name || Math.random()} className="flex items-center justify-between">
+                {(overview?.by_customer || []).slice(0, 6).map((c: any, idx: number) => (
+                  <div key={c.customer || c.name || `top-customer-${idx}`} className="flex items-center justify-between">
                     <span className="text-sm text-gray-700">{c.customer || c.name || 'Unknown'}</span>
                     <div className="text-right">
                       <span className="text-sm font-semibold text-gray-800">

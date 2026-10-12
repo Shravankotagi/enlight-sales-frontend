@@ -1302,9 +1302,9 @@ export function calculatePricingSummary(
   const isUniformUnit = distinctUnits.length <= 1;
   const primaryUnit = isUniformUnit ? (distinctUnits[0] || 'MT') : 'MT';
 
-  let totalQuantity = 0;
-  let totalQuantityMt = 0;
-  let formattedQuantity = '';
+  let totalQuantity: number;
+  let totalQuantityMt: number;
+  let formattedQuantity: string;
 
   if (primaryUnit === 'KG' && isUniformUnit) {
     totalQuantity = processedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
@@ -1318,6 +1318,7 @@ export function calculatePricingSummary(
     totalQuantity = processedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
     totalQuantityMt = totalQuantity;
     formattedQuantity = `${totalQuantity.toLocaleString('en-IN')} MT`;
+  } else {
     // Mixed units or piece/count units: compute converted MT using physical formulas
     const tonnageRes = calculateTotalTonnageMt(processedItems);
     totalQuantityMt = tonnageRes.totalMt;

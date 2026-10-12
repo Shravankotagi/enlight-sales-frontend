@@ -1678,13 +1678,13 @@ export default function InquiriesPage() {
   const formCustMeta = lookupCustomerMeta(formCustomerName);
   const formPlaceOfSupply = resolvePlaceOfSupply({
     deliveryAddress: formDeliveryLocation,
-    customerState: formCustMeta?.state || formExtractedJsonRef.current?.place_of_supply,
+    customerState: formCustMeta?.state || formExtractedJson?.place_of_supply,
     customerGstin:
       formCustMeta?.gstin ||
-      formExtractedJsonRef.current?.customer_gst ||
-      formExtractedJsonRef.current?.gstin ||
-      formExtractedJsonRef.current?.gst,
-    customerAddress: formCustMeta?.address || formExtractedJsonRef.current?.customer_address,
+      formExtractedJson?.customer_gst ||
+      formExtractedJson?.gstin ||
+      formExtractedJson?.gst,
+    customerAddress: formCustMeta?.address || formExtractedJson?.customer_address,
   });
   const isFormInterState = formPlaceOfSupply.isInterState;
 
@@ -3124,7 +3124,7 @@ export default function InquiriesPage() {
       });
 
       const newInquiry: InquiryItem = {
-        id: createRes?.data?.id || createRes?.data?.data?.id || String(Date.now()),
+        id: createRes?.data?.id || createRes?.data?.data?.id || 'new-inquiry',
         sender_name: customerName,
         customer_name: customerName,
         customer_phone: finalCustomerPhone,

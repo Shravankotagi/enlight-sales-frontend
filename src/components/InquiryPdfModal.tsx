@@ -75,9 +75,21 @@ interface InquiryPdfModalProps {
   onClose: () => void;
 }
 
+function printWithTitleFallback(title: string) {
+  if (typeof document !== 'undefined') {
+    const previousTitle = document.title;
+    document.title = title;
+    window.print();
+    document.title = previousTitle;
+  } else {
+    window.print();
+  }
+}
+
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
   const { employee, viewingAs } = useAuth();
   const [logoError, setLogoError] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const { data: customerList = [] } = useQuery({
     queryKey: ['customers-list'],
@@ -190,8 +202,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
     return viewingAs?.name || employee?.name || 'Vedant Goel';
   })();
 
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
-
   const handlePrintDownload = async () => {
     try {
       setDownloadingPdf(true);
@@ -226,10 +236,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
       window.URL.revokeObjectURL(downloadUrl);
     } catch (e) {
       console.warn('Direct PDF download fallback to print:', e);
-      const previousTitle = document.title;
-      document.title = `Quotation_${piNumber}`;
-      window.print();
-      document.title = previousTitle;
+      printWithTitleFallback(`Quotation_${piNumber}`);
     } finally {
       setDownloadingPdf(false);
     }
