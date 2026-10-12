@@ -26,6 +26,7 @@ import {
   Layers,
   ArrowLeft,
   UserCheck,
+  ExternalLink,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -340,6 +341,37 @@ export function getOrderSourceDocuments(ord?: Order | null): string[] {
   );
 }
 
+export function openDocumentUrl(url?: string | null) {
+  if (!url) return;
+  if (url.startsWith("data:")) {
+    try {
+      const [header, base64Data] = url.split(",");
+      const mimeMatch = header.match(/:(.*?);/);
+      const mimeType = mimeMatch ? mimeMatch[1] : "application/pdf";
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+      const newWin = window.open(blobUrl, "_blank");
+      if (!newWin) {
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.target = "_blank";
+        a.rel = "noreferrer";
+        a.click();
+      }
+      return;
+    } catch (err) {
+      console.error("Failed to open data URL as blob:", err);
+    }
+  }
+  window.open(url, "_blank", "noreferrer");
+}
+
 export function formatOrderSourceText(ord?: Order | null): string {
   const originalText = getOrderOriginalSourceText(ord);
   if (originalText) return `Original Source Message:\n${originalText}`;
@@ -349,7 +381,7 @@ export function formatOrderSourceText(ord?: Order | null): string {
   }
 
   if (getOrderSourceDocuments(ord).length > 0) {
-    return "Original source is an attached document. Use the document preview above.";
+    return 'Original source is an attached document. Click "Open Document" above to view the uploaded file.';
   }
 
   return "No original source text or document is available for this order.";
@@ -2297,12 +2329,28 @@ export default function OrdersPage() {
                   Order PO Details &amp; Source
                 </span>
               </div>
-              <button
-                onClick={handleClosePoViewer}
-                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer"
-              >
-                <X size={18} /> Close
-              </button>
+              <div className="flex items-center gap-2">
+                {getOrderSourceDocuments(selectedPoOrder).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openDocumentUrl(
+                        getOrderSourceDocuments(selectedPoOrder)[0],
+                      )
+                    }
+                    className="h-8 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ExternalLink size={14} />
+                    Open Document
+                  </button>
+                )}
+                <button
+                  onClick={handleClosePoViewer}
+                  className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <X size={18} /> Close
+                </button>
+              </div>
             </div>
 
             <div className="w-full space-y-3">
@@ -2325,7 +2373,25 @@ export default function OrdersPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                <span>Original Source</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700">
+                    Original Source Message
+                  </span>
+                  {getOrderSourceDocuments(selectedPoOrder).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openDocumentUrl(
+                          getOrderSourceDocuments(selectedPoOrder)[0],
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                    >
+                      <ExternalLink size={12} />
+                      Open Document
+                    </button>
+                  )}
+                </div>
                 {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
                   <span className="font-mono">
                     Received:{" "}
@@ -2338,51 +2404,7 @@ export default function OrdersPage() {
                 )}
               </div>
 
-              {getOrderSourceDocuments(selectedPoOrder)
-                .slice(0, 1)
-                .map((sourceUrl) => {
-                  const isPdf =
-                    sourceUrl
-                      .toLowerCase()
-                      .startsWith("data:application/pdf") ||
-                    /\.pdf(?:$|[?#])/i.test(sourceUrl);
-                  return (
-                    <div
-                      key={sourceUrl}
-                      className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-slate-700">
-                          Original Source Document
-                        </span>
-                        <a
-                          href={sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          download={isPdf ? "original-po.pdf" : undefined}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-                        >
-                          Open document
-                        </a>
-                      </div>
-                      {isPdf ? (
-                        <iframe
-                          title="Original PO document"
-                          src={sourceUrl}
-                          className="w-full h-[42vh] rounded-lg border border-slate-200 bg-white"
-                        />
-                      ) : (
-                        <img
-                          src={sourceUrl}
-                          alt="Original PO document"
-                          className="max-h-[42vh] w-full object-contain rounded-lg border border-slate-200 bg-white"
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[220px] max-h-[65vh] overflow-y-auto">
                 {formatOrderSourceText(selectedPoOrder)}
               </div>
             </div>
