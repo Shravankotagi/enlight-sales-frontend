@@ -33,4 +33,40 @@ describe('systemPo helpers', () => {
     expect(getPoErrorMessage(new Error('Network'))).toBe('Network')
     expect(getPoErrorMessage(undefined)).toBe('This PO number is already allocated.')
   })
+
+  it('formats structured View PO source details instead of Original PO Document placeholder', async () => {
+    const { formatOrderSourceText } = await import('../pages/OrdersPage')
+    const formatted = formatOrderSourceText({
+      id: 'deal-49',
+      po_number: 'EM/PO/49',
+      customer_name: 'Zenith Metal Works Pvt Ltd',
+      delivery_location:
+        'Suraj SIM Techno Works Pvt Ltd, Gut. No. 61/62/63, Shendurwada Road , Village Murmi, Dahegaon (B), Tq. Gangapur, Dist. CH. SAMBHAJINAGAR, Maharashtra - 431133, India',
+      payment_terms: 'Pmt immediate after delivery.',
+      raw_text: '[PO Document Attached: EM/PO/45] Zenith Metal Works Pvt Ltd - Original PO Document',
+      deal_items: [
+        { sku_text: 'HR PLATE', dimensions: '05X1500X6300MM', quantity: 50, unit: 'MT', rate: 64200 },
+        { sku_text: 'HR PLATE', dimensions: '08X1500X6300MM', quantity: 50, unit: 'MT', rate: 64200 },
+      ],
+      inquiries: {
+        ai_extraction_json: {
+          additional_notes:
+            'TC Must Be Supplied Along With Invoice. Invoice, TC and E -way Bill along with Vechile to be provided.',
+        },
+      },
+    } as any)
+
+    expect(formatted).toBe(
+      [
+        'Original Source Message:',
+        'Material:',
+        '1. HR PLATE (05X1500X6300MM) - 50 MT @ ₹64200',
+        '2. HR PLATE (08X1500X6300MM) - 50 MT @ ₹64200',
+        'Delivery: Gut. No. 61/62/63, Shendurwada Road , Village Murmi, Dahegaon (B), Tq. Gangapur, Dist. CH. SAMBHAJINAGAR, Maharashtra - 431133, India',
+        'Payment Terms: Pmt immediate after delivery.',
+        'Notes: TC Must Be Supplied Along With Invoice. Invoice, TC and E -way Bill along with Vechile to be provided.',
+        'PO Number: EM/PO/49',
+      ].join('\n'),
+    )
+  })
 })
