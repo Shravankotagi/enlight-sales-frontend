@@ -166,6 +166,7 @@ export default function HomePage() {
       queryClient.invalidateQueries({ queryKey: ['customers-churn-home'] });
       queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
       queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['home-complaints-list'] });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
     } finally {
@@ -581,7 +582,11 @@ export default function HomePage() {
     return safeVisits.length;
   }, [safeVisits]);
 
-  // 5. Open (Pending) Complaints
+  // 5. Total Complaints count & Open (Pending) Complaints
+  const totalComplaintsCount = useMemo(() => {
+    return safeComplaints.length;
+  }, [safeComplaints]);
+
   const openComplaints = useMemo(() => {
     return safeComplaints.filter(c => c.status !== 'resolved');
   }, [safeComplaints]);
@@ -708,14 +713,20 @@ export default function HomePage() {
   // ── Curated Action Carousel (3-colour palette: Blue, Emerald, Indigo) ──
   const curatedActionItems: CarouselItem[] = useMemo(() => {
     const items: CarouselItem[] = [];
+    const activeInquiries = safeInquiries.filter(isProductInquiry);
 
-    // 1. Quote Follow-up
-    const quotedDeals = safeDeals.filter(d => d.stage === 'quoted' || d.stage === 'sent_to_party');
-    if (quotedDeals.length > 0) {
+    // 1. Quote Follow-up (Strictly matches Inquiries & Pipeline stageCounts.quoted)
+    const quotedInquiriesCount = activeInquiries.filter(inq => {
+      const parsed = parseInquiryText(inq.raw_text || '', inq);
+      const stageKey = resolveInquiryDealStageKey(inq, parsed.companyName, safeDeals);
+      const normKey = (stageKey === 'qualified' || stageKey === 'saved' || stageKey === 'confirmed') ? 'quoted' : (stageKey === 'hold' ? 'on_hold' : stageKey);
+      return normKey === 'quoted';
+    }).length;
+    if (quotedInquiriesCount > 0) {
       items.push({
         id: 'action-quote-followup',
         category: 'Quote Follow-up',
-        title: quotedDeals.length === 1 ? '1 quote needs follow-up' : `${quotedDeals.length} quotes need follow-up`,
+        title: quotedInquiriesCount === 1 ? '1 quote needs follow-up' : `${quotedInquiriesCount} quotes need follow-up`,
         link: '/pipeline',
         icon: Clock,
       });
@@ -764,7 +775,7 @@ export default function HomePage() {
       ).length;
       const totalCount = dueOrOverdueVisits.length;
 
-      let titleText = '';
+      let titleText: string;
       if (overdueCount > 0 && todayCount > 0) {
         titleText = `${totalCount} visit follow-up${totalCount > 1 ? 's' : ''} due (${overdueCount} overdue, ${todayCount} today)`;
       } else if (overdueCount > 0) {
@@ -783,7 +794,6 @@ export default function HomePage() {
     }
 
     // 5. Review New Inquiries (Strictly matches Inquiries tab stageCounts.new_inquiry)
-    const activeInquiries = safeInquiries.filter(isProductInquiry);
     const newInquiriesCount = activeInquiries.filter(inq => {
       const parsed = parseInquiryText(inq.raw_text || '', inq);
       const stageKey = resolveInquiryDealStageKey(inq, parsed.companyName, safeDeals);
@@ -1159,7 +1169,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 5: Complaints - Blue Soft */}
+        {/* Card 5: Total Complaints - Blue Soft */}
         <div
           onClick={() => navigate('/complaints')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1 cursor-pointer">
@@ -1169,9 +1179,9 @@ export default function HomePage() {
           <div>
             <div className="flex items-baseline gap-2">
               <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
-                {openComplaints.length}
+                {totalComplaintsCount}
               </p>
-              <span className="text-sm sm:text-base font-bold text-slate-900">Complaints</span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Total Complaints</span>
             </div>
           </div>
         </div>

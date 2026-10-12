@@ -162,12 +162,57 @@ interface LineItemDetail {
 
 const GENERATED_SOURCE_PLACEHOLDER = /^\[(?:Inquiry Attachment|PO Document Attached|PO Document):/i;
 
+export function buildOrderStructuredSourceText(ord?: Order | null): string | null {
+  if (!ord) return null;
+  const items = Array.isArray(ord.deal_items) ? ord.deal_items : [];
+  const itemStrs = items
+    .map((item, idx) => {
+      const sku = String(item?.sku_text || (item as any)?.description || '').trim();
+      if (!sku && !Number(item?.quantity)) return '';
+      const dims = item?.dimensions ? ` (${String(item.dimensions).trim()})` : '';
+      const qty = Number(item?.quantity) > 0 ? ` - ${item.quantity} ${item.unit || 'MT'}` : '';
+      const rate = Number(item?.rate) > 0 ? ` @ ₹${Number(item.rate)}` : '';
+      return `${idx + 1}. ${sku || 'Item'}${dims}${qty}${rate}`.trim();
+    })
+    .filter(Boolean);
+
+  const rawDelivery = String(ord.delivery_location || '').trim();
+  const cleanDelivery = rawDelivery
+    .replace(/^[^,\n]*?\b(?:pvt\.?\s*ltd\.?|private\s+limited|limited|llp)\s*,\s*/i, '')
+    .trim();
+  const paymentTerms = String(ord.payment_terms || '').trim();
+  const inqObj = (ord as any).inquiries;
+  const aiJson = inqObj?.ai_extraction_json || (ord as any).ai_extraction_json || {};
+  const notes = String(
+    (ord as any).additional_notes ||
+      (ord as any).notes ||
+      aiJson.additional_notes ||
+      aiJson.notes ||
+      aiJson.remarks ||
+      '',
+  ).trim();
+  const poNumber = String(ord.po_number || '').trim();
+
+  if (itemStrs.length === 0 && !cleanDelivery && !paymentTerms && !notes) {
+    return null;
+  }
+
+  return [
+    itemStrs.length > 0 ? `Material:\n${itemStrs.join('\n')}` : '',
+    cleanDelivery ? `Delivery: ${cleanDelivery}` : '',
+    paymentTerms ? `Payment Terms: ${paymentTerms}` : '',
+    notes ? `Notes: ${notes}` : '',
+    poNumber ? `PO Number: ${poNumber}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export function getOrderOriginalSourceText(ord?: Order | null): string | null {
   if (!ord) return null;
   const candidate = String(
     ord.source_original_text ?? ord.raw_text ?? '',
   ).trim();
-  if (!candidate) return null;
 
   const strippedContent = candidate
     .replace(
@@ -177,10 +222,25 @@ export function getOrderOriginalSourceText(ord?: Order | null): string | null {
     .trim();
 
   const isPurePlaceholder =
-    GENERATED_SOURCE_PLACEHOLDER.test(candidate) && !strippedContent;
+    (GENERATED_SOURCE_PLACEHOLDER.test(candidate) &&
+      (!strippedContent || / - Original PO Document$/i.test(strippedContent))) ||
+    / - Original PO Document$/i.test(candidate);
 
-  if (isPurePlaceholder) return null;
-  return strippedContent || candidate;
+  if (candidate && !isPurePlaceholder && strippedContent) {
+    const poNumber = String(ord.po_number || '').trim();
+    if (poNumber && /^Material:/i.test(strippedContent)) {
+      if (/\bPO\s*Number\s*:/i.test(strippedContent)) {
+        return strippedContent.replace(
+          /(\bPO\s*Number\s*:\s*)([^\n\r]+)/i,
+          `$1${poNumber}`,
+        );
+      }
+      return `${strippedContent}\nPO Number: ${poNumber}`;
+    }
+    return strippedContent;
+  }
+
+  return buildOrderStructuredSourceText(ord);
 }
 
 export function getOrderSourceDocuments(ord?: Order | null): string[] {
@@ -590,7 +650,8 @@ export default function OrdersPage() {
   const poInputDirtyRef = useRef(false);
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
-  const extractedCustomerExtrasRef = useRef<{ contactPerson: string; gstin: string }>({
+  const [formNotes, setFormNotes] = useState('');
+  const [extractedCustomerExtras, setExtractedCustomerExtras] = useState<{ contactPerson: string; gstin: string }>({
     contactPerson: '',
     gstin: '',
   });
@@ -791,14 +852,28 @@ export default function OrdersPage() {
           setFormPoDate(formattedDate);
         }
         if (extraction.delivery_location || extraction.deliveryLocation || extraction.customer_address || extraction.address || extraction.customer?.address) {
-          setFormDeliveryLocation(String(extraction.delivery_location || extraction.deliveryLocation || extraction.customer_address || extraction.address || extraction.customer?.address).trim());
+          const rawDeliv = String(
+            extraction.delivery_location ||
+              extraction.deliveryLocation ||
+              extraction.customer_address ||
+              extraction.address ||
+              extraction.customer?.address,
+          )
+            .replace(/^[^,\n]*?\b(?:pvt\.?\s*ltd\.?|private\s+limited|limited|llp)\s*,\s*/i, '')
+            .replace(/,?\s*e-?mail\s*:\s*\S+/gi, '')
+            .trim();
+          setFormDeliveryLocation(rawDeliv);
         }
-        extractedCustomerExtrasRef.current = {
+        const extractedNotes = String(
+          extraction.additional_notes || extraction.notes || extraction.remarks || '',
+        ).trim();
+        setFormNotes(extractedNotes);
+        setExtractedCustomerExtras({
           contactPerson: String(
             extraction.contact_person || extraction.contact_name || extraction.customer?.contact_person || '',
           ).trim(),
           gstin: String(extraction.customer_gst || extraction.gstin || extraction.gst || '').trim(),
-        };
+        });
         if (extraction.payment_terms || extraction.paymentTerms) {
           setFormPaymentTerms(String(extraction.payment_terms || extraction.paymentTerms).trim());
         }
@@ -852,6 +927,7 @@ export default function OrdersPage() {
         console.error('Error parsing PO document:', err);
         setFormUploadedBase64(null);
         setPoFileName('');
+        setFormNotes('');
         toast.error(err?.message || 'Could not auto-extract PO details. You can enter the fields manually.');
       } finally {
         setIsParsingDoc(false);
@@ -968,6 +1044,32 @@ export default function OrdersPage() {
     const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
     const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
 
+    const itemStrs = formLineItems
+      .map((item, idx) => {
+        const sku = (item.sku_text || 'Item').trim();
+        const dims = item.dimensions?.trim() ? ` (${item.dimensions.trim()})` : '';
+        const qty = item.quantity ? ` - ${item.quantity} ${item.unit || 'MT'}` : '';
+        const rate = Number(item.rate) > 0 ? ` @ ₹${Number(item.rate)}` : '';
+        return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
+      })
+      .filter(Boolean);
+    const cleanDeliveryForSource = formDeliveryLocation
+      .trim()
+      .replace(/^[^,\n]*?\b(?:pvt\.?\s*ltd\.?|private\s+limited|limited|llp)\s*,\s*/i, '')
+      .trim();
+    const reqDetails = [
+      itemStrs.length > 0 ? `Material:\n${itemStrs.join('\n')}` : '',
+      cleanDeliveryForSource ? `Delivery: ${cleanDeliveryForSource}` : '',
+      formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
+      formNotes.trim() ? `Notes: ${formNotes.trim()}` : '',
+      formPoNumber.trim() ? `PO Number: ${formPoNumber.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const sourceOriginalText = poFileName
+      ? `[Inquiry Attachment: ${poFileName}]\n${reqDetails}`
+      : reqDetails;
+
     try {
       setSubmitting(true);
       await ordersApi.processPo({
@@ -982,6 +1084,8 @@ export default function OrdersPage() {
         total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim() || undefined,
+        additional_notes: formNotes.trim() || undefined,
+        source_original_text: sourceOriginalText || undefined,
         source_channel: 'web_dashboard',
         line_items: formLineItems.map(i => {
           const baseAmt = Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0));
@@ -1024,6 +1128,7 @@ export default function OrdersPage() {
       setFormPoDate(new Date().toISOString().split('T')[0]);
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
+      setFormNotes('');
       setFormLineItems([
         {
           sku_text: '',
@@ -2014,7 +2119,7 @@ export default function OrdersPage() {
                                 const rawQ = val === '' ? 0 : parseFloat(val);
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
-                                let currentItem = { ...updated[idx], quantity: safeQ };
+                                const currentItem = { ...updated[idx], quantity: safeQ };
                                 if (normalizeUnit(currentItem.unit) === 'MT') {
                                   currentItem.converted_mt = safeQ;
                                 }
@@ -2039,7 +2144,7 @@ export default function OrdersPage() {
                               onChange={(e) => {
                                 const newUnit = e.target.value;
                                 const updated = [...formLineItems];
-                                let currentItem = { ...updated[idx], unit: newUnit };
+                                const currentItem = { ...updated[idx], unit: newUnit };
                                 delete currentItem.is_manual_mt;
                                 if (newUnit === 'MT') {
                                   currentItem.converted_mt = currentItem.quantity;
@@ -2091,7 +2196,7 @@ export default function OrdersPage() {
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       const updated = [...formLineItems];
-                                      let currentItem = { ...updated[idx] };
+                                      const currentItem = { ...updated[idx] };
 
                                       if (val === '') {
                                         delete currentItem.converted_mt;
@@ -2361,10 +2466,10 @@ export default function OrdersPage() {
         assignPhone={effectivePhone || employee?.phone || ''}
         seed={{
           companyName: formCustomerName.trim(),
-          contactPerson: extractedCustomerExtrasRef.current.contactPerson,
+          contactPerson: extractedCustomerExtras.contactPerson,
           mobile: formCustomerPhone.trim(),
           deliveryLocation: formDeliveryLocation.trim(),
-          gstin: extractedCustomerExtrasRef.current.gstin,
+          gstin: extractedCustomerExtras.gstin,
         }}
         onClose={() => setShowAddCustomer(false)}
         onSaved={(saved) => {
