@@ -13,5 +13,7 @@ Search within the file by exported function, intent/state key, or user-visible r
 - If a customer is already registered under another representative, the current draft is blocked.
   The response preserves the ownership warning and offers only `Discard Draft`; it must not
   invite a replacement customer name or allow arbitrary text to resume that draft.
+- When an unrecognized product is entered, do not fabricate a fallback HSN (`72083840`); leave HSN empty if undetected, present catalog suggestions alongside the `Add Product` button (`btn_add_product`), and allow saving a custom product to `products` via `catalog_implicit_prod_add|<RETURN_INTENT>` using only user-entered product name and specs before resuming the inquiry/order draft.
 
 Run focused scripts under `scripts/test-*catalog*`, `test-*order*`, `test-*inquiry*`, and `test-*update*` in a safe environment after changes.
+

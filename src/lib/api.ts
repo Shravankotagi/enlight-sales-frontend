@@ -223,6 +223,8 @@ export const inquiriesApi = {
 export const productsApi = {
   getAll: (params?: any) => API.get('/products', { params }),
   lookup: (name: string, dimensions?: string) => API.get('/products/lookup', { params: { name, dimensions } }),
+  create: (data: { product_name: string; dimensions?: string; hsn_code?: string; category?: string }) =>
+    API.post('/products', data),
 };
 
 export const reportsApi = {

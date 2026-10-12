@@ -10,6 +10,7 @@ import {
 import {
   inquiriesApi,
   customersApi,
+  productsApi,
   employeesApi,
   dealsApi,
   zohoApi,
@@ -20,6 +21,11 @@ import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
 import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
+import AddProductDialog, {
+  isProductInCatalogList,
+  findCustomProductMatch,
+  type CatalogDbProduct,
+} from '../components/AddProductDialog';
 import PaginationControl from '../components/PaginationControl';
 import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useAuth } from '../context/AuthContext';
@@ -34,7 +40,7 @@ import {
   normalizeUnit,
   formatIndianCurrency,
 } from '../utils/pricingEngine';
-import { detectHsnCode } from '../utils/hsnDetector';
+import { detectHsnCode, MASTER_PRODUCTS_CATALOG } from '../utils/hsnDetector';
 
 export interface InquiryItem {
   id: string;
@@ -820,7 +826,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
         (item.hsn_code && item.hsn_code.trim()) ||
         (item as any).hsn ||
         detectHsnCode(skuText, itemDim) ||
-        '72083840',
+        '',
       quantity: rawQty,
       unit: rawUnit,
       rate: item.rate,
@@ -850,7 +856,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
           hsn_code:
             (m.hsn_code && m.hsn_code.trim()) ||
             detectHsnCode(m.sku_text, m.dimensions) ||
-            '72083840',
+            '',
           cgst_rate: calc.cgst_rate,
           cgst_amount: calc.cgst_amount,
           sgst_rate: calc.sgst_rate,
@@ -877,7 +883,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
     rawLineItems.push({
       sku_text: defaultSku,
       dimensions: defaultDim,
-      hsn_code: detectHsnCode(defaultSku, defaultDim) || '72083840',
+      hsn_code: detectHsnCode(defaultSku, defaultDim) || '',
       quantity: quantityTons || 0,
       unit: 'MT',
       rate: unitPrice || 0,
@@ -1481,6 +1487,9 @@ export default function InquiriesPage() {
   // Form state for Manual Log & File Upload
   const [formCustomerName, setFormCustomerName] = useState('');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [addProductModalRowIdx, setAddProductModalRowIdx] = useState<number | null>(null);
+  const [addProductModalSource, setAddProductModalSource] = useState<'create' | 'edit'>('create');
+  const [showProductListModal, setShowProductListModal] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [formPreferredMake, setFormPreferredMake] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
@@ -1514,6 +1523,9 @@ export default function InquiriesPage() {
   const handleCancelCreateInquiry = () => {
     setShowModal(false);
     setFormCustomerName('');
+    setShowAddCustomer(false);
+    setAddProductModalRowIdx(null);
+    setShowProductListModal(false);
     setShowCompanyDropdown(false);
     setFormPhone('');
     setFormPreferredMake('');
@@ -1581,6 +1593,17 @@ export default function InquiriesPage() {
       return Array.from(new Set(fetchedNames)).sort((a, b) => a.localeCompare(b));
     },
     refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: rawDbProducts = [] } = useQuery<CatalogDbProduct[]>({
+    queryKey: ['products-catalog'],
+    queryFn: async () => {
+      const res = await productsApi.getAll().catch(() => null);
+      return normalizeListResponse(res?.data);
+    },
+    staleTime: 5 * 1000,
+    refetchInterval: 10000,
     refetchOnWindowFocus: true,
   });
 
@@ -2138,7 +2161,8 @@ export default function InquiriesPage() {
                   (item.hsn_code && item.hsn_code.trim()) ||
                   item.hsn ||
                   detectHsnCode(skuText, itemDim) ||
-                  '72083840',
+                  findCustomProductMatch(skuText, itemDim, rawDbProducts)?.hsn_code ||
+                  '',
                 quantity: Number(item.quantity) || 0,
                 unit: item.unit || 'MT',
                 rate: Number(item.rate) || 0,
@@ -2235,7 +2259,8 @@ export default function InquiriesPage() {
             (item.hsn_code && item.hsn_code.trim()) ||
             item.hsn ||
             detectHsnCode(skuText, itemDim) ||
-            '72083840',
+            findCustomProductMatch(skuText, itemDim, rawDbProducts)?.hsn_code ||
+            '',
           quantity: rawQty,
           unit: rawUnit,
           rate: rate,
@@ -2458,12 +2483,11 @@ export default function InquiriesPage() {
       const item = currentItems[i];
       if (!item.sku_text || !item.sku_text.trim()) {
         errors[`sku_${i}`] = 'Description is required.';
+      } else if (!isProductInCatalogList(item.sku_text, item.dimensions, rawDbProducts)) {
+        errors[`sku_${i}`] = `Product "${item.sku_text.trim()}" is not in our product list. Select a product from the list or click Add Product.`;
       }
       if (!item.dimensions || !item.dimensions.trim()) {
         errors[`dim_${i}`] = 'Specification is required.';
-      }
-      if (!item.hsn_code || !item.hsn_code.trim()) {
-        errors[`hsn_${i}`] = 'HSN/SAC is required.';
       }
       if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
         errors[`qty_${i}`] = 'Quantity must be > 0.';
@@ -2603,7 +2627,14 @@ export default function InquiriesPage() {
 
               const r = Number(i.rate ?? i.unit_price ?? i.price_per_mt) || 0;
               const amt = Number(i.amount) || 0;
-              const detectedHsn = (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '72083840').trim();
+              const matchedCustomProd = findCustomProductMatch(skuText, dims, rawDbProducts);
+              const detectedHsn = (
+                i.hsn_code ||
+                i.hsn ||
+                detectHsnCode(skuText, dims) ||
+                matchedCustomProd?.hsn_code ||
+                ''
+              ).trim();
 
               const calc = calculateLineItem({
                 sku_text: skuText,
@@ -2629,7 +2660,12 @@ export default function InquiriesPage() {
           } else if (extracted.sku_text || extracted.product_type) {
             const skuText = extracted.sku_text || extracted.product_type || 'Material';
             const dims = extracted.dimensions || '';
-            const detectedHsn = detectHsnCode(skuText, dims) || '72083840';
+            const matchedCustomProd = findCustomProductMatch(skuText, dims, rawDbProducts);
+            const detectedHsn = (
+              detectHsnCode(skuText, dims) ||
+              matchedCustomProd?.hsn_code ||
+              ''
+            ).trim();
             let q = Number(extracted.quantity) || 0;
             let rawUnit = extracted.unit || 'KG';
             const totalWt = Number(extracted.total_weight_kg ?? extracted.weight_kg ?? 0);
@@ -2754,16 +2790,16 @@ export default function InquiriesPage() {
         }
         return;
       }
-      if (!item.dimensions?.trim()) {
-        const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
-        if (el) {
-          el.focus();
-          el.reportValidity();
-        }
+      if (!isProductInCatalogList(item.sku_text, item.dimensions, rawDbProducts)) {
+        toast.error(
+          `Cannot save inquiry: Product "${item.sku_text.trim()}" is not in the product list. Select a product from the list or click "Add Product".`,
+        );
+        const el = document.getElementById(`form-item-sku-${i}`) as HTMLInputElement;
+        if (el) el.focus();
         return;
       }
-      if (!item.hsn_code || !item.hsn_code.trim()) {
-        const el = document.getElementById(`form-item-hsn-${i}`) as HTMLInputElement;
+      if (!item.dimensions?.trim()) {
+        const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
         if (el) {
           el.focus();
           el.reportValidity();
@@ -2811,10 +2847,15 @@ export default function InquiriesPage() {
         const sgstAmt = i.sgst_amount !== undefined ? Number(i.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
         const totalGst = Math.round((cgstAmt + sgstAmt) * 100) / 100;
         const finalAmt = i.final_amount !== undefined && Number(i.final_amount) > 0 ? Number(i.final_amount) : Math.round((baseAmt + totalGst) * 100) / 100;
+        const resolvedHsn = i.hsn_code
+          ? i.hsn_code.trim()
+          : (detectHsnCode(i.sku_text, i.dimensions) ||
+            findCustomProductMatch(i.sku_text, i.dimensions, rawDbProducts)?.hsn_code ||
+            '');
         return {
           sku_text: i.sku_text.trim(),
           dimensions: i.dimensions ? i.dimensions.trim() : '',
-          hsn_code: i.hsn_code ? i.hsn_code.trim() : (detectHsnCode(i.sku_text, i.dimensions) || '72083840'),
+          hsn_code: resolvedHsn,
           quantity: Number(i.quantity) || 0,
           unit: normalizeUnit(i.unit) || 'MT',
           rate: Number(i.rate) || 0,
@@ -3521,7 +3562,8 @@ export default function InquiriesPage() {
                           hsn_code:
                             (item.hsn_code && item.hsn_code.trim()) ||
                             detectHsnCode(sText, sDim) ||
-                            '72083840',
+                            findCustomProductMatch(sText, sDim, rawDbProducts)?.hsn_code ||
+                            '',
                           quantity: Number(item.quantity) || 0,
                           unit: item.unit || 'MT',
                           rate: Number(item.rate) || 0,
@@ -3912,6 +3954,77 @@ export default function InquiriesPage() {
                   </div>
                 </div>
 
+                {(() => {
+                  const drawerItems =
+                    editDetails.lineItems && editDetails.lineItems.length > 0
+                      ? editDetails.lineItems
+                      : [
+                          {
+                            sku_text: editDetails.productType || '',
+                            dimensions: [editDetails.thickness, editDetails.width, editDetails.length]
+                              .filter(Boolean)
+                              .join(' x '),
+                          },
+                        ];
+                  const seenLower = new Set<string>();
+                  const unrecognizedProductNames: string[] = [];
+                  let firstUnrecognizedRowIdx: number | null = null;
+
+                  drawerItems.forEach((item, idx) => {
+                    const trimmed = (item.sku_text || '').trim();
+                    if (!trimmed) return;
+                    if (!isProductInCatalogList(trimmed, item.dimensions, rawDbProducts)) {
+                      if (firstUnrecognizedRowIdx === null) {
+                        firstUnrecognizedRowIdx = idx;
+                      }
+                      const lower = trimmed.toLowerCase();
+                      if (!seenLower.has(lower)) {
+                        seenLower.add(lower);
+                        unrecognizedProductNames.push(trimmed);
+                      }
+                    }
+                  });
+
+                  if (unrecognizedProductNames.length === 0) return null;
+
+                  return (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 leading-relaxed">
+                          <span className="font-bold">Product Not Available:</span>{' '}
+                          <span>
+                            These products are not in our product list:{' '}
+                            <span className="font-bold">
+                              {unrecognizedProductNames.join(', ')}
+                            </span>
+                            . Select a product from the list below or click ‘Add Product’.{' '}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowProductListModal(true)}
+                            className="font-bold text-rose-700 underline hover:text-rose-900 ml-1 cursor-pointer">
+                            View product list
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 pl-6">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (firstUnrecognizedRowIdx !== null) {
+                              setAddProductModalSource('edit');
+                              setAddProductModalRowIdx(firstUnrecognizedRowIdx);
+                            }
+                          }}
+                          className="px-3 py-1 bg-white border border-rose-300 text-rose-800 rounded-lg text-[11px] font-bold hover:bg-rose-100 cursor-pointer">
+                          Add Product
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Structured Inquiry Table Layout */}
                 <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
                   <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
@@ -3922,7 +4035,7 @@ export default function InquiriesPage() {
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
-                          HSN/SAC <span className="text-red-500 font-bold">*</span>
+                          HSN/SAC
                         </th>
                         <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[20%] text-center align-middle">
                           Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
@@ -3950,7 +4063,7 @@ export default function InquiriesPage() {
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: editDetails.productType ? (detectHsnCode(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || '72083840') : '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: editDetails.productType ? (detectHsnCode(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || findCustomProductMatch(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), rawDbProducts)?.hsn_code || '') : '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -3958,22 +4071,28 @@ export default function InquiriesPage() {
                             <div className="space-y-1">
                               <input
                                 type="text"
+                                list="catalog-products-datalist"
                                 value={item.sku_text || ''}
                                 onChange={(e) => {
                                   const newSku = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
                                   const currentHsn = updated[idx]?.hsn_code || '';
-                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions);
-                                  const newAutoHsn = detectHsnCode(newSku, item.dimensions);
+                                  const matchedCustom = findCustomProductMatch(newSku, item.dimensions, rawDbProducts);
+                                  const nextDim =
+                                    item.dimensions && item.dimensions.trim()
+                                      ? item.dimensions
+                                      : matchedCustom?.dimensions || '';
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions) || findCustomProductMatch(updated[idx]?.sku_text || '', item.dimensions, rawDbProducts)?.hsn_code || '';
+                                  const newAutoHsn = detectHsnCode(newSku, nextDim) || matchedCustom?.hsn_code || '';
 
                                   let finalHsn = currentHsn;
                                   if (!newSku.trim()) {
                                     finalHsn = '';
-                                  } else if (!currentHsn || currentHsn === prevAutoHsn) {
-                                    finalHsn = newAutoHsn || '72083840';
+                                  } else if (newAutoHsn || !currentHsn || currentHsn === prevAutoHsn) {
+                                    finalHsn = newAutoHsn || '';
                                   }
 
-                                  const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
+                                  const currentItem = { ...updated[idx], sku_text: newSku, dimensions: nextDim, hsn_code: finalHsn };
                                   const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                   updated[idx] = {
                                     ...currentItem,
@@ -4015,14 +4134,14 @@ export default function InquiriesPage() {
                                     const newDim = e.target.value;
                                     const updated = [...(editDetails.lineItems || [])];
                                     const currentHsn = updated[idx]?.hsn_code || '';
-                                    const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions);
-                                    const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
+                                    const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions) || findCustomProductMatch(updated[idx]?.sku_text || '', updated[idx]?.dimensions, rawDbProducts)?.hsn_code || '';
+                                    const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim) || findCustomProductMatch(updated[idx]?.sku_text || '', newDim, rawDbProducts)?.hsn_code || '';
 
                                     let finalHsn = currentHsn;
                                     if (!String(updated[idx]?.sku_text || '').trim()) {
                                       finalHsn = '';
                                     } else if (!currentHsn || currentHsn === prevAutoHsn) {
-                                      finalHsn = newAutoHsn || '72083840';
+                                      finalHsn = newAutoHsn || '';
                                     }
 
                                     const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
@@ -4521,7 +4640,15 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
-                disabled={submitting || saveSuccess}
+                disabled={
+                  submitting ||
+                  saveSuccess ||
+                  (editDetails?.lineItems || []).some(
+                    item =>
+                      (item.sku_text || '').trim().length > 0 &&
+                      !isProductInCatalogList(item.sku_text, item.dimensions, rawDbProducts),
+                  )
+                }
                 onClick={handleSaveDrawerDetails}
                 className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
                   submitting
@@ -5190,6 +5317,66 @@ export default function InquiriesPage() {
                 )}
               </div>
 
+              {(() => {
+                const seenLower = new Set<string>();
+                const unrecognizedProductNames: string[] = [];
+                let firstUnrecognizedRowIdx: number | null = null;
+
+                formLineItems.forEach((item, idx) => {
+                  const trimmed = (item.sku_text || '').trim();
+                  if (!trimmed) return;
+                  if (!isProductInCatalogList(trimmed, item.dimensions, rawDbProducts)) {
+                    if (firstUnrecognizedRowIdx === null) {
+                      firstUnrecognizedRowIdx = idx;
+                    }
+                    const lower = trimmed.toLowerCase();
+                    if (!seenLower.has(lower)) {
+                      seenLower.add(lower);
+                      unrecognizedProductNames.push(trimmed);
+                    }
+                  }
+                });
+
+                if (unrecognizedProductNames.length === 0) return null;
+
+                return (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 leading-relaxed">
+                        <span className="font-bold">Product Not Available:</span>{' '}
+                        <span>
+                          These products are not in our product list:{' '}
+                          <span className="font-bold">
+                            {unrecognizedProductNames.join(', ')}
+                          </span>
+                          . Select a product from the list below or click ‘Add Product’.{' '}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowProductListModal(true)}
+                          className="font-bold text-rose-700 underline hover:text-rose-900 ml-1 cursor-pointer">
+                          View product list
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 pl-6">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (firstUnrecognizedRowIdx !== null) {
+                            setAddProductModalSource('create');
+                            setAddProductModalRowIdx(firstUnrecognizedRowIdx);
+                          }
+                        }}
+                        className="px-3 py-1 bg-white border border-rose-300 text-rose-800 rounded-lg text-[11px] font-bold hover:bg-rose-100 cursor-pointer">
+                        Add Product
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Structured Line Items Table matching Image 3 / Orders */}
               <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
                 <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
@@ -5200,7 +5387,7 @@ export default function InquiriesPage() {
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
                       <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
-                        HSN/SAC <span className="text-red-500 font-bold">*</span>
+                        HSN/SAC
                       </th>
                       <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
                         Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
@@ -5234,23 +5421,36 @@ export default function InquiriesPage() {
                             <input
                               id={`form-item-sku-${idx}`}
                               type="text"
+                              list="catalog-products-datalist"
                               required
                               value={item.sku_text || ''}
                               onChange={(e) => {
                                 const newSku = e.target.value;
                                 const updated = [...formLineItems];
                                 const currentHsn = updated[idx]?.hsn_code || '';
-                                const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions);
-                                const newAutoHsn = detectHsnCode(newSku, item.dimensions);
+                                const prevSku = updated[idx]?.sku_text || '';
+                                const matchedCustom = findCustomProductMatch(newSku, item.dimensions, rawDbProducts);
+                                const nextDim =
+                                  item.dimensions && item.dimensions.trim()
+                                    ? item.dimensions
+                                    : matchedCustom?.dimensions || '';
+                                const prevAutoHsn =
+                                  detectHsnCode(prevSku, item.dimensions) ||
+                                  findCustomProductMatch(prevSku, item.dimensions, rawDbProducts)?.hsn_code ||
+                                  '';
+                                const newAutoHsn =
+                                  detectHsnCode(newSku, nextDim) ||
+                                  matchedCustom?.hsn_code ||
+                                  '';
 
                                 let finalHsn = currentHsn;
                                 if (!newSku.trim()) {
                                   finalHsn = '';
-                                } else if (!currentHsn || currentHsn === prevAutoHsn) {
+                                } else if (newAutoHsn || !currentHsn || currentHsn === prevAutoHsn) {
                                   finalHsn = newAutoHsn;
                                 }
 
-                                const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
+                                const currentItem = { ...updated[idx], sku_text: newSku, dimensions: nextDim, hsn_code: finalHsn };
                                 const calc = calculateLineItem({ ...currentItem, amount: 0 });
                                 updated[idx] = {
                                   ...currentItem,
@@ -5278,8 +5478,15 @@ export default function InquiriesPage() {
                                   const newDim = e.target.value;
                                   const updated = [...formLineItems];
                                   const currentHsn = updated[idx]?.hsn_code || '';
-                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions);
-                                  const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
+                                  const currSku = updated[idx]?.sku_text || '';
+                                  const prevAutoHsn =
+                                    detectHsnCode(currSku, updated[idx]?.dimensions) ||
+                                    findCustomProductMatch(currSku, updated[idx]?.dimensions, rawDbProducts)?.hsn_code ||
+                                    '';
+                                  const newAutoHsn =
+                                    detectHsnCode(currSku, newDim) ||
+                                    findCustomProductMatch(currSku, newDim, rawDbProducts)?.hsn_code ||
+                                    '';
 
                                   let finalHsn = currentHsn;
                                   if (!currentHsn || currentHsn === prevAutoHsn) {
@@ -5310,7 +5517,6 @@ export default function InquiriesPage() {
                           <input
                             id={`form-item-hsn-${idx}`}
                             type="text"
-                            required
                             value={item.hsn_code || ''}
                             onChange={(e) => {
                               const updated = [...formLineItems];
@@ -5689,7 +5895,16 @@ export default function InquiriesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || isExtractingPo || (formCustomerName.trim().length > 0 && !isCustomerInAssignedList(formCustomerName, rawCustomers))}
+                  disabled={
+                    submitting ||
+                    isExtractingPo ||
+                    (formCustomerName.trim().length > 0 && !isCustomerInAssignedList(formCustomerName, rawCustomers)) ||
+                    formLineItems.some(
+                      item =>
+                        item.sku_text.trim().length > 0 &&
+                        !isProductInCatalogList(item.sku_text, item.dimensions, rawDbProducts),
+                    )
+                  }
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
                   {submitting ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                   {submitting ? 'Saving Inquiry...' : 'Save Inquiry'}
@@ -5745,6 +5960,219 @@ export default function InquiriesPage() {
           queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
         }}
       />
+
+      <datalist id="catalog-products-datalist">
+        {Array.from(
+          new Set(
+            [
+              ...MASTER_PRODUCTS_CATALOG.map(p => (p.product_name || '').trim()),
+              ...(rawDbProducts || []).map(p => (p.product_name || '').trim()),
+            ].filter(Boolean),
+          ),
+        ).map(name => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+
+      <AddProductDialog
+        open={addProductModalRowIdx !== null}
+        seed={{
+          productName:
+            addProductModalRowIdx !== null
+              ? addProductModalSource === 'edit'
+                ? (editDetails?.lineItems?.[addProductModalRowIdx]?.sku_text || '').trim()
+                : (formLineItems[addProductModalRowIdx]?.sku_text || '').trim()
+              : '',
+          dimensions:
+            addProductModalRowIdx !== null
+              ? addProductModalSource === 'edit'
+                ? (editDetails?.lineItems?.[addProductModalRowIdx]?.dimensions || '').trim()
+                : (formLineItems[addProductModalRowIdx]?.dimensions || '').trim()
+              : '',
+        }}
+        onClose={() => setAddProductModalRowIdx(null)}
+        onSaved={(saved) => {
+          const targetIdx = addProductModalRowIdx;
+          const activeSource = addProductModalSource;
+          const sourceItems =
+            activeSource === 'edit' ? editDetails?.lineItems || [] : formLineItems;
+          const originalSkuLower =
+            targetIdx !== null
+              ? (sourceItems[targetIdx]?.sku_text || '').trim().toLowerCase()
+              : '';
+          setAddProductModalRowIdx(null);
+
+          queryClient.setQueryData<CatalogDbProduct[]>(['products-catalog'], (prev) => {
+            const list = Array.isArray(prev) ? prev : [];
+            const newEntry: CatalogDbProduct = {
+              ...(saved.record || {}),
+              product_name: saved.record?.product_name || saved.productName,
+              dimensions: saved.record?.dimensions || saved.dimensions,
+              hsn_code: saved.record?.hsn_code || saved.hsnCode,
+              category: saved.record?.category || 'Custom',
+            };
+            const filtered = list.filter(
+              p =>
+                !(
+                  (p.product_name || '').trim().toLowerCase() === saved.productName.toLowerCase() &&
+                  (p.dimensions || '').trim().toLowerCase() === saved.dimensions.toLowerCase()
+                ),
+            );
+            return [...filtered, newEntry];
+          });
+          queryClient.invalidateQueries({ queryKey: ['products-catalog'] });
+
+          const applySavedToRows = (prevItems: LineItemDetail[]) =>
+            prevItems.map((row, idx) => {
+              const rowSkuLower = (row.sku_text || '').trim().toLowerCase();
+              if (idx !== targetIdx && (!originalSkuLower || rowSkuLower !== originalSkuLower)) {
+                return row;
+              }
+              const nextDim =
+                idx === targetIdx
+                  ? saved.dimensions || row.dimensions || ''
+                  : row.dimensions?.trim()
+                    ? row.dimensions
+                    : saved.dimensions || '';
+              const nextHsn = saved.hsnCode || row.hsn_code || '';
+              const updatedRow = {
+                ...row,
+                sku_text: saved.productName,
+                dimensions: nextDim,
+                hsn_code: nextHsn,
+              };
+              const calc = calculateLineItem({ ...updatedRow, amount: 0 });
+              return {
+                ...updatedRow,
+                amount: calc.amount,
+                cgst_rate: calc.cgst_rate,
+                cgst_amount: calc.cgst_amount,
+                sgst_rate: calc.sgst_rate,
+                sgst_amount: calc.sgst_amount,
+                total_gst: calc.total_gst,
+                final_amount: calc.final_amount,
+              };
+            });
+
+          if (activeSource === 'edit') {
+            setEditDetails((prev: any) => {
+              if (!prev) return prev;
+              const updated = applySavedToRows(prev.lineItems || []);
+              const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+              const totalTons = calculateTotalTonnageMt(updated).totalMt;
+              return { ...prev, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons };
+            });
+            setSaveSuccess(false);
+            setFieldErrors(prev => {
+              const next = { ...prev };
+              if (targetIdx !== null) {
+                delete next[`sku_${targetIdx}`];
+                delete next[`dim_${targetIdx}`];
+                delete next[`hsn_${targetIdx}`];
+              }
+              return next;
+            });
+          } else {
+            setFormLineItems(applySavedToRows);
+          }
+        }}
+      />
+
+      {showProductListModal && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+          onClick={() => setShowProductListModal(false)}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+              <h3 className="text-sm font-bold text-slate-900">Product List &amp; HSN Catalog</h3>
+              <button
+                type="button"
+                onClick={() => setShowProductListModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 cursor-pointer">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              <table className="w-full border-collapse border border-slate-800 text-xs text-slate-900">
+                <thead>
+                  <tr className="bg-slate-100 font-bold text-center">
+                    <th className="border border-slate-800 px-3 py-2 w-[26%]">Product Name</th>
+                    <th className="border border-slate-800 px-3 py-2 w-[52%]">Dimensions</th>
+                    <th className="border border-slate-800 px-3 py-2 w-[22%]">8-Digit HSN Code</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(['Flat Steel', 'Structural Steel', 'Pipes and Tubes', 'Value Added Products'] as const).map(
+                    (category) => {
+                      const rows = MASTER_PRODUCTS_CATALOG.filter((p) => p.category === category);
+                      return [
+                        <tr key={`cat-${category}`}>
+                          <td
+                            colSpan={3}
+                            className="border border-slate-800 px-3 py-1.5 text-center font-bold text-red-600 bg-white">
+                            {category}
+                          </td>
+                        </tr>,
+                        ...rows.map((row, rIdx) => (
+                          <tr key={`${category}-${rIdx}`} className="hover:bg-slate-50">
+                            <td className="border border-slate-800 px-3 py-1.5 text-center font-bold">
+                              {row.product_name}
+                            </td>
+                            <td className="border border-slate-800 px-3 py-1.5 text-center">
+                              {row.dimensions}
+                            </td>
+                            <td className="border border-slate-800 px-3 py-1.5 text-center font-mono">
+                              {row.hsn_code}
+                            </td>
+                          </tr>
+                        )),
+                      ];
+                    },
+                  )}
+                  {(() => {
+                    const staticKeys = new Set(
+                      MASTER_PRODUCTS_CATALOG.map(
+                        (p) => `${p.product_name.trim().toLowerCase()}|${p.dimensions.trim().toLowerCase()}`,
+                      ),
+                    );
+                    const customRows = (rawDbProducts || []).filter((p) => {
+                      const name = (p.product_name || '').trim();
+                      if (!name) return false;
+                      const key = `${name.toLowerCase()}|${(p.dimensions || '').trim().toLowerCase()}`;
+                      return !staticKeys.has(key);
+                    });
+                    if (customRows.length === 0) return null;
+                    return [
+                      <tr key="cat-custom">
+                        <td
+                          colSpan={3}
+                          className="border border-slate-800 px-3 py-1.5 text-center font-bold text-red-600 bg-white">
+                          Custom Products
+                        </td>
+                      </tr>,
+                      ...customRows.map((row, rIdx) => (
+                        <tr key={`custom-${rIdx}`} className="hover:bg-slate-50">
+                          <td className="border border-slate-800 px-3 py-1.5 text-center font-bold">
+                            {row.product_name}
+                          </td>
+                          <td className="border border-slate-800 px-3 py-1.5 text-center">
+                            {row.dimensions || '—'}
+                          </td>
+                          <td className="border border-slate-800 px-3 py-1.5 text-center font-mono">
+                            {row.hsn_code || '—'}
+                          </td>
+                        </tr>
+                      )),
+                    ];
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pipeline Mark as Lost Modal */}
       {pipelineLostModal && (

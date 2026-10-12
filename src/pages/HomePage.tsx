@@ -166,6 +166,7 @@ export default function HomePage() {
       queryClient.invalidateQueries({ queryKey: ['customers-churn-home'] });
       queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
       queryClient.invalidateQueries({ queryKey: ['kra-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['home-complaints-list'] });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
     } finally {
@@ -581,7 +582,11 @@ export default function HomePage() {
     return safeVisits.length;
   }, [safeVisits]);
 
-  // 5. Open (Pending) Complaints
+  // 5. Total Complaints count & Open (Pending) Complaints
+  const totalComplaintsCount = useMemo(() => {
+    return safeComplaints.length;
+  }, [safeComplaints]);
+
   const openComplaints = useMemo(() => {
     return safeComplaints.filter(c => c.status !== 'resolved');
   }, [safeComplaints]);
@@ -1159,7 +1164,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 5: Complaints - Blue Soft */}
+        {/* Card 5: Total Complaints - Blue Soft */}
         <div
           onClick={() => navigate('/complaints')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1 cursor-pointer">
@@ -1169,9 +1174,9 @@ export default function HomePage() {
           <div>
             <div className="flex items-baseline gap-2">
               <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
-                {openComplaints.length}
+                {totalComplaintsCount}
               </p>
-              <span className="text-sm sm:text-base font-bold text-slate-900">Complaints</span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Total Complaints</span>
             </div>
           </div>
         </div>
