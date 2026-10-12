@@ -1,7 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   reportsApi,
-  inquiriesApi,
   dealsApi,
   employeesApi,
   ordersApi,
@@ -10,18 +9,18 @@ import {
 } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import SalesQuotationModal from '../components/SalesQuotationModal';
 import { formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
-  ArrowUpRight, Award, AlertCircle, Layers,
+  ArrowUpRight, Award, Layers,
   Plus, Truck, Sparkles,
-  Activity, CheckCircle2, Info
+  Activity, Info
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
+import { useAuth } from '../context/AuthContext';
 
 const normalizePhone = (phone?: string | null) =>
   String(phone || '').replace(/\D/g, '').slice(-10);
@@ -100,6 +99,7 @@ const buildOrderLeaderboard = (
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { setViewingAs } = useAuth();
   const [selectedPhone, setSelectedPhone] = useState<string>('');
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
@@ -130,6 +130,20 @@ export default function AdminDashboard() {
     (s: any) => normalizePhone(s.phone) === normalizePhone(selectedPhone),
   );
 
+  const handleDetailedAnalytics = () => {
+    if (selectedSalesperson) {
+      setViewingAs({
+        ...selectedSalesperson,
+        role: 'salesperson',
+        original_role: selectedSalesperson.original_role || selectedSalesperson.role,
+        mode: 'personal',
+      });
+      navigate('/inquiries?returnTo=/admin-dashboard');
+      return;
+    }
+    navigate('/pipeline');
+  };
+
   const queryParams = {
     ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
     from: fromDate,
@@ -152,12 +166,6 @@ export default function AdminDashboard() {
   const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
     queryKey: ['admin-sku', selectedPhone, dateRange],
     queryFn: () => reportsApi.getSku(queryParams).then(r => r.data?.data || r.data),
-    placeholderData: keepPreviousData,
-  });
-
-  const { data: inquiries, isLoading: inquiriesLoading, refetch: refetchInquiries } = useQuery({
-    queryKey: ['admin-inquiries-queue'],
-    queryFn: () => inquiriesApi.getReviewQueue().then(r => r.data?.data || r.data),
     placeholderData: keepPreviousData,
   });
 
@@ -203,7 +211,6 @@ export default function AdminDashboard() {
         .then(unwrapListResponse),
   });
 
-  const [selectedQuotationDeal, setSelectedQuotationDeal] = useState<any | null>(null);
   const [isScoreInfoOpen, setIsScoreInfoOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -227,7 +234,6 @@ export default function AdminDashboard() {
         refetchMonthly(),
         refetchFunnel(),
         refetchSku(),
-        refetchInquiries(),
         refetchDeals(),
         refetchLeaderboardOrders(),
         refetchLeaderboardVisits(),
@@ -242,7 +248,6 @@ export default function AdminDashboard() {
     monthlyLoading ||
     funnelLoading ||
     skuLoading ||
-    inquiriesLoading ||
     dealsLoading ||
     leaderboardOrdersLoading ||
     leaderboardVisitsLoading ||
@@ -273,7 +278,6 @@ export default function AdminDashboard() {
     Array.isArray(leaderboardComplaints) ? leaderboardComplaints : [],
     dateRange,
   );
-  const reviewQueue = inquiries?.data || inquiries || [];
   const getLeaderboardDisplayName = (sp: any) => {
     const apiName = String(sp?.name || '').trim();
     if (apiName && apiName !== 'Unknown' && apiName !== 'Sales Representative') {
@@ -294,7 +298,25 @@ export default function AdminDashboard() {
     );
   };
   const rawDeals = Array.isArray(deals) ? deals : (Array.isArray(deals?.data) ? deals.data : []);
-  const recentDeals = rawDeals.slice(0, 6);
+  const recentOrders = (Array.isArray(leaderboardOrders) ? leaderboardOrders : [])
+    .slice()
+    .sort((a: any, b: any) => {
+      const dateA = new Date(a.won_at || a.created_at || a.po_date || 0).getTime();
+      const dateB = new Date(b.won_at || b.created_at || b.po_date || 0).getTime();
+      return dateB - dateA;
+    })
+    .slice(0, 6);
+  const getOrderDate = (order: any) => {
+    const value = order.won_at || order.created_at || order.po_date;
+    if (!value) return '-';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '-' : formatLocalDate(date);
+  };
+  const getOrderSalesperson = (order: any) =>
+    order.salesperson_name ||
+    order.assigned_salesperson_name ||
+    order.salesperson ||
+    getLeaderboardDisplayName({ salesperson_phone: order.salesperson_phone });
 
   const wonDealsList = rawDeals.filter((d: any) => d.stage === 'won');
   const activeDealsList = rawDeals.filter((d: any) => !['won', 'lost'].includes(d.stage));
@@ -326,11 +348,6 @@ export default function AdminDashboard() {
   const deliveredTonnagePct = totalTonnage > 0 ? Math.round((deliveredTonnage / totalTonnage) * 100) : (deliveredTonnage > 0 ? 100 : 0);
   const totalCombinedValue = wonValue + totalValue;
   const wonValueSharePct = totalCombinedValue > 0 ? Math.round((wonValue / totalCombinedValue) * 100) : 0;
-
-  // Find selected salesperson specific KRA metrics from reports response
-  const selectedKRA = leaderboardRows.find(
-    (s: any) => normalizePhone(s.phone) === normalizePhone(selectedPhone),
-  );
 
   const todayStr = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -532,62 +549,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Card 4: INQUIRIES / KRA SCORE */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
-              {selectedKRA ? 'KRA PERFORMANCE SCORE' : 'REVIEW QUEUE'}
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              {selectedKRA ? <Award size={18} /> : <AlertCircle size={18} />}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            {selectedKRA ? (
-              <>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-indigo-600">
-                  {Math.round(Number(selectedKRA.kra_score) || 0)}/100
-                </h2>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    <Award size={12} /> {selectedKRA.ordersCount || 0} orders
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {selectedKRA.visitsCount || 0} visits
-                  </span>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-amber-600">
-                  {reviewQueue.length}
-                </h2>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full border ${
-                    reviewQueue.length > 0
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}>
-                    {reviewQueue.length > 0 ? (
-                      <>
-                        <AlertCircle size={12} /> Needs Review
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={12} /> All Clear
-                      </>
-                    )}
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {reviewQueue.length > 0 ? `${reviewQueue.length} pending inquiries` : '0 pending AI inquiries'}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
       </div>
 
       {/* Featured Total Sales Overview Value Banner */}
@@ -639,7 +600,7 @@ export default function AdminDashboard() {
           </div>
 
           <button
-            onClick={() => navigate('/pipeline')}
+            onClick={handleDetailedAnalytics}
             className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors shadow-2xs hover:bg-blue-100 self-start sm:self-auto"
           >
             Detailed Analytics <ChevronRight size={14} />
@@ -653,66 +614,69 @@ export default function AdminDashboard() {
         {/* Left Column (Recent Deals & Product Distribution) */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Recent Company-wide Deals Card */}
+          {/* Recent Company-wide Orders Card */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShoppingBag size={18} className="text-blue-600" />
                 <h3 className="font-bold text-slate-900 text-sm">
                   {selectedSalesperson
-                    ? `Recent Deals by ${selectedSalesperson.name}`
-                    : 'Recent Company-wide Deals'}
+                    ? `Recent Orders by ${selectedSalesperson.name}`
+                    : 'Recent Company-wide Orders'}
                 </h3>
               </div>
               <button
-                onClick={() => navigate('/pipeline')}
+                onClick={() => navigate('/orders')}
                 className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
-                Go to Pipeline <ChevronRight size={14} />
+                View all <ChevronRight size={14} />
               </button>
             </div>
 
             <div className="p-4 space-y-2.5">
-              {recentDeals.length > 0 ? (
-                recentDeals.map((deal: any) => (
+              {recentOrders.length > 0 ? (
+                recentOrders.map((order: any) => (
                   <div
-                    key={deal.id}
+                    key={order.id}
                     className="flex items-center justify-between p-3.5 bg-slate-50/80 hover:bg-blue-50/50 rounded-xl border border-slate-100 transition-colors group cursor-pointer"
-                    onClick={() => setSelectedQuotationDeal(deal)}
+                    onClick={() => navigate(`/orders?orderId=${encodeURIComponent(order.id)}`)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-700 text-sm shadow-2xs group-hover:border-blue-300">
-                        {deal.customer_name?.charAt(0) || 'C'}
+                        {order.customer_name?.charAt(0) || 'C'}
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
-                          {deal.customer_name || 'Unknown Customer'}
+                          {order.customer_name || 'Unknown Customer'}
                         </p>
                         <p className="text-xs text-slate-500 font-mono mt-0.5">
-                          PO Number: {deal.po_number || '-'}
+                          {order.po_number || 'PO number unavailable'}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {(order.deal_items?.length || 0)} items · {Number(getOrderTonnage(order) || 0).toFixed(2)} MT · {getOrderSalesperson(order)} · {getOrderDate(order)}
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right">
                       <p className="text-sm font-bold text-slate-900">
-                        {'\u20B9'}{Number(deal.total_amount || 0).toLocaleString('en-IN')}
+                        {'\u20B9'}{Number(order.total_amount || 0).toLocaleString('en-IN')}
                       </p>
                       <span className={`inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full capitalize mt-0.5 border ${
-                        deal.stage === 'won'
+                        (order.po_status || order.status) === 'won'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : deal.stage === 'lost'
+                          : (order.po_status || order.status) === 'lost'
                           ? 'bg-red-50 text-red-700 border-red-200'
                           : 'bg-blue-50 text-blue-700 border-blue-200'
                       }`}>
-                        {deal.stage?.replace('_', ' ') || 'Open'}
+                        {(order.po_status || order.status || 'Open').replace('_', ' ')}
                       </span>
                     </div>
                   </div>
                 ))
               ) : (
                 <div className="text-center py-8 text-slate-400 text-sm">
-                  No recent deals found for this period.
+                  No recent orders found for this period.
                 </div>
               )}
             </div>
@@ -908,13 +872,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Render Official Sales Quotation & Invoice Modal when clicking any deal */}
-      {selectedQuotationDeal && (
-        <SalesQuotationModal
-          deal={selectedQuotationDeal}
-          onClose={() => setSelectedQuotationDeal(null)}
-        />
-      )}
     </div>
   );
 }
