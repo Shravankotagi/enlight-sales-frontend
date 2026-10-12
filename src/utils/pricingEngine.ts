@@ -27,11 +27,18 @@ export interface CalculatedLineItem extends LineItemInput {
   amount: number;
   unit: string;
   cgst_rate?: number;
+  cgst_percent?: number;
   cgst_amount?: number;
   sgst_rate?: number;
+  sgst_percent?: number;
   sgst_amount?: number;
+  igst_rate?: number;
+  igst_percent?: number;
+  igst_amount?: number;
+  is_inter_state?: boolean;
   total_gst?: number;
   final_amount?: number;
+  line_total?: number;
 }
 
 export interface PricingSummary {
@@ -813,13 +820,312 @@ export function convertToMt(quantity: number, rawUnit?: string): number {
   return quantity;
 }
 
+export const SELLER_GST_CONFIG = {
+  companyName: 'Enlight Metals Private Limited',
+  gstin: '27AAICE5263E1ZN',
+  stateName: 'Maharashtra',
+  stateCode: '27',
+  placeOfSupplyLabel: 'Maharashtra (27)',
+  gstRate: 18,
+} as const;
+
+export interface GstStateInfo {
+  stateName: string;
+  stateCode: string;
+  code: string;
+  name: string;
+  label: string;
+}
+
+export interface PlaceOfSupplyResolution extends GstStateInfo {
+  isInterState: boolean;
+  taxType: 'INTRA_STATE' | 'INTER_STATE';
+}
+
+export interface PlaceOfSupplyInput {
+  deliveryAddress?: string | null;
+  deliveryLocation?: string | null;
+  customerState?: string | null;
+  state?: string | null;
+  placeOfSupply?: string | null;
+  customerGstin?: string | null;
+  gstin?: string | null;
+  customerAddress?: string | null;
+  address?: string | null;
+}
+
+const INDIAN_GST_STATES_RAW: ReadonlyArray<{
+  code: string;
+  name: string;
+  keywords: ReadonlyArray<string>;
+}> = [
+  { code: '01', name: 'Jammu and Kashmir', keywords: ['jammu and kashmir', 'jammu & kashmir', 'j&k', 'jammu', 'srinagar', 'kathua', 'samba', 'bari brahmana', 'udhampur', 'anantnag', 'baramulla', 'pulwama'] },
+  { code: '02', name: 'Himachal Pradesh', keywords: ['himachal pradesh', 'himachal', 'baddi', 'parwanoo', 'nalagarh', 'barotiwala', 'kala amb', 'paonta sahib', 'shimla', 'solan', 'una', 'mandi', 'kullu', 'dharamshala', 'kangra'] },
+  { code: '03', name: 'Punjab', keywords: ['punjab', 'ludhiana', 'amritsar', 'jalandhar', 'patiala', 'bathinda', 'mohali', 'sas nagar', 'mandi gobindgarh', 'gobindgarh', 'khanna', 'phagwara', 'hoshiarpur', 'batala', 'pathankot', 'moga', 'rajpura', 'zirakpur', 'dera bassi', 'kapurthala', 'sangrur', 'barnala', 'firozpur', 'ferozepur'] },
+  { code: '04', name: 'Chandigarh', keywords: ['chandigarh'] },
+  { code: '05', name: 'Uttarakhand', keywords: ['uttarakhand', 'uttaranchal', 'dehradun', 'haridwar', 'roorkee', 'rudrapur', 'pantnagar', 'haldwani', 'kashipur', 'sitarganj', 'kichha', 'kotdwar', 'rishikesh', 'selaqui', 'bhagwanpur', 'nainital'] },
+  { code: '06', name: 'Haryana', keywords: ['haryana', 'gurugram', 'gurgaon', 'faridabad', 'manesar', 'panipat', 'sonipat', 'rohtak', 'hisar', 'karnal', 'ambala', 'yamunanagar', 'bhiwani', 'rewari', 'bawal', 'dharuhera', 'bahadurgarh', 'palwal', 'ballabhgarh', 'kundli', 'jhajjar', 'jind', 'kaithal', 'kurukshetra', 'sirsa', 'panchkula'] },
+  { code: '07', name: 'Delhi', keywords: ['new delhi', 'delhi', 'ncr delhi', 'okhla', 'bawana', 'naraina', 'mayapuri', 'wazirpur', 'patparganj', 'narela', 'mundka', 'dwarka', 'rohini'] },
+  { code: '08', name: 'Rajasthan', keywords: ['rajasthan', 'jaipur', 'jodhpur', 'udaipur', 'kota', 'bhiwadi', 'neemrana', 'alwar', 'ajmer', 'bikaner', 'bhilwara', 'sikar', 'pali', 'sri ganganagar', 'bharatpur', 'chittorgarh', 'kishangarh', 'beawar', 'hanumangarh', 'jhunjhunu', 'churu', 'nagaur', 'barmer', 'jaisalmer', 'khushkhera', 'tapukara', 'sitapura'] },
+  { code: '09', name: 'Uttar Pradesh', keywords: ['uttar pradesh', 'noida', 'greater noida', 'ghaziabad', 'kanpur', 'lucknow', 'agra', 'varanasi', 'meerut', 'prayagraj', 'allahabad', 'bareilly', 'aligarh', 'moradabad', 'saharanpur', 'gorakhpur', 'firozabad', 'jhansi', 'muzaffarnagar', 'mathura', 'dadri', 'sikandrabad', 'bulandshahr', 'hapur', 'modinagar', 'sahibabad', 'unnao', 'renukoot', 'sonbhadra', 'mirzapur'] },
+  { code: '10', name: 'Bihar', keywords: ['bihar', 'patna', 'gaya', 'bhagalpur', 'muzaffarpur', 'purnia', 'darbhanga', 'bihar sharif', 'arrah', 'begusarai', 'katihar', 'munger', 'chhapra', 'danapur', 'bettiah', 'saharsa', 'hajipur', 'sasaram', 'siwan', 'motihari', 'bihta', 'barauni'] },
+  { code: '11', name: 'Sikkim', keywords: ['sikkim', 'gangtok', 'rangpo', 'jorethang', 'namchi'] },
+  { code: '12', name: 'Arunachal Pradesh', keywords: ['arunachal pradesh', 'arunachal', 'itanagar', 'naharlagun', 'tawang', 'pasighat'] },
+  { code: '13', name: 'Nagaland', keywords: ['nagaland', 'dimapur', 'kohima', 'mokokchung'] },
+  { code: '14', name: 'Manipur', keywords: ['manipur', 'imphal', 'thoubal', 'churachandpur'] },
+  { code: '15', name: 'Mizoram', keywords: ['mizoram', 'aizawl', 'lunglei'] },
+  { code: '16', name: 'Tripura', keywords: ['tripura', 'agartala', 'udaipur tripura', 'dharmanagar'] },
+  { code: '17', name: 'Meghalaya', keywords: ['meghalaya', 'shillong', 'byrnihat', 'tura', 'jowai'] },
+  { code: '18', name: 'Assam', keywords: ['assam', 'guwahati', 'dibrugarh', 'silchar', 'jorhat', 'nagaon', 'tinsukia', 'tezpur', 'bongaigaon', 'duliajan', 'digboi', 'sibsagar', 'sivasagar', 'golaghat', 'dispur', 'amingaon'] },
+  { code: '19', name: 'West Bengal', keywords: ['west bengal', 'bengal', 'kolkata', 'calcutta', 'howrah', 'durgapur', 'asansol', 'siliguri', 'haldia', 'kharagpur', 'bardhaman', 'burdwan', 'malda', 'dankuni', 'hooghly', 'serampore', 'barrackpore', 'barasat', 'kalyani', 'bankura', 'purulia', 'medinipur', 'midnapore', 'jalpaiguri', 'uluberia', 'salt lake', 'rajarhat'] },
+  { code: '20', name: 'Jharkhand', keywords: ['jharkhand', 'jamshedpur', 'ranchi', 'dhanbad', 'bokaro', 'adityapur', 'hazaribagh', 'deoghar', 'giridih', 'ramgarh', 'medininagar', 'daltonganj', 'chaibasa', 'gamharia', 'seraikela', 'dumka', 'koderma', 'patratu', 'sindri', 'jharia'] },
+  { code: '21', name: 'Odisha', keywords: ['odisha', 'orissa', 'bhubaneswar', 'cuttack', 'rourkela', 'sambalpur', 'berhampur', 'brahmapur', 'angul', 'jharsuguda', 'balasore', 'baleswar', 'bhadrak', 'baripada', 'puri', 'jajpur', 'kalinganagar', 'paradeep', 'paradip', 'talcher', 'barbil', 'joda', 'keonjhar', 'kendujhar', 'sundargarh', 'rajgangpur', 'bargarh', 'rayagada', 'dhenkanal'] },
+  { code: '22', name: 'Chhattisgarh', keywords: ['chhattisgarh', 'chhatisgarh', 'raipur', 'bhilai', 'durg', 'bilaspur', 'korba', 'raigarh', 'jagdalpur', 'ambikapur', 'rajnandgaon', 'dhamtari', 'mahasamund', 'champa', 'janjgir', 'bhatapara', 'tilda', 'siltara', 'urla', 'kumhari'] },
+  { code: '23', name: 'Madhya Pradesh', keywords: ['madhya pradesh', 'indore', 'bhopal', 'pithampur', 'jabalpur', 'gwalior', 'ujjain', 'dewas', 'sagar', 'satna', 'ratlam', 'rewa', 'katni', 'singrauli', 'burhanpur', 'khandwa', 'bhind', 'chhindwara', 'guna', 'shivpuri', 'vidisha', 'chhatarpur', 'damoh', 'mandsaur', 'khargone', 'neemuch', 'sehore', 'mandideep', 'malanpur', 'banmore', 'hoshangabad', 'narmadapuram', 'itarsi', 'betul', 'morena', 'dhar'] },
+  { code: '24', name: 'Gujarat', keywords: ['gujarat', 'gujrat', 'ahmedabad', 'surat', 'vadodara', 'baroda', 'rajkot', 'vapi', 'ankleshwar', 'bharuch', 'valsad', 'gandhinagar', 'sanand', 'halol', 'kalol', 'mehsana', 'morbi', 'jamnagar', 'bhavnagar', 'junagadh', 'gandhidham', 'mundra', 'kutch', 'bhuj', 'anand', 'nadiad', 'navsari', 'dahej', 'hazira', 'changodar', 'vatva', 'naroda', 'odhav', 'kathwada', 'chatral', 'kadi', 'himatnagar', 'palanpur', 'patan', 'surendranagar', 'amreli', 'porbandar', 'godhra', 'dahod'] },
+  { code: '26', name: 'Dadra and Nagar Haveli and Daman and Diu', keywords: ['dadra and nagar haveli', 'daman and diu', 'silvassa', 'daman', 'diu', 'dadra'] },
+  { code: '27', name: 'Maharashtra', keywords: ['maharashtra', 'pune', 'mumbai', 'navi mumbai', 'thane', 'chakan', 'bhosari', 'pimpri', 'chinchwad', 'talawade', 'ranjangaon', 'shirwal', 'satara', 'kolhapur', 'sangli', 'solapur', 'nashik', 'nagpur', 'aurangabad', 'chhatrapati sambhajinagar', 'sambhajinagar', 'jalna', 'ahmednagar', 'ahilyanagar', 'tarapur', 'palghar', 'vasai', 'virar', 'bhiwandi', 'kalyan', 'dombivli', 'ambarnath', 'badlapur', 'taloja', 'panvel', 'raigad', 'roha', 'mahad', 'ratnagiri', 'sindhudurg', 'wardha', 'amravati', 'akola', 'jalgaon', 'dhule', 'nandurbar', 'latur', 'nanded', 'osmanabad', 'dharashiv', 'beed', 'parbhani', 'hingoli', 'buldhana', 'washim', 'yavatmal', 'chandrapur', 'gadchiroli', 'gondia', 'bhandara', 'vasuli', 'khed', 'kurkumbh', 'jejuri', 'baramati', 'supa', 'waluj', 'shendra', 'chikalthana', 'butibori', 'hingna', 'kupwad', 'miraj', 'ichalkaranji', 'kagal', 'shiroli', 'ambad', 'satpur', 'sinnar', 'iglaspur', 'murbad', 'shahapur', 'wada', 'boisar', 'khopoli', 'patalganga', 'mahape', 'rabale', 'ttc industrial', 'turbhe', 'pawane', 'shirvane', 'nerul', 'vashi', 'belapur', 'kharghar', 'kalamboli', 'taloja midc', 'alibuag', 'pen'] },
+  { code: '29', name: 'Karnataka', keywords: ['karnataka', 'bengaluru', 'bangalore', 'belagavi', 'belgaum', 'hubballi', 'hubli', 'dharwad', 'mysuru', 'mysore', 'mangaluru', 'mangalore', 'tumakuru', 'tumkur', 'peenya', 'bommasandra', 'jigani', 'bidadi', 'hoskote', 'dobbaspet', 'nelamangala', 'davanagere', 'ballari', 'bellary', 'hospet', 'hosapete', 'shivamogga', 'shimoga', 'kalaburagi', 'gulbarga', 'bidar', 'raichur', 'vijayapura', 'bijapur', 'bagalkot', 'gadag', 'haveri', 'udupi', 'chikkamagaluru', 'chikmagalur', 'hassan', 'mandya', 'kolar', 'chikkaballapur', 'ramanagara', 'chitradurga', 'koppal', 'yadgir'] },
+  { code: '30', name: 'Goa', keywords: ['goa', 'panaji', 'panjim', 'margao', 'madgaon', 'vasco', 'mapusa', 'ponda', 'verna', 'kundaim', 'cuncolim', 'bicholim', 'mormugao'] },
+  { code: '31', name: 'Lakshadweep', keywords: ['lakshadweep', 'kavaratti'] },
+  { code: '32', name: 'Kerala', keywords: ['kerala', 'kochi', 'cochin', 'ernakulam', 'thiruvananthapuram', 'trivandrum', 'kozhikode', 'calicut', 'thrissur', 'trichur', 'kollam', 'palakkad', 'alappuzha', 'alleppey', 'kannur', 'kottayam', 'malappuram', 'kasaragod', 'pathanamthitta', 'idukki', 'wayanad', 'kanjikode', 'kalamassery', 'aluva', 'angamaly', 'perumbavoor'] },
+  { code: '33', name: 'Tamil Nadu', keywords: ['tamil nadu', 'tamilnadu', 'chennai', 'madras', 'coimbatore', 'hosur', 'madurai', 'tiruchirappalli', 'trichy', 'salem', 'tiruppur', 'erode', 'vellore', 'thoothukudi', 'tuticorin', 'tirunelveli', 'ambattur', 'sriperumbudur', 'oragadam', 'chengalpattu', 'kanchipuram', 'thiruvallur', 'gumidipoondi', 'maraimalai', 'ranipet', 'ambur', 'krishnagiri', 'dharmapuri', 'namakkal', 'karur', 'dindigul', 'thanjavur', 'pudukkottai', 'sivakasi', 'virudhunagar', 'nagercoil', 'kanyakumari', 'cuddalore'] },
+  { code: '34', name: 'Puducherry', keywords: ['puducherry', 'pondicherry', 'karaikal', 'mahe', 'yanam'] },
+  { code: '35', name: 'Andaman and Nicobar Islands', keywords: ['andaman', 'nicobar', 'port blair'] },
+  { code: '36', name: 'Telangana', keywords: ['telangana', 'hyderabad', 'secunderabad', 'cyberabad', 'medchal', 'patancheru', 'jeedimetla', 'balanagar', 'cherlapally', 'nacharam', 'uppal', 'shamshabad', 'kukatpally', 'sangareddy', 'zaheerabad', 'warangal', 'kazipet', 'karimnagar', 'nizamabad', 'khammam', 'ramagundam', 'mahbubnagar', 'nalgonda', 'suryapet', 'adilabad', 'mancherial', 'siddipet', 'medak', 'kothagudem'] },
+  { code: '37', name: 'Andhra Pradesh', keywords: ['andhra pradesh', 'andhra', 'visakhapatnam', 'vizag', 'vijayawada', 'guntur', 'tirupati', 'nellore', 'sri city', 'sricity', 'kakinada', 'rajahmundry', 'eluru', 'ongole', 'kurnool', 'anantapur', 'kadapa', 'cuddapah', 'chittoor', 'vizianagaram', 'srikakulam', 'machilipatnam', 'bhimavaram', 'hindupur', 'nandyal', 'proddatur'] },
+  { code: '38', name: 'Ladakh', keywords: ['ladakh', 'leh', 'kargil'] },
+];
+
+export const INDIAN_GST_STATES: ReadonlyArray<{
+  code: string;
+  name: string;
+  stateCode: string;
+  stateName: string;
+  label: string;
+  keywords: ReadonlyArray<string>;
+}> = INDIAN_GST_STATES_RAW.map((s) => ({
+  ...s,
+  stateCode: s.code,
+  stateName: s.name,
+  label: `${s.name} (${s.code})`,
+}));
+
+const GST_STATE_BY_CODE: Record<string, GstStateInfo> = (() => {
+  const map: Record<string, GstStateInfo> = {};
+  for (const s of INDIAN_GST_STATES) {
+    map[s.code] = {
+      stateName: s.name,
+      stateCode: s.code,
+      code: s.code,
+      name: s.name,
+      label: `${s.name} (${s.code})`,
+    };
+  }
+  // Legacy GST state codes
+  map['25'] = map['26'];
+  map['28'] = map['37'];
+  return map;
+})();
+
+/**
+ * Resolves Indian GST State info from a GSTIN (first 2 digits are the state code).
+ */
+export function resolveStateFromGstin(gstin?: string | null): GstStateInfo | null {
+  if (!gstin || typeof gstin !== 'string') return null;
+  const cleaned = gstin.trim().toUpperCase().replace(/\s+/g, '');
+  const codeMatch = cleaned.match(/^(\d{2})/);
+  if (!codeMatch) return null;
+  const code = codeMatch[1];
+  return GST_STATE_BY_CODE[code] || null;
+}
+
+/**
+ * Resolves Indian GST State info from an address, city, state name, "State (Code)" label, or 6-digit PIN code.
+ */
+export function resolveStateFromAddress(address?: string | null): GstStateInfo | null {
+  if (!address || typeof address !== 'string') return null;
+  const trimmed = address.trim();
+  if (!trimmed) return null;
+
+  // 1. Check explicit "State (DD)" format or pure 2-digit code
+  const explicitCodeMatch = trimmed.match(/\((\d{2})\)/) || trimmed.match(/^(\d{2})$/);
+  if (explicitCodeMatch && GST_STATE_BY_CODE[explicitCodeMatch[1]]) {
+    return GST_STATE_BY_CODE[explicitCodeMatch[1]];
+  }
+
+  // 2. If someone passed a GSTIN directly in the string
+  const gstinMatch = trimmed.toUpperCase().match(/\b(\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b/);
+  if (gstinMatch) {
+    const fromGstin = resolveStateFromGstin(gstinMatch[1]);
+    if (fromGstin) return fromGstin;
+  }
+
+  const lower = trimmed.toLowerCase();
+
+  // 3. Check exact state name match first
+  for (const s of INDIAN_GST_STATES) {
+    const stateLower = s.name.toLowerCase();
+    const stateRegex = new RegExp(`\\b${stateLower.replace(/\s+/g, '\\s+')}\\b`, 'i');
+    if (stateRegex.test(lower)) {
+      return GST_STATE_BY_CODE[s.code];
+    }
+  }
+
+  // 4. Check keywords (cities, industrial areas, aliases) using word boundaries
+  for (const s of INDIAN_GST_STATES) {
+    for (const kw of s.keywords) {
+      const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+      const kwRegex = new RegExp(`\\b${escaped}\\b`, 'i');
+      if (kwRegex.test(lower)) {
+        return GST_STATE_BY_CODE[s.code];
+      }
+    }
+  }
+
+  // 5. Check 6-digit Indian PIN code prefixes
+  const pinMatch = lower.match(/\b([1-8]\d{5})\b/);
+  if (pinMatch) {
+    const pin = pinMatch[1];
+    const p2 = Number(pin.slice(0, 2));
+    const p3 = Number(pin.slice(0, 3));
+    if (p2 === 11) return GST_STATE_BY_CODE['07']; // Delhi
+    if (p2 === 12 || p2 === 13) return GST_STATE_BY_CODE['06']; // Haryana
+    if (p3 === 160) return GST_STATE_BY_CODE['04']; // Chandigarh
+    if (p2 >= 14 && p2 <= 16) return GST_STATE_BY_CODE['03']; // Punjab
+    if (p2 === 17) return GST_STATE_BY_CODE['02']; // Himachal Pradesh
+    if (p3 === 194) return GST_STATE_BY_CODE['38']; // Ladakh
+    if (p2 === 18 || p2 === 19) return GST_STATE_BY_CODE['01']; // J&K
+    if ((p3 >= 246 && p3 <= 249) || (p3 >= 262 && p3 <= 263)) return GST_STATE_BY_CODE['05']; // Uttarakhand
+    if (p2 >= 20 && p2 <= 28) return GST_STATE_BY_CODE['09']; // Uttar Pradesh
+    if (p2 >= 30 && p2 <= 34) return GST_STATE_BY_CODE['08']; // Rajasthan
+    if (p3 === 396) return GST_STATE_BY_CODE['26']; // Daman & Diu / Dadra
+    if (p2 >= 36 && p2 <= 39) return GST_STATE_BY_CODE['24']; // Gujarat
+    if (p3 === 403) return GST_STATE_BY_CODE['30']; // Goa
+    if (p2 >= 40 && p2 <= 44) return GST_STATE_BY_CODE['27']; // Maharashtra
+    if (p2 >= 45 && p2 <= 48) return GST_STATE_BY_CODE['23']; // Madhya Pradesh
+    if (p2 === 49) return GST_STATE_BY_CODE['22']; // Chhattisgarh
+    if (p2 === 50) return GST_STATE_BY_CODE['36']; // Telangana
+    if (p2 >= 51 && p2 <= 53) return GST_STATE_BY_CODE['37']; // Andhra Pradesh
+    if (p2 >= 56 && p2 <= 59) return GST_STATE_BY_CODE['29']; // Karnataka
+    if (p3 === 605) return GST_STATE_BY_CODE['34']; // Puducherry
+    if (p2 >= 60 && p2 <= 64) return GST_STATE_BY_CODE['33']; // Tamil Nadu
+    if (p3 === 682) return GST_STATE_BY_CODE['31']; // Lakshadweep
+    if (p2 >= 67 && p2 <= 69) return GST_STATE_BY_CODE['32']; // Kerala
+    if (p3 === 744) return GST_STATE_BY_CODE['35']; // Andaman & Nicobar
+    if (p3 === 737) return GST_STATE_BY_CODE['11']; // Sikkim
+    if (p2 >= 70 && p2 <= 74) return GST_STATE_BY_CODE['19']; // West Bengal
+    if (p2 >= 75 && p2 <= 77) return GST_STATE_BY_CODE['21']; // Odisha
+    if (p3 === 790 || p3 === 791 || p3 === 792) return GST_STATE_BY_CODE['12']; // Arunachal
+    if (p3 === 793 || p3 === 794) return GST_STATE_BY_CODE['17']; // Meghalaya
+    if (p3 === 795) return GST_STATE_BY_CODE['14']; // Manipur
+    if (p3 === 796) return GST_STATE_BY_CODE['15']; // Mizoram
+    if (p3 === 797 || p3 === 798) return GST_STATE_BY_CODE['13']; // Nagaland
+    if (p3 === 799) return GST_STATE_BY_CODE['16']; // Tripura
+    if (p2 === 78) return GST_STATE_BY_CODE['18']; // Assam
+    if (p3 >= 814 && p3 <= 835) return GST_STATE_BY_CODE['20']; // Jharkhand
+    if (p2 >= 80 && p2 <= 85) return GST_STATE_BY_CODE['10']; // Bihar
+  }
+
+  return null;
+}
+
+/**
+ * Resolves a customer's state from explicit customerState, GSTIN (first 2 digits), or address.
+ */
+export function resolveCustomerState(
+  input?:
+    | {
+        customerState?: string | null;
+        state?: string | null;
+        placeOfSupply?: string | null;
+        customerGstin?: string | null;
+        gstin?: string | null;
+        customerAddress?: string | null;
+        address?: string | null;
+      }
+    | string
+    | null,
+): GstStateInfo | null {
+  if (!input) return null;
+  if (typeof input === 'string') {
+    return resolveStateFromGstin(input) || resolveStateFromAddress(input);
+  }
+  const explicitState = input.customerState || input.state || input.placeOfSupply;
+  if (explicitState) {
+    const fromExplicit =
+      resolveStateFromAddress(explicitState) ||
+      resolveStateFromGstin(explicitState);
+    if (fromExplicit) return fromExplicit;
+  }
+  const gstinVal = input.customerGstin || input.gstin;
+  if (gstinVal) {
+    const fromGstin = resolveStateFromGstin(gstinVal);
+    if (fromGstin) return fromGstin;
+  }
+  const addrVal = input.customerAddress || input.address;
+  if (addrVal) {
+    const fromAddr = resolveStateFromAddress(addrVal);
+    if (fromAddr) return fromAddr;
+  }
+  return null;
+}
+
+/**
+ * Resolves Place of Supply and Tax Type (INTRA_STATE: CGST+SGST vs INTER_STATE: IGST).
+ * Priority for goods:
+ * 1. Delivery Location / Shipping Address State
+ * 2. Customer State / Customer GSTIN State / Customer Registered Address State
+ * 3. Seller State fallback (Maharashtra - 27)
+ */
+export function resolvePlaceOfSupply(
+  input?: PlaceOfSupplyInput | string | null,
+): PlaceOfSupplyResolution {
+  let resolved: GstStateInfo | null = null;
+
+  if (typeof input === 'string') {
+    resolved = resolveStateFromAddress(input) || resolveStateFromGstin(input);
+  } else if (input && typeof input === 'object') {
+    const deliveryVal = input.deliveryAddress || input.deliveryLocation;
+    if (deliveryVal) {
+      resolved = resolveStateFromAddress(deliveryVal);
+    }
+    if (!resolved) {
+      resolved = resolveCustomerState({
+        customerState: input.customerState || input.state || input.placeOfSupply,
+        customerGstin: input.customerGstin || input.gstin,
+        customerAddress: input.customerAddress || input.address,
+      });
+    }
+  }
+
+  const finalState: GstStateInfo = resolved || {
+    stateName: SELLER_GST_CONFIG.stateName,
+    stateCode: SELLER_GST_CONFIG.stateCode,
+    code: SELLER_GST_CONFIG.stateCode,
+    name: SELLER_GST_CONFIG.stateName,
+    label: SELLER_GST_CONFIG.placeOfSupplyLabel,
+  };
+
+  const isInterState = finalState.stateCode !== SELLER_GST_CONFIG.stateCode;
+  return {
+    ...finalState,
+    isInterState,
+    taxType: isInterState ? 'INTER_STATE' : 'INTRA_STATE',
+  };
+}
+
 /**
  * Calculates line item values.
  */
-export function calculateLineItem(item: LineItemInput): CalculatedLineItem {
+export function calculateLineItem(
+  item: LineItemInput,
+  options?: { isInterState?: boolean },
+): CalculatedLineItem {
   if (!item) {
     return { quantity: 0, rate: 0, amount: 0, unit: 'MT' };
   }
+  const opts = options && typeof options === 'object' ? options : undefined;
   const quantity = Number(item.quantity ?? item.quantity_mt ?? item.quantityTons ?? item.qty ?? 0) || 0;
   const rate = Number(item.rate ?? item.rate_per_mt ?? item.price_per_mt ?? item.unitPrice ?? 0) || 0;
   const unit = normalizeUnit(item.unit);
@@ -829,14 +1135,8 @@ export function calculateLineItem(item: LineItemInput): CalculatedLineItem {
 
   if (item.isManualAmount && item.amount !== undefined && Number(item.amount) > 0) {
     amount = Number(item.amount);
-  } else if (quantity > 0 && rate > 0) {
-    if (unit === 'KG') {
-      if (rate > 1000 && conv.canConvert && conv.mt !== null && conv.mt > 0) {
-        amount = Math.round(conv.mt * rate * 100) / 100;
-      } else {
-        amount = Math.round(quantity * rate * 100) / 100;
-      }
-    } else if (conv.canConvert && conv.mt !== null && conv.mt > 0) {
+  } else if ((quantity > 0 || (conv.canConvert && conv.mt !== null && conv.mt > 0)) && rate > 0) {
+    if (conv.canConvert && conv.mt !== null && conv.mt > 0) {
       amount = Math.round(conv.mt * rate * 100) / 100;
     } else {
       amount = Math.round(quantity * rate * 100) / 100;
@@ -845,8 +1145,52 @@ export function calculateLineItem(item: LineItemInput): CalculatedLineItem {
     amount = Number(item.amount);
   }
 
-  const cgst_rate = Number(item.cgst_rate !== undefined ? item.cgst_rate : 9);
-  const sgst_rate = Number(item.sgst_rate !== undefined ? item.sgst_rate : 9);
+  const isInterState =
+    opts?.isInterState !== undefined
+      ? Boolean(opts.isInterState)
+      : Boolean(item.is_inter_state) ||
+        ((Number(item.igst_rate) > 0 || Number(item.igst_amount) > 0) &&
+          !Number(item.cgst_amount) &&
+          !Number(item.sgst_amount));
+
+  if (isInterState) {
+    const igst_rate = Number(
+      item.igst_rate !== undefined && Number(item.igst_rate) > 0
+        ? item.igst_rate
+        : SELLER_GST_CONFIG.gstRate,
+    );
+    const igst_amount = Math.round(amount * (igst_rate / 100) * 100) / 100;
+    const total_gst = igst_amount;
+    const final_amount = Math.round((amount + total_gst) * 100) / 100;
+
+    return {
+      ...item,
+      quantity,
+      rate,
+      amount,
+      unit,
+      cgst_rate: 0,
+      cgst_percent: 0,
+      cgst_amount: 0,
+      sgst_rate: 0,
+      sgst_percent: 0,
+      sgst_amount: 0,
+      igst_rate,
+      igst_percent: igst_rate,
+      igst_amount,
+      is_inter_state: true,
+      total_gst,
+      final_amount,
+      line_total: final_amount,
+    };
+  }
+
+  const cgst_rate = Number(
+    item.cgst_rate !== undefined && Number(item.cgst_rate) > 0 ? item.cgst_rate : 9,
+  );
+  const sgst_rate = Number(
+    item.sgst_rate !== undefined && Number(item.sgst_rate) > 0 ? item.sgst_rate : 9,
+  );
   const cgst_amount = Math.round(amount * (cgst_rate / 100) * 100) / 100;
   const sgst_amount = Math.round(amount * (sgst_rate / 100) * 100) / 100;
   const total_gst = Math.round((cgst_amount + sgst_amount) * 100) / 100;
@@ -859,20 +1203,30 @@ export function calculateLineItem(item: LineItemInput): CalculatedLineItem {
     amount,
     unit,
     cgst_rate,
+    cgst_percent: cgst_rate,
     cgst_amount,
     sgst_rate,
+    sgst_percent: sgst_rate,
     sgst_amount,
+    igst_rate: 0,
+    igst_percent: 0,
+    igst_amount: 0,
+    is_inter_state: false,
     total_gst,
     final_amount,
+    line_total: final_amount,
   };
 }
 
 /**
  * Calculates array of line items.
  */
-export function calculateLineItems(lineItems: LineItemInput[]): CalculatedLineItem[] {
+export function calculateLineItems(
+  lineItems: LineItemInput[],
+  options?: { isInterState?: boolean },
+): CalculatedLineItem[] {
   if (!Array.isArray(lineItems)) return [];
-  return lineItems.map(calculateLineItem);
+  return lineItems.map((item) => calculateLineItem(item, options));
 }
 
 /**
@@ -948,9 +1302,9 @@ export function calculatePricingSummary(
   const isUniformUnit = distinctUnits.length <= 1;
   const primaryUnit = isUniformUnit ? (distinctUnits[0] || 'MT') : 'MT';
 
-  let totalQuantity = 0;
-  let totalQuantityMt = 0;
-  let formattedQuantity = '';
+  let totalQuantity: number;
+  let totalQuantityMt: number;
+  let formattedQuantity: string;
 
   if (primaryUnit === 'KG' && isUniformUnit) {
     totalQuantity = processedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
@@ -964,6 +1318,7 @@ export function calculatePricingSummary(
     totalQuantity = processedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
     totalQuantityMt = totalQuantity;
     formattedQuantity = `${totalQuantity.toLocaleString('en-IN')} MT`;
+  } else {
     // Mixed units or piece/count units: compute converted MT using physical formulas
     const tonnageRes = calculateTotalTonnageMt(processedItems);
     totalQuantityMt = tonnageRes.totalMt;
@@ -1029,11 +1384,16 @@ export interface QuotationFinancialBreakdown {
   subtotal: number;
   CGST: number;
   SGST: number;
+  IGST: number;
+  totalTax: number;
+  isInterState: boolean;
+  taxType: 'INTRA_STATE' | 'INTER_STATE';
   rounding: number;
   grandTotal: number;
   formattedSubtotal: string;
   formattedCGST: string;
   formattedSGST: string;
+  formattedIGST: string;
   formattedRounding: string;
   formattedGrandTotal: string;
 }
@@ -1066,34 +1426,72 @@ export function formatIndianCurrency(num: number, includeDecimals = true): strin
 }
 
 /**
- * Calculates standard GST 9% + 9% and Rounding financial breakdown for quotation displays.
+ * Calculates GST (Intra-state: CGST 9% + SGST 9%, or Inter-state: IGST 18%) and Rounding financial breakdown.
  */
 export function calculateQuotationBreakdown(
   baseAmount: number,
   lineItems?: LineItemInput[],
+  options?: { isInterState?: boolean },
 ): QuotationFinancialBreakdown {
   const subtotal = Math.max(0, Number(baseAmount) || 0);
-  let CGST = Math.round(subtotal * 0.09 * 100) / 100;
-  let SGST = Math.round(subtotal * 0.09 * 100) / 100;
+  const opts = options && typeof options === 'object' ? options : undefined;
+  const isInterState =
+    opts?.isInterState !== undefined
+      ? Boolean(opts.isInterState)
+      : Array.isArray(lineItems) &&
+        lineItems.length > 0 &&
+        lineItems.some((i) => Number(i?.igst_amount) > 0 || Number(i?.igst_rate) > 0) &&
+        lineItems.every((i) => !Number(i?.cgst_amount) && !Number(i?.sgst_amount));
 
-  if (Array.isArray(lineItems) && lineItems.length > 0) {
-    const sumCgst = lineItems.reduce((acc, item) => {
-      const amt = Number(item.amount) || 0;
-      const itemCgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : (Math.round(amt * 0.09 * 100) / 100);
-      return acc + itemCgst;
-    }, 0);
-    const sumSgst = lineItems.reduce((acc, item) => {
-      const amt = Number(item.amount) || 0;
-      const itemSgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : (Math.round(amt * 0.09 * 100) / 100);
-      return acc + itemSgst;
-    }, 0);
-    if (sumCgst > 0 || sumSgst > 0) {
-      CGST = Math.round(sumCgst * 100) / 100;
-      SGST = Math.round(sumSgst * 100) / 100;
+  let CGST = 0;
+  let SGST = 0;
+  let IGST = 0;
+
+  if (isInterState) {
+    IGST = Math.round(subtotal * 0.18 * 100) / 100;
+    if (Array.isArray(lineItems) && lineItems.length > 0) {
+      const sumIgst = lineItems.reduce((acc, item) => {
+        const amt = Number(item.amount) || 0;
+        const itemIgst =
+          item.igst_amount !== undefined && Number(item.igst_amount) > 0
+            ? Number(item.igst_amount)
+            : Math.round(amt * 0.18 * 100) / 100;
+        return acc + itemIgst;
+      }, 0);
+      if (sumIgst > 0) {
+        IGST = Math.round(sumIgst * 100) / 100;
+      }
+    }
+  } else {
+    CGST = Math.round(subtotal * 0.09 * 100) / 100;
+    SGST = Math.round(subtotal * 0.09 * 100) / 100;
+
+    if (Array.isArray(lineItems) && lineItems.length > 0) {
+      const sumCgst = lineItems.reduce((acc, item) => {
+        const amt = Number(item.amount) || 0;
+        const itemCgst =
+          item.cgst_amount !== undefined && Number(item.cgst_amount) > 0
+            ? Number(item.cgst_amount)
+            : Math.round(amt * 0.09 * 100) / 100;
+        return acc + itemCgst;
+      }, 0);
+      const sumSgst = lineItems.reduce((acc, item) => {
+        const amt = Number(item.amount) || 0;
+        const itemSgst =
+          item.sgst_amount !== undefined && Number(item.sgst_amount) > 0
+            ? Number(item.sgst_amount)
+            : Math.round(amt * 0.09 * 100) / 100;
+        return acc + itemSgst;
+      }, 0);
+      if (sumCgst > 0 || sumSgst > 0) {
+        CGST = Math.round(sumCgst * 100) / 100;
+        SGST = Math.round(sumSgst * 100) / 100;
+      }
     }
   }
 
-  const exactTotal = subtotal + CGST + SGST;
+  const totalTax = Math.round((isInterState ? IGST : CGST + SGST) * 100) / 100;
+  const exactTotal = subtotal + totalTax;
   const grandTotal = Math.round(exactTotal);
   const rounding = Math.round((grandTotal - exactTotal) * 100) / 100;
 
@@ -1101,13 +1499,19 @@ export function calculateQuotationBreakdown(
     subtotal,
     CGST,
     SGST,
+    IGST,
+    totalTax,
+    isInterState,
+    taxType: isInterState ? 'INTER_STATE' : 'INTRA_STATE',
     rounding,
     grandTotal,
     formattedSubtotal: formatIndianCurrency(subtotal, true),
     formattedCGST: formatIndianCurrency(CGST, true),
     formattedSGST: formatIndianCurrency(SGST, true),
+    formattedIGST: formatIndianCurrency(IGST, true),
     formattedRounding: formatIndianCurrency(rounding, true),
     formattedGrandTotal: `\u20B9${formatIndianCurrency(grandTotal, true)}`,
   };
 }
+
 

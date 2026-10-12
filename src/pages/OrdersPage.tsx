@@ -22,6 +22,7 @@ import {
   Layers,
   ArrowLeft,
   UserCheck,
+  ExternalLink,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -48,6 +49,7 @@ import {
   getOrderTonnage,
   normalizeUnit,
   formatIndianCurrency,
+  resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
 
@@ -90,6 +92,7 @@ interface Order {
   deal_items?: DealItem[];
   raw_text?: string;
   source_channel?: string;
+  inquiry_type?: string;
   inquiries?: {
     source_channel?: string;
     inquiry_type?: string;
@@ -98,11 +101,29 @@ interface Order {
 
 export function getOrderSourceChannel(ord?: Order | null): string {
   if (!ord) return 'Dashboard';
+
+  if (
+    ord.po_source === 'upload' ||
+    ord.po_source === 'manual' ||
+    ord.po_source === 'dashboard'
+  ) {
+    return 'Dashboard';
+  }
+
   const channel = (
     ord.source_channel ||
     ord.inquiries?.source_channel ||
     ''
   ).toLowerCase().trim();
+
+  // If inquiry_type is purchase_order and it's not explicitly WhatsApp, default to Dashboard
+  if (
+    (ord.inquiry_type === 'purchase_order' || ord.inquiries?.inquiry_type === 'purchase_order') &&
+    !channel.includes('whatsapp') &&
+    !(ord.inquiries as any)?.whatsapp_message_id
+  ) {
+    return 'Dashboard';
+  }
 
   // AI Assistant signals
   if (
@@ -156,6 +177,9 @@ interface LineItemDetail {
   cgst_amount?: number;
   sgst_rate?: number;
   sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  is_inter_state?: boolean;
   total_gst?: number;
   final_amount?: number;
 }
@@ -227,6 +251,28 @@ export function getOrderOriginalSourceText(ord?: Order | null): string | null {
     / - Original PO Document$/i.test(candidate);
 
   if (candidate && !isPurePlaceholder && strippedContent) {
+    // Guard against stale/unrelated inquiry raw_text when this order has deal_items
+    if (Array.isArray(ord.deal_items) && ord.deal_items.length > 0) {
+      const candidateLower = candidate.toLowerCase();
+      const hasMatchingItem = ord.deal_items.some((item: any) => {
+        const name = String(item.sku_text || item.product_name || item.description || '')
+          .toLowerCase()
+          .trim();
+        if (!name) return false;
+        const cleanName = name.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const firstTwoWords = cleanName.split(' ').slice(0, 2).join(' ');
+        if (firstTwoWords.length >= 4 && candidateLower.includes(firstTwoWords)) {
+          return true;
+        }
+        const tokens = cleanName.split(' ').filter(w => w.length >= 5);
+        return tokens.some(t => candidateLower.includes(t));
+      });
+
+      if (!hasMatchingItem) {
+        return buildOrderStructuredSourceText(ord);
+      }
+    }
+
     const poNumber = String(ord.po_number || '').trim();
     if (poNumber && /^Material:/i.test(strippedContent)) {
       if (/\bPO\s*Number\s*:/i.test(strippedContent)) {
@@ -245,12 +291,52 @@ export function getOrderOriginalSourceText(ord?: Order | null): string | null {
 
 export function getOrderSourceDocuments(ord?: Order | null): string[] {
   if (!ord) return [];
-  const urls = ord.source_media_urls || ord.media_urls || [];
-  return urls.filter(
-    url =>
-      typeof url === 'string' &&
-      (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')),
+  const urls = [
+    ...(ord.source_media_urls || []),
+    ...(ord.media_urls || []),
+    ...((ord as any).inquiries?.media_urls || []),
+  ];
+  return Array.from(
+    new Set(
+      urls.filter(
+        url =>
+          typeof url === 'string' &&
+          url !== 'attached_document' &&
+          (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')),
+      ),
+    ),
   );
+}
+
+export function openDocumentUrl(url?: string | null) {
+  if (!url) return;
+  if (url.startsWith('data:')) {
+    try {
+      const [header, base64Data] = url.split(',');
+      const mimeMatch = header.match(/:(.*?);/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'application/pdf';
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+      const newWin = window.open(blobUrl, '_blank');
+      if (!newWin) {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.target = '_blank';
+        a.rel = 'noreferrer';
+        a.click();
+      }
+      return;
+    } catch (err) {
+      console.error('Failed to open data URL as blob:', err);
+    }
+  }
+  window.open(url, '_blank', 'noreferrer');
 }
 
 export function formatOrderSourceText(ord?: Order | null): string {
@@ -262,7 +348,7 @@ export function formatOrderSourceText(ord?: Order | null): string {
   }
 
   if (getOrderSourceDocuments(ord).length > 0) {
-    return 'Original source is an attached document. Use the document preview above.';
+    return 'Original source is an attached document. Click "Open Source Document" above to view the uploaded file.';
   }
 
   return 'No original source text or document is available for this order.';
@@ -524,6 +610,14 @@ export default function OrdersPage() {
     placeholderData: keepPreviousData,
   });
 
+  const [customerMetaMap, setCustomerMetaMap] = useState<Record<string, { gstin?: string; state?: string; address?: string }>>({});
+
+  const lookupCustomerMeta = (companyName?: string) => {
+    if (!companyName) return undefined;
+    const key = companyName.trim().toLowerCase();
+    return customerMetaMap[key];
+  };
+
   const { data: rawCustomers = [] } = useQuery<string[]>({
     queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
@@ -534,6 +628,18 @@ export default function OrdersPage() {
       const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
+      const metaMap: Record<string, { gstin?: string; state?: string; address?: string }> = {};
+      cList.forEach((c: any) => {
+        const cName = String(c.customer_name || c.name || c.company_name || '').trim();
+        if (cName) {
+          metaMap[cName.toLowerCase()] = {
+            gstin: c.gst_number || c.gstin || undefined,
+            state: c.customer_state || c.state || undefined,
+            address: c.delivery_location || c.registered_address || c.address || undefined,
+          };
+        }
+      });
+      setCustomerMetaMap(metaMap);
       const fetchedNames: string[] = cList
         .map((c: any) => String(c.customer_name || c.name || c.company_name || '').trim())
         .filter(Boolean);
@@ -668,6 +774,40 @@ export default function OrdersPage() {
       amount: 0,
     },
   ]);
+
+  const formCustomerMeta = lookupCustomerMeta(formCustomerName);
+  const formPlaceOfSupply = useMemo(
+    () =>
+      resolvePlaceOfSupply({
+        deliveryLocation: formDeliveryLocation,
+        customerState: formCustomerMeta?.state,
+        customerGstin: formCustomerMeta?.gstin || extractedCustomerExtras.gstin || undefined,
+        customerAddress: formCustomerMeta?.address,
+      }),
+    [formDeliveryLocation, formCustomerMeta?.state, formCustomerMeta?.gstin, formCustomerMeta?.address, extractedCustomerExtras.gstin],
+  );
+  const isFormInterState = formPlaceOfSupply.isInterState;
+
+  useEffect(() => {
+    setFormLineItems(prev =>
+      prev.map(item => {
+        const calc = calculateLineItem(item, { isInterState: isFormInterState });
+        return {
+          ...item,
+          amount: calc.amount,
+          cgst_rate: calc.cgst_rate,
+          cgst_amount: calc.cgst_amount,
+          sgst_rate: calc.sgst_rate,
+          sgst_amount: calc.sgst_amount,
+          igst_rate: calc.igst_rate,
+          igst_amount: calc.igst_amount,
+          is_inter_state: calc.is_inter_state,
+          total_gst: calc.total_gst,
+          final_amount: calc.final_amount,
+        };
+      }),
+    );
+  }, [isFormInterState]);
 
   const createPoReservationToken = () =>
     `dashboard:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
@@ -878,6 +1018,24 @@ export default function OrdersPage() {
           setFormPaymentTerms(String(extraction.payment_terms || extraction.paymentTerms).trim());
         }
 
+        const extractedCustName = String(rawCust || formCustomerName || '').trim();
+        const extractedCustMeta = lookupCustomerMeta(extractedCustName);
+        const extractedDeliv = String(
+          extraction.delivery_location ||
+            extraction.deliveryLocation ||
+            extraction.customer_address ||
+            extraction.address ||
+            extraction.customer?.address ||
+            formDeliveryLocation ||
+            '',
+        ).trim();
+        const extractedPos = resolvePlaceOfSupply({
+          deliveryLocation: extractedDeliv,
+          customerState: extractedCustMeta?.state,
+          customerGstin: (extraction.gstin || extraction.customer?.gstin || extractedCustomerExtras.gstin || extractedCustMeta?.gstin || '').trim() || undefined,
+          customerAddress: extractedCustMeta?.address,
+        });
+
         const extractedLines = Array.isArray(extraction.line_items)
           ? extraction.line_items
           : Array.isArray(extraction.lineItems)
@@ -900,15 +1058,18 @@ export default function OrdersPage() {
               rawUnit = 'MT';
             }
 
-            const calc = calculateLineItem({
-              sku_text: skuText,
-              dimensions: dims,
-              hsn_code: (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '').trim(),
-              quantity: q,
-              unit: normalizeUnit(rawUnit) || 'MT',
-              rate: r,
-              amount: amt,
-            });
+            const calc = calculateLineItem(
+              {
+                sku_text: skuText,
+                dimensions: dims,
+                hsn_code: (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '').trim(),
+                quantity: q,
+                unit: normalizeUnit(rawUnit) || 'MT',
+                rate: r,
+                amount: amt,
+              },
+              { isInterState: extractedPos.isInterState },
+            );
 
             return {
               ...calc,
@@ -1042,7 +1203,7 @@ export default function OrdersPage() {
     }
 
     const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
+    const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems, { isInterState: isFormInterState });
 
     const itemStrs = formLineItems
       .map((item, idx) => {
@@ -1083,15 +1244,18 @@ export default function OrdersPage() {
         po_date: formPoDate,
         total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
+        place_of_supply: formPlaceOfSupply.label,
+        is_inter_state: isFormInterState,
         payment_terms: formPaymentTerms.trim() || undefined,
         additional_notes: formNotes.trim() || undefined,
         source_original_text: sourceOriginalText || undefined,
         source_channel: 'web_dashboard',
         line_items: formLineItems.map(i => {
           const baseAmt = Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0));
-          const cgstAmt = i.cgst_amount !== undefined ? Number(i.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-          const sgstAmt = i.sgst_amount !== undefined ? Number(i.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-          const totalGst = Math.round((cgstAmt + sgstAmt) * 100) / 100;
+          const cgstAmt = isFormInterState ? 0 : (i.cgst_amount !== undefined ? Number(i.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+          const sgstAmt = isFormInterState ? 0 : (i.sgst_amount !== undefined ? Number(i.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+          const igstAmt = isFormInterState ? (i.igst_amount !== undefined && Number(i.igst_amount) > 0 ? Number(i.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100) : 0;
+          const totalGst = isFormInterState ? igstAmt : Math.round((cgstAmt + sgstAmt) * 100) / 100;
           const finalAmt = i.final_amount !== undefined ? Number(i.final_amount) : Math.round((baseAmt + totalGst) * 100) / 100;
           return {
             sku_text: i.sku_text.trim(),
@@ -1101,10 +1265,13 @@ export default function OrdersPage() {
             unit: i.unit || 'MT',
             rate: Number(i.rate) || 0,
             amount: baseAmt,
-            cgst_rate: 9,
+            cgst_rate: isFormInterState ? 0 : 9,
             cgst_amount: cgstAmt,
-            sgst_rate: 9,
+            sgst_rate: isFormInterState ? 0 : 9,
             sgst_amount: sgstAmt,
+            igst_rate: isFormInterState ? 18 : 0,
+            igst_amount: igstAmt,
+            is_inter_state: isFormInterState,
             total_gst: totalGst,
             final_amount: finalAmt,
             converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
@@ -1174,12 +1341,11 @@ export default function OrdersPage() {
   };
 
   const handleViewPoDocument = async (ord: Order) => {
-    // Check if order already has genuine renderable documents or genuine source text
+    // Check if order already has genuine renderable documents
     const hasRenderableDoc = getOrderSourceDocuments(ord).length > 0;
-    const hasOriginalText = Boolean(getOrderOriginalSourceText(ord));
 
-    // If order already has renderable doc or genuine original text, open immediately (0ms latency)
-    if (hasRenderableDoc || hasOriginalText) {
+    // If order already has renderable doc, open immediately (0ms latency)
+    if (hasRenderableDoc) {
       setSelectedPoOrder(ord);
       setPoImageViewerUrl(`extracted_preview://${ord.id}`);
       return;
@@ -1368,8 +1534,8 @@ export default function OrdersPage() {
               onClick={handleOpenCreateOrder}
               disabled={allocatingPo}
               className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
-              {allocatingPo ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-              {allocatingPo ? 'Generating PO…' : 'Create New Order'}
+              <Plus size={15} />
+              Create New Order
             </button>
           </div>
         </div>
@@ -1709,7 +1875,22 @@ export default function OrdersPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                <span>Original Source</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700">Original Source Message</span>
+                  {getOrderSourceDocuments(selectedPoOrder).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openDocumentUrl(
+                          getOrderSourceDocuments(selectedPoOrder)[0],
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer">
+                      <ExternalLink size={12} />
+                      Open Source Document
+                    </button>
+                  )}
+                </div>
                 {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
                   <span className="font-mono">
                     Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
@@ -1717,43 +1898,7 @@ export default function OrdersPage() {
                 )}
               </div>
 
-              {getOrderSourceDocuments(selectedPoOrder).slice(0, 1).map(sourceUrl => {
-                const isPdf =
-                  sourceUrl.toLowerCase().startsWith('data:application/pdf') ||
-                  /\.pdf(?:$|[?#])/i.test(sourceUrl);
-                return (
-                  <div key={sourceUrl} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-700">
-                        Original Source Document
-                      </span>
-                      <a
-                        href={sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        download={isPdf ? 'original-po.pdf' : undefined}
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-700">
-                        Open document
-                      </a>
-                    </div>
-                    {isPdf ? (
-                      <iframe
-                        title="Original PO document"
-                        src={sourceUrl}
-                        className="w-full h-[42vh] rounded-lg border border-slate-200 bg-white"
-                      />
-                    ) : (
-                      <img
-                        src={sourceUrl}
-                        alt="Original PO document"
-                        className="max-h-[42vh] w-full object-contain rounded-lg border border-slate-200 bg-white"
-                      />
-                    )}
-                  </div>
-                );
-              })}
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[220px] max-h-[65vh] overflow-y-auto">
                 {formatOrderSourceText(selectedPoOrder)}
               </div>
             </div>
@@ -1763,7 +1908,7 @@ export default function OrdersPage() {
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingBag className="text-blue-600" size={20} />
@@ -1931,11 +2076,6 @@ export default function OrdersPage() {
                   <p className="mt-1 text-[10px] text-slate-500">
                     Generated automatically and editable before confirmation.
                   </p>
-                  {checkingPoAvailability && (
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      Checking availability…
-                    </p>
-                  )}
                   {poConflict && (
                     <p className="mt-1 text-[10px] font-semibold text-rose-600">
                       {poConflict}
@@ -1979,34 +2119,37 @@ export default function OrdersPage() {
                 <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th rowSpan={2} className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
-                      <th rowSpan={2} className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
                         HSN/SAC <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
                         Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
                         Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th colSpan={2} className="px-3 py-1.5 border-r border-b border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest">
-                        18% GST
-                      </th>
-                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                      {isFormInterState ? (
+                        <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[16%] min-w-[110px]">
+                          IGST (18%)
+                        </th>
+                      ) : (
+                        <>
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                            CGST (9%)
+                          </th>
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                            SGST (9%)
+                          </th>
+                        </>
+                      )}
+                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
                         Amount (₹)
                       </th>
-                      <th rowSpan={2} className="px-2 py-3 text-center w-[3%] align-middle"></th>
-                    </tr>
-                    <tr>
-                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
-                        CGST (9%)
-                      </th>
-                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
-                        SGST (9%)
-                      </th>
+                      <th className="px-2 py-3 text-center w-[3%] align-middle"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -2035,7 +2178,7 @@ export default function OrdersPage() {
                                 }
 
                                 const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                 updated[idx] = {
                                   ...currentItem,
                                   amount: calc.amount,
@@ -2043,6 +2186,9 @@ export default function OrdersPage() {
                                   cgst_amount: calc.cgst_amount,
                                   sgst_rate: calc.sgst_rate,
                                   sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  is_inter_state: calc.is_inter_state,
                                   total_gst: calc.total_gst,
                                   final_amount: calc.final_amount,
                                 };
@@ -2071,7 +2217,7 @@ export default function OrdersPage() {
                                   }
 
                                   const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                   updated[idx] = {
                                     ...currentItem,
                                     amount: calc.amount,
@@ -2079,6 +2225,9 @@ export default function OrdersPage() {
                                     cgst_amount: calc.cgst_amount,
                                     sgst_rate: calc.sgst_rate,
                                     sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
+                                    is_inter_state: calc.is_inter_state,
                                     total_gst: calc.total_gst,
                                     final_amount: calc.final_amount,
                                   };
@@ -2119,11 +2268,12 @@ export default function OrdersPage() {
                                 const rawQ = val === '' ? 0 : parseFloat(val);
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
-                                const currentItem = { ...updated[idx], quantity: safeQ };
+                                const currentItem: any = { ...updated[idx], quantity: safeQ };
+                                delete currentItem.isManualAmount;
                                 if (normalizeUnit(currentItem.unit) === 'MT') {
                                   currentItem.converted_mt = safeQ;
                                 }
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                 updated[idx] = {
                                   ...currentItem,
                                   amount: calc.amount,
@@ -2131,6 +2281,9 @@ export default function OrdersPage() {
                                   cgst_amount: calc.cgst_amount,
                                   sgst_rate: calc.sgst_rate,
                                   sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  is_inter_state: calc.is_inter_state,
                                   total_gst: calc.total_gst,
                                   final_amount: calc.final_amount,
                                 };
@@ -2146,12 +2299,13 @@ export default function OrdersPage() {
                                 const updated = [...formLineItems];
                                 const currentItem = { ...updated[idx], unit: newUnit };
                                 delete currentItem.is_manual_mt;
+                                delete currentItem.isManualAmount;
                                 if (newUnit === 'MT') {
                                   currentItem.converted_mt = currentItem.quantity;
                                 } else {
                                   delete currentItem.converted_mt;
                                 }
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                 updated[idx] = {
                                   ...currentItem,
                                   amount: calc.amount,
@@ -2159,6 +2313,9 @@ export default function OrdersPage() {
                                   cgst_amount: calc.cgst_amount,
                                   sgst_rate: calc.sgst_rate,
                                   sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  is_inter_state: calc.is_inter_state,
                                   total_gst: calc.total_gst,
                                   final_amount: calc.final_amount,
                                 };
@@ -2196,7 +2353,8 @@ export default function OrdersPage() {
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       const updated = [...formLineItems];
-                                      const currentItem = { ...updated[idx] };
+                                      const currentItem: any = { ...updated[idx] };
+                                      delete currentItem.isManualAmount;
 
                                       if (val === '') {
                                         delete currentItem.converted_mt;
@@ -2211,7 +2369,7 @@ export default function OrdersPage() {
                                         }
                                       }
 
-                                      const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                      const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                       updated[idx] = {
                                         ...currentItem,
                                         amount: calc.amount,
@@ -2219,6 +2377,9 @@ export default function OrdersPage() {
                                         cgst_amount: calc.cgst_amount,
                                         sgst_rate: calc.sgst_rate,
                                         sgst_amount: calc.sgst_amount,
+                                        igst_rate: calc.igst_rate,
+                                        igst_amount: calc.igst_amount,
+                                        is_inter_state: calc.is_inter_state,
                                         total_gst: calc.total_gst,
                                         final_amount: calc.final_amount,
                                       };
@@ -2247,7 +2408,8 @@ export default function OrdersPage() {
                               const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
                               const updated = [...formLineItems];
                               const currentItem = { ...updated[idx], rate: safeR };
-                              const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                              delete currentItem.isManualAmount;
+                              const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                               updated[idx] = {
                                 ...currentItem,
                                 amount: calc.amount,
@@ -2255,6 +2417,9 @@ export default function OrdersPage() {
                                 cgst_amount: calc.cgst_amount,
                                 sgst_rate: calc.sgst_rate,
                                 sgst_amount: calc.sgst_amount,
+                                igst_rate: calc.igst_rate,
+                                igst_amount: calc.igst_amount,
+                                is_inter_state: calc.is_inter_state,
                                 total_gst: calc.total_gst,
                                 final_amount: calc.final_amount,
                               };
@@ -2264,42 +2429,63 @@ export default function OrdersPage() {
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                           />
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
-                          {(() => {
-                            const baseAmt = Number(item.amount) || 0;
-                            const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                            return (
-                              <input
-                                type="text"
-                                readOnly
-                                tabIndex={-1}
-                                value={formatIndianCurrency(cgst, true)}
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
-                              />
-                            );
-                          })()}
-                        </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
-                          {(() => {
-                            const baseAmt = Number(item.amount) || 0;
-                            const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                            return (
-                              <input
-                                type="text"
-                                readOnly
-                                tabIndex={-1}
-                                value={formatIndianCurrency(sgst, true)}
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
-                              />
-                            );
-                          })()}
-                        </td>
+                        {isFormInterState ? (
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                            {(() => {
+                              const baseAmt = Number(item.amount) || 0;
+                              const igst = item.igst_amount !== undefined && Number(item.igst_amount) > 0 ? Number(item.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100;
+                              return (
+                                <input
+                                  type="text"
+                                  readOnly
+                                  tabIndex={-1}
+                                  value={formatIndianCurrency(igst, true)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                />
+                              );
+                            })()}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(cgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(sgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                          </>
+                        )}
                         <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
                           {(() => {
                             const baseAmt = Number(item.amount) || 0;
-                            const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                            const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                            const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst) * 100) / 100;
+                            const cgst = isFormInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                            const sgst = isFormInterState ? 0 : (item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                            const igst = isFormInterState ? (item.igst_amount !== undefined && Number(item.igst_amount) > 0 ? Number(item.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100) : 0;
+                            const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst + igst) * 100) / 100;
                             return (
                               <input
                                 id={`form-item-amount-${idx}`}
@@ -2312,18 +2498,22 @@ export default function OrdersPage() {
                                   const rawA = val === '' ? 0 : parseFloat(val);
                                   const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                                   const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
-                                  const cgstA = Math.round(safeBase * 0.09 * 100) / 100;
-                                  const sgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                  const cgstA = isFormInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                  const sgstA = isFormInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                  const igstA = isFormInterState ? Math.round(safeBase * 0.18 * 100) / 100 : 0;
                                   const updated = [...formLineItems];
                                   updated[idx] = {
                                     ...updated[idx],
                                     amount: safeBase,
                                     isManualAmount: true,
-                                    cgst_rate: 9,
+                                    cgst_rate: isFormInterState ? 0 : 9,
                                     cgst_amount: cgstA,
-                                    sgst_rate: 9,
+                                    sgst_rate: isFormInterState ? 0 : 9,
                                     sgst_amount: sgstA,
-                                    total_gst: Math.round((cgstA + sgstA) * 100) / 100,
+                                    igst_rate: isFormInterState ? 18 : 0,
+                                    igst_amount: igstA,
+                                    is_inter_state: isFormInterState,
+                                    total_gst: isFormInterState ? igstA : Math.round((cgstA + sgstA) * 100) / 100,
                                     final_amount: safeFinal,
                                   };
                                   setFormLineItems(updated);
@@ -2354,7 +2544,24 @@ export default function OrdersPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
+                                    {
+                                      sku_text: '',
+                                      dimensions: '',
+                                      hsn_code: '',
+                                      quantity: 0,
+                                      unit: 'MT',
+                                      rate: 0,
+                                      amount: 0,
+                                      cgst_rate: isFormInterState ? 0 : 9,
+                                      cgst_amount: 0,
+                                      sgst_rate: isFormInterState ? 0 : 9,
+                                      sgst_amount: 0,
+                                      igst_rate: isFormInterState ? 18 : 0,
+                                      igst_amount: 0,
+                                      is_inter_state: isFormInterState,
+                                      total_gst: 0,
+                                      final_amount: 0,
+                                    },
                                   ];
                                   setFormLineItems(updated);
                                 }}
@@ -2373,16 +2580,25 @@ export default function OrdersPage() {
                 {/* Standard Quotation Pricing Breakdown Layout */}
                 {(() => {
                   const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                  const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
+                  const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems, { isInterState: isFormInterState });
 
                   const totalTonnage = calculateTotalTonnageMt(formLineItems);
                   const formattedItemsInTotal = totalTonnage.formattedText;
 
                   return (
                     <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                      <div className="text-xs text-slate-700 pt-1">
-                        <span className="font-bold text-slate-900">Items in Total = </span>
-                        <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      <div className="text-xs text-slate-700 pt-1 space-y-1">
+                        <div>
+                          <span className="font-bold text-slate-900">Items in Total = </span>
+                          <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Place of Supply:{' '}
+                          <span className="font-semibold text-slate-800">{formPlaceOfSupply.label}</span>{' '}
+                          <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${isFormInterState ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                            {isFormInterState ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST 9% + SGST 9%)'}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
@@ -2390,14 +2606,23 @@ export default function OrdersPage() {
                           <span className="font-medium text-slate-600">Sub Total</span>
                           <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
                         </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">CGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">SGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
-                        </div>
+                        {isFormInterState ? (
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">IGST (18%)</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedIGST}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">CGST (9%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">SGST (9%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex justify-between items-center py-0.5">
                           <span className="font-medium text-slate-600">Rounding</span>
                           <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
@@ -2476,6 +2701,14 @@ export default function OrdersPage() {
           setFormCustomerName(saved.companyName);
           setFormCustomerPhone(saved.mobile);
           setFormDeliveryLocation(saved.deliveryLocation);
+          setCustomerMetaMap(prev => ({
+            ...prev,
+            [saved.companyName.trim().toLowerCase()]: {
+              gstin: saved.gstin,
+              state: saved.customerState,
+              address: saved.deliveryLocation,
+            },
+          }));
           setShowAddCustomer(false);
           queryClient.setQueryData<string[]>(
             ['customer-names-list', effectivePhone, activeRole, activeMode],

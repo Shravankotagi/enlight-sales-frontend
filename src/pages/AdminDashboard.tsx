@@ -21,6 +21,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useAuth } from '../context/AuthContext';
+import SyncBiginButton from '../components/SyncBiginButton';
 
 const normalizePhone = (phone?: string | null) =>
   String(phone || '').replace(/\D/g, '').slice(-10);
@@ -390,6 +391,7 @@ export default function AdminDashboard() {
 
           {/* Top Actions: Refresh, Create Order */}
           <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+            <SyncBiginButton onSynced={handleRefreshAll} />
             <button
               type="button"
               onClick={handleRefreshAll}
