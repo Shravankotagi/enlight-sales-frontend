@@ -6,6 +6,9 @@
 ## Interface
 Frontend calls `/inquiries`, `/inquiries/:id`, `/inquiries/review-queue`, `/inquiries/stats`, `/inquiries/:id/status`, quotation preview/send endpoints, `/inquiries/generate-pdf`, `/inquiries/parse-document`, and `/inquiries/parse-text`.
 
+### Quotation email CC contract
+`POST /inquiries/quotation-preview/:id` returns the resolved default `cc` list for the Share Quotation modal. The frontend may edit that list as normalized email chips and sends the final list as `cc: string[]` to `POST /inquiries/send-quotation/:id`. The backend validates and deduplicates submitted addresses, excludes the primary `customer_email`, and passes the resulting list to the email provider. If `cc` is omitted, the backend retains the existing default recipients.
+
 ## Dependencies
 Uses product/HSN/pricing rules, PDF generation and image/text parsing. It feeds deals/order conversion and bot sales/OCR handling. Preserve server-side field authority and scoped queries when adding editable fields.
 
