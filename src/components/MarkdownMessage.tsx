@@ -39,8 +39,8 @@ function preprocessMarkdown(raw: string): string {
 
   // 6. Ensure proper separation before and after list blocks so CommonMark parses <ul>/<ol> correctly
   // Add a blank line before a list if preceded by non-list, non-empty text
-  text = text.replace(/([^\n\-\*\+\d])\n([ \t]*[-*+]\s+)/g, '$1\n\n$2');
-  text = text.replace(/([^\n\-\*\+\d])\n([ \t]*\d+\.\s+)/g, '$1\n\n$2');
+  text = text.replace(/([^\n\-*+\d])\n([ \t]*[-*+]\s+)/g, '$1\n\n$2');
+  text = text.replace(/([^\n\-*+\d])\n([ \t]*\d+\.\s+)/g, '$1\n\n$2');
 
   // Add a blank line after a list if followed by regular paragraph text
   text = text.replace(/(\n[ \t]*[-*+]\s+[^\n]+)\n([^\n\s\-*+\d])/g, '$1\n\n$2');

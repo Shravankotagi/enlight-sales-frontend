@@ -651,7 +651,7 @@ export default function OrdersPage() {
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formNotes, setFormNotes] = useState('');
-  const extractedCustomerExtrasRef = useRef<{ contactPerson: string; gstin: string }>({
+  const [extractedCustomerExtras, setExtractedCustomerExtras] = useState<{ contactPerson: string; gstin: string }>({
     contactPerson: '',
     gstin: '',
   });
@@ -868,12 +868,12 @@ export default function OrdersPage() {
           extraction.additional_notes || extraction.notes || extraction.remarks || '',
         ).trim();
         setFormNotes(extractedNotes);
-        extractedCustomerExtrasRef.current = {
+        setExtractedCustomerExtras({
           contactPerson: String(
             extraction.contact_person || extraction.contact_name || extraction.customer?.contact_person || '',
           ).trim(),
           gstin: String(extraction.customer_gst || extraction.gstin || extraction.gst || '').trim(),
-        };
+        });
         if (extraction.payment_terms || extraction.paymentTerms) {
           setFormPaymentTerms(String(extraction.payment_terms || extraction.paymentTerms).trim());
         }
@@ -2119,7 +2119,7 @@ export default function OrdersPage() {
                                 const rawQ = val === '' ? 0 : parseFloat(val);
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
-                                let currentItem = { ...updated[idx], quantity: safeQ };
+                                const currentItem = { ...updated[idx], quantity: safeQ };
                                 if (normalizeUnit(currentItem.unit) === 'MT') {
                                   currentItem.converted_mt = safeQ;
                                 }
@@ -2144,7 +2144,7 @@ export default function OrdersPage() {
                               onChange={(e) => {
                                 const newUnit = e.target.value;
                                 const updated = [...formLineItems];
-                                let currentItem = { ...updated[idx], unit: newUnit };
+                                const currentItem = { ...updated[idx], unit: newUnit };
                                 delete currentItem.is_manual_mt;
                                 if (newUnit === 'MT') {
                                   currentItem.converted_mt = currentItem.quantity;
@@ -2196,7 +2196,7 @@ export default function OrdersPage() {
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       const updated = [...formLineItems];
-                                      let currentItem = { ...updated[idx] };
+                                      const currentItem = { ...updated[idx] };
 
                                       if (val === '') {
                                         delete currentItem.converted_mt;
@@ -2466,10 +2466,10 @@ export default function OrdersPage() {
         assignPhone={effectivePhone || employee?.phone || ''}
         seed={{
           companyName: formCustomerName.trim(),
-          contactPerson: extractedCustomerExtrasRef.current.contactPerson,
+          contactPerson: extractedCustomerExtras.contactPerson,
           mobile: formCustomerPhone.trim(),
           deliveryLocation: formDeliveryLocation.trim(),
-          gstin: extractedCustomerExtrasRef.current.gstin,
+          gstin: extractedCustomerExtras.gstin,
         }}
         onClose={() => setShowAddCustomer(false)}
         onSaved={(saved) => {

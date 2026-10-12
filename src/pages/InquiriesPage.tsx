@@ -464,7 +464,7 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
 
     const gradeMatch = chunk.match(/([A-Za-z0-9\s]+?(?:\([^)]+\))?)\s*[-:]\s*(\d+.*)/);
     let sku = cleanProductType(indices[i].product.trim());
-    let dims = '';
+    let dims: string;
 
     const thkMatch = sku.match(/(\d+(?:\.\d+)?\s*mm)/i);
     if (thkMatch) {
@@ -547,7 +547,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const companyName = candidateName || '';
 
   // 2. Customer Phone Number (Directly take from database inq.customer_phone, aiJson, or customer directory)
-  let rawCustPhone =
+  const rawCustPhone =
     inq?.customer_phone ||
     aiJson.customer?.phone ||
     aiJson.customer_phone ||
@@ -655,8 +655,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const productType = cleanProductType(rawPt || 'HR Coil');
 
   // 4. Dimensions (Thickness x Width x Length) - extract only what is stated
-  let thickness = '';
-  let width = '';
+  let thickness: string;
+  let width: string;
   let length = '';
 
   // Pattern A: "8mmx1500x10000" or "8mm x 1500 x 10000" or "1.6mm 1250 * 2500"
@@ -729,23 +729,23 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   // Helper to sanitize delivery address and strip any appended field labels or pipe delimiters
   const cleanDeliveryLocation = (str?: string): string => {
     if (!str || typeof str !== 'string') return '';
-    let clean = str.replace(/^[•\-\*:\s|]+|[•\-\*:\s|]+$/g, '').trim();
+    let clean = str.replace(/^[•\-*:\s|]+|[•\-*:\s|]+$/g, '').trim();
     if (clean.includes('|')) {
       clean = clean.split('|')[0].trim();
     }
     clean = clean.replace(/\s*(?:payment\s*terms?|payment|terms?|make|brand|preferred\s*make|notes?|remarks?|email|contact|phone)\s*[:=-].*$/i, '').trim();
-    return clean.replace(/^[•\-\*:\s|]+|[•\-\*:\s|]+$/g, '').trim();
+    return clean.replace(/^[•\-*:\s|]+|[•\-*:\s|]+$/g, '').trim();
   };
 
   // 7. Delivery Location (Capture full delivery address without payment terms leakage)
-  let directDelivery = cleanDeliveryLocation(inq?.delivery_location || inq?.deliveryLocation || '');
-  let fromJson = cleanDeliveryLocation(aiJson.delivery_location || aiJson.deliveryLocation || '');
+  const directDelivery = cleanDeliveryLocation(inq?.delivery_location || inq?.deliveryLocation || '');
+  const fromJson = cleanDeliveryLocation(aiJson.delivery_location || aiJson.deliveryLocation || '');
 
   let fromText = '';
   if (textRaw && typeof textRaw === 'string') {
     // 1. Line-by-line match for bullet or key-value format (stops strictly at pipe, newline, or next field)
     const lineMatch =
-      textRaw.match(/(?:^[•\-\*]?\s*(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/im) ||
+      textRaw.match(/(?:^[•\-*]?\s*(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/im) ||
       textRaw.match(/(?:(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/i);
     if (lineMatch && lineMatch[1].trim().length > 2) {
       fromText = cleanDeliveryLocation(lineMatch[1]);
@@ -754,8 +754,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
     // 2. Multiline block fallback
     if (!fromText) {
       const blockMatch =
-        textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to)\s*[:=-]?\s*([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s*(?:\||;|\n{2,}|payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|email|contact|phone|before|by|on\s+\d|gst\b)|$)/i) ||
-        textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s+before|\s+by|\s+on|\s+within|\||$)/i);
+        textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to)\s*[:=-]?\s*([A-Za-z0-9\s,./#&'"()-]+?)(?:\s*(?:\||;|\n{2,}|payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|email|contact|phone|before|by|on\s+\d|gst\b)|$)/i) ||
+        textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&'"()-]+?)(?:\s+before|\s+by|\s+on|\s+within|\||$)/i);
       if (blockMatch && blockMatch[1].trim().length > 2) {
         fromText = cleanDeliveryLocation(blockMatch[1]);
       }
@@ -1175,6 +1175,9 @@ export function resolveInquiryDealStageKey(inq: InquiryItem, companyName?: strin
   return 'new_inquiry';
 }
 
+const createDashboardWonReservationToken = () =>
+  `dashboard-won:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+
 export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1541,6 +1544,7 @@ export default function InquiriesPage() {
   const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
   const formExtractedJsonRef = useRef<any>(null);
+  const [formExtractedJson, setFormExtractedJson] = useState<any>(null);
   const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
     {
       sku_text: '',
@@ -1575,6 +1579,7 @@ export default function InquiriesPage() {
     setPoFileName('');
     setPoFileBase64(null);
     formExtractedJsonRef.current = null;
+    setFormExtractedJson(null);
     setFormLineItems([
       {
         sku_text: '',
@@ -1750,9 +1755,7 @@ export default function InquiriesPage() {
     dealCode: string;
     existingDeal?: any;
   }) => {
-    const reservationToken = `dashboard-won:${Date.now()}:${Math.random()
-      .toString(36)
-      .slice(2, 10)}`;
+    const reservationToken = createDashboardWonReservationToken();
     const existingGenerated = String(
       details.existingDeal?.generated_po_number ||
         (/^EM\/PO\/\d+$/i.test(
@@ -2575,6 +2578,7 @@ export default function InquiriesPage() {
     setPoFileName(file.name);
     setIsExtractingPo(true);
     formExtractedJsonRef.current = null;
+    setFormExtractedJson(null);
 
     try {
       const reader = new FileReader();
@@ -2617,6 +2621,7 @@ export default function InquiriesPage() {
 
         if (extracted) {
           formExtractedJsonRef.current = extracted;
+          setFormExtractedJson(extracted);
 
           // Customer name: fill ONLY if explicitly present, keep blank if not
           const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || extracted.customer?.name || '';
@@ -2775,7 +2780,7 @@ export default function InquiriesPage() {
     e.preventDefault();
 
     // Read directly from ref to avoid React state batching delays
-    let extractedJson = formExtractedJsonRef.current;
+    const extractedJson = formExtractedJsonRef.current;
     const customerName =
       (formCustomerName.trim() && !isProductOrGenericName(formCustomerName))
         ? formCustomerName.trim()
@@ -4261,7 +4266,7 @@ export default function InquiriesPage() {
                                   const rawQ = val === '' ? 0 : parseFloat(val);
                                   const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  let currentItem = { ...updated[idx], quantity: safeQ };
+                                  const currentItem = { ...updated[idx], quantity: safeQ };
                                   if (normalizeUnit(currentItem.unit) === 'MT') {
                                     currentItem.converted_mt = safeQ;
                                   }
@@ -4296,7 +4301,7 @@ export default function InquiriesPage() {
                                 onChange={(e) => {
                                   const newUnit = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  let currentItem = { ...updated[idx], unit: newUnit };
+                                  const currentItem = { ...updated[idx], unit: newUnit };
                                   delete currentItem.is_manual_mt;
                                   if (newUnit === 'MT') {
                                     currentItem.converted_mt = currentItem.quantity;
@@ -4351,7 +4356,7 @@ export default function InquiriesPage() {
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         const updated = [...(editDetails.lineItems || [])];
-                                        let currentItem = { ...updated[idx] };
+                                        const currentItem = { ...updated[idx] };
 
                                         if (val === '') {
                                           delete currentItem.converted_mt;
@@ -5655,7 +5660,7 @@ export default function InquiriesPage() {
                                 const rawQ = val === '' ? 0 : parseFloat(val);
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
-                                let currentItem = { ...updated[idx], quantity: safeQ };
+                                const currentItem = { ...updated[idx], quantity: safeQ };
                                 if (normalizeUnit(currentItem.unit) === 'MT') {
                                   currentItem.converted_mt = safeQ;
                                 }
@@ -6035,25 +6040,25 @@ export default function InquiriesPage() {
         seed={{
           companyName: formCustomerName.trim(),
           contactPerson: String(
-            formExtractedJsonRef.current?.contact_person
-            || formExtractedJsonRef.current?.contact_name
-            || formExtractedJsonRef.current?.customer?.contact_person
+            formExtractedJson?.contact_person
+            || formExtractedJson?.contact_name
+            || formExtractedJson?.customer?.contact_person
             || '',
           ).trim(),
           mobile: formPhone.trim(),
           deliveryLocation: (
             formDeliveryLocation.trim()
             || String(
-              formExtractedJsonRef.current?.delivery_location
-              || formExtractedJsonRef.current?.customer_address
-              || formExtractedJsonRef.current?.address
+              formExtractedJson?.delivery_location
+              || formExtractedJson?.customer_address
+              || formExtractedJson?.address
               || '',
             )
           ).trim(),
           gstin: String(
-            formExtractedJsonRef.current?.customer_gst
-            || formExtractedJsonRef.current?.gstin
-            || formExtractedJsonRef.current?.gst
+            formExtractedJson?.customer_gst
+            || formExtractedJson?.gstin
+            || formExtractedJson?.gst
             || '',
           ).trim(),
         }}

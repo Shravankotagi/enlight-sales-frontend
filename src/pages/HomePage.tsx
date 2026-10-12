@@ -775,7 +775,7 @@ export default function HomePage() {
       ).length;
       const totalCount = dueOrOverdueVisits.length;
 
-      let titleText = '';
+      let titleText: string;
       if (overdueCount > 0 && todayCount > 0) {
         titleText = `${totalCount} visit follow-up${totalCount > 1 ? 's' : ''} due (${overdueCount} overdue, ${todayCount} today)`;
       } else if (overdueCount > 0) {
