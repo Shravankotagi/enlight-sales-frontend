@@ -39,6 +39,7 @@ import {
   formatLineItemWeightMt,
   normalizeUnit,
   formatIndianCurrency,
+  resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode, MASTER_PRODUCTS_CATALOG } from '../utils/hsnDetector';
 
@@ -92,6 +93,8 @@ export interface LineItemDetail {
   cgst_amount?: number;
   sgst_rate?: number;
   sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
   total_gst?: number;
   final_amount?: number;
 }
@@ -1576,6 +1579,10 @@ export default function InquiriesPage() {
     placeholderData: keepPreviousData,
   });
 
+  const [customerMetaMap, setCustomerMetaMap] = useState<
+    Record<string, { gstin?: string; address?: string; state?: string }>
+  >({});
+
   const { data: rawCustomers = [] } = useQuery<string[]>({
     queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
@@ -1586,15 +1593,127 @@ export default function InquiriesPage() {
       const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
+      const nextMeta: Record<string, { gstin?: string; address?: string; state?: string }> = {};
       const fetchedNames: string[] = cList
-        .map((c: any) => String(c.customer_name || c.name || c.company_name || '').trim())
+        .map((c: any) => {
+          const nm = String(c.customer_name || c.name || c.company_name || '').trim();
+          if (nm) {
+            nextMeta[nm.toLowerCase()] = {
+              gstin: c.customer_gst || c.gstin || c.gst || undefined,
+              address: c.customer_address || c.address || undefined,
+              state: c.customer_state || c.state || undefined,
+            };
+          }
+          return nm;
+        })
         .filter(Boolean);
+      setCustomerMetaMap(prev => ({ ...prev, ...nextMeta }));
 
       return Array.from(new Set(fetchedNames)).sort((a, b) => a.localeCompare(b));
     },
     refetchInterval: 15000,
     refetchOnWindowFocus: true,
   });
+
+  const lookupCustomerMeta = (name?: string) => {
+    if (!name || !name.trim()) return undefined;
+    const clean = name.trim().toLowerCase();
+    if (customerMetaMap[clean]) return customerMetaMap[clean];
+    const strip = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/\b(private\s+limited|pvt\s+ltd|pvt\s+limited|private\s+ltd|co\s+ltd|llp|limited|pvt|ltd|inc|corp)\b/gi, '')
+        .replace(/[^a-z0-9]/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const stripped = strip(clean);
+    if (!stripped) return undefined;
+    const entry = Object.entries(customerMetaMap).find(([k]) => {
+      const sk = strip(k);
+      return Boolean(sk && (sk === stripped || stripped.startsWith(sk) || sk.startsWith(stripped)));
+    });
+    return entry?.[1];
+  };
+
+  const formCustMeta = lookupCustomerMeta(formCustomerName);
+  const formPlaceOfSupply = resolvePlaceOfSupply({
+    deliveryAddress: formDeliveryLocation,
+    customerState: formCustMeta?.state || formExtractedJsonRef.current?.place_of_supply,
+    customerGstin:
+      formCustMeta?.gstin ||
+      formExtractedJsonRef.current?.customer_gst ||
+      formExtractedJsonRef.current?.gstin ||
+      formExtractedJsonRef.current?.gst,
+    customerAddress: formCustMeta?.address || formExtractedJsonRef.current?.customer_address,
+  });
+  const isFormInterState = formPlaceOfSupply.isInterState;
+
+  const editAiMeta = (selectedInquiry?.ai_extraction_json as any) || {};
+  const editCustMeta = lookupCustomerMeta(
+    editDetails?.companyName || selectedInquiry?.customer_name || selectedInquiry?.sender_name,
+  );
+  const editPlaceOfSupply = resolvePlaceOfSupply({
+    deliveryAddress:
+      editDetails?.deliveryLocation ||
+      selectedInquiry?.delivery_location ||
+      selectedInquiry?.deliveryLocation ||
+      editAiMeta?.delivery_location ||
+      editAiMeta?.deliveryLocation,
+    customerState: editCustMeta?.state || editAiMeta?.place_of_supply || editAiMeta?.customer?.state,
+    customerGstin: editCustMeta?.gstin || editAiMeta?.customer_gst || editAiMeta?.customer?.gst,
+    customerAddress:
+      editCustMeta?.address || editAiMeta?.customer_address || editAiMeta?.customer?.address,
+  });
+  const isEditInterState = editPlaceOfSupply.isInterState;
+
+  useEffect(() => {
+    setFormLineItems(prev =>
+      prev.map(item => {
+        const calc = calculateLineItem(
+          { ...item, amount: item.isManualAmount ? item.amount : 0 },
+          { isInterState: isFormInterState },
+        );
+        return {
+          ...item,
+          amount: calc.amount,
+          cgst_rate: calc.cgst_rate,
+          cgst_amount: calc.cgst_amount,
+          sgst_rate: calc.sgst_rate,
+          sgst_amount: calc.sgst_amount,
+          igst_rate: calc.igst_rate,
+          igst_amount: calc.igst_amount,
+          total_gst: calc.total_gst,
+          final_amount: calc.final_amount,
+        };
+      }),
+    );
+  }, [isFormInterState]);
+
+  useEffect(() => {
+    if (!editDetails?.lineItems) return;
+    setEditDetails(prev => {
+      if (!prev || !prev.lineItems) return prev;
+      const updated = prev.lineItems.map(item => {
+        const calc = calculateLineItem(
+          { ...item, amount: item.isManualAmount ? item.amount : 0 },
+          { isInterState: isEditInterState },
+        );
+        return {
+          ...item,
+          amount: calc.amount,
+          cgst_rate: calc.cgst_rate,
+          cgst_amount: calc.cgst_amount,
+          sgst_rate: calc.sgst_rate,
+          sgst_amount: calc.sgst_amount,
+          igst_rate: calc.igst_rate,
+          igst_amount: calc.igst_amount,
+          total_gst: calc.total_gst,
+          final_amount: calc.final_amount,
+        };
+      });
+      return { ...prev, lineItems: updated };
+    });
+  }, [isEditInterState]);
 
   const { data: rawDbProducts = [] } = useQuery<CatalogDbProduct[]>({
     queryKey: ['products-catalog'],
@@ -2368,7 +2487,9 @@ export default function InquiriesPage() {
       setSubmitting(true);
 
       const baseAmt = itemsToSave.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
-      const qBreakdown = calculateQuotationBreakdown(baseAmt, itemsToSave);
+      const qBreakdown = calculateQuotationBreakdown(baseAmt, itemsToSave, {
+        isInterState: isEditInterState,
+      });
 
       let summaryRequirement = '';
       if (itemsToSave.length > 0) {
@@ -2388,6 +2509,8 @@ export default function InquiriesPage() {
         customer_phone: editDetails.customerPhone,
         deliveryLocation: editDetails.deliveryLocation,
         delivery_location: editDetails.deliveryLocation,
+        place_of_supply: editPlaceOfSupply.label,
+        is_inter_state: isEditInterState,
         paymentTerms: editDetails.paymentTerms,
         payment_terms: editDetails.paymentTerms,
         lineItems: itemsToSave,
@@ -2396,8 +2519,11 @@ export default function InquiriesPage() {
         totalAmount: baseAmt,
         total_amount: baseAmt,
         subtotal: qBreakdown.subtotal,
-        gstAmount: qBreakdown.CGST + qBreakdown.SGST,
-        gst_amount: qBreakdown.CGST + qBreakdown.SGST,
+        cgst_amount: qBreakdown.CGST,
+        sgst_amount: qBreakdown.SGST,
+        igst_amount: qBreakdown.IGST,
+        gstAmount: qBreakdown.totalTax,
+        gst_amount: qBreakdown.totalTax,
         grandTotal: qBreakdown.grandTotal,
         grand_total: qBreakdown.grandTotal,
         media_urls: mediaUrlsPayload,
@@ -2835,7 +2961,9 @@ export default function InquiriesPage() {
     }
 
     const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
+    const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems, {
+      isInterState: isFormInterState,
+    });
     const totalTonnage = calculateTotalTonnageMt(formLineItems);
 
     try {
@@ -2843,9 +2971,22 @@ export default function InquiriesPage() {
 
       const lineItemsPayload = formLineItems.map(i => {
         const baseAmt = Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0));
-        const cgstAmt = i.cgst_amount !== undefined ? Number(i.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-        const sgstAmt = i.sgst_amount !== undefined ? Number(i.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-        const totalGst = Math.round((cgstAmt + sgstAmt) * 100) / 100;
+        const cgstAmt = isFormInterState
+          ? 0
+          : i.cgst_amount !== undefined
+            ? Number(i.cgst_amount)
+            : Math.round(baseAmt * 0.09 * 100) / 100;
+        const sgstAmt = isFormInterState
+          ? 0
+          : i.sgst_amount !== undefined
+            ? Number(i.sgst_amount)
+            : Math.round(baseAmt * 0.09 * 100) / 100;
+        const igstAmt = isFormInterState
+          ? i.igst_amount !== undefined && Number(i.igst_amount) > 0
+            ? Number(i.igst_amount)
+            : Math.round(baseAmt * 0.18 * 100) / 100
+          : 0;
+        const totalGst = Math.round((cgstAmt + sgstAmt + igstAmt) * 100) / 100;
         const finalAmt = i.final_amount !== undefined && Number(i.final_amount) > 0 ? Number(i.final_amount) : Math.round((baseAmt + totalGst) * 100) / 100;
         const resolvedHsn = i.hsn_code
           ? i.hsn_code.trim()
@@ -2860,10 +3001,12 @@ export default function InquiriesPage() {
           unit: normalizeUnit(i.unit) || 'MT',
           rate: Number(i.rate) || 0,
           amount: baseAmt,
-          cgst_rate: 9,
+          cgst_rate: isFormInterState ? 0 : 9,
           cgst_amount: cgstAmt,
-          sgst_rate: 9,
+          sgst_rate: isFormInterState ? 0 : 9,
           sgst_amount: sgstAmt,
+          igst_rate: isFormInterState ? 18 : 0,
+          igst_amount: igstAmt,
           total_gst: totalGst,
           final_amount: finalAmt,
           converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
@@ -2876,8 +3019,9 @@ export default function InquiriesPage() {
         customer: {
           name: customerName,
           phone: finalCustomerPhone,
-          gst: extractedJson?.customer_gst || null,
+          gst: formCustMeta?.gstin || extractedJson?.customer_gst || null,
           address: formDeliveryLocation.trim() || null,
+          state: formPlaceOfSupply.label,
         },
         companyName: customerName,
         customer_name: customerName,
@@ -2892,6 +3036,9 @@ export default function InquiriesPage() {
         subtotal: qBreakdown.subtotal,
         cgst_amount: qBreakdown.CGST,
         sgst_amount: qBreakdown.SGST,
+        igst_amount: qBreakdown.IGST,
+        is_inter_state: isFormInterState,
+        place_of_supply: formPlaceOfSupply.label,
         rounding: qBreakdown.rounding,
         delivery_location: formDeliveryLocation.trim(),
         deliveryLocation: formDeliveryLocation.trim(),
@@ -4030,34 +4177,37 @@ export default function InquiriesPage() {
                   <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th rowSpan={2} className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
-                        <th rowSpan={2} className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
+                        <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
                           HSN/SAC
                         </th>
-                        <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[20%] text-center align-middle">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center align-middle">
                           Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
                           Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th colSpan={2} className="px-3 py-1.5 border-r border-b border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest">
-                          18% GST
-                        </th>
-                        <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                        {isEditInterState ? (
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[16%] min-w-[110px]">
+                            IGST (18%)
+                          </th>
+                        ) : (
+                          <>
+                            <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                              CGST (9%)
+                            </th>
+                            <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                              SGST (9%)
+                            </th>
+                          </>
+                        )}
+                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
                           Amount (₹)
                         </th>
-                        <th rowSpan={2} className="px-2 py-3 text-center w-[3%] align-middle"></th>
-                      </tr>
-                      <tr>
-                        <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
-                          CGST (9%)
-                        </th>
-                        <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
-                          SGST (9%)
-                        </th>
+                        <th className="px-2 py-3 text-center w-[3%] align-middle"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
@@ -4093,7 +4243,7 @@ export default function InquiriesPage() {
                                   }
 
                                   const currentItem = { ...updated[idx], sku_text: newSku, dimensions: nextDim, hsn_code: finalHsn };
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
                                   updated[idx] = {
                                     ...currentItem,
                                     amount: calc.amount,
@@ -4101,6 +4251,8 @@ export default function InquiriesPage() {
                                     cgst_amount: calc.cgst_amount,
                                     sgst_rate: calc.sgst_rate,
                                     sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
                                     total_gst: calc.total_gst,
                                     final_amount: calc.final_amount,
                                   };
@@ -4145,7 +4297,7 @@ export default function InquiriesPage() {
                                     }
 
                                     const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
-                                    const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                    const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
                                     updated[idx] = {
                                       ...currentItem,
                                       amount: calc.amount,
@@ -4153,6 +4305,8 @@ export default function InquiriesPage() {
                                       cgst_amount: calc.cgst_amount,
                                       sgst_rate: calc.sgst_rate,
                                       sgst_amount: calc.sgst_amount,
+                                      igst_rate: calc.igst_rate,
+                                      igst_amount: calc.igst_amount,
                                       total_gst: calc.total_gst,
                                       final_amount: calc.final_amount,
                                     };
@@ -4221,7 +4375,7 @@ export default function InquiriesPage() {
                                   if (normalizeUnit(currentItem.unit) === 'MT') {
                                     currentItem.converted_mt = safeQ;
                                   }
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
                                   updated[idx] = {
                                     ...currentItem,
                                     amount: calc.amount,
@@ -4229,6 +4383,8 @@ export default function InquiriesPage() {
                                     cgst_amount: calc.cgst_amount,
                                     sgst_rate: calc.sgst_rate,
                                     sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
                                     total_gst: calc.total_gst,
                                     final_amount: calc.final_amount,
                                   };
@@ -4259,7 +4415,7 @@ export default function InquiriesPage() {
                                   } else {
                                     delete currentItem.converted_mt;
                                   }
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
                                   updated[idx] = {
                                     ...currentItem,
                                     amount: calc.amount,
@@ -4267,6 +4423,8 @@ export default function InquiriesPage() {
                                     cgst_amount: calc.cgst_amount,
                                     sgst_rate: calc.sgst_rate,
                                     sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
                                     total_gst: calc.total_gst,
                                     final_amount: calc.final_amount,
                                   };
@@ -4322,7 +4480,7 @@ export default function InquiriesPage() {
                                           }
                                         }
 
-                                        const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                        const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
                                         updated[idx] = {
                                           ...currentItem,
                                           amount: calc.amount,
@@ -4330,6 +4488,8 @@ export default function InquiriesPage() {
                                           cgst_amount: calc.cgst_amount,
                                           sgst_rate: calc.sgst_rate,
                                           sgst_amount: calc.sgst_amount,
+                                          igst_rate: calc.igst_rate,
+                                          igst_amount: calc.igst_amount,
                                           total_gst: calc.total_gst,
                                           final_amount: calc.final_amount,
                                         };
@@ -4365,7 +4525,7 @@ export default function InquiriesPage() {
                                   safeR = isNaN(parsed) || parsed < 0 ? 0 : parsed;
                                 }
                                 const currentItem = { ...updated[idx], rate: safeR };
-                                const calc = calculateLineItem({ ...currentItem, rate: typeof safeR === 'number' ? safeR : 0, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, rate: typeof safeR === 'number' ? safeR : 0, amount: 0 }, { isInterState: isEditInterState });
                                 updated[idx] = {
                                   ...currentItem,
                                   amount: calc.amount,
@@ -4373,6 +4533,8 @@ export default function InquiriesPage() {
                                   cgst_amount: calc.cgst_amount,
                                   sgst_rate: calc.sgst_rate,
                                   sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
                                   total_gst: calc.total_gst,
                                   final_amount: calc.final_amount,
                                 };
@@ -4395,42 +4557,66 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block mt-0.5">{fieldErrors[`rate_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
-                            {(() => {
-                              const baseAmt = Number(item.amount) || 0;
-                              const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                              return (
-                                <input
+                          {isEditInterState ? (
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const igst =
+                                  item.igst_amount !== undefined && Number(item.igst_amount) > 0
+                                    ? Number(item.igst_amount)
+                                    : Math.round(baseAmt * 0.18 * 100) / 100;
+                                return (
+                                  <input
                                     type="text"
                                     readOnly
                                     tabIndex={-1}
-                                    value={formatIndianCurrency(cgst, true)}
-                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
+                                    value={formatIndianCurrency(igst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
                                   />
-                              );
-                            })()}
-                          </td>
-                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
-                            {(() => {
-                              const baseAmt = Number(item.amount) || 0;
-                              const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                              return (
-                                <input
-                                    type="text"
-                                    readOnly
-                                    tabIndex={-1}
-                                    value={formatIndianCurrency(sgst, true)}
-                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
-                                  />
-                              );
-                            })()}
-                          </td>
+                                );
+                              })()}
+                            </td>
+                          ) : (
+                            <>
+                              <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                                {(() => {
+                                  const baseAmt = Number(item.amount) || 0;
+                                  const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                  return (
+                                    <input
+                                      type="text"
+                                      readOnly
+                                      tabIndex={-1}
+                                      value={formatIndianCurrency(cgst, true)}
+                                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                    />
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                                {(() => {
+                                  const baseAmt = Number(item.amount) || 0;
+                                  const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                  return (
+                                    <input
+                                      type="text"
+                                      readOnly
+                                      tabIndex={-1}
+                                      value={formatIndianCurrency(sgst, true)}
+                                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                    />
+                                  );
+                                })()}
+                              </td>
+                            </>
+                          )}
                           <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
                             {(() => {
                               const baseAmt = Number(item.amount) || 0;
-                              const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                              const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                              const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst) * 100) / 100;
+                              const cgst = isEditInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                              const sgst = isEditInterState ? 0 : (item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                              const igst = isEditInterState ? (item.igst_amount !== undefined && Number(item.igst_amount) > 0 ? Number(item.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100) : 0;
+                              const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst + igst) * 100) / 100;
                               return (
                                 <input
                                   type="number"
@@ -4442,18 +4628,21 @@ export default function InquiriesPage() {
                                     const rawA = val === '' ? 0 : parseFloat(val);
                                     const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                                     const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
-                                    const cgstA = Math.round(safeBase * 0.09 * 100) / 100;
-                                    const sgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                    const cgstA = isEditInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                    const sgstA = isEditInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                    const igstA = isEditInterState ? Math.round(safeBase * 0.18 * 100) / 100 : 0;
                                     const updated = [...(editDetails.lineItems || [])];
                                     updated[idx] = {
                                       ...updated[idx],
                                       amount: safeBase,
                                       isManualAmount: true,
-                                      cgst_rate: 9,
+                                      cgst_rate: isEditInterState ? 0 : 9,
                                       cgst_amount: cgstA,
-                                      sgst_rate: 9,
+                                      sgst_rate: isEditInterState ? 0 : 9,
                                       sgst_amount: sgstA,
-                                      total_gst: Math.round((cgstA + sgstA) * 100) / 100,
+                                      igst_rate: isEditInterState ? 18 : 0,
+                                      igst_amount: igstA,
+                                      total_gst: Math.round((cgstA + sgstA + igstA) * 100) / 100,
                                       final_amount: safeFinal,
                                     };
                                     const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
@@ -4492,7 +4681,7 @@ export default function InquiriesPage() {
                                       : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                                     const updated = [
                                       ...current,
-                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
+                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: isEditInterState ? 0 : 9, cgst_amount: 0, sgst_rate: isEditInterState ? 0 : 9, sgst_amount: 0, igst_rate: isEditInterState ? 18 : 0, igst_amount: 0, total_gst: 0, final_amount: 0 },
                                     ];
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
@@ -4516,7 +4705,9 @@ export default function InquiriesPage() {
                       : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
 
                     const subtotal = activeLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                    const qBreakdown = calculateQuotationBreakdown(subtotal, activeLineItems);
+                    const qBreakdown = calculateQuotationBreakdown(subtotal, activeLineItems, {
+                      isInterState: isEditInterState,
+                    });
 
                     const totalTonnage = calculateTotalTonnageMt(activeLineItems);
                     const formattedItemsInTotal = totalTonnage.formattedText;
@@ -4539,6 +4730,13 @@ export default function InquiriesPage() {
                             <span className="font-bold">Est. Total Weight: </span>
                             <span className="font-mono font-bold">{weightLabel}</span>
                           </p>
+                          <p className="mt-1 text-slate-600">
+                            <span className="font-bold text-slate-700">Place of Supply: </span>
+                            <span className="font-semibold">{editPlaceOfSupply.label}</span>
+                            <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                              {isEditInterState ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST 9% + SGST 9%)'}
+                            </span>
+                          </p>
                         </div>
 
                         <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
@@ -4546,14 +4744,23 @@ export default function InquiriesPage() {
                             <span className="font-medium text-slate-600">Sub Total</span>
                             <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
                           </div>
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">CGST (9%)</span>
-                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">SGST (9%)</span>
-                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
-                          </div>
+                          {qBreakdown.isInterState ? (
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">IGST (18%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedIGST}</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex justify-between items-center py-0.5">
+                                <span className="font-medium text-slate-600">CGST (9%)</span>
+                                <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                              </div>
+                              <div className="flex justify-between items-center py-0.5">
+                                <span className="font-medium text-slate-600">SGST (9%)</span>
+                                <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                              </div>
+                            </>
+                          )}
                           <div className="flex justify-between items-center py-0.5">
                             <span className="font-medium text-slate-600">Rounding</span>
                             <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
@@ -5382,34 +5589,37 @@ export default function InquiriesPage() {
                 <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th rowSpan={2} className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
-                      <th rowSpan={2} className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
                         HSN/SAC
                       </th>
-                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
                         Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
                         Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th colSpan={2} className="px-3 py-1.5 border-r border-b border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest">
-                        18% GST
-                      </th>
-                      <th rowSpan={2} className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                      {isFormInterState ? (
+                        <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[16%] min-w-[110px]">
+                          IGST (18%)
+                        </th>
+                      ) : (
+                        <>
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                            CGST (9%)
+                          </th>
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                            SGST (9%)
+                          </th>
+                        </>
+                      )}
+                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
                         Amount (₹)
                       </th>
-                      <th rowSpan={2} className="px-2 py-3 text-center w-[3%] align-middle"></th>
-                    </tr>
-                    <tr>
-                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
-                        CGST (9%)
-                      </th>
-                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
-                        SGST (9%)
-                      </th>
+                      <th className="px-2 py-3 text-center w-[3%] align-middle"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -5451,7 +5661,7 @@ export default function InquiriesPage() {
                                 }
 
                                 const currentItem = { ...updated[idx], sku_text: newSku, dimensions: nextDim, hsn_code: finalHsn };
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                 updated[idx] = {
                                   ...currentItem,
                                   amount: calc.amount,
@@ -5459,6 +5669,8 @@ export default function InquiriesPage() {
                                   cgst_amount: calc.cgst_amount,
                                   sgst_rate: calc.sgst_rate,
                                   sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
                                   total_gst: calc.total_gst,
                                   final_amount: calc.final_amount,
                                 };
@@ -5494,7 +5706,7 @@ export default function InquiriesPage() {
                                   }
 
                                   const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                   updated[idx] = {
                                     ...currentItem,
                                     amount: calc.amount,
@@ -5502,6 +5714,8 @@ export default function InquiriesPage() {
                                     cgst_amount: calc.cgst_amount,
                                     sgst_rate: calc.sgst_rate,
                                     sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
                                     total_gst: calc.total_gst,
                                     final_amount: calc.final_amount,
                                   };
@@ -5542,10 +5756,11 @@ export default function InquiriesPage() {
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
                                 let currentItem = { ...updated[idx], quantity: safeQ };
+                                delete currentItem.isManualAmount;
                                 if (normalizeUnit(currentItem.unit) === 'MT') {
                                   currentItem.converted_mt = safeQ;
                                 }
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                 updated[idx] = {
                                   ...currentItem,
                                   amount: calc.amount,
@@ -5553,6 +5768,8 @@ export default function InquiriesPage() {
                                   cgst_amount: calc.cgst_amount,
                                   sgst_rate: calc.sgst_rate,
                                   sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
                                   total_gst: calc.total_gst,
                                   final_amount: calc.final_amount,
                                 };
@@ -5568,12 +5785,13 @@ export default function InquiriesPage() {
                                 const updated = [...formLineItems];
                                 const currentItem = { ...updated[idx], unit: newUnit };
                                 delete currentItem.is_manual_mt;
+                                delete currentItem.isManualAmount;
                                 if (newUnit === 'MT') {
                                   currentItem.converted_mt = currentItem.quantity;
                                 } else {
                                   delete currentItem.converted_mt;
                                 }
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                 updated[idx] = {
                                   ...currentItem,
                                   amount: calc.amount,
@@ -5581,6 +5799,8 @@ export default function InquiriesPage() {
                                   cgst_amount: calc.cgst_amount,
                                   sgst_rate: calc.sgst_rate,
                                   sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
                                   total_gst: calc.total_gst,
                                   final_amount: calc.final_amount,
                                 };
@@ -5616,6 +5836,7 @@ export default function InquiriesPage() {
                                       const val = e.target.value;
                                       const updated = [...formLineItems];
                                       const currentItem = { ...updated[idx] };
+                                      delete currentItem.isManualAmount;
 
                                       if (val === '') {
                                         delete currentItem.converted_mt;
@@ -5630,7 +5851,7 @@ export default function InquiriesPage() {
                                         }
                                       }
 
-                                      const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                                      const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                                       updated[idx] = {
                                         ...currentItem,
                                         amount: calc.amount,
@@ -5638,6 +5859,8 @@ export default function InquiriesPage() {
                                         cgst_amount: calc.cgst_amount,
                                         sgst_rate: calc.sgst_rate,
                                         sgst_amount: calc.sgst_amount,
+                                        igst_rate: calc.igst_rate,
+                                        igst_amount: calc.igst_amount,
                                         total_gst: calc.total_gst,
                                         final_amount: calc.final_amount,
                                       };
@@ -5665,7 +5888,8 @@ export default function InquiriesPage() {
                               const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
                               const updated = [...formLineItems];
                               const currentItem = { ...updated[idx], rate: safeR };
-                              const calc = calculateLineItem({ ...currentItem, amount: 0 });
+                              delete currentItem.isManualAmount;
+                              const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
                               updated[idx] = {
                                 ...currentItem,
                                 amount: calc.amount,
@@ -5673,6 +5897,8 @@ export default function InquiriesPage() {
                                 cgst_amount: calc.cgst_amount,
                                 sgst_rate: calc.sgst_rate,
                                 sgst_amount: calc.sgst_amount,
+                                igst_rate: calc.igst_rate,
+                                igst_amount: calc.igst_amount,
                                 total_gst: calc.total_gst,
                                 final_amount: calc.final_amount,
                               };
@@ -5682,42 +5908,66 @@ export default function InquiriesPage() {
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                           />
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
-                          {(() => {
-                            const baseAmt = Number(item.amount) || 0;
-                            const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                            return (
-                              <input
-                                type="text"
-                                readOnly
-                                tabIndex={-1}
-                                value={formatIndianCurrency(cgst, true)}
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
-                              />
-                            );
-                          })()}
-                        </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
-                          {(() => {
-                            const baseAmt = Number(item.amount) || 0;
-                            const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                            return (
-                              <input
-                                type="text"
-                                readOnly
-                                tabIndex={-1}
-                                value={formatIndianCurrency(sgst, true)}
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
-                              />
-                            );
-                          })()}
-                        </td>
+                        {isFormInterState ? (
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                            {(() => {
+                              const baseAmt = Number(item.amount) || 0;
+                              const igst =
+                                item.igst_amount !== undefined && Number(item.igst_amount) > 0
+                                  ? Number(item.igst_amount)
+                                  : Math.round(baseAmt * 0.18 * 100) / 100;
+                              return (
+                                <input
+                                  type="text"
+                                  readOnly
+                                  tabIndex={-1}
+                                  value={formatIndianCurrency(igst, true)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                />
+                              );
+                            })()}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(cgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(sgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                          </>
+                        )}
                         <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
                           {(() => {
                             const baseAmt = Number(item.amount) || 0;
-                            const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                            const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
-                            const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst) * 100) / 100;
+                            const cgst = isFormInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                            const sgst = isFormInterState ? 0 : (item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                            const igst = isFormInterState ? (item.igst_amount !== undefined && Number(item.igst_amount) > 0 ? Number(item.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100) : 0;
+                            const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst + igst) * 100) / 100;
                             return (
                               <input
                                 id={`form-item-amount-${idx}`}
@@ -5730,18 +5980,21 @@ export default function InquiriesPage() {
                                   const rawA = val === '' ? 0 : parseFloat(val);
                                   const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
                                   const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
-                                  const cgstA = Math.round(safeBase * 0.09 * 100) / 100;
-                                  const sgstA = Math.round(safeBase * 0.09 * 100) / 100;
+                                  const cgstA = isFormInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                  const sgstA = isFormInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                  const igstA = isFormInterState ? Math.round(safeBase * 0.18 * 100) / 100 : 0;
                                   const updated = [...formLineItems];
                                   updated[idx] = {
                                     ...updated[idx],
                                     amount: safeBase,
                                     isManualAmount: true,
-                                    cgst_rate: 9,
+                                    cgst_rate: isFormInterState ? 0 : 9,
                                     cgst_amount: cgstA,
-                                    sgst_rate: 9,
+                                    sgst_rate: isFormInterState ? 0 : 9,
                                     sgst_amount: sgstA,
-                                    total_gst: Math.round((cgstA + sgstA) * 100) / 100,
+                                    igst_rate: isFormInterState ? 18 : 0,
+                                    igst_amount: igstA,
+                                    total_gst: Math.round((cgstA + sgstA + igstA) * 100) / 100,
                                     final_amount: safeFinal,
                                   };
                                   setFormLineItems(updated);
@@ -5772,7 +6025,7 @@ export default function InquiriesPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: 9, cgst_amount: 0, sgst_rate: 9, sgst_amount: 0, total_gst: 0, final_amount: 0 },
+                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: isFormInterState ? 0 : 9, cgst_amount: 0, sgst_rate: isFormInterState ? 0 : 9, sgst_amount: 0, igst_rate: isFormInterState ? 18 : 0, igst_amount: 0, total_gst: 0, final_amount: 0 },
                                   ];
                                   setFormLineItems(updated);
                                 }}
@@ -5791,7 +6044,9 @@ export default function InquiriesPage() {
                 {/* Standard Quotation Pricing Breakdown Layout */}
                 {(() => {
                   const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                  const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems);
+                  const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems, {
+                    isInterState: isFormInterState,
+                  });
 
                   const totalTonnage = calculateTotalTonnageMt(formLineItems);
                   const formattedItemsInTotal = totalTonnage.formattedText;
@@ -5799,8 +6054,17 @@ export default function InquiriesPage() {
                   return (
                     <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
                       <div className="text-xs text-slate-700 pt-1">
-                        <span className="font-bold text-slate-900">Items in Total = </span>
-                        <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        <div>
+                          <span className="font-bold text-slate-900">Items in Total = </span>
+                          <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        </div>
+                        <div className="mt-1 text-slate-600">
+                          <span className="font-bold text-slate-700">Place of Supply: </span>
+                          <span className="font-semibold">{formPlaceOfSupply.label}</span>
+                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                            {isFormInterState ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST 9% + SGST 9%)'}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
@@ -5808,14 +6072,23 @@ export default function InquiriesPage() {
                           <span className="font-medium text-slate-600">Sub Total</span>
                           <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
                         </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">CGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">SGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
-                        </div>
+                        {qBreakdown.isInterState ? (
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">IGST (18%)</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedIGST}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">CGST (9%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">SGST (9%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex justify-between items-center py-0.5">
                           <span className="font-medium text-slate-600">Rounding</span>
                           <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
@@ -5948,6 +6221,14 @@ export default function InquiriesPage() {
           setFormCustomerName(saved.companyName);
           setFormPhone(saved.mobile);
           setFormDeliveryLocation(saved.deliveryLocation);
+          setCustomerMetaMap(prev => ({
+            ...prev,
+            [saved.companyName.trim().toLowerCase()]: {
+              gstin: saved.gstin,
+              state: saved.customerState,
+              address: saved.deliveryLocation,
+            },
+          }));
           setShowAddCustomer(false);
           queryClient.setQueryData<string[]>(
             ['customer-names-list', effectivePhone, activeRole, activeMode],
@@ -6022,6 +6303,7 @@ export default function InquiriesPage() {
           });
           queryClient.invalidateQueries({ queryKey: ['products-catalog'] });
 
+          const activeIsInterState = activeSource === 'edit' ? isEditInterState : isFormInterState;
           const applySavedToRows = (prevItems: LineItemDetail[]) =>
             prevItems.map((row, idx) => {
               const rowSkuLower = (row.sku_text || '').trim().toLowerCase();
@@ -6041,7 +6323,7 @@ export default function InquiriesPage() {
                 dimensions: nextDim,
                 hsn_code: nextHsn,
               };
-              const calc = calculateLineItem({ ...updatedRow, amount: 0 });
+              const calc = calculateLineItem({ ...updatedRow, amount: 0 }, { isInterState: activeIsInterState });
               return {
                 ...updatedRow,
                 amount: calc.amount,
@@ -6049,6 +6331,9 @@ export default function InquiriesPage() {
                 cgst_amount: calc.cgst_amount,
                 sgst_rate: calc.sgst_rate,
                 sgst_amount: calc.sgst_amount,
+                igst_rate: calc.igst_rate,
+                igst_amount: calc.igst_amount,
+                is_inter_state: calc.is_inter_state,
                 total_gst: calc.total_gst,
                 final_amount: calc.final_amount,
               };

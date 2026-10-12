@@ -8,6 +8,7 @@ import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
+  resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
 
@@ -97,6 +98,13 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   const customerAddress = details.deliveryLocation || matchedCustomer?.address || matchedCustomer?.billing_address || (inquiry as any)?.customer_address || '';
   const customerGstin = (details as any)?.gstin || matchedCustomer?.gstin || matchedCustomer?.gst_number || (inquiry as any)?.customer_gstin || (inquiry as any)?.ai_extraction_json?.gstin || (inquiry as any)?.ai_extraction_json?.gst_number || '';
+  const placeOfSupply = resolvePlaceOfSupply({
+    deliveryLocation: details.deliveryLocation || (inquiry as any)?.delivery_location,
+    customerState: matchedCustomer?.customer_state || matchedCustomer?.state || (inquiry as any)?.ai_extraction_json?.place_of_supply,
+    customerGstin,
+    customerAddress,
+  });
+  const isInterState = placeOfSupply.isInterState;
 
   // Build line items list - prefer dynamic lineItems, fall back to single item
   const rawLineItems: LineItemDetail[] =
@@ -128,7 +136,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const activePdfItems = pricedLineItems.length > 0 ? pricedLineItems : [];
 
   const lineItems: LineItemDetail[] = activePdfItems.map(item => {
-    const calc = calculateLineItem(item);
+    const calc = calculateLineItem(item, { isInterState });
     return {
       ...item,
       amount: item.amount ? Number(item.amount) : calc.amount,
@@ -137,7 +145,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   // totalAmount = base pre-GST value; calculate GST breakdown
   const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const breakdown = calculateQuotationBreakdown(computedSubtotal);
+  const breakdown = calculateQuotationBreakdown(computedSubtotal, lineItems as any, { isInterState });
   const totalTonnage = calculateTotalTonnageMt(lineItems);
 
   const piNumber = (() => {
@@ -446,7 +454,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
                 <div className="flex items-baseline justify-between gap-6 pt-1">
                   <p className="font-medium text-slate-800 text-[12px]">
-                    Place Of Supply: <span className="font-normal text-slate-700">Maharashtra (27)</span>
+                    Place Of Supply: <span className="font-normal text-slate-700">{placeOfSupply.label}</span>
                   </p>
                   <div className="grid shrink-0 grid-cols-[85px_auto] gap-x-3 text-[12px]">
                     <span className="font-normal text-slate-700">Order Date :</span>
@@ -473,7 +481,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   {lineItems.map((item, idx) => {
                     const qty = Number(item.quantity) || 0;
                     const rate = Number(item.rate) || 0;
-                    const amt = Number(item.amount) || calculateLineItem(item).amount || 0;
+                    const amt = Number(item.amount) || calculateLineItem(item, { isInterState }).amount || 0;
                     const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
                     const unit = item.unit || 'MT';
 
@@ -529,15 +537,24 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   <span className="font-normal text-slate-900 text-right">{breakdown.formattedSubtotal}</span>
                 </div>
 
-                <div className="flex justify-between items-center py-0.5">
-                  <span className="font-normal text-slate-700">CGST9 (9%)</span>
-                  <span className="font-normal text-slate-900 text-right">{breakdown.formattedCGST}</span>
-                </div>
+                {isInterState ? (
+                  <div className="flex justify-between items-center py-0.5">
+                    <span className="font-normal text-slate-700">IGST18 (18%)</span>
+                    <span className="font-normal text-slate-900 text-right">{breakdown.formattedIGST}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center py-0.5">
+                      <span className="font-normal text-slate-700">CGST9 (9%)</span>
+                      <span className="font-normal text-slate-900 text-right">{breakdown.formattedCGST}</span>
+                    </div>
 
-                <div className="flex justify-between items-center py-0.5">
-                  <span className="font-normal text-slate-700">SGST9 (9%)</span>
-                  <span className="font-normal text-slate-900 text-right">{breakdown.formattedSGST}</span>
-                </div>
+                    <div className="flex justify-between items-center py-0.5">
+                      <span className="font-normal text-slate-700">SGST9 (9%)</span>
+                      <span className="font-normal text-slate-900 text-right">{breakdown.formattedSGST}</span>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex justify-between items-center py-0.5">
                   <span className="font-normal text-slate-700">Rounding</span>
