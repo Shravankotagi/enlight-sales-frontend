@@ -242,6 +242,7 @@ export const employeesApi = {
   create: (data: any) => API.post('/employees', data),
   update: (id: string, data: any) => API.patch(`/employees/${id}`, data),
   deactivate: (id: string) => API.patch(`/employees/${id}/deactivate`),
+  delete: (id: string) => API.delete(`/employees/${id}`),
 };
 
 export const chatbotApi = {

@@ -156,14 +156,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
       <div
-        className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-slate-900 text-white transition-all duration-300 flex flex-col`}
+        className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-[#06122E] text-white transition-all duration-300 flex flex-col`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           {sidebarOpen && (
-            <div>
-              <h1 className="text-lg font-bold text-white">Enlight Sales</h1>
-              <p className="text-xs text-slate-400">Metals OS</p>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img src="/em-logo.png" alt="" className="h-9 w-9 shrink-0 object-contain" />
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-white">Enlight Sigma</h1>
+                
+              </div>
             </div>
           )}
           <button

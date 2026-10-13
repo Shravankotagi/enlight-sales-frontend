@@ -18,7 +18,7 @@ export default function IntelligencePage() {
   const salespersonPhone = effectivePhone || undefined;
 
   useEffect(() => {
-    document.title = 'Intelligence Center - Enlight Sales OS';
+    document.title = 'Intelligence Center - Enlight Sigma';
   }, []);
 
   // ── Real Data Queries ───────────────────────────────────────────────────────

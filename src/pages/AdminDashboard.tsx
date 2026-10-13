@@ -113,7 +113,7 @@ export default function AdminDashboard() {
   const toDate = dateRange.to || formatLocalDate();
 
   useEffect(() => {
-    document.title = 'Admin Overview - Enlight Sales OS';
+    document.title = 'Admin Overview - Enlight Sigma';
   }, []);
 
   // Fetch employees list

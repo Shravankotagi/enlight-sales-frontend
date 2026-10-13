@@ -1236,7 +1236,7 @@ export default function InquiriesPage() {
   }, [location.search]);
 
   useEffect(() => {
-    document.title = viewMode === 'pipeline' ? 'Pipeline - Enlight Sales OS' : 'Inquiries - Enlight Sales OS';
+    document.title = viewMode === 'pipeline' ? 'Pipeline - Enlight Sigma' : 'Inquiries - Enlight Sigma';
   }, [viewMode]);
 
   const [showModal, setShowModal] = useState(false);

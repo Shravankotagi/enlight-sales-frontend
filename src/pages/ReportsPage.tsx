@@ -19,7 +19,7 @@ export default function ReportsPage() {
   });
 
   useEffect(() => {
-    document.title = 'Reports - Enlight Sales OS';
+    document.title = 'Reports - Enlight Sigma';
   }, []);
 
   const getParams = () => {
