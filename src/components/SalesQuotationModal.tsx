@@ -5,6 +5,7 @@ import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
+  formatLineItemWeightMt,
   resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -230,11 +231,9 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white text-slate-900">
                 {items.map((item, idx) => {
-                  const qty = Number(item.quantity || 0);
                   const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
                   const amt = Number(item.amount) || calculateLineItem({ ...item, rate }, { isInterState }).amount || 0;
                   const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
-                  const unit = item.unit || 'MT';
 
                   return (
                     <tr key={idx} className="hover:bg-slate-50/70">
@@ -247,8 +246,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                       </td>
                       <td className="px-3 py-3 text-center font-mono text-slate-600 text-xs">{hsn}</td>
                       <td className="px-4 py-3 text-right">
-                        <div className="font-bold text-slate-900 font-mono text-xs">{formatIndianCurrency(qty, true)}</div>
-                        <div className="text-[10px] text-slate-500 font-semibold">{unit}</div>
+                        <div className="font-bold text-slate-900 font-mono text-xs">{formatLineItemWeightMt(item).text}</div>
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-slate-800 text-xs">
                         {rate > 0 ? formatIndianCurrency(rate, true) : '-'}
