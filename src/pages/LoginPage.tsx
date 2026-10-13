@@ -88,7 +88,7 @@ export default function LoginPage() {
             <Sparkles size={26} className="text-white" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            Enlight Sales OS
+            Enlight Sigma
           </h1>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1.5 flex items-center justify-center gap-1.5">
             <span>Enlight Metals Private Limited</span>

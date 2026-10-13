@@ -189,7 +189,7 @@ export default function CustomersPage() {
   };
 
   useEffect(() => {
-    document.title = 'Customer Health - Enlight Sales OS';
+    document.title = 'Customer Health - Enlight Sigma';
   }, []);
 
   // Fetch employees for salesperson name lookup

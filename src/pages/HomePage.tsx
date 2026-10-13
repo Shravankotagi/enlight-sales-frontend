@@ -268,7 +268,7 @@ export default function HomePage() {
   const [activeBarHover, setActiveBarHover] = useState<number | null>(null);
 
   useEffect(() => {
-    document.title = 'Home Dashboard - Enlight Sales OS';
+    document.title = 'Home Dashboard - Enlight Sigma';
   }, []);
 
   // 1. KRA Action Queue Query

@@ -584,7 +584,7 @@ export default function AssistantPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold text-gray-900 tracking-tight">
-                Enlight Sales AI Assistant
+                Enlight Sigma AI Assistant
               </h1>
               <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full text-xs font-semibold">
                 v1.0 Ready
