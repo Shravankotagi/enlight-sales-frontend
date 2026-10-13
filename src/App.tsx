@@ -29,7 +29,10 @@ function AppRoutes() {
   const prevPathRef = useRef(location.pathname);
   useEffect(() => {
     // Only clear impersonation if we navigate TO /admin from a different page
-    if (location.pathname === '/admin' && prevPathRef.current !== '/admin') {
+    if (
+      (location.pathname === '/admin' || location.pathname === '/control-panel') &&
+      prevPathRef.current !== location.pathname
+    ) {
       clearViewingAs();
     }
     prevPathRef.current = location.pathname;
@@ -38,7 +41,10 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/admin" element={<AdminSelectionPage />} />
+      <Route
+        path="/admin"
+        element={isAdmin ? <Navigate to="/control-panel" replace /> : <AdminSelectionPage />}
+      />
       <Route path="/404" element={<NotFoundPage />} />
 
       {/* Authenticated Layout Hierarchy */}
@@ -62,6 +68,7 @@ function AppRoutes() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
         {isAdmin && <Route path="/admin-dashboard" element={<AdminDashboard />} />}
+        {isAdmin && <Route path="/control-panel" element={<AdminSelectionPage />} />}
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

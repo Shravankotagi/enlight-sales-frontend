@@ -823,7 +823,7 @@ export default function HomePage() {
             <button
               onClick={() => {
                 clearViewingAs();
-                navigate('/admin');
+                navigate('/control-panel');
               }}
               className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
               title="Return to Admin Control Center"
@@ -838,20 +838,6 @@ export default function HomePage() {
 
         {canSwitchRole && (
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            {isAdminUser && (
-              <button
-                onClick={() => {
-                  clearViewingAs();
-                  navigate('/admin');
-                }}
-                className="flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-300 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
-                title="Go to Salesperson Selection Page"
-              >
-                <Users size={14} className="text-blue-600" />
-                Salesperson Selection
-              </button>
-            )}
-
             {isViewingPersonal ? (
               <button
                 onClick={handleSwitchToExecutive}

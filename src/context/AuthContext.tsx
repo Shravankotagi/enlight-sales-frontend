@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handlePopState = () => {
-      if (window.location.pathname === '/admin') {
+      if (window.location.pathname === '/admin' || window.location.pathname === '/control-panel') {
         sessionStorage.removeItem('enlight_viewing_as');
         sessionStorage.removeItem('enlight_active_chat_session_id');
         setViewingAsState(null);
