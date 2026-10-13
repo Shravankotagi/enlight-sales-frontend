@@ -8,6 +8,7 @@ import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
+  formatLineItemWeightMt,
   resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -486,11 +487,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-900 bg-white">
                   {lineItems.map((item, idx) => {
-                    const qty = Number(item.quantity) || 0;
                     const rate = Number(item.rate) || 0;
                     const amt = Number(item.amount) || calculateLineItem(item, { isInterState }).amount || 0;
                     const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
-                    const unit = item.unit || 'MT';
 
                     return (
                       <tr key={idx} className="align-top">
@@ -507,7 +506,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                         </td>
                         <td className="px-3 py-3 text-center font-normal text-slate-700 text-[12px]">{hsn}</td>
                         <td className="px-4 py-3 text-right font-normal text-slate-900 text-[12px] whitespace-nowrap">
-                          {formatIndianCurrency(qty, true)} {unit}
+                          {formatLineItemWeightMt(item).text}
                         </td>
                         <td className="px-4 py-3 text-right font-normal text-slate-800 text-[12px]">
                           {rate > 0 ? formatIndianCurrency(rate, true) : '0.00'}
