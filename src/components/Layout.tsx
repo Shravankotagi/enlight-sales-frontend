@@ -8,6 +8,7 @@ import {
   X,
   Brain,
   ShieldAlert,
+  Settings,
   AlertTriangle,
   MapPin,
   ShoppingBag,
@@ -48,7 +49,7 @@ function EmployeeFooter() {
 
   const handleBackToAdmin = () => {
     clearViewingAs();
-    navigate('/admin');
+    navigate(isAdmin ? '/control-panel' : '/admin');
   };
 
   // Always reflect the user's own true identity & role (never overridden by impersonated user's role)
@@ -134,7 +135,10 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const showAdminTab = isAdmin && !isImpersonatingOther;
   const visibleItems = [
     ...(showAdminTab
-      ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }]
+      ? [
+          { path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert },
+          { path: '/control-panel', label: 'Control Panel', icon: Settings },
+        ]
       : []),
     ...navItems,
   ];

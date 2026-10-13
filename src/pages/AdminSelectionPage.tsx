@@ -123,8 +123,8 @@ export default function AdminSelectionPage() {
           );
           setEmployees(team);
         } else {
-          // Admin sees all employees including other Admins, Sales Managers, and Salespersons
-          setEmployees(activeList);
+          // Admin sees every employee, including deactivated accounts.
+          setEmployees(rawList);
         }
       })
       .catch((err) => {
@@ -201,6 +201,7 @@ export default function AdminSelectionPage() {
       employee_id: emp.employee_id,
       manager_id: matchedMgrId,
       manager_phone: emp.manager_phone || '',
+      is_active: emp.is_active !== false,
     });
     setShowModal(true);
   };
@@ -329,13 +330,21 @@ export default function AdminSelectionPage() {
 
   const handleDeactivate = async () => {
     if (!form.id) return;
-    const confirmMsg = `Are you sure you want to deactivate ${form.name}? They will no longer be able to log in.`;
+    const turningOn = form.is_active === false;
+    const confirmMsg = turningOn
+      ? `Activate ${form.name}? They will be able to log in again.`
+      : `Are you sure you want to deactivate ${form.name}? They will no longer be able to log in.`;
     if (!window.confirm(confirmMsg)) return;
 
     setFormLoading(true);
     try {
-      await employeesApi.deactivate(form.id);
-      setFormSuccess(`${form.name} deactivated successfully.`);
+      if (turningOn) {
+        await employeesApi.update(form.id, { is_active: true });
+        setFormSuccess(`${form.name} activated successfully.`);
+      } else {
+        await employeesApi.deactivate(form.id);
+        setFormSuccess(`${form.name} deactivated successfully.`);
+      }
       fetchEmployees();
       setTimeout(() => {
         handleCloseModal();
@@ -421,8 +430,8 @@ export default function AdminSelectionPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className={isAdmin ? 'space-y-6 animate-fade-in pb-12 font-sans text-slate-900' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
+      <div className={isAdmin ? 'space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
         {/* Top Executive Header Card */}
         <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -484,25 +493,6 @@ export default function AdminSelectionPage() {
 
               {isAdmin && (
                 <>
-                  <button
-                    onClick={handleViewPersonalDashboard}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-blue-500/20 active:scale-95 cursor-pointer"
-                    title="Switch to My Personal Salesperson Dashboard (Your Individual Accounts & Targets)"
-                  >
-                    <UserCheck size={15} />
-                    <span>My Salesperson Dashboard</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      clearViewingAs();
-                      navigate('/admin-dashboard');
-                    }}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="Open Company-wide Admin Overview Dashboard"
-                  >
-                    <ShieldAlert size={15} className="text-blue-600" />
-                    <span>Admin Overview</span>
-                  </button>
                   <button
                     onClick={() => setShowImportModal(true)}
                     className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
@@ -901,6 +891,11 @@ export default function AdminSelectionPage() {
                                     You
                                   </span>
                                 )}
+                                {emp.is_active === false && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 font-bold border border-rose-200">
+                                    Deactivated
+                                  </span>
+                                )}
                               </div>
                               <span className="font-mono text-slate-400 text-[11px]">
                                 {emp.employee_id}
@@ -1049,6 +1044,11 @@ export default function AdminSelectionPage() {
                             {emp.id === employee?.id && (
                               <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-blue-100 text-blue-800 font-bold border border-blue-200">
                                 You
+                              </span>
+                            )}
+                            {emp.is_active === false && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 font-bold border border-rose-200">
+                                Deactivated
                               </span>
                             )}
                           </div>
@@ -1311,9 +1311,13 @@ export default function AdminSelectionPage() {
                       type="button"
                       onClick={handleDeactivate}
                       disabled={formLoading}
-                      className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                      className={`px-3.5 py-2.5 border rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer ${
+                        form.is_active === false
+                          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                          : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                      }`}
                     >
-                      Deactivate
+                      {form.is_active === false ? 'Activate' : 'Deactivate'}
                     </button>
                   )}
                   <button
