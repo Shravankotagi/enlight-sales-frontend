@@ -2,6 +2,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { customersApi, employeesApi } from '../lib/api';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useState, useMemo } from 'react';
 import {
   ChevronLeft,
@@ -34,7 +35,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
+import {
+  calculateOrdersTotalTonnage,
+  getOrderTonnage,
+  INDIAN_GST_STATES,
+  resolveCustomerState,
+} from '../utils/pricingEngine';
 
 function safeStr(val: any): string {
   if (val === null || val === undefined) return '';
@@ -303,12 +309,12 @@ function CustomerProfilePageContent() {
 
   // Fetch employees for rep mapping
   const { data: rawEmployees = [] } = useQuery<any[]>({
-    queryKey: ['employees-list-customers'],
+    queryKey: queryKeys.employeesDirectory,
     queryFn: async () => {
       const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+      return normalizeListResponse(res?.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const safeEmployees = Array.isArray(rawEmployees) ? rawEmployees : [];
@@ -439,12 +445,20 @@ function CustomerProfilePageContent() {
 
   const handleOpenEdit = () => {
     if (!customer) return;
+    const derivedState =
+      customer.customer_state ||
+      resolveCustomerState({
+        gstin: customer.customer_gst,
+        address: customer.customer_address || customer.address,
+      })?.label ||
+      '';
     setEditForm({
       customer_name: customer.customer_name || '',
       contact_person: customer.contact_person || '',
       customer_phone: customer.customer_phone || '',
       customer_gst: customer.customer_gst || '',
       customer_address: customer.customer_address || customer.address || '',
+      customer_state: derivedState,
       assigned_salesperson_phone: customer.assigned_salesperson_phone || '',
       avg_order_frequency_days: customer.avg_order_frequency_days || 30,
       segment: customer.segment || 'new',
@@ -706,6 +720,25 @@ function CustomerProfilePageContent() {
                   <span className="inline-flex items-center gap-1 font-medium text-slate-500">
                     <MapPin size={12} className="text-slate-400" />
                     {customer.customer_address}
+                  </span>
+                )}
+                {(customer.customer_state ||
+                  resolveCustomerState({
+                    gstin: customer.customer_gst,
+                    address: customer.customer_address,
+                  })?.label) && (
+                  <span className="font-semibold text-blue-700 inline-flex items-center gap-1 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                    State:{' '}
+                    {customer.customer_state ||
+                      resolveCustomerState({
+                        gstin: customer.customer_gst,
+                        address: customer.customer_address,
+                      })?.label}
+                  </span>
+                )}
+                {customer.customer_gst && (
+                  <span className="font-mono font-semibold text-slate-600 inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md">
+                    GSTIN: {customer.customer_gst}
                   </span>
                 )}
               </div>
@@ -1562,10 +1595,65 @@ function CustomerProfilePageContent() {
                   <input
                     type="text"
                     value={editForm.customer_gst}
-                    onChange={e =>
-                      setEditForm({ ...editForm, customer_gst: e.target.value })
-                    }
+                    onChange={e => {
+                      const nextGst = e.target.value;
+                      const gstState = resolveCustomerState({ gstin: nextGst });
+                      setEditForm({
+                        ...editForm,
+                        customer_gst: nextGst,
+                        customer_state: gstState?.label || editForm.customer_state,
+                      });
+                    }}
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono transition-all shadow-2xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    State (Place of Supply)
+                  </label>
+                  <select
+                    value={editForm.customer_state || ''}
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        customer_state: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    <option value="">Auto-detect from GSTIN / Address</option>
+                    {INDIAN_GST_STATES.map(st => (
+                      <option key={st.code} value={st.label}>
+                        {st.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Registered Address
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.customer_address}
+                    onChange={e => {
+                      const nextAddr = e.target.value;
+                      const derivedState = !editForm.customer_state
+                        ? resolveCustomerState({
+                            gstin: editForm.customer_gst,
+                            address: nextAddr,
+                          })?.label || ''
+                        : editForm.customer_state;
+                      setEditForm({
+                        ...editForm,
+                        customer_address: nextAddr,
+                        customer_state: derivedState,
+                      });
+                    }}
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                   />
                 </div>
 
@@ -1585,23 +1673,6 @@ function CustomerProfilePageContent() {
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">
-                  Registered Address
-                </label>
-                <input
-                  type="text"
-                  value={editForm.customer_address}
-                  onChange={e =>
-                    setEditForm({
-                      ...editForm,
-                      customer_address: e.target.value,
-                    })
-                  }
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
-                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

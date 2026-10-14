@@ -4,7 +4,7 @@ import { Home } from 'lucide-react';
 
 export default function NotFoundPage() {
   useEffect(() => {
-    document.title = '404 - Enlight Sales OS';
+    document.title = '404 - Enlight Sigma';
   }, []);
 
   const navigate = useNavigate();

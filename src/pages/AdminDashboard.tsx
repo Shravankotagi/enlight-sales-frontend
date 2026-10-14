@@ -1,24 +1,107 @@
-import { useQuery } from '@tanstack/react-query';
-import { reportsApi, inquiriesApi, dealsApi, employeesApi } from '../lib/api';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  reportsApi,
+  dealsApi,
+  employeesApi,
+  ordersApi,
+  visitsApi,
+  complaintsApi,
+} from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import SalesQuotationModal from '../components/SalesQuotationModal';
 import { formatLocalDate } from '../utils/dateUtils';
-import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
+import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
   ChevronRight, Calendar, Users, RefreshCw,
-  ArrowUpRight, Award, AlertCircle, Layers,
+  ArrowUpRight, Award, Layers,
   Plus, Truck, Sparkles,
-  Activity, CheckCircle2
+  Activity, Info
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
+import { useAuth } from '../context/AuthContext';
+import SyncBiginButton from '../components/SyncBiginButton';
+
+const normalizePhone = (phone?: string | null) =>
+  String(phone || '').replace(/\D/g, '').slice(-10);
+
+const unwrapListResponse = (response: any): any[] => {
+  const raw = response?.data;
+  if (Array.isArray(raw)) return raw;
+  return Array.isArray(raw?.data) ? raw.data : [];
+};
+
+const getTargetMonths = (dateRange: DateFilterRange): number => {
+  if (dateRange.preset === 'monthly') return 1;
+  if (!dateRange.from || !dateRange.to) return 1;
+
+  const from = new Date(`${dateRange.from}T00:00:00`);
+  const to = new Date(`${dateRange.to}T00:00:00`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 1;
+
+  return Math.max(
+    1,
+    (to.getFullYear() - from.getFullYear()) * 12 +
+      to.getMonth() -
+      from.getMonth() +
+      1,
+  );
+};
+
+const buildOrderLeaderboard = (
+  salespeople: any[],
+  orders: any[],
+  visits: any[],
+  complaints: any[],
+  dateRange: DateFilterRange,
+) => {
+  const targetMonths = getTargetMonths(dateRange);
+  const tonnageTarget = 40 * targetMonths;
+
+  return salespeople.map((salesperson: any) => {
+    const phone = normalizePhone(salesperson.phone);
+    const repOrders = orders.filter(
+      (order: any) => normalizePhone(order.salesperson_phone) === phone,
+    );
+    const repVisits = visits.filter(
+      (visit: any) => normalizePhone(visit.salesperson_phone) === phone,
+    );
+    const repComplaints = complaints.filter(
+      (complaint: any) =>
+        normalizePhone(complaint.reported_by) === phone &&
+        complaint.status !== 'resolved',
+    );
+    const deliveredTonnage = repOrders.reduce(
+      (sum: number, order: any) => sum + getOrderTonnage(order),
+      0,
+    );
+    const orderPoints = Math.min(40, repOrders.length * 4);
+    const visitPoints = Math.min(30, Math.round((repVisits.length / 40) * 30));
+    const tonnagePoints = Math.min(
+      30,
+      Math.round((deliveredTonnage / tonnageTarget) * 30),
+    );
+    const complaintPenalty = Math.min(20, repComplaints.length * 10);
+
+    return {
+      ...salesperson,
+      ordersCount: repOrders.length,
+      visitsCount: repVisits.length,
+      complaintsCount: repComplaints.length,
+      deliveredTonnage: Math.round(deliveredTonnage * 10) / 10,
+      kra_score: Math.max(
+        0,
+        Math.min(100, orderPoints + visitPoints + tonnagePoints - complaintPenalty),
+      ),
+    };
+  }).sort((a, b) => b.kra_score - a.kra_score);
+};
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { setViewingAs } = useAuth();
   const [selectedPhone, setSelectedPhone] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
@@ -26,82 +109,150 @@ export default function AdminDashboard() {
     to: formatLocalDate(),
   });
 
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  const years = [2025, 2026, 2027];
-
   const fromDate = dateRange.from || '2000-01-01';
   const toDate = dateRange.to || formatLocalDate();
 
   useEffect(() => {
-    document.title = 'Admin Overview - Enlight Sales OS';
+    document.title = 'Admin Overview - Enlight Sigma';
   }, []);
 
   // Fetch employees list
-  const { data: employeesRes } = useQuery({
-    queryKey: ['admin-employees-list'],
-    queryFn: () => employeesApi.getAll().then(r => r.data),
+  const { data: employeesRes = [], refetch: refetchEmployees } = useQuery({
+    queryKey: queryKeys.employeesDirectory,
+    queryFn: () => employeesApi.getAll().then(r => normalizeListResponse(r.data)).catch(() => []),
+    staleTime: 5 * 60 * 1000,
   });
 
-  const salespeople = (employeesRes?.data || employeesRes || []).filter(
+  const salespeople = (Array.isArray(employeesRes) ? employeesRes : []).filter(
     (e: any) => e.role === 'salesperson' || e.role === 'sales_lead'
   );
 
-  const selectedSalesperson = salespeople.find((s: any) => s.phone === selectedPhone);
+  const selectedSalesperson = salespeople.find(
+    (s: any) => normalizePhone(s.phone) === normalizePhone(selectedPhone),
+  );
+
+  const handleDetailedAnalytics = () => {
+    if (selectedSalesperson) {
+      setViewingAs({
+        ...selectedSalesperson,
+        role: 'salesperson',
+        original_role: selectedSalesperson.original_role || selectedSalesperson.role,
+        mode: 'personal',
+      });
+      navigate('/inquiries?returnTo=/admin-dashboard');
+      return;
+    }
+    navigate('/pipeline');
+  };
 
   const queryParams = {
     ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
-    month: dateRange.preset === 'monthly' ? dateRange.month : selectedMonth,
-    year: dateRange.preset === 'monthly' ? dateRange.year : selectedYear,
     from: fromDate,
     to: toDate,
   };
 
   // Queries with dynamic parameters
   const { data: monthly, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery({
-    queryKey: ['admin-monthly', selectedPhone, selectedMonth, selectedYear, dateRange],
+    queryKey: ['admin-monthly', selectedPhone, dateRange],
     queryFn: () => reportsApi.getMonthly(queryParams).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
-    queryKey: ['admin-funnel', selectedPhone, selectedMonth, selectedYear, dateRange],
+    queryKey: ['admin-funnel', selectedPhone, dateRange],
     queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
-    queryKey: ['admin-sku', selectedPhone, selectedMonth, selectedYear, dateRange],
+    queryKey: ['admin-sku', selectedPhone, dateRange],
     queryFn: () => reportsApi.getSku(queryParams).then(r => r.data?.data || r.data),
-  });
-
-  const { data: salesperson, isLoading: salespersonLoading, refetch: refetchSalesperson } = useQuery({
-    queryKey: ['admin-salesperson', selectedMonth, selectedYear, dateRange],
-    queryFn: () => reportsApi.getSalesperson({ month: selectedMonth, year: selectedYear, from: fromDate, to: toDate }).then(r => r.data?.data || r.data),
-  });
-
-  const { data: inquiries, isLoading: inquiriesLoading, refetch: refetchInquiries } = useQuery({
-    queryKey: ['admin-inquiries-queue'],
-    queryFn: () => inquiriesApi.getReviewQueue().then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
   const { data: deals, isLoading: dealsLoading, refetch: refetchDeals } = useQuery({
-    queryKey: ['admin-recent-deals', selectedPhone, selectedMonth, selectedYear, dateRange],
+    queryKey: ['admin-recent-deals', selectedPhone, dateRange],
     queryFn: () => dealsApi.getAll({ ...queryParams, from: fromDate, to: toDate }).then(r => r.data?.data || r.data),
+    placeholderData: keepPreviousData,
   });
 
-  const [selectedQuotationDeal, setSelectedQuotationDeal] = useState<any | null>(null);
+  const { data: leaderboardOrders, isLoading: leaderboardOrdersLoading, refetch: refetchLeaderboardOrders } = useQuery({
+    queryKey: ['admin-leaderboard-orders', selectedPhone, dateRange],
+    queryFn: () =>
+      ordersApi
+        .getAll({
+          ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
+          from: fromDate,
+          to: toDate,
+        })
+        .then(unwrapListResponse),
+  });
 
-  const handleRefreshAll = () => {
-    refetchMonthly();
-    refetchFunnel();
-    refetchSku();
-    refetchSalesperson();
-    refetchInquiries();
-    refetchDeals();
+  const { data: leaderboardVisits, isLoading: leaderboardVisitsLoading, refetch: refetchLeaderboardVisits } = useQuery({
+    queryKey: ['admin-leaderboard-visits', selectedPhone, dateRange],
+    queryFn: () =>
+      visitsApi
+        .getAll({
+          ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
+          from: fromDate,
+          to: toDate,
+        })
+        .then(unwrapListResponse),
+  });
+
+  const { data: leaderboardComplaints, isLoading: leaderboardComplaintsLoading, refetch: refetchLeaderboardComplaints } = useQuery({
+    queryKey: ['admin-leaderboard-complaints', selectedPhone, dateRange],
+    queryFn: () =>
+      complaintsApi
+        .getAll({
+          ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
+          from: fromDate,
+          to: toDate,
+        })
+        .then(unwrapListResponse),
+  });
+
+  const [isScoreInfoOpen, setIsScoreInfoOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (!isScoreInfoOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsScoreInfoOpen(false);
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isScoreInfoOpen]);
+
+  const handleRefreshAll = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchEmployees(),
+        refetchMonthly(),
+        refetchFunnel(),
+        refetchSku(),
+        refetchDeals(),
+        refetchLeaderboardOrders(),
+        refetchLeaderboardVisits(),
+        refetchLeaderboardComplaints(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  const isLoading = monthlyLoading || funnelLoading || skuLoading || salespersonLoading || inquiriesLoading || dealsLoading;
+  const isLoading =
+    monthlyLoading ||
+    funnelLoading ||
+    skuLoading ||
+    dealsLoading ||
+    leaderboardOrdersLoading ||
+    leaderboardVisitsLoading ||
+    leaderboardComplaintsLoading;
 
   if (isLoading) return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
@@ -121,10 +272,52 @@ export default function AdminDashboard() {
     </div>
   );
 
-  const spList = salesperson?.salespersons || salesperson || [];
-  const reviewQueue = inquiries?.data || inquiries || [];
+  const leaderboardRows = buildOrderLeaderboard(
+    salespeople,
+    Array.isArray(leaderboardOrders) ? leaderboardOrders : [],
+    Array.isArray(leaderboardVisits) ? leaderboardVisits : [],
+    Array.isArray(leaderboardComplaints) ? leaderboardComplaints : [],
+    dateRange,
+  );
+  const getLeaderboardDisplayName = (sp: any) => {
+    const apiName = String(sp?.name || '').trim();
+    if (apiName && apiName !== 'Unknown' && apiName !== 'Sales Representative') {
+      return apiName;
+    }
+
+    const phone = normalizePhone(sp?.salesperson_phone);
+    const employee = salespeople.find(
+      (candidate: any) => normalizePhone(candidate.phone) === phone,
+    );
+    return (
+      employee?.name ||
+      sp?.employee_id ||
+      employee?.employee_id ||
+      sp?.salesperson_phone ||
+      phone ||
+      'Sales Representative'
+    );
+  };
   const rawDeals = Array.isArray(deals) ? deals : (Array.isArray(deals?.data) ? deals.data : []);
-  const recentDeals = rawDeals.slice(0, 6);
+  const recentOrders = (Array.isArray(leaderboardOrders) ? leaderboardOrders : [])
+    .slice()
+    .sort((a: any, b: any) => {
+      const dateA = new Date(a.won_at || a.created_at || a.po_date || 0).getTime();
+      const dateB = new Date(b.won_at || b.created_at || b.po_date || 0).getTime();
+      return dateB - dateA;
+    })
+    .slice(0, 6);
+  const getOrderDate = (order: any) => {
+    const value = order.won_at || order.created_at || order.po_date;
+    if (!value) return '-';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '-' : formatLocalDate(date);
+  };
+  const getOrderSalesperson = (order: any) =>
+    order.salesperson_name ||
+    order.assigned_salesperson_name ||
+    order.salesperson ||
+    getLeaderboardDisplayName({ salesperson_phone: order.salesperson_phone });
 
   const wonDealsList = rawDeals.filter((d: any) => d.stage === 'won');
   const activeDealsList = rawDeals.filter((d: any) => !['won', 'lost'].includes(d.stage));
@@ -157,9 +350,6 @@ export default function AdminDashboard() {
   const totalCombinedValue = wonValue + totalValue;
   const wonValueSharePct = totalCombinedValue > 0 ? Math.round((wonValue / totalCombinedValue) * 100) : 0;
 
-  // Find selected salesperson specific KRA metrics from reports response
-  const selectedKRA = spList.find((s: any) => s.salesperson_phone === selectedPhone);
-
   const todayStr = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
@@ -183,6 +373,15 @@ export default function AdminDashboard() {
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
                   <Users size={12} /> {selectedSalesperson ? selectedSalesperson.name : 'Company-Wide (All Salespersons)'}
                 </span>
+                {selectedSalesperson && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhone('')}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                  >
+                    Company-Wide
+                  </button>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1 font-medium">
                 <Calendar size={13} className="text-slate-400" /> {todayStr}
@@ -192,12 +391,15 @@ export default function AdminDashboard() {
 
           {/* Top Actions: Refresh, Create Order */}
           <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+            <SyncBiginButton onSynced={handleRefreshAll} />
             <button
+              type="button"
               onClick={handleRefreshAll}
+              disabled={isRefreshing}
               title="Refresh All Dashboard Metrics"
               className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} />
             </button>
 
             <button
@@ -209,32 +411,10 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Row 2: Filter Toolbar (Date range, Month/Year, Salesperson Filter) */}
+        {/* Row 2: Filter Toolbar (Date range, Salesperson Filter) */}
         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 flex-wrap">
             <DateFilterControl onChange={setDateRange} initialPreset={dateRange.preset} />
-
-            <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                {months.map((m, idx) => (
-                  <option key={m} value={idx}>{m}</option>
-                ))}
-              </select>
-
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                {years.map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 self-start sm:self-auto">
@@ -246,7 +426,7 @@ export default function AdminDashboard() {
             >
               <option value="">All Salespeople (Global)</option>
               {salespeople.map((sp: any) => (
-                <option key={sp.phone} value={sp.phone}>
+                <option key={sp.phone} value={normalizePhone(sp.phone)}>
                   {sp.name} ({sp.employee_id})
                 </option>
               ))}
@@ -371,62 +551,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Card 4: INQUIRIES / KRA SCORE */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
-              {selectedKRA ? 'KRA PERFORMANCE SCORE' : 'REVIEW QUEUE'}
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              {selectedKRA ? <Award size={18} /> : <AlertCircle size={18} />}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            {selectedKRA ? (
-              <>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-indigo-600">
-                  {Math.round(Number(selectedKRA.kra_score) || 0)}/100
-                </h2>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    <Award size={12} /> {selectedKRA.deals?.won || 0} won / {selectedKRA.deals?.total || 0} deals
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {selectedKRA.visits?.total || 0} visits
-                  </span>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-amber-600">
-                  {reviewQueue.length}
-                </h2>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full border ${
-                    reviewQueue.length > 0
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}>
-                    {reviewQueue.length > 0 ? (
-                      <>
-                        <AlertCircle size={12} /> Needs Review
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={12} /> All Clear
-                      </>
-                    )}
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {reviewQueue.length > 0 ? `${reviewQueue.length} pending inquiries` : '0 pending AI inquiries'}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
       </div>
 
       {/* Featured Total Sales Overview Value Banner */}
@@ -478,7 +602,7 @@ export default function AdminDashboard() {
           </div>
 
           <button
-            onClick={() => navigate('/pipeline')}
+            onClick={handleDetailedAnalytics}
             className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors shadow-2xs hover:bg-blue-100 self-start sm:self-auto"
           >
             Detailed Analytics <ChevronRight size={14} />
@@ -492,66 +616,69 @@ export default function AdminDashboard() {
         {/* Left Column (Recent Deals & Product Distribution) */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Recent Company-wide Deals Card */}
+          {/* Recent Company-wide Orders Card */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShoppingBag size={18} className="text-blue-600" />
                 <h3 className="font-bold text-slate-900 text-sm">
                   {selectedSalesperson
-                    ? `Recent Deals by ${selectedSalesperson.name}`
-                    : 'Recent Company-wide Deals'}
+                    ? `Recent Orders by ${selectedSalesperson.name}`
+                    : 'Recent Company-wide Orders'}
                 </h3>
               </div>
               <button
-                onClick={() => navigate('/pipeline')}
+                onClick={() => navigate('/orders')}
                 className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
-                Go to Pipeline <ChevronRight size={14} />
+                View all <ChevronRight size={14} />
               </button>
             </div>
 
             <div className="p-4 space-y-2.5">
-              {recentDeals.length > 0 ? (
-                recentDeals.map((deal: any) => (
+              {recentOrders.length > 0 ? (
+                recentOrders.map((order: any) => (
                   <div
-                    key={deal.id}
+                    key={order.id}
                     className="flex items-center justify-between p-3.5 bg-slate-50/80 hover:bg-blue-50/50 rounded-xl border border-slate-100 transition-colors group cursor-pointer"
-                    onClick={() => setSelectedQuotationDeal(deal)}
+                    onClick={() => navigate(`/orders?orderId=${encodeURIComponent(order.id)}`)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-700 text-sm shadow-2xs group-hover:border-blue-300">
-                        {deal.customer_name?.charAt(0) || 'C'}
+                        {order.customer_name?.charAt(0) || 'C'}
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
-                          {deal.customer_name || 'Unknown Customer'}
+                          {order.customer_name || 'Unknown Customer'}
                         </p>
                         <p className="text-xs text-slate-500 font-mono mt-0.5">
-                          PO Number: {deal.po_number || '-'}
+                          {order.po_number || 'PO number unavailable'}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {(order.deal_items?.length || 0)} items · {Number(getOrderTonnage(order) || 0).toFixed(2)} MT · {getOrderSalesperson(order)} · {getOrderDate(order)}
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right">
                       <p className="text-sm font-bold text-slate-900">
-                        {'\u20B9'}{Number(deal.total_amount || 0).toLocaleString('en-IN')}
+                        {'\u20B9'}{Number(order.total_amount || 0).toLocaleString('en-IN')}
                       </p>
                       <span className={`inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full capitalize mt-0.5 border ${
-                        deal.stage === 'won'
+                        (order.po_status || order.status) === 'won'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : deal.stage === 'lost'
+                          : (order.po_status || order.status) === 'lost'
                           ? 'bg-red-50 text-red-700 border-red-200'
                           : 'bg-blue-50 text-blue-700 border-blue-200'
                       }`}>
-                        {deal.stage?.replace('_', ' ') || 'Open'}
+                        {(order.po_status || order.status || 'Open').replace('_', ' ')}
                       </span>
                     </div>
                   </div>
                 ))
               ) : (
                 <div className="text-center py-8 text-slate-400 text-sm">
-                  No recent deals found for this period.
+                  No recent orders found for this period.
                 </div>
               )}
             </div>
@@ -669,41 +796,77 @@ export default function AdminDashboard() {
 
           {/* Salesperson Leaderboard Card */}
           {!selectedSalesperson && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-visible">
               <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Award size={18} className="text-amber-500" />
                   <h3 className="font-bold text-slate-900 text-sm">Leaderboard Scores</h3>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-label="How leaderboard scores are calculated"
+                      aria-expanded={isScoreInfoOpen}
+                      aria-controls="leaderboard-score-explanation"
+                      title="How leaderboard scores are calculated"
+                      onClick={() => setIsScoreInfoOpen((open) => !open)}
+                      className="w-5 h-5 rounded-full border border-slate-300 text-slate-500 hover:text-blue-700 hover:border-blue-300 hover:bg-blue-50 inline-flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <Info size={12} />
+                    </button>
+                    {isScoreInfoOpen && (
+                      <div
+                        id="leaderboard-score-explanation"
+                        role="dialog"
+                        aria-label="Leaderboard score calculation"
+                        className="absolute right-0 top-7 z-50 w-[min(18rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3.5 text-[11px] leading-4 text-slate-600 shadow-xl"
+                      >
+                        <p className="font-bold text-slate-900 text-xs leading-5">How the score is calculated</p>
+                        <ul className="mt-2 space-y-1.5 list-disc pl-4">
+                          <li>Won orders: up to 40 points.</li>
+                          <li>Visits: up to 30 points against a 40-visit target.</li>
+                          <li>Delivered tonnage: up to 30 points against a 40 MT monthly target.</li>
+                          <li>Pending complaints deduct up to 20 points.</li>
+                        </ul>
+                        <p className="mt-2 font-semibold text-slate-700">Final score is clamped between 0 and 100.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <span className="text-xs font-bold text-blue-600">Company-Wide</span>
               </div>
 
               <div className="p-4 space-y-2">
-                {spList.slice(0, 5).map((sp: any) => (
-                  <div
-                    key={sp.salesperson_phone}
-                    onClick={() => setSelectedPhone(sp.salesperson_phone)}
-                    className="flex items-center justify-between p-3 hover:bg-blue-50/50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-blue-100 group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 text-white font-bold text-xs flex items-center justify-center shadow-xs">
-                        {sp.name?.charAt(0) || 'S'}
+                {leaderboardRows.slice(0, 5).map((sp: any) => {
+                  const displayName = getLeaderboardDisplayName({
+                    ...sp,
+                    salesperson_phone: sp.phone,
+                  });
+                  return (
+                    <div
+                      key={sp.phone || sp.employee_id}
+                      onClick={() => setSelectedPhone(normalizePhone(sp.phone))}
+                      className="flex items-center justify-between p-3 hover:bg-blue-50/50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-blue-100 group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                          {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                            {displayName}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {sp.ordersCount} orders · {sp.visitsCount} visits
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
-                          {sp.name || 'Sales Representative'}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {sp.deals?.total || 0} deals · {sp.visits?.total || 0} visits
-                        </p>
-                      </div>
-                    </div>
 
-                    <span className="text-xs font-black bg-blue-50 text-blue-700 px-3 py-1 rounded-xl border border-blue-200">
-                      {Math.round(Number(sp.kra_score) || 0)}
-                    </span>
-                  </div>
-                ))}
+                      <span className="text-xs font-black bg-blue-50 text-blue-700 px-3 py-1 rounded-xl border border-blue-200">
+                        {Math.round(Number(sp.kra_score) || 0)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -711,13 +874,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Render Official Sales Quotation & Invoice Modal when clicking any deal */}
-      {selectedQuotationDeal && (
-        <SalesQuotationModal
-          deal={selectedQuotationDeal}
-          onClose={() => setSelectedQuotationDeal(null)}
-        />
-      )}
     </div>
   );
 }

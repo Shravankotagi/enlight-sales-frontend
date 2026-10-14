@@ -8,6 +8,7 @@ import {
   X,
   Brain,
   ShieldAlert,
+  Settings,
   AlertTriangle,
   MapPin,
   ShoppingBag,
@@ -38,6 +39,8 @@ function EmployeeFooter() {
     clearViewingAs,
     isAdmin,
     isSalesManager,
+    isProcurementManager,
+    isProcurementPerson,
   } = useAuth();
   const navigate = useNavigate();
 
@@ -48,7 +51,7 @@ function EmployeeFooter() {
 
   const handleBackToAdmin = () => {
     clearViewingAs();
-    navigate('/admin');
+    navigate(isAdmin ? '/control-panel' : '/admin');
   };
 
   // Always reflect the user's own true identity & role (never overridden by impersonated user's role)
@@ -56,7 +59,11 @@ function EmployeeFooter() {
     ? 'Admin'
     : isSalesManager
       ? 'Sales Manager'
-      : 'Salesperson';
+      : isProcurementManager
+        ? 'Procurement Manager'
+        : isProcurementPerson
+          ? 'Procurement Person'
+          : 'Salesperson';
 
   // Only true impersonation of ANOTHER employee should show "Viewing as"
   const isImpersonatingOther = Boolean(
@@ -122,7 +129,7 @@ function EmployeeFooter() {
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { employee, viewingAs, isAdmin } = useAuth();
+  const { employee, viewingAs, isAdmin, isProcurement } = useAuth();
 
   const isImpersonatingOther = Boolean(
     viewingAs &&
@@ -132,12 +139,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   );
 
   const showAdminTab = isAdmin && !isImpersonatingOther;
-  const visibleItems = [
-    ...(showAdminTab
-      ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }]
-      : []),
-    ...navItems,
-  ];
+  const visibleItems = isProcurement
+    ? navItems.filter((item) => item.path === '/inquiries')
+    : [
+        ...(showAdminTab
+          ? [
+              { path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert },
+              { path: '/control-panel', label: 'Control Panel', icon: Settings },
+            ]
+          : []),
+        ...navItems,
+      ];
 
   const isActive = (path: string) => {
     if (path === '/pipeline')
@@ -152,14 +164,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
       <div
-        className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-slate-900 text-white transition-all duration-300 flex flex-col`}
+        className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-[#06122E] text-white transition-all duration-300 flex flex-col`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           {sidebarOpen && (
-            <div>
-              <h1 className="text-lg font-bold text-white">Enlight Sales</h1>
-              <p className="text-xs text-slate-400">Metals OS</p>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img src="/em-logo.png" alt="" className="h-9 w-9 shrink-0 object-contain" />
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-white">Enlight Sigma</h1>
+                
+              </div>
             </div>
           )}
           <button

@@ -1,24 +1,33 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
-  Calendar, Save, Check, UploadCloud, FileCheck, Send, ShoppingBag, Eye,
+  Calendar, Save, Check, UploadCloud, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, UserCheck, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, ArrowLeft, AlertCircle, AlertTriangle
 } from 'lucide-react';
 import {
   inquiriesApi,
   customersApi,
+  productsApi,
   employeesApi,
   dealsApi,
+  zohoApi,
   activityLogsApi,
   logPoAllocationError,
 } from '../lib/api';
 import toast from 'react-hot-toast';
 import type { DateFilterRange } from '../components/DateFilterControl';
 import InquiryPdfModal from '../components/InquiryPdfModal';
+import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
+import AddProductDialog, {
+  isProductInCatalogList,
+  findCustomProductMatch,
+  type CatalogDbProduct,
+} from '../components/AddProductDialog';
 import PaginationControl from '../components/PaginationControl';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import {
@@ -29,8 +38,17 @@ import {
   calculateTotalTonnageMt,
   formatLineItemWeightMt,
   normalizeUnit,
+  formatIndianCurrency,
+  resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
-import { detectHsnCode } from '../utils/hsnDetector';
+import { detectHsnCode, MASTER_PRODUCTS_CATALOG } from '../utils/hsnDetector';
+import SalespersonContextBanner from '../components/SalespersonContextBanner';
+import { buildInquiryScopeParams } from '../utils/inquiryScope';
+import {
+  addQuotationCcEmail,
+  isValidQuotationEmail,
+  normalizeQuotationEmail,
+} from '../utils/quotationCc';
 
 export interface InquiryItem {
   id: string;
@@ -65,6 +83,8 @@ export interface InquiryItem {
   ai_extraction_json?: any;
   created_at: string;
   updated_at?: string;
+  procurement_employee_id?: string | null;
+  procurement_assigned_at?: string | null;
 }
 
 export interface LineItemDetail {
@@ -78,6 +98,14 @@ export interface LineItemDetail {
   isManualAmount?: boolean;
   converted_mt?: number | string;
   is_manual_mt?: boolean;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  total_gst?: number;
+  final_amount?: number;
 }
 
 export interface ExtractedDetails {
@@ -441,7 +469,7 @@ function extractMultiItemsFromText(raw: string): LineItemDetail[] {
 
     const gradeMatch = chunk.match(/([A-Za-z0-9\s]+?(?:\([^)]+\))?)\s*[-:]\s*(\d+.*)/);
     let sku = cleanProductType(indices[i].product.trim());
-    let dims = '';
+    let dims: string;
 
     const thkMatch = sku.match(/(\d+(?:\.\d+)?\s*mm)/i);
     if (thkMatch) {
@@ -524,7 +552,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const companyName = candidateName || '';
 
   // 2. Customer Phone Number (Directly take from database inq.customer_phone, aiJson, or customer directory)
-  let rawCustPhone =
+  const rawCustPhone =
     inq?.customer_phone ||
     aiJson.customer?.phone ||
     aiJson.customer_phone ||
@@ -632,8 +660,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   const productType = cleanProductType(rawPt || 'HR Coil');
 
   // 4. Dimensions (Thickness x Width x Length) - extract only what is stated
-  let thickness = '';
-  let width = '';
+  let thickness: string;
+  let width: string;
   let length = '';
 
   // Pattern A: "8mmx1500x10000" or "8mm x 1500 x 10000" or "1.6mm 1250 * 2500"
@@ -706,23 +734,23 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   // Helper to sanitize delivery address and strip any appended field labels or pipe delimiters
   const cleanDeliveryLocation = (str?: string): string => {
     if (!str || typeof str !== 'string') return '';
-    let clean = str.replace(/^[•\-\*:\s|]+|[•\-\*:\s|]+$/g, '').trim();
+    let clean = str.replace(/^[•\-*:\s|]+|[•\-*:\s|]+$/g, '').trim();
     if (clean.includes('|')) {
       clean = clean.split('|')[0].trim();
     }
     clean = clean.replace(/\s*(?:payment\s*terms?|payment|terms?|make|brand|preferred\s*make|notes?|remarks?|email|contact|phone)\s*[:=-].*$/i, '').trim();
-    return clean.replace(/^[•\-\*:\s|]+|[•\-\*:\s|]+$/g, '').trim();
+    return clean.replace(/^[•\-*:\s|]+|[•\-*:\s|]+$/g, '').trim();
   };
 
   // 7. Delivery Location (Capture full delivery address without payment terms leakage)
-  let directDelivery = cleanDeliveryLocation(inq?.delivery_location || inq?.deliveryLocation || '');
-  let fromJson = cleanDeliveryLocation(aiJson.delivery_location || aiJson.deliveryLocation || '');
+  const directDelivery = cleanDeliveryLocation(inq?.delivery_location || inq?.deliveryLocation || '');
+  const fromJson = cleanDeliveryLocation(aiJson.delivery_location || aiJson.deliveryLocation || '');
 
   let fromText = '';
   if (textRaw && typeof textRaw === 'string') {
     // 1. Line-by-line match for bullet or key-value format (stops strictly at pipe, newline, or next field)
     const lineMatch =
-      textRaw.match(/(?:^[•\-\*]?\s*(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/im) ||
+      textRaw.match(/(?:^[•\-*]?\s*(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/im) ||
       textRaw.match(/(?:(?:delivery\s*(?:location|address)?|delivered\s*to|dispatch\s*to|site\s*(?:location|address)?|destination)\s*[:=-]\s*)([^|\n\r]+)/i);
     if (lineMatch && lineMatch[1].trim().length > 2) {
       fromText = cleanDeliveryLocation(lineMatch[1]);
@@ -731,8 +759,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
     // 2. Multiline block fallback
     if (!fromText) {
       const blockMatch =
-        textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to)\s*[:=-]?\s*([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s*(?:\||;|\n{2,}|payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|email|contact|phone|before|by|on\s+\d|gst\b)|$)/i) ||
-        textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&'\"()\-]+?)(?:\s+before|\s+by|\s+on|\s+within|\||$)/i);
+        textRaw.match(/(?:delivery\s*(?:address|location)?|delivered\s*to|deliver\s*to|site\s*(?:address|location)?|destination|dispatch\s*to)\s*[:=-]?\s*([A-Za-z0-9\s,./#&'"()-]+?)(?:\s*(?:\||;|\n{2,}|payment\s*terms?|payment|terms?|rate|price|qty|quantity|make|brand|notes?|email|contact|phone|before|by|on\s+\d|gst\b)|$)/i) ||
+        textRaw.match(/(?:for\s+delivery\s+to|delivery\s+to|delivery\s+at|location|destination)\s+([A-Za-z0-9\s,./#&'"()-]+?)(?:\s+before|\s+by|\s+on|\s+within|\||$)/i);
       if (blockMatch && blockMatch[1].trim().length > 2) {
         fromText = cleanDeliveryLocation(blockMatch[1]);
       }
@@ -797,6 +825,12 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
     const itemDim = item.dimensions || '';
     const rawQty = Number((item as any).original_quantity ?? item.quantity ?? (item as any).qty) || 0;
     const rawUnit = normalizeUnit((item as any).original_unit || item.unit) || 'MT';
+    const baseA = Number(item.amount) || 0;
+    const cgstA = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseA * 0.09 * 100) / 100;
+    const sgstA = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseA * 0.09 * 100) / 100;
+    const totalG = item.total_gst !== undefined ? Number(item.total_gst) : Math.round((cgstA + sgstA) * 100) / 100;
+    const finalA = item.final_amount !== undefined ? Number(item.final_amount) : Math.round((baseA + totalG) * 100) / 100;
+
     return {
       sku_text: skuText,
       dimensions: itemDim,
@@ -804,11 +838,17 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
         (item.hsn_code && item.hsn_code.trim()) ||
         (item as any).hsn ||
         detectHsnCode(skuText, itemDim) ||
-        '72083840',
+        '',
       quantity: rawQty,
       unit: rawUnit,
       rate: item.rate,
       amount: item.amount,
+      cgst_rate: item.cgst_rate ?? 9,
+      cgst_amount: cgstA,
+      sgst_rate: item.sgst_rate ?? 9,
+      sgst_amount: sgstA,
+      total_gst: totalG,
+      final_amount: finalA,
       converted_mt: (item as any).converted_mt !== undefined ? (item as any).converted_mt : undefined,
       is_manual_mt: (item as any).is_manual_mt !== undefined ? (item as any).is_manual_mt : undefined,
     };
@@ -821,27 +861,51 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   ) {
     const multiItems = extractMultiItemsFromText(textRaw);
     if (multiItems.length > 0) {
-      rawLineItems = multiItems.map(m => ({
-        ...m,
-        hsn_code:
-          (m.hsn_code && m.hsn_code.trim()) ||
-          detectHsnCode(m.sku_text, m.dimensions) ||
-          '72083840',
-      }));
+      rawLineItems = multiItems.map(m => {
+        const calc = calculateLineItem(m);
+        return {
+          ...m,
+          hsn_code:
+            (m.hsn_code && m.hsn_code.trim()) ||
+            detectHsnCode(m.sku_text, m.dimensions) ||
+            '',
+          cgst_rate: calc.cgst_rate,
+          cgst_amount: calc.cgst_amount,
+          sgst_rate: calc.sgst_rate,
+          sgst_amount: calc.sgst_amount,
+          total_gst: calc.total_gst,
+          final_amount: calc.final_amount,
+        };
+      });
     }
   }
 
   if (rawLineItems.length === 0 && (productType || quantityTons > 0)) {
     const defaultSku = productType || 'Hot Rolled';
     const defaultDim = [thickness, width, length].filter(Boolean).join(' x ') || '';
-    rawLineItems.push({
+    const baseAmt = totalAmount || Math.round((quantityTons || 0) * (unitPrice || 0));
+    const calc = calculateLineItem({
       sku_text: defaultSku,
       dimensions: defaultDim,
-      hsn_code: detectHsnCode(defaultSku, defaultDim) || '72083840',
       quantity: quantityTons || 0,
       unit: 'MT',
       rate: unitPrice || 0,
-      amount: totalAmount || Math.round((quantityTons || 0) * (unitPrice || 0)),
+      amount: baseAmt,
+    });
+    rawLineItems.push({
+      sku_text: defaultSku,
+      dimensions: defaultDim,
+      hsn_code: detectHsnCode(defaultSku, defaultDim) || '',
+      quantity: quantityTons || 0,
+      unit: 'MT',
+      rate: unitPrice || 0,
+      amount: baseAmt,
+      cgst_rate: calc.cgst_rate,
+      cgst_amount: calc.cgst_amount,
+      sgst_rate: calc.sgst_rate,
+      sgst_amount: calc.sgst_amount,
+      total_gst: calc.total_gst,
+      final_amount: calc.final_amount,
     });
   }
 
@@ -1116,12 +1180,27 @@ export function resolveInquiryDealStageKey(inq: InquiryItem, companyName?: strin
   return 'new_inquiry';
 }
 
+const createDashboardWonReservationToken = () =>
+  `dashboard-won:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+
 export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, viewingAs, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
-  const canViewSalesperson = isAdmin || isSalesManager;
+  const {
+    effectivePhone,
+    employee,
+    viewingAs,
+    activeRole,
+    activeMode,
+    isAdmin,
+    isSalesManager,
+    isProcurement,
+    isProcurementManager,
+    clearViewingAs,
+  } = useAuth();
+  const canViewSalesperson = isAdmin || isSalesManager || isProcurement;
+  const canAssignProcurement = isAdmin || isProcurementManager;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1144,21 +1223,25 @@ export default function InquiriesPage() {
     (selectedInquiry as any)?.salesperson_name ||
     (selectedInquiry as any)?.assigned_salesperson_name ||
     'Shravan Kotagi';
+  const adminReturnPath =
+    new URLSearchParams(location.search).get('returnTo') === '/admin-dashboard'
+      ? '/admin-dashboard'
+      : null;
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('view') === 'pipeline') {
-      setViewMode('pipeline');
-    } else {
+    if (isProcurement || params.get('view') !== 'pipeline') {
       setViewMode('table');
+    } else {
+      setViewMode('pipeline');
     }
     const stageParam = params.get('stage') || params.get('status');
     if (stageParam) {
       setFilterStatus(stageParam);
     }
-  }, [location.search]);
+  }, [location.search, isProcurement]);
 
   useEffect(() => {
-    document.title = viewMode === 'pipeline' ? 'Pipeline - Enlight Sales OS' : 'Inquiries - Enlight Sales OS';
+    document.title = viewMode === 'pipeline' ? 'Pipeline - Enlight Sigma' : 'Inquiries - Enlight Sigma';
   }, [viewMode]);
 
   const [showModal, setShowModal] = useState(false);
@@ -1181,6 +1264,8 @@ export default function InquiriesPage() {
   const [quotationSubject, setQuotationSubject] = useState('');
   const [quotationBody, setQuotationBody] = useState('');
   const [quotationCc, setQuotationCc] = useState<string[]>([]);
+  const [quotationCcDraft, setQuotationCcDraft] = useState('');
+  const [quotationCcError, setQuotationCcError] = useState('');
   const [quotationReference, setQuotationReference] = useState('');
   const [quotationSenderEmail, setQuotationSenderEmail] = useState('');
   const [quotationPreviewLoading, setQuotationPreviewLoading] = useState(false);
@@ -1204,7 +1289,13 @@ export default function InquiriesPage() {
       const preview = res?.data?.data || res?.data;
       setQuotationSubject(preview?.subject || '');
       setQuotationBody(preview?.body || '');
-      setQuotationCc(Array.isArray(preview?.cc) ? preview.cc : []);
+      setQuotationCc(
+        Array.isArray(preview?.cc)
+          ? preview.cc.map((email: string) => normalizeQuotationEmail(email)).filter(isValidQuotationEmail)
+          : [],
+      );
+      setQuotationCcDraft('');
+      setQuotationCcError('');
       setQuotationReference(preview?.quotation_reference || '');
       setQuotationSenderEmail(preview?.sender_email || '');
     }).catch((err: any) => {
@@ -1221,6 +1312,17 @@ export default function InquiriesPage() {
       cancelled = true;
     };
   }, [showQuotationModal, shareInquiry?.id]);
+
+  const commitQuotationCcDraft = () => {
+    const result = addQuotationCcEmail(
+      quotationCc,
+      quotationCcDraft,
+      quotationEmail,
+    );
+    setQuotationCc(result.emails);
+    setQuotationCcError(result.error);
+    if (!result.error) setQuotationCcDraft('');
+  };
 
   // Full-screen image viewer
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
@@ -1434,8 +1536,11 @@ export default function InquiriesPage() {
 
   // Form state for Manual Log & File Upload
   const [formCustomerName, setFormCustomerName] = useState('');
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [addProductModalRowIdx, setAddProductModalRowIdx] = useState<number | null>(null);
+  const [addProductModalSource, setAddProductModalSource] = useState<'create' | 'edit'>('create');
+  const [showProductListModal, setShowProductListModal] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
-  const [formProductSKU, setFormProductSKU] = useState('');
   const [formPreferredMake, setFormPreferredMake] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
@@ -1447,6 +1552,60 @@ export default function InquiriesPage() {
   const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
   const formExtractedJsonRef = useRef<any>(null);
+  const [formExtractedJson, setFormExtractedJson] = useState<any>(null);
+  const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
+    {
+      sku_text: '',
+      dimensions: '',
+      hsn_code: '',
+      quantity: 0,
+      unit: 'MT',
+      rate: 0,
+      amount: 0,
+      cgst_rate: 9,
+      cgst_amount: 0,
+      sgst_rate: 9,
+      sgst_amount: 0,
+      total_gst: 0,
+      final_amount: 0,
+    },
+  ]);
+
+  const handleCancelCreateInquiry = () => {
+    setShowModal(false);
+    setFormCustomerName('');
+    setShowAddCustomer(false);
+    setAddProductModalRowIdx(null);
+    setShowProductListModal(false);
+    setShowCompanyDropdown(false);
+    setFormPhone('');
+    setFormPreferredMake('');
+    setFormDeliveryLocation('');
+    setFormPaymentTerms('');
+    setFormRequirement('');
+    setFormInquiryType('Product Requirement');
+    setPoFileName('');
+    setPoFileBase64(null);
+    formExtractedJsonRef.current = null;
+    setFormExtractedJson(null);
+    setFormLineItems([
+      {
+        sku_text: '',
+        dimensions: '',
+        hsn_code: '',
+        quantity: 0,
+        unit: 'MT',
+        rate: 0,
+        amount: 0,
+        cgst_rate: 9,
+        cgst_amount: 0,
+        sgst_rate: 9,
+        sgst_amount: 0,
+        total_gst: 0,
+        final_amount: 0,
+      },
+    ]);
+  };
 
   const isPdf = (url: string) => {
     if (!url) return false;
@@ -1456,9 +1615,7 @@ export default function InquiriesPage() {
   const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
     queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
     queryFn: async () => {
-      const params: any = {};
-      if (effectivePhone) params.salesperson_phone = effectivePhone;
-      if (activeMode) params.mode = activeMode;
+      const params = buildInquiryScopeParams(effectivePhone, activeMode);
 
       const res = await inquiriesApi.getAll(params);
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
@@ -1466,34 +1623,160 @@ export default function InquiriesPage() {
     },
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 
+  const [customerMetaMap, setCustomerMetaMap] = useState<
+    Record<string, { gstin?: string; address?: string; state?: string }>
+  >({});
+
   const { data: rawCustomers = [] } = useQuery<string[]>({
-    queryKey: ['customer-names-list', effectivePhone, activeRole, activeMode],
+    queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
-      const params: any = {};
-      if (effectivePhone) params.salesperson_phone = effectivePhone;
-      if (activeMode) params.mode = activeMode;
+      const params = buildInquiryScopeParams(effectivePhone, activeMode);
 
       const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
+      const nextMeta: Record<string, { gstin?: string; address?: string; state?: string }> = {};
       const fetchedNames: string[] = cList
-        .map((c: any) => String(c.customer_name || c.name || c.company_name || '').trim())
+        .map((c: any) => {
+          const nm = String(c.customer_name || c.name || c.company_name || '').trim();
+          if (nm) {
+            nextMeta[nm.toLowerCase()] = {
+              gstin: c.customer_gst || c.gstin || c.gst || undefined,
+              address: c.customer_address || c.address || undefined,
+              state: c.customer_state || c.state || undefined,
+            };
+          }
+          return nm;
+        })
         .filter(Boolean);
+      setCustomerMetaMap(prev => ({ ...prev, ...nextMeta }));
 
       return Array.from(new Set(fetchedNames)).sort((a, b) => a.localeCompare(b));
     },
     refetchInterval: 15000,
     refetchOnWindowFocus: true,
+    enabled: !isProcurement,
+  });
+
+  const lookupCustomerMeta = (name?: string) => {
+    if (!name || !name.trim()) return undefined;
+    const clean = name.trim().toLowerCase();
+    if (customerMetaMap[clean]) return customerMetaMap[clean];
+    const strip = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/\b(private\s+limited|pvt\s+ltd|pvt\s+limited|private\s+ltd|co\s+ltd|llp|limited|pvt|ltd|inc|corp)\b/gi, '')
+        .replace(/[^a-z0-9]/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const stripped = strip(clean);
+    if (!stripped) return undefined;
+    const entry = Object.entries(customerMetaMap).find(([k]) => {
+      const sk = strip(k);
+      return Boolean(sk && (sk === stripped || stripped.startsWith(sk) || sk.startsWith(stripped)));
+    });
+    return entry?.[1];
+  };
+
+  const formCustMeta = lookupCustomerMeta(formCustomerName);
+  const formPlaceOfSupply = resolvePlaceOfSupply({
+    deliveryAddress: formDeliveryLocation,
+    customerState: formCustMeta?.state || formExtractedJson?.place_of_supply,
+    customerGstin:
+      formCustMeta?.gstin ||
+      formExtractedJson?.customer_gst ||
+      formExtractedJson?.gstin ||
+      formExtractedJson?.gst,
+    customerAddress: formCustMeta?.address || formExtractedJson?.customer_address,
+  });
+  const isFormInterState = formPlaceOfSupply.isInterState;
+
+  const editAiMeta = (selectedInquiry?.ai_extraction_json as any) || {};
+  const editCustMeta = lookupCustomerMeta(
+    editDetails?.companyName || selectedInquiry?.customer_name || selectedInquiry?.sender_name,
+  );
+  const editPlaceOfSupply = resolvePlaceOfSupply({
+    deliveryAddress:
+      editDetails?.deliveryLocation ||
+      selectedInquiry?.delivery_location ||
+      selectedInquiry?.deliveryLocation ||
+      editAiMeta?.delivery_location ||
+      editAiMeta?.deliveryLocation,
+    customerState: editCustMeta?.state || editAiMeta?.place_of_supply || editAiMeta?.customer?.state,
+    customerGstin: editCustMeta?.gstin || editAiMeta?.customer_gst || editAiMeta?.customer?.gst,
+    customerAddress:
+      editCustMeta?.address || editAiMeta?.customer_address || editAiMeta?.customer?.address,
+  });
+  const isEditInterState = editPlaceOfSupply.isInterState;
+
+  useEffect(() => {
+    setFormLineItems(prev =>
+      prev.map(item => {
+        const calc = calculateLineItem(
+          { ...item, amount: item.isManualAmount ? item.amount : 0 },
+          { isInterState: isFormInterState },
+        );
+        return {
+          ...item,
+          amount: calc.amount,
+          cgst_rate: calc.cgst_rate,
+          cgst_amount: calc.cgst_amount,
+          sgst_rate: calc.sgst_rate,
+          sgst_amount: calc.sgst_amount,
+          igst_rate: calc.igst_rate,
+          igst_amount: calc.igst_amount,
+          total_gst: calc.total_gst,
+          final_amount: calc.final_amount,
+        };
+      }),
+    );
+  }, [isFormInterState]);
+
+  useEffect(() => {
+    if (!editDetails?.lineItems) return;
+    setEditDetails(prev => {
+      if (!prev || !prev.lineItems) return prev;
+      const updated = prev.lineItems.map(item => {
+        const calc = calculateLineItem(
+          { ...item, amount: item.isManualAmount ? item.amount : 0 },
+          { isInterState: isEditInterState },
+        );
+        return {
+          ...item,
+          amount: calc.amount,
+          cgst_rate: calc.cgst_rate,
+          cgst_amount: calc.cgst_amount,
+          sgst_rate: calc.sgst_rate,
+          sgst_amount: calc.sgst_amount,
+          igst_rate: calc.igst_rate,
+          igst_amount: calc.igst_amount,
+          total_gst: calc.total_gst,
+          final_amount: calc.final_amount,
+        };
+      });
+      return { ...prev, lineItems: updated };
+    });
+  }, [isEditInterState]);
+
+  const { data: rawDbProducts = [] } = useQuery<CatalogDbProduct[]>({
+    queryKey: ['products-catalog'],
+    queryFn: async () => {
+      const res = await productsApi.getAll().catch(() => null);
+      return normalizeListResponse(res?.data);
+    },
+    staleTime: 5 * 1000,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: rawEmployees = [] } = useQuery<any[]>({
-    queryKey: ['employees-list-inquiries'],
+    queryKey: queryKeys.employeesDirectory,
     queryFn: async () => {
       const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      return normalizeListResponse(res?.data);
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -1501,9 +1784,7 @@ export default function InquiriesPage() {
   const { data: rawDeals = [], isFetching: dealsFetching, refetch: fetchDeals } = useQuery<any[]>({
     queryKey: ['deals', effectivePhone, dateRange, activeRole, activeMode],
     queryFn: async () => {
-      const params: any = {};
-      if (effectivePhone) params.salesperson_phone = effectivePhone;
-      if (activeMode) params.mode = activeMode;
+      const params = buildInquiryScopeParams(effectivePhone, activeMode);
       if (dateRange.from) params.from = dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`;
       if (dateRange.to) params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
       const res = await dealsApi.getAll(params).catch(() => null);
@@ -1512,7 +1793,36 @@ export default function InquiriesPage() {
     },
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+    enabled: !isProcurement,
   });
+
+  const [isSyncingZoho, setIsSyncingZoho] = useState(false);
+
+  const handleTriggerZohoSync = async () => {
+    try {
+      setIsSyncingZoho(true);
+      const res = await zohoApi.pullInitialSync();
+      const data = res?.data?.data || res?.data || {};
+      const notice = Array.isArray(data.errors) ? data.errors[0] : '';
+      if (data.success === false || (notice && !data.companiesImported && !data.dealsImported)) {
+        toast.error(notice || 'Could not sync with Zoho Bigin');
+        return;
+      }
+      toast.success(
+        `Bigin sync complete. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
+    } finally {
+      setIsSyncingZoho(false);
+    }
+  };
 
   const stageMutation = useMutation({
     mutationFn: ({ id, stage, reason, po_number, po_date }: { id: string; stage: string; reason?: string; po_number?: string; po_date?: string }) =>
@@ -1571,9 +1881,7 @@ export default function InquiriesPage() {
     dealCode: string;
     existingDeal?: any;
   }) => {
-    const reservationToken = `dashboard-won:${Date.now()}:${Math.random()
-      .toString(36)
-      .slice(2, 10)}`;
+    const reservationToken = createDashboardWonReservationToken();
     const existingGenerated = String(
       details.existingDeal?.generated_po_number ||
         (/^EM\/PO\/\d+$/i.test(
@@ -2015,7 +2323,8 @@ export default function InquiriesPage() {
                   (item.hsn_code && item.hsn_code.trim()) ||
                   item.hsn ||
                   detectHsnCode(skuText, itemDim) ||
-                  '72083840',
+                  findCustomProductMatch(skuText, itemDim, rawDbProducts)?.hsn_code ||
+                  '',
                 quantity: Number(item.quantity) || 0,
                 unit: item.unit || 'MT',
                 rate: Number(item.rate) || 0,
@@ -2059,18 +2368,6 @@ export default function InquiriesPage() {
       }
     }
   }, [rawInquiries]);
-
-  useEffect(() => {
-    const handleDbChange = (e: any) => {
-      const { table } = e.detail || {};
-      if (table === 'inquiries' || table === 'deals' || table === 'deal_items' || table === 'inquiry_items') {
-        fetchMonthlyInquiries();
-        fetchDeals();
-      }
-    };
-    window.addEventListener('enlight-db-change', handleDbChange);
-    return () => window.removeEventListener('enlight-db-change', handleDbChange);
-  }, [fetchMonthlyInquiries, fetchDeals]);
 
   useEffect(() => {
     setExistingCustomers(Array.isArray(rawCustomers) ? rawCustomers : []);
@@ -2124,7 +2421,8 @@ export default function InquiriesPage() {
             (item.hsn_code && item.hsn_code.trim()) ||
             item.hsn ||
             detectHsnCode(skuText, itemDim) ||
-            '72083840',
+            findCustomProductMatch(skuText, itemDim, rawDbProducts)?.hsn_code ||
+            '',
           quantity: rawQty,
           unit: rawUnit,
           rate: rate,
@@ -2232,7 +2530,9 @@ export default function InquiriesPage() {
       setSubmitting(true);
 
       const baseAmt = itemsToSave.reduce((s, i) => s + (Number(i.amount) || 0), 0) || editDetails.totalAmount || 0;
-      const qBreakdown = calculateQuotationBreakdown(baseAmt);
+      const qBreakdown = calculateQuotationBreakdown(baseAmt, itemsToSave, {
+        isInterState: isEditInterState,
+      });
 
       let summaryRequirement = '';
       if (itemsToSave.length > 0) {
@@ -2252,6 +2552,8 @@ export default function InquiriesPage() {
         customer_phone: editDetails.customerPhone,
         deliveryLocation: editDetails.deliveryLocation,
         delivery_location: editDetails.deliveryLocation,
+        place_of_supply: editPlaceOfSupply.label,
+        is_inter_state: isEditInterState,
         paymentTerms: editDetails.paymentTerms,
         payment_terms: editDetails.paymentTerms,
         lineItems: itemsToSave,
@@ -2260,18 +2562,33 @@ export default function InquiriesPage() {
         totalAmount: baseAmt,
         total_amount: baseAmt,
         subtotal: qBreakdown.subtotal,
-        gstAmount: qBreakdown.CGST + qBreakdown.SGST,
-        gst_amount: qBreakdown.CGST + qBreakdown.SGST,
+        cgst_amount: qBreakdown.CGST,
+        sgst_amount: qBreakdown.SGST,
+        igst_amount: qBreakdown.IGST,
+        gstAmount: qBreakdown.totalTax,
+        gst_amount: qBreakdown.totalTax,
         grandTotal: qBreakdown.grandTotal,
         grand_total: qBreakdown.grandTotal,
         media_urls: mediaUrlsPayload,
       };
 
-      await inquiriesApi.updateStatus(selectedInquiry.id, 'confirmed', payload);
+      const procurementBlocked = ['confirmed', 'won', 'lost', 'saved', 'processed'].includes(
+        (selectedInquiry.status || '').toLowerCase(),
+      );
+      if (isProcurement && procurementBlocked) {
+        toast.error('Procurement roles cannot change a confirmed, won, or lost inquiry.');
+        return;
+      }
+
+      await inquiriesApi.updateStatus(
+        selectedInquiry.id,
+        isProcurement ? selectedInquiry.status || 'review' : 'confirmed',
+        payload,
+      );
 
       const updatedObj: InquiryItem = {
         ...selectedInquiry,
-        status: 'confirmed',
+        status: isProcurement ? selectedInquiry.status || 'review' : 'confirmed',
         sender_name: editDetails.companyName,
         customer_name: editDetails.companyName,
         sender_phone: editDetails.customerPhone,
@@ -2347,12 +2664,11 @@ export default function InquiriesPage() {
       const item = currentItems[i];
       if (!item.sku_text || !item.sku_text.trim()) {
         errors[`sku_${i}`] = 'Description is required.';
+      } else if (!isProductInCatalogList(item.sku_text, item.dimensions, rawDbProducts)) {
+        errors[`sku_${i}`] = `Product "${item.sku_text.trim()}" is not in our product list. Select a product from the list or click Add Product.`;
       }
       if (!item.dimensions || !item.dimensions.trim()) {
         errors[`dim_${i}`] = 'Specification is required.';
-      }
-      if (!item.hsn_code || !item.hsn_code.trim()) {
-        errors[`hsn_${i}`] = 'HSN/SAC is required.';
       }
       if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
         errors[`qty_${i}`] = 'Quantity must be > 0.';
@@ -2407,6 +2723,7 @@ export default function InquiriesPage() {
     setPoFileName(file.name);
     setIsExtractingPo(true);
     formExtractedJsonRef.current = null;
+    setFormExtractedJson(null);
 
     try {
       const reader = new FileReader();
@@ -2421,6 +2738,7 @@ export default function InquiriesPage() {
         setPoFileBase64(base64String);
 
         let extracted: any = null;
+        let extractError = '';
 
         // Process Document OCR via Backend Gemini Vision API Route (/inquiries/parse-document)
         try {
@@ -2428,25 +2746,35 @@ export default function InquiriesPage() {
             file_base64: cleanBase64,
             mime_type: file.type || 'image/jpeg',
           });
-          if (res.data?.success && res.data?.data) {
-            extracted = res.data.data;
+          const body = res.data;
+          const candidate = body?.data?.customer_name || body?.data?.line_items || body?.data?.customer
+            ? body.data
+            : body?.customer_name || body?.line_items || body?.customer
+              ? body
+              : body?.data?.success === false
+                ? null
+                : body?.data;
+          if (candidate && candidate.success !== false) {
+            extracted = candidate;
+          } else {
+            extractError = body?.data?.error || body?.error || body?.message || '';
           }
-        } catch (apiErr) {
+        } catch (apiErr: any) {
           console.warn('Backend parse-document failed:', apiErr);
+          extractError = apiErr?.response?.data?.message || apiErr?.message || '';
         }
 
         if (extracted) {
           formExtractedJsonRef.current = extracted;
+          setFormExtractedJson(extracted);
 
           // Customer name: fill ONLY if explicitly present, keep blank if not
-          const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || '';
+          const rawName = extracted.customer_name || extracted.customerName || extracted.company_name || extracted.customer?.name || '';
           const cleanCustomer = (rawName && !isProductOrGenericName(String(rawName)))
             ? String(rawName).trim()
             : '';
           setFormCustomerName(cleanCustomer);
-          if (cleanCustomer) {
-            setExistingCustomers(prev => Array.from(new Set([cleanCustomer, ...prev])));
-          }
+          let filledFromDocument = Boolean(cleanCustomer);
 
           // Phone: fill if detected (10 digits), keep blank if not
           const rawPhone = extracted.customer_phone || extracted.contact_phone || extracted.customer?.phone || extracted.phone || '';
@@ -2454,23 +2782,99 @@ export default function InquiriesPage() {
           const validPhone = (cleanPhone.length >= 10 && !SYSTEM_EMPLOYEE_PHONES.has(cleanPhone)) ? cleanPhone : '';
           setFormPhone(validPhone);
 
-          // Product Description / SKU: Formatted numbered serial list matching document
-          if (Array.isArray(extracted.line_items) && extracted.line_items.length > 0) {
-            const mappedSkus = extracted.line_items
-              .map((li: any, idx: number) => {
-                const sku = li.sku_text || li.sku || li.material || li.description || 'Material';
-                const dims = li.dimensions ? ` (${li.dimensions})` : '';
-                const qty = (li.quantity !== undefined && li.quantity !== null && li.quantity !== '')
-                  ? ` - ${li.quantity} ${li.unit || 'Nos'}`
-                  : '';
-                const rate = li.rate ? ` @ ₹${li.rate}` : '';
-                return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
-              })
-              .filter(Boolean)
-              .join('\n');
-            if (mappedSkus) setFormProductSKU(mappedSkus);
+          // Structured Line Items auto-fill
+          const extractedLines = Array.isArray(extracted.line_items)
+            ? extracted.line_items
+            : Array.isArray(extracted.lineItems)
+              ? extracted.lineItems
+              : [];
+          if (extractedLines.length > 0) {
+            const mappedItems: LineItemDetail[] = extractedLines.map((i: any) => {
+              const skuText = i.sku_text || i.sku || i.material || i.description || 'Material';
+              const dims = i.dimensions || [i.thickness, i.width, i.length].filter(Boolean).join(' x ') || '';
+              let q = Number(i.quantity ?? i.qty) || 0;
+              let rawUnit = i.unit || 'KG';
+              const totalWt = Number(i.total_weight_kg ?? i.weight_kg ?? 0);
+
+              if (
+                totalWt > 0 &&
+                (!i.unit ||
+                  ['NOS', 'NO', 'PCS', 'PC', 'PIECES'].includes(
+                    String(i.unit).toUpperCase(),
+                  ) ||
+                  (q > 0 && q < totalWt / 10))
+              ) {
+                q = totalWt;
+                rawUnit = 'KG';
+              }
+
+              const r = Number(i.rate ?? i.unit_price ?? i.price_per_mt) || 0;
+              const amt = Number(i.amount) || 0;
+              const matchedCustomProd = findCustomProductMatch(skuText, dims, rawDbProducts);
+              const detectedHsn = (
+                i.hsn_code ||
+                i.hsn ||
+                detectHsnCode(skuText, dims) ||
+                matchedCustomProd?.hsn_code ||
+                ''
+              ).trim();
+
+              const calc = calculateLineItem({
+                sku_text: skuText,
+                dimensions: dims,
+                hsn_code: detectedHsn,
+                quantity: q,
+                unit: normalizeUnit(rawUnit) || 'KG',
+                rate: r,
+                amount: amt,
+              });
+
+              return {
+                ...calc,
+                sku_text: skuText,
+                hsn_code: detectedHsn,
+                converted_mt: i.weight_mt !== undefined && i.weight_mt !== null ? i.weight_mt : calc.converted_mt,
+              };
+            });
+            if (mappedItems.length > 0) {
+              setFormLineItems(mappedItems);
+              filledFromDocument = true;
+            }
           } else if (extracted.sku_text || extracted.product_type) {
-            setFormProductSKU(extracted.sku_text || extracted.product_type);
+            const skuText = extracted.sku_text || extracted.product_type || 'Material';
+            const dims = extracted.dimensions || '';
+            const matchedCustomProd = findCustomProductMatch(skuText, dims, rawDbProducts);
+            const detectedHsn = (
+              detectHsnCode(skuText, dims) ||
+              matchedCustomProd?.hsn_code ||
+              ''
+            ).trim();
+            let q = Number(extracted.quantity) || 0;
+            let rawUnit = extracted.unit || 'KG';
+            const totalWt = Number(extracted.total_weight_kg ?? extracted.weight_kg ?? 0);
+            if (
+              totalWt > 0 &&
+              (!extracted.unit ||
+                ['NOS', 'NO', 'PCS', 'PC', 'PIECES'].includes(
+                  String(extracted.unit).toUpperCase(),
+                ) ||
+                (q > 0 && q < totalWt / 10))
+            ) {
+              q = totalWt;
+              rawUnit = 'KG';
+            }
+            const r = Number(extracted.rate) || 0;
+            const calc = calculateLineItem({
+              sku_text: skuText,
+              dimensions: dims,
+              hsn_code: detectedHsn,
+              quantity: q,
+              unit: normalizeUnit(rawUnit) || 'KG',
+              rate: r,
+              amount: 0,
+            });
+            setFormLineItems([{ ...calc, sku_text: skuText, hsn_code: detectedHsn }]);
+            filledFromDocument = true;
           }
 
           // Additional Notes: Only non-product notes, remarks, delivery timeline, contact details (never line items)
@@ -2486,12 +2890,25 @@ export default function InquiriesPage() {
           if (extracted.preferred_make || extracted.make || extracted.brand) {
             setFormPreferredMake(extracted.preferred_make || extracted.make || extracted.brand);
           }
-          if (extracted.payment_terms) {
-            setFormPaymentTerms(extracted.payment_terms);
+          if (extracted.payment_terms || extracted.paymentTerms) {
+            setFormPaymentTerms(extracted.payment_terms || extracted.paymentTerms);
           }
-          if (extracted.delivery_location) {
-            setFormDeliveryLocation(extracted.delivery_location);
+          const extractedDelivery = extracted.delivery_location || extracted.deliveryLocation || extracted.customer_address || extracted.customer?.address || '';
+          if (extractedDelivery) {
+            setFormDeliveryLocation(String(extractedDelivery).trim());
           }
+
+          if (cleanCustomer || extractedLines.length > 0 || extracted.preferred_make || extracted.payment_terms || extractedDelivery) {
+            filledFromDocument = true;
+          }
+
+          if (filledFromDocument) {
+            toast.success('Inquiry Document parsed! Details auto-filled.');
+          } else {
+            toast.error(extractError || 'Could not auto-extract inquiry details. You can enter the fields manually.');
+          }
+        } else {
+          toast.error(extractError || 'Could not auto-extract inquiry details. You can enter the fields manually.');
         }
 
         setIsExtractingPo(false);
@@ -2508,7 +2925,7 @@ export default function InquiriesPage() {
     e.preventDefault();
 
     // Read directly from ref to avoid React state batching delays
-    let extractedJson = formExtractedJsonRef.current;
+    const extractedJson = formExtractedJsonRef.current;
     const customerName =
       (formCustomerName.trim() && !isProductOrGenericName(formCustomerName))
         ? formCustomerName.trim()
@@ -2528,148 +2945,180 @@ export default function InquiriesPage() {
 
     if (!customerName) {
       toast.error('Please enter Company Name');
+      const el = document.getElementById('form-company-name') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
-    if (!formProductSKU.trim()) {
-      toast.error('Please enter Product Description / SKU');
+
+    if (!isCustomerInAssignedList(customerName, rawCustomers)) {
+      toast.error('Cannot save inquiry: Customer is not in your assigned customer list.');
       return;
     }
-    if (!formPaymentTerms.trim()) {
-      toast.error('Please enter Payment Terms');
+
+    if (formLineItems.length === 0) {
+      toast.error('Please add at least one line item');
       return;
     }
+
+    for (let i = 0; i < formLineItems.length; i++) {
+      const item = formLineItems[i];
+      if (!item.sku_text.trim()) {
+        const el = document.getElementById(`form-item-sku-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+      if (!isProductInCatalogList(item.sku_text, item.dimensions, rawDbProducts)) {
+        toast.error(
+          `Cannot save inquiry: Product "${item.sku_text.trim()}" is not in the product list. Select a product from the list or click "Add Product".`,
+        );
+        const el = document.getElementById(`form-item-sku-${i}`) as HTMLInputElement;
+        if (el) el.focus();
+        return;
+      }
+      if (!item.dimensions?.trim()) {
+        const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+      if (!item.quantity || Number(item.quantity) <= 0) {
+        const el = document.getElementById(`form-item-qty-${i}`) as HTMLInputElement;
+        if (el) {
+          el.focus();
+          el.reportValidity();
+        }
+        return;
+      }
+    }
+
     if (!formDeliveryLocation.trim()) {
-      toast.error('Please enter Delivery Location');
+      const el = document.getElementById('form-delivery-location') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
       return;
     }
+
+    if (!formPaymentTerms.trim()) {
+      const el = document.getElementById('form-payment-terms') as HTMLInputElement;
+      if (el) {
+        el.focus();
+        el.reportValidity();
+      }
+      return;
+    }
+
+    const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems, {
+      isInterState: isFormInterState,
+    });
+    const totalTonnage = calculateTotalTonnageMt(formLineItems);
 
     try {
       setSubmitting(true);
 
-      // If no document extraction was pre-loaded, automatically extract line items & terms with Gemini AI
-      if (!extractedJson && formProductSKU.trim()) {
-        try {
-          const fullTextToParse = [
-            `Company: ${customerName}`,
-            `Products & Requirement: ${formProductSKU.trim()}`,
-            formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
-            formDeliveryLocation.trim() ? `Delivery Location: ${formDeliveryLocation.trim()}` : '',
-            formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
-            formRequirement.trim() ? `Additional Notes: ${formRequirement.trim()}` : '',
-          ].filter(Boolean).join('\n');
-
-          const res = await inquiriesApi.parseText({ text: fullTextToParse });
-          const data = res?.data?.data || res?.data;
-          if (data && (Array.isArray(data.line_items) || data.sku_text || data.product_type)) {
-            extractedJson = data;
-          }
-        } catch (geminiErr) {
-          console.warn('Gemini AI parsing fallback:', geminiErr);
-        }
-      }
-
-      // Build ai_extraction_json from the structured extraction or deterministic local parser
-      let aiExtractionJson: any = null;
-
-      if (extractedJson && Array.isArray(extractedJson.line_items) && extractedJson.line_items.length > 0) {
-        // Normalize line_items to match Review & Edit popup expectations
-        const lineItems = extractedJson.line_items.map((li: any) => {
-          const skuText = li.sku_text || li.description || li.material || li.sku || 'Material';
-          const liDim = li.dimensions || '';
-          return {
-            sku_text: skuText,
-            dimensions: liDim,
-            hsn_code:
-              (li.hsn_code && li.hsn_code.trim()) ||
-              li.hsn ||
-              detectHsnCode(skuText, liDim) ||
-              '72083840',
-            quantity: Number(li.quantity) || 0,
-            unit: li.unit || 'MT',
-            rate: Number(li.rate) || 0,
-            amount: Number(li.amount) || Math.round(Number(li.quantity || 0) * Number(li.rate || 0)),
-          };
-        });
-        const totalAmount = extractedJson.total_amount || lineItems.reduce((s: number, i: any) => s + i.amount, 0);
-        aiExtractionJson = {
-          ...extractedJson,
-          customer: {
-            name: customerName,
-            phone: finalCustomerPhone,
-            gst: extractedJson.customer_gst || null,
-            address: extractedJson.customer_address || formDeliveryLocation.trim() || null,
-          },
-          companyName: customerName,
-          customer_name: customerName,
-          customerPhone: finalCustomerPhone,
-          customer_phone: finalCustomerPhone,
-          salespersonName: activeSalespersonName,
-          line_items: lineItems,
-          lineItems: lineItems,
-          total_amount: totalAmount > 0 ? totalAmount : 0,
-          totalAmount: totalAmount > 0 ? totalAmount : 0,
-          delivery_location: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
-          deliveryLocation: formDeliveryLocation.trim() || extractedJson.delivery_location || '',
-          payment_terms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
-          paymentTerms: formPaymentTerms.trim() || extractedJson.payment_terms || '',
-          preferred_make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
-          make: formPreferredMake.trim() || extractedJson.preferred_make || extractedJson.make || '',
+      const lineItemsPayload = formLineItems.map(i => {
+        const baseAmt = Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0));
+        const cgstAmt = isFormInterState
+          ? 0
+          : i.cgst_amount !== undefined
+            ? Number(i.cgst_amount)
+            : Math.round(baseAmt * 0.09 * 100) / 100;
+        const sgstAmt = isFormInterState
+          ? 0
+          : i.sgst_amount !== undefined
+            ? Number(i.sgst_amount)
+            : Math.round(baseAmt * 0.09 * 100) / 100;
+        const igstAmt = isFormInterState
+          ? i.igst_amount !== undefined && Number(i.igst_amount) > 0
+            ? Number(i.igst_amount)
+            : Math.round(baseAmt * 0.18 * 100) / 100
+          : 0;
+        const totalGst = Math.round((cgstAmt + sgstAmt + igstAmt) * 100) / 100;
+        const finalAmt = i.final_amount !== undefined && Number(i.final_amount) > 0 ? Number(i.final_amount) : Math.round((baseAmt + totalGst) * 100) / 100;
+        const resolvedHsn = i.hsn_code
+          ? i.hsn_code.trim()
+          : (detectHsnCode(i.sku_text, i.dimensions) ||
+            findCustomProductMatch(i.sku_text, i.dimensions, rawDbProducts)?.hsn_code ||
+            '');
+        return {
+          sku_text: i.sku_text.trim(),
+          dimensions: i.dimensions ? i.dimensions.trim() : '',
+          hsn_code: resolvedHsn,
+          quantity: Number(i.quantity) || 0,
+          unit: normalizeUnit(i.unit) || 'MT',
+          rate: Number(i.rate) || 0,
+          amount: baseAmt,
+          cgst_rate: isFormInterState ? 0 : 9,
+          cgst_amount: cgstAmt,
+          sgst_rate: isFormInterState ? 0 : 9,
+          sgst_amount: sgstAmt,
+          igst_rate: isFormInterState ? 18 : 0,
+          igst_amount: igstAmt,
+          total_gst: totalGst,
+          final_amount: finalAmt,
+          converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
+          is_manual_mt: i.is_manual_mt || undefined,
         };
-      } else {
-        const fullText = (formProductSKU || '') + ' ' + (formRequirement || '');
-        const parsedReq = parseInquiryText(fullText, {
-          customer_name: customerName,
-          raw_text: fullText,
-        });
+      });
 
-        const lineItems = (parsedReq.lineItems && parsedReq.lineItems.length > 0)
-          ? parsedReq.lineItems.map(i => ({
-              ...i,
-              hsn_code:
-                (i.hsn_code && i.hsn_code.trim()) ||
-                detectHsnCode(i.sku_text, i.dimensions) ||
-                '72083840',
-            }))
-          : (formProductSKU.trim() ? [{
-              sku_text: formProductSKU.trim(),
-              dimensions: '',
-              hsn_code: detectHsnCode(formProductSKU.trim(), '') || '72083840',
-              quantity: parsedReq.quantityTons || 1,
-              unit: parsedReq.lineItems?.[0]?.unit || 'MT',
-              rate: parsedReq.unitPrice || 0,
-              amount: parsedReq.totalAmount || 0,
-            }] : []);
+      const aiExtractionJson: any = {
+        ...(extractedJson || {}),
+        customer: {
+          name: customerName,
+          phone: finalCustomerPhone,
+          gst: formCustMeta?.gstin || extractedJson?.customer_gst || null,
+          address: formDeliveryLocation.trim() || null,
+          state: formPlaceOfSupply.label,
+        },
+        companyName: customerName,
+        customer_name: customerName,
+        customerPhone: finalCustomerPhone,
+        customer_phone: finalCustomerPhone,
+        salespersonName: activeSalespersonName,
+        productType: lineItemsPayload[0]?.sku_text || 'Hot Rolled',
+        quantityTons: totalTonnage.totalMt || lineItemsPayload[0]?.quantity || 0,
+        unitPrice: lineItemsPayload[0]?.rate || 0,
+        total_amount: qBreakdown.grandTotal > 0 ? qBreakdown.grandTotal : 0,
+        totalAmount: qBreakdown.grandTotal > 0 ? qBreakdown.grandTotal : 0,
+        subtotal: qBreakdown.subtotal,
+        cgst_amount: qBreakdown.CGST,
+        sgst_amount: qBreakdown.SGST,
+        igst_amount: qBreakdown.IGST,
+        is_inter_state: isFormInterState,
+        place_of_supply: formPlaceOfSupply.label,
+        rounding: qBreakdown.rounding,
+        delivery_location: formDeliveryLocation.trim(),
+        deliveryLocation: formDeliveryLocation.trim(),
+        payment_terms: formPaymentTerms.trim(),
+        paymentTerms: formPaymentTerms.trim(),
+        preferred_make: formPreferredMake.trim(),
+        make: formPreferredMake.trim(),
+        line_items: lineItemsPayload,
+        lineItems: lineItemsPayload,
+        additional_notes: formRequirement.trim(),
+        notes: formRequirement.trim(),
+      };
 
-        const subtotal = lineItems.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0);
-
-        aiExtractionJson = {
-          customer: {
-            name: customerName,
-            phone: finalCustomerPhone,
-          },
-          companyName: customerName,
-          customer_name: customerName,
-          customerPhone: finalCustomerPhone,
-          customer_phone: finalCustomerPhone,
-          salespersonName: activeSalespersonName,
-          productType: formProductSKU.trim() || parsedReq.productType,
-          quantityTons: parsedReq.quantityTons,
-          unitPrice: parsedReq.unitPrice,
-          totalAmount: subtotal > 0 ? subtotal : parsedReq.totalAmount,
-          total_amount: subtotal > 0 ? subtotal : parsedReq.totalAmount,
-          delivery_location: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
-          deliveryLocation: formDeliveryLocation.trim() || parsedReq.deliveryLocation || '',
-          payment_terms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
-          paymentTerms: formPaymentTerms.trim() || parsedReq.paymentTerms || '',
-          preferred_make: formPreferredMake.trim() || (parsedReq as any).preferredMake || '',
-          make: formPreferredMake.trim() || (parsedReq as any).preferredMake || '',
-          line_items: lineItems,
-          lineItems: lineItems,
-        };
-      }
+      const itemStrs = lineItemsPayload.map((item, idx) => {
+        const sku = item.sku_text || 'Item';
+        const dims = item.dimensions ? ` (${item.dimensions})` : '';
+        const qty = item.quantity ? ` - ${item.quantity} ${item.unit || 'MT'}` : '';
+        const rate = Number(item.rate) > 0 ? ` @ ₹${item.rate}/${item.unit || 'MT'}` : '';
+        return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
+      }).filter(Boolean);
 
       const reqDetails = [
-        formProductSKU.trim() ? `Material:\n${formProductSKU.trim()}` : '',
+        itemStrs.length > 0 ? `Material:\n${itemStrs.join('\n')}` : '',
         formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
         formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : '',
         formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
@@ -2678,7 +3127,7 @@ export default function InquiriesPage() {
 
       const rawText = poFileName
         ? `[Inquiry Attachment: ${poFileName}]\n${reqDetails || 'Inquiry'}`
-        : reqDetails || formProductSKU.trim() || 'Inquiry';
+        : reqDetails || 'Inquiry';
 
       const createRes = await inquiriesApi.create({
         sender_name: customerName,
@@ -2694,7 +3143,7 @@ export default function InquiriesPage() {
       });
 
       const newInquiry: InquiryItem = {
-        id: createRes?.data?.id || createRes?.data?.data?.id || String(Date.now()),
+        id: createRes?.data?.id || createRes?.data?.data?.id || 'new-inquiry',
         sender_name: customerName,
         customer_name: customerName,
         customer_phone: finalCustomerPhone,
@@ -2709,19 +3158,8 @@ export default function InquiriesPage() {
         created_at: new Date().toISOString(),
       };
 
-      setShowModal(false);
-      setFormCustomerName('');
-      setShowCompanyDropdown(false);
-      setFormPhone('');
-      setFormProductSKU('');
-      setFormPreferredMake('');
-      setFormDeliveryLocation('');
-      setFormPaymentTerms('');
-      setFormRequirement('');
-      setFormInquiryType('Product Requirement');
-      setPoFileName('');
-      setPoFileBase64(null);
-      formExtractedJsonRef.current = null;
+      toast.success('Inquiry logged successfully!');
+      handleCancelCreateInquiry();
 
       // Prepend local inquiry so it appears immediately with full ai_extraction_json
       setInquiries(prev => [newInquiry, ...(Array.isArray(prev) ? prev : [])]);
@@ -3065,6 +3503,15 @@ export default function InquiriesPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
+            {isAdmin && viewingAs?.role === 'salesperson' && adminReturnPath && (
+              <SalespersonContextBanner
+                name={viewingAs.name}
+                onBack={() => {
+                  clearViewingAs();
+                  navigate(adminReturnPath);
+                }}
+              />
+            )}
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <FileText className="text-blue-600" size={28} />
               {viewMode === 'pipeline' ? 'Sales Pipeline' : 'Inquiries & Quotations Management'}
@@ -3072,11 +3519,25 @@ export default function InquiriesPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            {!isProcurement && (
+            <button
+              type="button"
+              disabled={isSyncingZoho}
+              onClick={handleTriggerZohoSync}
+              className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
+              <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
+              <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
+            </button>
+            )}
+
             <button
               type="button"
               disabled={dealsFetching || isFetching}
               onClick={async () => {
-                await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+                await Promise.all([
+                  fetchMonthlyInquiries(),
+                  isProcurement ? Promise.resolve() : fetchDeals(),
+                ]);
                 toast.success(viewMode === 'pipeline' ? 'Pipeline refreshed' : 'Inquiries list refreshed');
               }}
               title={viewMode === 'pipeline' ? 'Refresh Pipeline' : 'Refresh Inquiries'}
@@ -3084,17 +3545,21 @@ export default function InquiriesPage() {
               <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
             </button>
 
+            {!isProcurement && (
             <button
               onClick={() => navigate('/orders')}
               className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0">
               <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
             </button>
+            )}
 
+            {!isProcurement && (
             <button
               onClick={() => setShowModal(true)}
               className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
               <Plus size={15} /> Log New Inquiry
             </button>
+            )}
           </div>
         </div>
 
@@ -3205,6 +3670,7 @@ export default function InquiriesPage() {
         )}
 
         {/* 5. Kanban View Button (Very Right in the Same Row) */}
+        {!isProcurement && (
         <div className="flex items-center ml-auto">
           <button
             type="button"
@@ -3229,6 +3695,7 @@ export default function InquiriesPage() {
             <span>Kanban View</span>
           </button>
         </div>
+        )}
       </div>
       </div>
 
@@ -3319,7 +3786,8 @@ export default function InquiriesPage() {
                           hsn_code:
                             (item.hsn_code && item.hsn_code.trim()) ||
                             detectHsnCode(sText, sDim) ||
-                            '72083840',
+                            findCustomProductMatch(sText, sDim, rawDbProducts)?.hsn_code ||
+                            '',
                           quantity: Number(item.quantity) || 0,
                           unit: item.unit || 'MT',
                           rate: Number(item.rate) || 0,
@@ -3352,8 +3820,8 @@ export default function InquiriesPage() {
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
                 const dealIdDisplay = inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : (linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : '-');
 
-                const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation' || dealStageKey === 'on_hold';
-                const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted';
+                const showUpdateStatus = !isProcurement && (dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation' || dealStageKey === 'on_hold');
+                const showShareQuotation = !isProcurement && (dealStageKey === 'qualified' || dealStageKey === 'quoted');
 
                 return (
                   <tr
@@ -3374,6 +3842,13 @@ export default function InquiriesPage() {
                         <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
                           <UserCheck size={12} className="text-slate-400 shrink-0" />
                           Rep: {details.salespersonName}
+                        </div>
+                      )}
+                      {(isProcurementManager || isAdmin) && (
+                        <div className="text-[11px] mt-0.5 font-semibold text-slate-500">
+                          {inq.procurement_employee_id
+                            ? `Procurement: ${rawEmployees.find((e: any) => e.id === inq.procurement_employee_id)?.name || 'Assigned'}`
+                            : 'Procurement: Unassigned'}
                         </div>
                       )}
                     </td>
@@ -3520,6 +3995,8 @@ export default function InquiriesPage() {
                                   setShareInquiry(inq);
                                   setShareDetails(details);
                                   setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || '');
+                                  setQuotationCcDraft('');
+                                  setQuotationCcError('');
                                   setShowQuotationModal(true);
                                 }}
                                 className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer">
@@ -3565,7 +4042,7 @@ export default function InquiriesPage() {
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overscroll-contain animate-in fade-in duration-150"
           onClick={handleCloseDrawer}>
           <div
-            className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
+            className="bg-white rounded-2xl max-w-7xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={e => e.stopPropagation()}>
             {/* Drawer Header (Fixed Top) */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
@@ -3585,6 +4062,37 @@ export default function InquiriesPage() {
                       return `ID: ${inqIdDisplay.replace(/^#/, '')}`;
                     })()}
                   </p>
+                  {canAssignProcurement && (
+                    <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+                      Procurement owner
+                      <select
+                        value={selectedInquiry.procurement_employee_id || ''}
+                        onChange={async (e) => {
+                          const nextId = e.target.value || null;
+                          try {
+                            await inquiriesApi.assignProcurement(selectedInquiry.id, nextId);
+                            setSelectedInquiry((prev) =>
+                              prev ? { ...prev, procurement_employee_id: nextId } : prev,
+                            );
+                            toast.success(nextId ? 'Procurement owner assigned' : 'Procurement owner cleared');
+                            fetchMonthlyInquiries();
+                          } catch (err: any) {
+                            toast.error(err?.response?.data?.message || 'Could not assign procurement owner');
+                          }
+                        }}
+                        className="px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800"
+                      >
+                        <option value="">Unassigned</option>
+                        {rawEmployees
+                          .filter((emp: any) => emp.role === 'procurement_person' || emp.role === 'procurement_manager')
+                          .map((emp: any) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
                 </div>
               </div>
 
@@ -3710,32 +4218,119 @@ export default function InquiriesPage() {
                   </div>
                 </div>
 
+                {(() => {
+                  const drawerItems =
+                    editDetails.lineItems && editDetails.lineItems.length > 0
+                      ? editDetails.lineItems
+                      : [
+                          {
+                            sku_text: editDetails.productType || '',
+                            dimensions: [editDetails.thickness, editDetails.width, editDetails.length]
+                              .filter(Boolean)
+                              .join(' x '),
+                          },
+                        ];
+                  const seenLower = new Set<string>();
+                  const unrecognizedProductNames: string[] = [];
+                  let firstUnrecognizedRowIdx: number | null = null;
+
+                  drawerItems.forEach((item, idx) => {
+                    const trimmed = (item.sku_text || '').trim();
+                    if (!trimmed) return;
+                    if (!isProductInCatalogList(trimmed, item.dimensions, rawDbProducts)) {
+                      if (firstUnrecognizedRowIdx === null) {
+                        firstUnrecognizedRowIdx = idx;
+                      }
+                      const lower = trimmed.toLowerCase();
+                      if (!seenLower.has(lower)) {
+                        seenLower.add(lower);
+                        unrecognizedProductNames.push(trimmed);
+                      }
+                    }
+                  });
+
+                  if (unrecognizedProductNames.length === 0) return null;
+
+                  return (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 leading-relaxed">
+                          <span className="font-bold">Product Not Available:</span>{' '}
+                          <span>
+                            These products are not in our product list:{' '}
+                            <span className="font-bold">
+                              {unrecognizedProductNames.join(', ')}
+                            </span>
+                            . Select a product from the list below or click ‘Add Product’.{' '}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowProductListModal(true)}
+                            className="font-bold text-rose-700 underline hover:text-rose-900 ml-1 cursor-pointer">
+                            View product list
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 pl-6">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (firstUnrecognizedRowIdx !== null) {
+                              setAddProductModalSource('edit');
+                              setAddProductModalRowIdx(firstUnrecognizedRowIdx);
+                            }
+                          }}
+                          className="px-3 py-1 bg-white border border-rose-300 text-rose-800 rounded-lg text-[11px] font-bold hover:bg-rose-100 cursor-pointer">
+                          Add Product
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Structured Inquiry Table Layout */}
-                <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
-                  <table className="w-full text-left text-xs text-slate-800 border-collapse">
+                <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
+                  <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[32%]">
+                        <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                        <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center">
-                          HSN/SAC <span className="text-red-500 font-bold">*</span>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
+                          HSN/SAC
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[23%] text-center">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center align-middle">
                           Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center min-w-[95px]">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
                           Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
-                        <th className="px-2 py-3 text-center w-[3%]"></th>
+                        {isEditInterState ? (
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[16%] min-w-[110px]">
+                            IGST (18%)
+                          </th>
+                        ) : (
+                          <>
+                            <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                              CGST (9%)
+                            </th>
+                            <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                              SGST (9%)
+                            </th>
+                          </>
+                        )}
+                        <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                          Amount (₹)
+                        </th>
+                        <th className="px-2 py-3 text-center w-[3%] align-middle"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {(editDetails.lineItems && editDetails.lineItems.length > 0
                         ? editDetails.lineItems
-                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: detectHsnCode(editDetails.productType || '', [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
+                        : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: editDetails.productType ? (detectHsnCode(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || findCustomProductMatch(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), rawDbProducts)?.hsn_code || '') : '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
@@ -3743,22 +4338,41 @@ export default function InquiriesPage() {
                             <div className="space-y-1">
                               <input
                                 type="text"
+                                list="catalog-products-datalist"
                                 value={item.sku_text || ''}
                                 onChange={(e) => {
                                   const newSku = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
                                   const currentHsn = updated[idx]?.hsn_code || '';
-                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions);
-                                  const newAutoHsn = detectHsnCode(newSku, item.dimensions);
+                                  const matchedCustom = findCustomProductMatch(newSku, item.dimensions, rawDbProducts);
+                                  const nextDim =
+                                    item.dimensions && item.dimensions.trim()
+                                      ? item.dimensions
+                                      : matchedCustom?.dimensions || '';
+                                  const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', item.dimensions) || findCustomProductMatch(updated[idx]?.sku_text || '', item.dimensions, rawDbProducts)?.hsn_code || '';
+                                  const newAutoHsn = detectHsnCode(newSku, nextDim) || matchedCustom?.hsn_code || '';
 
                                   let finalHsn = currentHsn;
-                                  if (!currentHsn || currentHsn === prevAutoHsn) {
-                                    finalHsn = newAutoHsn || '72083840';
+                                  if (!newSku.trim()) {
+                                    finalHsn = '';
+                                  } else if (newAutoHsn || !currentHsn || currentHsn === prevAutoHsn) {
+                                    finalHsn = newAutoHsn || '';
                                   }
 
-                                  const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  const currentItem = { ...updated[idx], sku_text: newSku, dimensions: nextDim, hsn_code: finalHsn };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3789,17 +4403,30 @@ export default function InquiriesPage() {
                                     const newDim = e.target.value;
                                     const updated = [...(editDetails.lineItems || [])];
                                     const currentHsn = updated[idx]?.hsn_code || '';
-                                    const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions);
-                                    const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim);
+                                    const prevAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', updated[idx]?.dimensions) || findCustomProductMatch(updated[idx]?.sku_text || '', updated[idx]?.dimensions, rawDbProducts)?.hsn_code || '';
+                                    const newAutoHsn = detectHsnCode(updated[idx]?.sku_text || '', newDim) || findCustomProductMatch(updated[idx]?.sku_text || '', newDim, rawDbProducts)?.hsn_code || '';
 
                                     let finalHsn = currentHsn;
-                                    if (!currentHsn || currentHsn === prevAutoHsn) {
-                                      finalHsn = newAutoHsn || '72083840';
+                                    if (!String(updated[idx]?.sku_text || '').trim()) {
+                                      finalHsn = '';
+                                    } else if (!currentHsn || currentHsn === prevAutoHsn) {
+                                      finalHsn = newAutoHsn || '';
                                     }
 
                                     const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
-                                    const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                    updated[idx] = { ...currentItem, amount: calc.amount };
+                                    const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
+                                    updated[idx] = {
+                                      ...currentItem,
+                                      amount: calc.amount,
+                                      cgst_rate: calc.cgst_rate,
+                                      cgst_amount: calc.cgst_amount,
+                                      sgst_rate: calc.sgst_rate,
+                                      sgst_amount: calc.sgst_amount,
+                                      igst_rate: calc.igst_rate,
+                                      igst_amount: calc.igst_amount,
+                                      total_gst: calc.total_gst,
+                                      final_amount: calc.final_amount,
+                                    };
                                     const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                     const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                     setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3861,12 +4488,23 @@ export default function InquiriesPage() {
                                   const rawQ = val === '' ? 0 : parseFloat(val);
                                   const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  let currentItem = { ...updated[idx], quantity: safeQ };
+                                  const currentItem = { ...updated[idx], quantity: safeQ };
                                   if (normalizeUnit(currentItem.unit) === 'MT') {
                                     currentItem.converted_mt = safeQ;
                                   }
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3883,37 +4521,47 @@ export default function InquiriesPage() {
                                 }`}
                               />
                               <select
-                                value={normalizeUnit(item.unit) || 'MT'}
+                                value={normalizeUnit(item.unit) || 'KG'}
                                 onChange={(e) => {
                                   const newUnit = e.target.value;
                                   const updated = [...(editDetails.lineItems || [])];
-                                  let currentItem = { ...updated[idx], unit: newUnit };
+                                  const currentItem = { ...updated[idx], unit: newUnit };
+                                  delete currentItem.is_manual_mt;
                                   if (newUnit === 'MT') {
                                     currentItem.converted_mt = currentItem.quantity;
-                                  } else if (currentItem.is_manual_mt && (currentItem.converted_mt === undefined || currentItem.converted_mt === 0)) {
+                                  } else {
                                     delete currentItem.converted_mt;
-                                    delete currentItem.is_manual_mt;
                                   }
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
                                   const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                   const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                 }}
                                 className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="KG">KG</option>
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
-                                <option value="Pcs">Pcs</option>
-                                <option value="KG">KG</option>
-                                <option value="Sheets">Sheets</option>
-                                <option value="Plates">Plates</option>
-                                <option value="Coils">Coils</option>
+                                {['Pcs', 'Sheets', 'Plates', 'Coils'].includes(normalizeUnit(item.unit) || '') && (
+                                  <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
+                                )}
                               </select>
                               {(() => {
                                 const itemWeight = formatLineItemWeightMt(item);
                                 const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
-                                const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                                const displayMt = (item.is_manual_mt || normalizeUnit(item.unit) === 'MT') && item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
                                   ? item.converted_mt
                                   : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
                                 const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
@@ -3934,7 +4582,7 @@ export default function InquiriesPage() {
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         const updated = [...(editDetails.lineItems || [])];
-                                        let currentItem = { ...updated[idx] };
+                                        const currentItem = { ...updated[idx] };
 
                                         if (val === '') {
                                           delete currentItem.converted_mt;
@@ -3949,8 +4597,19 @@ export default function InquiriesPage() {
                                           }
                                         }
 
-                                        const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                        updated[idx] = { ...currentItem, amount: calc.amount };
+                                        const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isEditInterState });
+                                        updated[idx] = {
+                                          ...currentItem,
+                                          amount: calc.amount,
+                                          cgst_rate: calc.cgst_rate,
+                                          cgst_amount: calc.cgst_amount,
+                                          sgst_rate: calc.sgst_rate,
+                                          sgst_amount: calc.sgst_amount,
+                                          igst_rate: calc.igst_rate,
+                                          igst_amount: calc.igst_amount,
+                                          total_gst: calc.total_gst,
+                                          final_amount: calc.final_amount,
+                                        };
                                         const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                         const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                         setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
@@ -3983,8 +4642,19 @@ export default function InquiriesPage() {
                                   safeR = isNaN(parsed) || parsed < 0 ? 0 : parsed;
                                 }
                                 const currentItem = { ...updated[idx], rate: safeR };
-                                const calc = calculateLineItem({ ...currentItem, rate: typeof safeR === 'number' ? safeR : 0, amount: 0 });
-                                updated[idx] = { ...currentItem, amount: calc.amount };
+                                const calc = calculateLineItem({ ...currentItem, rate: typeof safeR === 'number' ? safeR : 0, amount: 0 }, { isInterState: isEditInterState });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
                                 const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
                                 const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                 setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons, unitPrice: Number(updated[0]?.rate) || 0 });
@@ -4004,24 +4674,103 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block mt-0.5">{fieldErrors[`rate_${idx}`]}</span>
                             )}
                           </td>
+                          {isEditInterState ? (
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const igst =
+                                  item.igst_amount !== undefined && Number(item.igst_amount) > 0
+                                    ? Number(item.igst_amount)
+                                    : Math.round(baseAmt * 0.18 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(igst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                          ) : (
+                            <>
+                              <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                                {(() => {
+                                  const baseAmt = Number(item.amount) || 0;
+                                  const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                  return (
+                                    <input
+                                      type="text"
+                                      readOnly
+                                      tabIndex={-1}
+                                      value={formatIndianCurrency(cgst, true)}
+                                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                    />
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                                {(() => {
+                                  const baseAmt = Number(item.amount) || 0;
+                                  const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                  return (
+                                    <input
+                                      type="text"
+                                      readOnly
+                                      tabIndex={-1}
+                                      value={formatIndianCurrency(sgst, true)}
+                                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                    />
+                                  );
+                                })()}
+                              </td>
+                            </>
+                          )}
                           <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
-                            <input
-                              type="number"
-                              min="0"
-                              value={item.amount === 0 ? '' : item.amount}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const rawA = val === '' ? 0 : parseFloat(val);
-                                const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
-                                const updated = [...(editDetails.lineItems || [])];
-                                updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
-                                const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
-                                setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
-                                setSaveSuccess(false);
-                              }}
-                              placeholder="0"
-                              className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                            />
+                            {(() => {
+                              const baseAmt = Number(item.amount) || 0;
+                              const cgst = isEditInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                              const sgst = isEditInterState ? 0 : (item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                              const igst = isEditInterState ? (item.igst_amount !== undefined && Number(item.igst_amount) > 0 ? Number(item.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100) : 0;
+                              const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst + igst) * 100) / 100;
+                              return (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={finalAmt === 0 ? '' : finalAmt}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const rawA = val === '' ? 0 : parseFloat(val);
+                                    const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                                    const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
+                                    const cgstA = isEditInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                    const sgstA = isEditInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                    const igstA = isEditInterState ? Math.round(safeBase * 0.18 * 100) / 100 : 0;
+                                    const updated = [...(editDetails.lineItems || [])];
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      amount: safeBase,
+                                      isManualAmount: true,
+                                      cgst_rate: isEditInterState ? 0 : 9,
+                                      cgst_amount: cgstA,
+                                      sgst_rate: isEditInterState ? 0 : 9,
+                                      sgst_amount: sgstA,
+                                      igst_rate: isEditInterState ? 18 : 0,
+                                      igst_amount: igstA,
+                                      total_gst: Math.round((cgstA + sgstA + igstA) * 100) / 100,
+                                      final_amount: safeFinal,
+                                    };
+                                    const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+                                    setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt });
+                                    setSaveSuccess(false);
+                                  }}
+                                  placeholder="0"
+                                  className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                                />
+                              );
+                            })()}
                           </td>
                           <td className="px-2 py-3.5 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -4046,10 +4795,10 @@ export default function InquiriesPage() {
                                   onClick={() => {
                                     const current = editDetails.lineItems && editDetails.lineItems.length > 0
                                       ? editDetails.lineItems
-                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '72083840', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                                     const updated = [
                                       ...current,
-                                      { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: isEditInterState ? 0 : 9, cgst_amount: 0, sgst_rate: isEditInterState ? 0 : 9, sgst_amount: 0, igst_rate: isEditInterState ? 18 : 0, igst_amount: 0, total_gst: 0, final_amount: 0 },
                                     ];
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
@@ -4073,7 +4822,9 @@ export default function InquiriesPage() {
                       : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
 
                     const subtotal = activeLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                    const qBreakdown = calculateQuotationBreakdown(subtotal);
+                    const qBreakdown = calculateQuotationBreakdown(subtotal, activeLineItems, {
+                      isInterState: isEditInterState,
+                    });
 
                     const totalTonnage = calculateTotalTonnageMt(activeLineItems);
                     const formattedItemsInTotal = totalTonnage.formattedText;
@@ -4096,6 +4847,13 @@ export default function InquiriesPage() {
                             <span className="font-bold">Est. Total Weight: </span>
                             <span className="font-mono font-bold">{weightLabel}</span>
                           </p>
+                          <p className="mt-1 text-slate-600">
+                            <span className="font-bold text-slate-700">Place of Supply: </span>
+                            <span className="font-semibold">{editPlaceOfSupply.label}</span>
+                            <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                              {isEditInterState ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST 9% + SGST 9%)'}
+                            </span>
+                          </p>
                         </div>
 
                         <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
@@ -4103,14 +4861,23 @@ export default function InquiriesPage() {
                             <span className="font-medium text-slate-600">Sub Total</span>
                             <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
                           </div>
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">CGST (9%)</span>
-                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className="font-medium text-slate-600">SGST (9%)</span>
-                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
-                          </div>
+                          {qBreakdown.isInterState ? (
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">IGST (18%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedIGST}</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex justify-between items-center py-0.5">
+                                <span className="font-medium text-slate-600">CGST (9%)</span>
+                                <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                              </div>
+                              <div className="flex justify-between items-center py-0.5">
+                                <span className="font-medium text-slate-600">SGST (9%)</span>
+                                <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                              </div>
+                            </>
+                          )}
                           <div className="flex justify-between items-center py-0.5">
                             <span className="font-medium text-slate-600">Rounding</span>
                             <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
@@ -4197,7 +4964,15 @@ export default function InquiriesPage() {
 
               <button
                 type="button"
-                disabled={submitting || saveSuccess}
+                disabled={
+                  submitting ||
+                  saveSuccess ||
+                  (editDetails?.lineItems || []).some(
+                    item =>
+                      (item.sku_text || '').trim().length > 0 &&
+                      !isProductInCatalogList(item.sku_text, item.dimensions, rawDbProducts),
+                  )
+                }
                 onClick={handleSaveDrawerDetails}
                 className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
                   submitting
@@ -4224,7 +4999,7 @@ export default function InquiriesPage() {
               {(() => {
                 const currentDrawerDealStage = selectedInquiry ? getInquiryDealStageKey(selectedInquiry, editDetails?.companyName) : '';
                 const isQuotedDrawerStage = currentDrawerDealStage === 'quoted' || currentDrawerDealStage === 'qualified';
-                if (!selectedInquiry || !isQuotedDrawerStage) return null;
+                if (!selectedInquiry || !isQuotedDrawerStage || isProcurement) return null;
 
                 const shareAgain =
                   ['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) ||
@@ -4245,6 +5020,8 @@ export default function InquiriesPage() {
                         setShareInquiry(selectedInquiry);
                         setShareDetails(editDetails);
                         setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
+                        setQuotationCcDraft('');
+                        setQuotationCcError('');
                         setShowQuotationModal(true);
                       }}
                       className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
@@ -4454,6 +5231,8 @@ export default function InquiriesPage() {
                   setShareInquiry(null);
                   setShareDetails(null);
                   setResendNotice('');
+                  setQuotationCcDraft('');
+                  setQuotationCcError('');
                 }}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
                 <X size={20} />
@@ -4553,13 +5332,61 @@ export default function InquiriesPage() {
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   CC
                 </label>
-                <input
-                  type="text"
-                  readOnly
-                  value={quotationCc.join(', ')}
-                  placeholder="Resolved after preview"
-                  className="w-full px-3.5 py-2.5 border border-slate-200 bg-slate-50 rounded-xl text-xs font-semibold outline-none text-slate-600"
-                />
+                <div
+                  className="min-h-[42px] w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all flex flex-wrap items-center gap-1.5 bg-white"
+                  onClick={(event) => {
+                    const input = event.currentTarget.querySelector('input');
+                    input?.focus();
+                  }}
+                >
+                  {quotationCc.map((email) => (
+                    <span
+                      key={email}
+                      className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700"
+                    >
+                      {email}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${email}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setQuotationCc((current) => current.filter((item) => item !== email));
+                        }}
+                        className="text-slate-400 hover:text-slate-700 rounded-full"
+                      >
+                        <X size={13} />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="email"
+                    value={quotationCcDraft}
+                    onChange={(event) => {
+                      setQuotationCcDraft(event.target.value);
+                      if (quotationCcError) setQuotationCcError('');
+                    }}
+                    onBlur={commitQuotationCcDraft}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ',') {
+                        event.preventDefault();
+                        commitQuotationCcDraft();
+                      } else if (
+                        event.key === 'Backspace' &&
+                        !quotationCcDraft &&
+                        quotationCc.length > 0
+                      ) {
+                        setQuotationCc((current) => current.slice(0, -1));
+                      }
+                    }}
+                    placeholder={quotationCc.length === 0 ? 'Add CC recipients' : 'Add another email'}
+                    className="min-w-[150px] flex-1 border-0 bg-transparent px-1 py-1 text-xs font-semibold outline-none text-slate-800 placeholder:text-slate-400"
+                  />
+                </div>
+                {quotationCcError && (
+                  <p className="mt-1 text-[11px] font-semibold text-rose-600">
+                    {quotationCcError}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -4609,6 +5436,8 @@ export default function InquiriesPage() {
                   setShareInquiry(null);
                   setShareDetails(null);
                   setResendNotice('');
+                  setQuotationCcDraft('');
+                  setQuotationCcError('');
                 }}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
                 Cancel
@@ -4635,6 +5464,19 @@ export default function InquiriesPage() {
                     toast.error('Please enter a valid customer email address');
                     return;
                   }
+                  const ccResult = addQuotationCcEmail(
+                    quotationCc,
+                    quotationCcDraft,
+                    targetEmail,
+                  );
+                  if (ccResult.error) {
+                    setQuotationCcError(ccResult.error);
+                    toast.error(ccResult.error);
+                    return;
+                  }
+                  const finalCc = ccResult.emails;
+                  setQuotationCc(finalCc);
+                  setQuotationCcDraft('');
                   try {
                     setSendingQuotation(true);
                     setResendNotice('');
@@ -4652,6 +5494,7 @@ export default function InquiriesPage() {
                       email_subject: quotationSubject,
                       email_body: quotationBody,
                       quotation_reference: quotationReference,
+                      cc: finalCc,
                     });
                     const msg = res?.data?.message || res?.data?.data?.message || 'Live email & PDF Quotation dispatched to customer!';
                     const sharedAt =
@@ -4696,6 +5539,8 @@ export default function InquiriesPage() {
                         setShareInquiry(null);
                         setShareDetails(null);
                         setResendNotice('');
+                        setQuotationCcDraft('');
+                        setQuotationCcError('');
                       }, 1200);
                     }
                   } catch (err: any) {
@@ -4718,67 +5563,84 @@ export default function InquiriesPage() {
 
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overscroll-contain animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto my-auto overscroll-contain">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <FileText className="text-blue-600" size={22} />
+                <FileText className="text-blue-600" size={20} />
                 Log New Inquiry
               </h2>
               <button
-                onClick={() => setShowModal(false)}
+                type="button"
+                onClick={handleCancelCreateInquiry}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
                 <X size={20} />
               </button>
             </div>
 
             {/* Upload Inquiry Document Section */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                <span className="flex items-center gap-1.5 text-slate-800">
-                  <UploadCloud size={14} className="text-blue-600" />
-                  Or Upload Inquiry Document (PDF, JPEG, PNG)
+            <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between text-xs text-blue-900 font-bold">
+                <span className="flex items-center gap-1.5">
+                  <UploadCloud size={15} className="text-blue-600" />
+                  Upload Inquiry Document (Auto-Fill via Gemini)
                 </span>
-                <span className="text-slate-400 font-normal">PDF, JPEG, PNG</span>
+                <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
               </div>
-              <div className="relative flex items-center justify-center border border-dashed border-slate-300 rounded-lg p-2.5 bg-white hover:bg-slate-50 transition-all cursor-pointer">
+
+              <label
+                htmlFor="inquiry-doc-file-upload"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const files = e.dataTransfer.files;
+                  if (files && files.length > 0) {
+                    handleFileUpload({ target: { files } } as any);
+                  }
+                }}
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
                 <input
+                  id="inquiry-doc-file-upload"
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  accept="image/*,application/pdf"
                   onChange={handleFileUpload}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  className="hidden"
                 />
-                <div className="text-center">
-                  {isExtractingPo ? (
-                    <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
-                      <RefreshCw size={14} className="animate-spin text-blue-600" />
-                      Extracting Document...
-                    </div>
-                  ) : poFileName ? (
-                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
-                      <FileCheck size={16} />
-                      {poFileName} (Details Extracted &amp; Pre-filled!)
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-600 font-medium">
-                      Drop document here, or <span className="text-blue-600 underline font-bold">Browse File</span>
-                    </p>
-                  )}
-                </div>
-              </div>
+                {isExtractingPo ? (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 animate-pulse py-1">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>AI Extracting inquiry details from document...</span>
+                  </div>
+                ) : poFileBase64 ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
+                    <CheckCircle size={15} className="text-emerald-600 shrink-0" />
+                    <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
+                    <span className="text-[10px] text-blue-600 underline ml-1">Change</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-600 font-medium py-1">
+                    Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
+                  </p>
+                )}
+              </label>
             </div>
 
-            <form onSubmit={handleCreateInquiry} className="space-y-3.5">
+            <form onSubmit={handleCreateInquiry} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Company Name <span className="text-red-500 font-bold">*</span>
                 </label>
                 <div className="relative">
                   <div className="relative flex items-center">
                     <Building2 className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
                     <input
-                      required
+                      id="form-company-name"
                       type="text"
+                      required
                       placeholder="Type or select company name..."
                       value={formCustomerName}
                       onChange={e => {
@@ -4786,7 +5648,7 @@ export default function InquiriesPage() {
                         setShowCompanyDropdown(true);
                       }}
                       onFocus={() => setShowCompanyDropdown(true)}
-                      className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                      className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                     />
                     <button
                       type="button"
@@ -4824,26 +5686,640 @@ export default function InquiriesPage() {
                         ))}
                       {existingCustomers.filter(c => !formCustomerName || c.toLowerCase().includes(formCustomerName.toLowerCase())).length === 0 && (
                         <div className="px-3 py-2 text-xs text-slate-400 italic">
-                          No matching company found. Typing will save as new company.
+                          This company is not in your assigned customer list.
                         </div>
                       )}
                     </div>
                   )}
                 </div>
+                {formCustomerName.trim() && !isCustomerInAssignedList(formCustomerName, rawCustomers) && (
+                  <div className="mt-1.5 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="font-bold">Customer Not Assigned:</span>
+                      <p className="text-[11px] text-rose-700 mt-0.5">
+                        "{formCustomerName}" is not in your assigned customer list. Add this customer before saving the inquiry.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCustomer(true)}
+                        className="mt-2 px-3 py-1.5 bg-white border border-rose-300 text-rose-800 rounded-lg text-[11px] font-bold hover:bg-rose-100">
+                        Add this customer
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Product Description / SKU <span className="text-red-500 font-bold">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="e.g. HR Coil, MS Plate, SS 304 Pipe, TMT Rebar..."
-                  value={formProductSKU}
-                  onChange={e => setFormProductSKU(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal max-h-36 overflow-y-auto resize-y leading-relaxed"
-                />
+              {(() => {
+                const seenLower = new Set<string>();
+                const unrecognizedProductNames: string[] = [];
+                let firstUnrecognizedRowIdx: number | null = null;
+
+                formLineItems.forEach((item, idx) => {
+                  const trimmed = (item.sku_text || '').trim();
+                  if (!trimmed) return;
+                  if (!isProductInCatalogList(trimmed, item.dimensions, rawDbProducts)) {
+                    if (firstUnrecognizedRowIdx === null) {
+                      firstUnrecognizedRowIdx = idx;
+                    }
+                    const lower = trimmed.toLowerCase();
+                    if (!seenLower.has(lower)) {
+                      seenLower.add(lower);
+                      unrecognizedProductNames.push(trimmed);
+                    }
+                  }
+                });
+
+                if (unrecognizedProductNames.length === 0) return null;
+
+                return (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 leading-relaxed">
+                        <span className="font-bold">Product Not Available:</span>{' '}
+                        <span>
+                          These products are not in our product list:{' '}
+                          <span className="font-bold">
+                            {unrecognizedProductNames.join(', ')}
+                          </span>
+                          . Select a product from the list below or click ‘Add Product’.{' '}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowProductListModal(true)}
+                          className="font-bold text-rose-700 underline hover:text-rose-900 ml-1 cursor-pointer">
+                          View product list
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 pl-6">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (firstUnrecognizedRowIdx !== null) {
+                            setAddProductModalSource('create');
+                            setAddProductModalRowIdx(firstUnrecognizedRowIdx);
+                          }
+                        }}
+                        className="px-3 py-1 bg-white border border-rose-300 text-rose-800 rounded-lg text-[11px] font-bold hover:bg-rose-100 cursor-pointer">
+                        Add Product
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Structured Line Items Table matching Image 3 / Orders */}
+              <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
+                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                  <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
+                    <tr>
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
+                        Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
+                        HSN/SAC
+                      </th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
+                        Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
+                        Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
+                      </th>
+                      {isFormInterState ? (
+                        <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[16%] min-w-[110px]">
+                          IGST (18%)
+                        </th>
+                      ) : (
+                        <>
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                            CGST (9%)
+                          </th>
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                            SGST (9%)
+                          </th>
+                        </>
+                      )}
+                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                        Amount (₹)
+                      </th>
+                      <th className="px-2 py-3 text-center w-[3%] align-middle"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {formLineItems.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-blue-50/30">
+                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td className="px-4 py-3.5 border-r border-slate-200">
+                          <div className="space-y-1">
+                            <input
+                              id={`form-item-sku-${idx}`}
+                              type="text"
+                              list="catalog-products-datalist"
+                              required
+                              value={item.sku_text || ''}
+                              onChange={(e) => {
+                                const newSku = e.target.value;
+                                const updated = [...formLineItems];
+                                const currentHsn = updated[idx]?.hsn_code || '';
+                                const prevSku = updated[idx]?.sku_text || '';
+                                const matchedCustom = findCustomProductMatch(newSku, item.dimensions, rawDbProducts);
+                                const nextDim =
+                                  item.dimensions && item.dimensions.trim()
+                                    ? item.dimensions
+                                    : matchedCustom?.dimensions || '';
+                                const prevAutoHsn =
+                                  detectHsnCode(prevSku, item.dimensions) ||
+                                  findCustomProductMatch(prevSku, item.dimensions, rawDbProducts)?.hsn_code ||
+                                  '';
+                                const newAutoHsn =
+                                  detectHsnCode(newSku, nextDim) ||
+                                  matchedCustom?.hsn_code ||
+                                  '';
+
+                                let finalHsn = currentHsn;
+                                if (!newSku.trim()) {
+                                  finalHsn = '';
+                                } else if (newAutoHsn || !currentHsn || currentHsn === prevAutoHsn) {
+                                  finalHsn = newAutoHsn;
+                                }
+
+                                const currentItem = { ...updated[idx], sku_text: newSku, dimensions: nextDim, hsn_code: finalHsn };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
+                                setFormLineItems(updated);
+                              }}
+                              className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                              placeholder="Product Name / Description"
+                            />
+                            <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                              <span className="font-semibold text-slate-400 shrink-0">Spec:</span>
+                              <input
+                                id={`form-item-spec-${idx}`}
+                                type="text"
+                                required
+                                value={item.dimensions || ''}
+                                onChange={(e) => {
+                                  const newDim = e.target.value;
+                                  const updated = [...formLineItems];
+                                  const currentHsn = updated[idx]?.hsn_code || '';
+                                  const currSku = updated[idx]?.sku_text || '';
+                                  const prevAutoHsn =
+                                    detectHsnCode(currSku, updated[idx]?.dimensions) ||
+                                    findCustomProductMatch(currSku, updated[idx]?.dimensions, rawDbProducts)?.hsn_code ||
+                                    '';
+                                  const newAutoHsn =
+                                    detectHsnCode(currSku, newDim) ||
+                                    findCustomProductMatch(currSku, newDim, rawDbProducts)?.hsn_code ||
+                                    '';
+
+                                  let finalHsn = currentHsn;
+                                  if (!currentHsn || currentHsn === prevAutoHsn) {
+                                    finalHsn = newAutoHsn;
+                                  }
+
+                                  const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
+                                  setFormLineItems(updated);
+                                }}
+                                className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                                placeholder="e.g. 8X6000X1500"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                          <input
+                            id={`form-item-hsn-${idx}`}
+                            type="text"
+                            value={item.hsn_code || ''}
+                            onChange={(e) => {
+                              const updated = [...formLineItems];
+                              updated[idx] = { ...updated[idx], hsn_code: e.target.value };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="e.g. 72083730"
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          />
+                        </td>
+                        <td className="px-2.5 py-3.5 border-r border-slate-200">
+                          <div className="flex items-center gap-1.5 w-full min-w-[170px]">
+                            <input
+                              id={`form-item-qty-${idx}`}
+                              type="number"
+                              required
+                              min="0.001"
+                              step="any"
+                              value={item.quantity === 0 ? '' : item.quantity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rawQ = val === '' ? 0 : parseFloat(val);
+                                const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
+                                const updated = [...formLineItems];
+                                const currentItem: any = { ...updated[idx], quantity: safeQ };
+                                delete currentItem.isManualAmount;
+                                if (normalizeUnit(currentItem.unit) === 'MT') {
+                                  currentItem.converted_mt = safeQ;
+                                }
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
+                                setFormLineItems(updated);
+                              }}
+                              placeholder="0"
+                              className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                            />
+                            <select
+                              value={normalizeUnit(item.unit) || 'KG'}
+                              onChange={(e) => {
+                                const newUnit = e.target.value;
+                                const updated = [...formLineItems];
+                                const currentItem = { ...updated[idx], unit: newUnit };
+                                delete currentItem.is_manual_mt;
+                                delete currentItem.isManualAmount;
+                                if (newUnit === 'MT') {
+                                  currentItem.converted_mt = currentItem.quantity;
+                                } else {
+                                  delete currentItem.converted_mt;
+                                }
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
+                                setFormLineItems(updated);
+                              }}
+                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              <option value="KG">KG</option>
+                              <option value="MT">MT</option>
+                              <option value="Nos">Nos</option>
+                            </select>
+                            {(() => {
+                              const itemWeight = formatLineItemWeightMt(item);
+                              const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+                              const displayMt = (item.is_manual_mt || normalizeUnit(item.unit) === 'MT') && item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                                ? item.converted_mt
+                                : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
+                              const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
+
+                              return (
+                                <div
+                                  className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                    hasWeight
+                                      ? 'bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                      : 'bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                  }`}
+                                  title="Weight in MT (Editable - Amount calculates as MT × Rate)">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    value={displayMt ?? ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const updated = [...formLineItems];
+                                      const currentItem = { ...updated[idx] };
+                                      delete currentItem.isManualAmount;
+
+                                      if (val === '') {
+                                        delete currentItem.converted_mt;
+                                        delete currentItem.is_manual_mt;
+                                      } else {
+                                        const rawMt = parseFloat(val);
+                                        const safeMt = isNaN(rawMt) || rawMt < 0 ? 0 : rawMt;
+                                        currentItem.converted_mt = val;
+                                        currentItem.is_manual_mt = true;
+                                        if (normalizeUnit(currentItem.unit) === 'MT') {
+                                          currentItem.quantity = safeMt;
+                                        }
+                                      }
+
+                                      const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                      updated[idx] = {
+                                        ...currentItem,
+                                        amount: calc.amount,
+                                        cgst_rate: calc.cgst_rate,
+                                        cgst_amount: calc.cgst_amount,
+                                        sgst_rate: calc.sgst_rate,
+                                        sgst_amount: calc.sgst_amount,
+                                        igst_rate: calc.igst_rate,
+                                        igst_amount: calc.igst_amount,
+                                        total_gst: calc.total_gst,
+                                        final_amount: calc.final_amount,
+                                      };
+                                      setFormLineItems(updated);
+                                    }}
+                                    placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
+                                    className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                  />
+                                  <span className="text-[10px] font-mono font-bold text-blue-700/80 select-none ml-0.5">MT</span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </td>
+                        <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
+                          <input
+                            id={`form-item-rate-${idx}`}
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={item.rate === 0 ? '' : item.rate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const rawR = val === '' ? 0 : parseFloat(val);
+                              const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
+                              const updated = [...formLineItems];
+                              const currentItem = { ...updated[idx], rate: safeR };
+                              delete currentItem.isManualAmount;
+                              const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                              updated[idx] = {
+                                ...currentItem,
+                                amount: calc.amount,
+                                cgst_rate: calc.cgst_rate,
+                                cgst_amount: calc.cgst_amount,
+                                sgst_rate: calc.sgst_rate,
+                                sgst_amount: calc.sgst_amount,
+                                igst_rate: calc.igst_rate,
+                                igst_amount: calc.igst_amount,
+                                total_gst: calc.total_gst,
+                                final_amount: calc.final_amount,
+                              };
+                              setFormLineItems(updated);
+                            }}
+                            placeholder="0"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
+                          />
+                        </td>
+                        {isFormInterState ? (
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                            {(() => {
+                              const baseAmt = Number(item.amount) || 0;
+                              const igst =
+                                item.igst_amount !== undefined && Number(item.igst_amount) > 0
+                                  ? Number(item.igst_amount)
+                                  : Math.round(baseAmt * 0.18 * 100) / 100;
+                              return (
+                                <input
+                                  type="text"
+                                  readOnly
+                                  tabIndex={-1}
+                                  value={formatIndianCurrency(igst, true)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                />
+                              );
+                            })()}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(cgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(sgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                          </>
+                        )}
+                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
+                          {(() => {
+                            const baseAmt = Number(item.amount) || 0;
+                            const cgst = isFormInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                            const sgst = isFormInterState ? 0 : (item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                            const igst = isFormInterState ? (item.igst_amount !== undefined && Number(item.igst_amount) > 0 ? Number(item.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100) : 0;
+                            const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst + igst) * 100) / 100;
+                            return (
+                              <input
+                                id={`form-item-amount-${idx}`}
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={finalAmt === 0 ? '' : finalAmt}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const rawA = val === '' ? 0 : parseFloat(val);
+                                  const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                                  const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
+                                  const cgstA = isFormInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                  const sgstA = isFormInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                  const igstA = isFormInterState ? Math.round(safeBase * 0.18 * 100) / 100 : 0;
+                                  const updated = [...formLineItems];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    amount: safeBase,
+                                    isManualAmount: true,
+                                    cgst_rate: isFormInterState ? 0 : 9,
+                                    cgst_amount: cgstA,
+                                    sgst_rate: isFormInterState ? 0 : 9,
+                                    sgst_amount: sgstA,
+                                    igst_rate: isFormInterState ? 18 : 0,
+                                    igst_amount: igstA,
+                                    total_gst: Math.round((cgstA + sgstA + igstA) * 100) / 100,
+                                    final_amount: safeFinal,
+                                  };
+                                  setFormLineItems(updated);
+                                }}
+                                placeholder="0"
+                                className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              />
+                            );
+                          })()}
+                        </td>
+                        <td className="px-2 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {formLineItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = formLineItems.filter((_, i) => i !== idx);
+                                  setFormLineItems(updated);
+                                }}
+                                className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                                title="Remove line item">
+                                <Minus size={15} />
+                              </button>
+                            )}
+                            {idx === formLineItems.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [
+                                    ...formLineItems,
+                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: isFormInterState ? 0 : 9, cgst_amount: 0, sgst_rate: isFormInterState ? 0 : 9, sgst_amount: 0, igst_rate: isFormInterState ? 18 : 0, igst_amount: 0, total_gst: 0, final_amount: 0 },
+                                  ];
+                                  setFormLineItems(updated);
+                                }}
+                                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
+                                title="Add line item">
+                                <Plus size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Standard Quotation Pricing Breakdown Layout */}
+                {(() => {
+                  const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                  const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems, {
+                    isInterState: isFormInterState,
+                  });
+
+                  const totalTonnage = calculateTotalTonnageMt(formLineItems);
+                  const formattedItemsInTotal = totalTonnage.formattedText;
+
+                  return (
+                    <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
+                      <div className="text-xs text-slate-700 pt-1">
+                        <div>
+                          <span className="font-bold text-slate-900">Items in Total = </span>
+                          <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        </div>
+                        <div className="mt-1 text-slate-600">
+                          <span className="font-bold text-slate-700">Place of Supply: </span>
+                          <span className="font-semibold">{formPlaceOfSupply.label}</span>
+                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                            {isFormInterState ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST 9% + SGST 9%)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Sub Total</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
+                        </div>
+                        {qBreakdown.isInterState ? (
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">IGST (18%)</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedIGST}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">CGST (9%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">SGST (9%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                            </div>
+                          </>
+                        )}
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="font-medium text-slate-600">Rounding</span>
+                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                          <span className="font-bold">Total</span>
+                          <span className="font-mono text-base font-black text-slate-950">{qBreakdown.formattedGrandTotal}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Delivery Location <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    id="form-delivery-location"
+                    type="text"
+                    required
+                    placeholder="e.g. Gat No / Plot No PAP V :- 149/2, Village Vasuli, Chakan, Pune, Maharashtra - 410501"
+                    value={formDeliveryLocation}
+                    onChange={e => setFormDeliveryLocation(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Payment Terms <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    id="form-payment-terms"
+                    type="text"
+                    required
+                    placeholder="e.g. 30 Days Credit, 100% Advance"
+                    value={formPaymentTerms}
+                    onChange={e => setFormPaymentTerms(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -4854,66 +6330,318 @@ export default function InquiriesPage() {
                     placeholder="e.g. JSW, AM/NS, Tata, SAIL, or Any"
                     value={formPreferredMake}
                     onChange={e => setFormPreferredMake(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Payment Terms <span className="text-red-500 font-bold">*</span>
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes</label>
                   <input
-                    required
                     type="text"
-                    placeholder="e.g. 30 Days Credit, 100% Advance"
-                    value={formPaymentTerms}
-                    onChange={e => setFormPaymentTerms(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                    placeholder="Special instructions, delivery timeline, or logistics notes"
+                    value={formRequirement}
+                    onChange={e => setFormRequirement(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Delivery Location <span className="text-red-500 font-bold">*</span>
-                </label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. Chakan Industrial Area, Pune"
-                  value={formDeliveryLocation}
-                  onChange={e => setFormDeliveryLocation(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes</label>
-                <textarea
-                  rows={2}
-                  placeholder="Special instructions, delivery timeline, or logistics notes"
-                  value={formRequirement}
-                  onChange={e => setFormRequirement(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
-                />
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={handleCancelCreateInquiry}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold">
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || isExtractingPo}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2">
+                  disabled={
+                    submitting ||
+                    isExtractingPo ||
+                    (formCustomerName.trim().length > 0 && !isCustomerInAssignedList(formCustomerName, rawCustomers)) ||
+                    formLineItems.some(
+                      item =>
+                        item.sku_text.trim().length > 0 &&
+                        !isProductInCatalogList(item.sku_text, item.dimensions, rawDbProducts),
+                    )
+                  }
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
                   {submitting ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                   {submitting ? 'Saving Inquiry...' : 'Save Inquiry'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      <AddAssignedCustomerDialog
+        open={showAddCustomer}
+        assignPhone={effectivePhone || employee?.phone || ''}
+        seed={{
+          companyName: formCustomerName.trim(),
+          contactPerson: String(
+            formExtractedJson?.contact_person
+            || formExtractedJson?.contact_name
+            || formExtractedJson?.customer?.contact_person
+            || '',
+          ).trim(),
+          mobile: formPhone.trim(),
+          deliveryLocation: (
+            formDeliveryLocation.trim()
+            || String(
+              formExtractedJson?.delivery_location
+              || formExtractedJson?.customer_address
+              || formExtractedJson?.address
+              || '',
+            )
+          ).trim(),
+          gstin: String(
+            formExtractedJson?.customer_gst
+            || formExtractedJson?.gstin
+            || formExtractedJson?.gst
+            || '',
+          ).trim(),
+        }}
+        onClose={() => setShowAddCustomer(false)}
+        onSaved={(saved) => {
+          setFormCustomerName(saved.companyName);
+          setFormPhone(saved.mobile);
+          setFormDeliveryLocation(saved.deliveryLocation);
+          setCustomerMetaMap(prev => ({
+            ...prev,
+            [saved.companyName.trim().toLowerCase()]: {
+              gstin: saved.gstin,
+              state: saved.customerState,
+              address: saved.deliveryLocation,
+            },
+          }));
+          setShowAddCustomer(false);
+          queryClient.setQueryData<string[]>(
+            ['customer-names-list', effectivePhone, activeRole, activeMode],
+            (prev) => {
+              const list = Array.isArray(prev) ? prev : [];
+              if (list.some(c => c.trim().toLowerCase() === saved.companyName.trim().toLowerCase())) return list;
+              return [...list, saved.companyName].sort((a, b) => a.localeCompare(b));
+            },
+          );
+          queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
+        }}
+      />
+
+      <datalist id="catalog-products-datalist">
+        {Array.from(
+          new Set(
+            [
+              ...MASTER_PRODUCTS_CATALOG.map(p => (p.product_name || '').trim()),
+              ...(rawDbProducts || []).map(p => (p.product_name || '').trim()),
+            ].filter(Boolean),
+          ),
+        ).map(name => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+
+      <AddProductDialog
+        open={addProductModalRowIdx !== null}
+        seed={{
+          productName:
+            addProductModalRowIdx !== null
+              ? addProductModalSource === 'edit'
+                ? (editDetails?.lineItems?.[addProductModalRowIdx]?.sku_text || '').trim()
+                : (formLineItems[addProductModalRowIdx]?.sku_text || '').trim()
+              : '',
+          dimensions:
+            addProductModalRowIdx !== null
+              ? addProductModalSource === 'edit'
+                ? (editDetails?.lineItems?.[addProductModalRowIdx]?.dimensions || '').trim()
+                : (formLineItems[addProductModalRowIdx]?.dimensions || '').trim()
+              : '',
+        }}
+        onClose={() => setAddProductModalRowIdx(null)}
+        onSaved={(saved) => {
+          const targetIdx = addProductModalRowIdx;
+          const activeSource = addProductModalSource;
+          const sourceItems =
+            activeSource === 'edit' ? editDetails?.lineItems || [] : formLineItems;
+          const originalSkuLower =
+            targetIdx !== null
+              ? (sourceItems[targetIdx]?.sku_text || '').trim().toLowerCase()
+              : '';
+          setAddProductModalRowIdx(null);
+
+          queryClient.setQueryData<CatalogDbProduct[]>(['products-catalog'], (prev) => {
+            const list = Array.isArray(prev) ? prev : [];
+            const newEntry: CatalogDbProduct = {
+              ...(saved.record || {}),
+              product_name: saved.record?.product_name || saved.productName,
+              dimensions: saved.record?.dimensions || saved.dimensions,
+              hsn_code: saved.record?.hsn_code || saved.hsnCode,
+              category: saved.record?.category || 'Custom',
+            };
+            const filtered = list.filter(
+              p =>
+                !(
+                  (p.product_name || '').trim().toLowerCase() === saved.productName.toLowerCase() &&
+                  (p.dimensions || '').trim().toLowerCase() === saved.dimensions.toLowerCase()
+                ),
+            );
+            return [...filtered, newEntry];
+          });
+          queryClient.invalidateQueries({ queryKey: ['products-catalog'] });
+
+          const activeIsInterState = activeSource === 'edit' ? isEditInterState : isFormInterState;
+          const applySavedToRows = (prevItems: LineItemDetail[]) =>
+            prevItems.map((row, idx) => {
+              const rowSkuLower = (row.sku_text || '').trim().toLowerCase();
+              if (idx !== targetIdx && (!originalSkuLower || rowSkuLower !== originalSkuLower)) {
+                return row;
+              }
+              const nextDim =
+                idx === targetIdx
+                  ? saved.dimensions || row.dimensions || ''
+                  : row.dimensions?.trim()
+                    ? row.dimensions
+                    : saved.dimensions || '';
+              const nextHsn = saved.hsnCode || row.hsn_code || '';
+              const updatedRow = {
+                ...row,
+                sku_text: saved.productName,
+                dimensions: nextDim,
+                hsn_code: nextHsn,
+              };
+              const calc = calculateLineItem({ ...updatedRow, amount: 0 }, { isInterState: activeIsInterState });
+              return {
+                ...updatedRow,
+                amount: calc.amount,
+                cgst_rate: calc.cgst_rate,
+                cgst_amount: calc.cgst_amount,
+                sgst_rate: calc.sgst_rate,
+                sgst_amount: calc.sgst_amount,
+                igst_rate: calc.igst_rate,
+                igst_amount: calc.igst_amount,
+                is_inter_state: calc.is_inter_state,
+                total_gst: calc.total_gst,
+                final_amount: calc.final_amount,
+              };
+            });
+
+          if (activeSource === 'edit') {
+            setEditDetails((prev: any) => {
+              if (!prev) return prev;
+              const updated = applySavedToRows(prev.lineItems || []);
+              const totalAmt = updated.reduce((s, i) => s + (i.amount || 0), 0);
+              const totalTons = calculateTotalTonnageMt(updated).totalMt;
+              return { ...prev, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons };
+            });
+            setSaveSuccess(false);
+            setFieldErrors(prev => {
+              const next = { ...prev };
+              if (targetIdx !== null) {
+                delete next[`sku_${targetIdx}`];
+                delete next[`dim_${targetIdx}`];
+                delete next[`hsn_${targetIdx}`];
+              }
+              return next;
+            });
+          } else {
+            setFormLineItems(applySavedToRows);
+          }
+        }}
+      />
+
+      {showProductListModal && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+          onClick={() => setShowProductListModal(false)}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+              <h3 className="text-sm font-bold text-slate-900">Product List &amp; HSN Catalog</h3>
+              <button
+                type="button"
+                onClick={() => setShowProductListModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 cursor-pointer">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              <table className="w-full border-collapse border border-slate-800 text-xs text-slate-900">
+                <thead>
+                  <tr className="bg-slate-100 font-bold text-center">
+                    <th className="border border-slate-800 px-3 py-2 w-[26%]">Product Name</th>
+                    <th className="border border-slate-800 px-3 py-2 w-[52%]">Dimensions</th>
+                    <th className="border border-slate-800 px-3 py-2 w-[22%]">8-Digit HSN Code</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(['Flat Steel', 'Structural Steel', 'Pipes and Tubes', 'Value Added Products'] as const).map(
+                    (category) => {
+                      const rows = MASTER_PRODUCTS_CATALOG.filter((p) => p.category === category);
+                      return [
+                        <tr key={`cat-${category}`}>
+                          <td
+                            colSpan={3}
+                            className="border border-slate-800 px-3 py-1.5 text-center font-bold text-red-600 bg-white">
+                            {category}
+                          </td>
+                        </tr>,
+                        ...rows.map((row, rIdx) => (
+                          <tr key={`${category}-${rIdx}`} className="hover:bg-slate-50">
+                            <td className="border border-slate-800 px-3 py-1.5 text-center font-bold">
+                              {row.product_name}
+                            </td>
+                            <td className="border border-slate-800 px-3 py-1.5 text-center">
+                              {row.dimensions}
+                            </td>
+                            <td className="border border-slate-800 px-3 py-1.5 text-center font-mono">
+                              {row.hsn_code}
+                            </td>
+                          </tr>
+                        )),
+                      ];
+                    },
+                  )}
+                  {(() => {
+                    const staticKeys = new Set(
+                      MASTER_PRODUCTS_CATALOG.map(
+                        (p) => `${p.product_name.trim().toLowerCase()}|${p.dimensions.trim().toLowerCase()}`,
+                      ),
+                    );
+                    const customRows = (rawDbProducts || []).filter((p) => {
+                      const name = (p.product_name || '').trim();
+                      if (!name) return false;
+                      const key = `${name.toLowerCase()}|${(p.dimensions || '').trim().toLowerCase()}`;
+                      return !staticKeys.has(key);
+                    });
+                    if (customRows.length === 0) return null;
+                    return [
+                      <tr key="cat-custom">
+                        <td
+                          colSpan={3}
+                          className="border border-slate-800 px-3 py-1.5 text-center font-bold text-red-600 bg-white">
+                          Custom Products
+                        </td>
+                      </tr>,
+                      ...customRows.map((row, rIdx) => (
+                        <tr key={`custom-${rIdx}`} className="hover:bg-slate-50">
+                          <td className="border border-slate-800 px-3 py-1.5 text-center font-bold">
+                            {row.product_name}
+                          </td>
+                          <td className="border border-slate-800 px-3 py-1.5 text-center">
+                            {row.dimensions || '—'}
+                          </td>
+                          <td className="border border-slate-800 px-3 py-1.5 text-center font-mono">
+                            {row.hsn_code || '—'}
+                          </td>
+                        </tr>
+                      )),
+                    ];
+                  })()}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

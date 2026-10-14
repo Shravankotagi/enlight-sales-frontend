@@ -8,6 +8,8 @@ import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
+  formatLineItemWeightMt,
+  resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
 
@@ -74,9 +76,21 @@ interface InquiryPdfModalProps {
   onClose: () => void;
 }
 
+function printWithTitleFallback(title: string) {
+  if (typeof document !== 'undefined') {
+    const previousTitle = document.title;
+    document.title = title;
+    window.print();
+    document.title = previousTitle;
+  } else {
+    window.print();
+  }
+}
+
 export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPdfModalProps) {
   const { employee, viewingAs } = useAuth();
   const [logoError, setLogoError] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const { data: customerList = [] } = useQuery({
     queryKey: ['customers-list'],
@@ -97,6 +111,13 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   const customerAddress = details.deliveryLocation || matchedCustomer?.address || matchedCustomer?.billing_address || (inquiry as any)?.customer_address || '';
   const customerGstin = (details as any)?.gstin || matchedCustomer?.gstin || matchedCustomer?.gst_number || (inquiry as any)?.customer_gstin || (inquiry as any)?.ai_extraction_json?.gstin || (inquiry as any)?.ai_extraction_json?.gst_number || '';
+  const placeOfSupply = resolvePlaceOfSupply({
+    deliveryLocation: details.deliveryLocation || (inquiry as any)?.delivery_location,
+    customerState: matchedCustomer?.customer_state || matchedCustomer?.state || (inquiry as any)?.ai_extraction_json?.place_of_supply,
+    customerGstin,
+    customerAddress,
+  });
+  const isInterState = placeOfSupply.isInterState;
 
   // Build line items list - prefer dynamic lineItems, fall back to single item
   const rawLineItems: LineItemDetail[] =
@@ -128,7 +149,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   const activePdfItems = pricedLineItems.length > 0 ? pricedLineItems : [];
 
   const lineItems: LineItemDetail[] = activePdfItems.map(item => {
-    const calc = calculateLineItem(item);
+    const calc = calculateLineItem(item, { isInterState });
     return {
       ...item,
       amount: item.amount ? Number(item.amount) : calc.amount,
@@ -137,7 +158,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
   // totalAmount = base pre-GST value; calculate GST breakdown
   const computedSubtotal = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const breakdown = calculateQuotationBreakdown(computedSubtotal);
+  const breakdown = calculateQuotationBreakdown(computedSubtotal, lineItems as any, { isInterState });
   const totalTonnage = calculateTotalTonnageMt(lineItems);
 
   const piNumber = (() => {
@@ -182,8 +203,6 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
     return viewingAs?.name || employee?.name || 'Vedant Goel';
   })();
 
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
-
   const handlePrintDownload = async () => {
     try {
       setDownloadingPdf(true);
@@ -218,7 +237,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
       window.URL.revokeObjectURL(downloadUrl);
     } catch (e) {
       console.warn('Direct PDF download fallback to print:', e);
-      window.print();
+      printWithTitleFallback(`Quotation_${piNumber}`);
     } finally {
       setDownloadingPdf(false);
     }
@@ -282,6 +301,22 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+          .quotation-print-sheet {
+            overflow: visible !important;
+            max-height: none !important;
+            height: auto !important;
+          }
+          #printable-inquiry-pdf table {
+            page-break-inside: auto;
+          }
+          #printable-inquiry-pdf thead {
+            display: table-header-group;
+          }
+          #printable-inquiry-pdf tr,
+          #printable-inquiry-pdf .quotation-summary {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
           .no-print {
             display: none !important;
           }
@@ -295,7 +330,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         }
       `}</style>
 
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
+      <div className="quotation-print-sheet bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
         
         {/* Top Actions Bar (Hidden on print) */}
         <div className="bg-slate-900 px-6 py-3.5 flex items-center justify-between no-print shrink-0 border-b border-slate-800 z-10">
@@ -328,8 +363,8 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
           </div>
         </div>
 
-        {/* Notice banner: unpriced products excluded from PDF */}
-        {zeroPriceItems.length > 0 && (
+        {/* Notice banner: unpriced products excluded from PDF (only show when there are also priced items to avoid duplicate warnings) */}
+        {zeroPriceItems.length > 0 && pricedLineItems.length > 0 && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 text-xs text-amber-900 flex items-center justify-between gap-3 no-print shrink-0">
             <div className="flex items-center gap-2">
               <AlertTriangle size={15} className="text-amber-600 shrink-0" />
@@ -353,7 +388,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         )}
 
         {/* Printable PDF Document Body - Exact Reference Match */}
-        <div id="printable-inquiry-pdf" className="overflow-y-auto flex-1 p-8 sm:p-12 space-y-4 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
+        <div id="printable-inquiry-pdf" className="quotation-print-sheet overflow-y-auto flex-1 p-8 sm:p-12 space-y-4 bg-white font-sans text-slate-800 text-[13px] leading-relaxed">
           
           {/* ================= PAGE 1 ================= */}
           <div className="space-y-4">
@@ -427,7 +462,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
 
                 <div className="flex items-baseline justify-between gap-6 pt-1">
                   <p className="font-medium text-slate-800 text-[12px]">
-                    Place Of Supply: <span className="font-normal text-slate-700">Maharashtra (27)</span>
+                    Place Of Supply: <span className="font-normal text-slate-700">{placeOfSupply.label}</span>
                   </p>
                   <div className="grid shrink-0 grid-cols-[85px_auto] gap-x-3 text-[12px]">
                     <span className="font-normal text-slate-700">Order Date :</span>
@@ -452,11 +487,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-900 bg-white">
                   {lineItems.map((item, idx) => {
-                    const qty = Number(item.quantity) || 0;
                     const rate = Number(item.rate) || 0;
-                    const amt = Number(item.amount) || calculateLineItem(item).amount || 0;
+                    const amt = Number(item.amount) || calculateLineItem(item, { isInterState }).amount || 0;
                     const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
-                    const unit = item.unit || 'MT';
 
                     return (
                       <tr key={idx} className="align-top">
@@ -473,7 +506,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                         </td>
                         <td className="px-3 py-3 text-center font-normal text-slate-700 text-[12px]">{hsn}</td>
                         <td className="px-4 py-3 text-right font-normal text-slate-900 text-[12px] whitespace-nowrap">
-                          {formatIndianCurrency(qty, true)} {unit}
+                          {formatLineItemWeightMt(item).text}
                         </td>
                         <td className="px-4 py-3 text-right font-normal text-slate-800 text-[12px]">
                           {rate > 0 ? formatIndianCurrency(rate, true) : '0.00'}
@@ -489,7 +522,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
             </div>
 
             {/* Financial Totals & Summary Block - Exact Reference Style */}
-            <div className="flex flex-col sm:flex-row justify-between items-start pt-4 gap-6 border-t border-slate-200 mt-2">
+            <div className="quotation-summary flex flex-col sm:flex-row justify-between items-start pt-4 gap-6 border-t border-slate-200 mt-2">
               {/* Bottom Left: Total Items & Payment Terms in Same Text Color */}
               <div className="space-y-1.5 text-[12px] text-slate-800 pt-1">
                 <div>
@@ -510,15 +543,24 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                   <span className="font-normal text-slate-900 text-right">{breakdown.formattedSubtotal}</span>
                 </div>
 
-                <div className="flex justify-between items-center py-0.5">
-                  <span className="font-normal text-slate-700">CGST9 (9%)</span>
-                  <span className="font-normal text-slate-900 text-right">{breakdown.formattedCGST}</span>
-                </div>
+                {isInterState ? (
+                  <div className="flex justify-between items-center py-0.5">
+                    <span className="font-normal text-slate-700">IGST18 (18%)</span>
+                    <span className="font-normal text-slate-900 text-right">{breakdown.formattedIGST}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center py-0.5">
+                      <span className="font-normal text-slate-700">CGST9 (9%)</span>
+                      <span className="font-normal text-slate-900 text-right">{breakdown.formattedCGST}</span>
+                    </div>
 
-                <div className="flex justify-between items-center py-0.5">
-                  <span className="font-normal text-slate-700">SGST9 (9%)</span>
-                  <span className="font-normal text-slate-900 text-right">{breakdown.formattedSGST}</span>
-                </div>
+                    <div className="flex justify-between items-center py-0.5">
+                      <span className="font-normal text-slate-700">SGST9 (9%)</span>
+                      <span className="font-normal text-slate-900 text-right">{breakdown.formattedSGST}</span>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex justify-between items-center py-0.5">
                   <span className="font-normal text-slate-700">Rounding</span>

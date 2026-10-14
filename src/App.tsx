@@ -22,14 +22,17 @@ import AssistantPage from './pages/AssistantPage';
 import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
-  const { isAuthenticated, employee, clearViewingAs } = useAuth();
+  const { isAuthenticated, employee, clearViewingAs, isProcurement } = useAuth();
   const location = useLocation();
   const isAdmin = employee?.role === 'admin';
 
   const prevPathRef = useRef(location.pathname);
   useEffect(() => {
     // Only clear impersonation if we navigate TO /admin from a different page
-    if (location.pathname === '/admin' && prevPathRef.current !== '/admin') {
+    if (
+      (location.pathname === '/admin' || location.pathname === '/control-panel') &&
+      prevPathRef.current !== location.pathname
+    ) {
       clearViewingAs();
     }
     prevPathRef.current = location.pathname;
@@ -38,13 +41,32 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/admin" element={<AdminSelectionPage />} />
+      <Route
+        path="/admin"
+        element={
+          !isAuthenticated ? (
+            <Navigate to="/login" replace />
+          ) : isAdmin ? (
+            <Navigate to="/control-panel" replace />
+          ) : isProcurement ? (
+            <Navigate to="/inquiries" replace />
+          ) : (
+            <AdminSelectionPage />
+          )
+        }
+      />
       <Route path="/404" element={<NotFoundPage />} />
 
       {/* Authenticated Layout Hierarchy */}
       <Route
         element={
-          isAuthenticated ? <Layout /> : <Navigate to="/login" replace />
+          !isAuthenticated ? (
+            <Navigate to="/login" replace />
+          ) : isProcurement && location.pathname !== '/inquiries' ? (
+            <Navigate to="/inquiries" replace />
+          ) : (
+            <Layout />
+          )
         }
       >
         <Route path="/" element={<Navigate to="/home" replace />} />
@@ -61,7 +83,14 @@ function AppRoutes() {
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
-        {isAdmin && <Route path="/admin-dashboard" element={<AdminDashboard />} />}
+        <Route
+          path="/admin-dashboard"
+          element={isAdmin ? <AdminDashboard /> : <Navigate to="/home" replace />}
+        />
+        <Route
+          path="/control-panel"
+          element={isAdmin ? <AdminSelectionPage /> : <Navigate to="/home" replace />}
+        />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

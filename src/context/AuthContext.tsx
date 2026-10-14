@@ -25,6 +25,9 @@ interface AuthContextType {
   isAdmin: boolean;
   isSalesManager: boolean;
   isSalesperson: boolean;
+  isProcurement: boolean;
+  isProcurementManager: boolean;
+  isProcurementPerson: boolean;
   isAuthenticated: boolean;
   effectivePhone: string | null;
   activeRole: string;
@@ -48,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handlePopState = () => {
-      if (window.location.pathname === '/admin') {
+      if (window.location.pathname === '/admin' || window.location.pathname === '/control-panel') {
         sessionStorage.removeItem('enlight_viewing_as');
         sessionStorage.removeItem('enlight_active_chat_session_id');
         setViewingAsState(null);
@@ -93,7 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = employee?.role === 'admin';
   const isSalesManager =
     employee?.role === 'sales_manager' || employee?.role === 'manager';
-  const isSalesperson = !isAdmin && !isSalesManager;
+  const isProcurementManager = employee?.role === 'procurement_manager';
+  const isProcurementPerson = employee?.role === 'procurement_person';
+  const isProcurement = isProcurementManager || isProcurementPerson;
+  const isSalesperson = !isAdmin && !isSalesManager && !isProcurement;
 
   // effectivePhone:
   // - If viewing someone specifically -> that person's phone
@@ -133,6 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isSalesManager,
         isSalesperson,
+        isProcurement,
+        isProcurementManager,
+        isProcurementPerson,
         isAuthenticated: !!token && !!employee,
         effectivePhone,
         activeRole,

@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
+import SyncBiginButton from '../components/SyncBiginButton';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3 } from 'lucide-react';
@@ -9,7 +10,7 @@ import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 
 export default function ReportsPage() {
-  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const { effectivePhone, isAdmin, employee, activeRole, activeMode } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
@@ -18,7 +19,7 @@ export default function ReportsPage() {
   });
 
   useEffect(() => {
-    document.title = 'Reports - Enlight Sales OS';
+    document.title = 'Reports - Enlight Sigma';
   }, []);
 
   const getParams = () => {
@@ -89,6 +90,7 @@ export default function ReportsPage() {
         inquiries_count: inquiries.length || monthly.summary?.total_inquiries || monthly.summary?.total_deals || 0,
       };
     },
+    placeholderData: keepPreviousData,
     staleTime: 30000,
   });
 
@@ -136,6 +138,10 @@ export default function ReportsPage() {
           </h1>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
+          <SyncBiginButton
+            show={isAdmin || employee?.role === 'salesperson'}
+            onSynced={refetchAll}
+          />
           <DateFilterControl onChange={setDateRange} />
           <button
             onClick={refetchAll}
@@ -306,8 +312,8 @@ export default function ReportsPage() {
                 <ShoppingBag size={16} className="text-blue-600" /> Top Customers
               </h3>
               <div className="space-y-2">
-                {(overview?.by_customer || []).slice(0, 6).map((c: any) => (
-                  <div key={c.customer || c.name || Math.random()} className="flex items-center justify-between">
+                {(overview?.by_customer || []).slice(0, 6).map((c: any, idx: number) => (
+                  <div key={c.customer || c.name || `top-customer-${idx}`} className="flex items-center justify-between">
                     <span className="text-sm text-gray-700">{c.customer || c.name || 'Unknown'}</span>
                     <div className="text-right">
                       <span className="text-sm font-semibold text-gray-800">

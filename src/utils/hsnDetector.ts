@@ -93,7 +93,7 @@ export function detectHsnCode(productName: string | null | undefined, dimensions
   const pName = (productName || '').toLowerCase().trim();
   const dStr = (dimensions || '').toLowerCase().trim();
   const combined = `${pName} ${dStr}`.trim();
-  if (!combined) return '72083840';
+  if (!combined) return '';
 
   const t = extractThickness(dimensions) || extractThickness(productName);
 
@@ -295,7 +295,7 @@ export function normalizeProductToCatalog(productName: string | null | undefined
   if (/\bsquare\s*(?:pipe|tube|tubing)\b|\bshs\b|\bbox\s*(?:pipe|tube|section)\b/i.test(combined) || (/\bsquare\b/i.test(p) && /\b(?:pipe|tube)\b/i.test(combined))) {
     return { isValid: true, catalogName: 'MS Square Pipe', category: 'Pipes and Tubes', hsnCode: '73063090' };
   }
-  if (/\b(?:round\s*pipe|erw\s*pipe|seamless\s*pipe|ms\s*pipe|gi\s*pipe|round\s*tube|ms\s*tube|pipe|tube)\b/i.test(combined)) {
+  if (/\b(?:round\s*pipe|erw\s*pipe|seamless\s*pipe|ms\s*pipe|gi\s*pipe|round\s*tube|ms\s*tube)\b/i.test(combined)) {
     return { isValid: true, catalogName: 'MS Round Pipe', category: 'Pipes and Tubes', hsnCode: '73063090' };
   }
 

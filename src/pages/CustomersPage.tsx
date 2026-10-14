@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { customersApi, employeesApi, zohoApi } from '../lib/api';
+import { customersApi, employeesApi } from '../lib/api';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useEffect, useState, useMemo } from 'react';
 import {
   Users,
@@ -20,7 +21,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
-import toast from 'react-hot-toast';
+import SyncBiginButton from '../components/SyncBiginButton';
 
 function HealthBadge({ risk }: { risk: string }) {
   const r = (risk || '').toLowerCase();
@@ -117,32 +118,8 @@ export default function CustomersPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const { effectivePhone, isSalesManager, isAdmin, activeRole, activeMode } = useAuth();
+  const { effectivePhone, isSalesManager, isAdmin, employee, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
-  const [isSyncingZoho, setIsSyncingZoho] = useState(false);
-
-  const handleTriggerZohoSync = async () => {
-    try {
-      setIsSyncingZoho(true);
-      const res = await zohoApi.pullInitialSync();
-      const data = res?.data?.data || res?.data || {};
-      const notice = Array.isArray(data.errors) ? data.errors[0] : '';
-      if (data.success === false || (notice && !data.companiesImported && !data.dealsImported)) {
-        toast.error(notice || 'Could not sync with Zoho Bigin');
-        return;
-      }
-      toast.success(
-        `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
-      );
-      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
-    } finally {
-      setIsSyncingZoho(false);
-    }
-  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterHealth, setFilterHealth] = useState<string>('all');
@@ -212,17 +189,17 @@ export default function CustomersPage() {
   };
 
   useEffect(() => {
-    document.title = 'Customer Health - Enlight Sales OS';
+    document.title = 'Customer Health - Enlight Sigma';
   }, []);
 
   // Fetch employees for salesperson name lookup
   const { data: rawEmployees = [] } = useQuery<{ id: string; name: string; phone: string }[]>({
-    queryKey: ['employees-list-customers'],
+    queryKey: queryKeys.employeesDirectory,
     queryFn: async () => {
       const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+      return normalizeListResponse(res?.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const employeeMap = useMemo(() => {
@@ -277,7 +254,7 @@ export default function CustomersPage() {
       await Promise.all([
         refetch(),
         queryClient.invalidateQueries({ queryKey: ['customers-churn'] }),
-        queryClient.invalidateQueries({ queryKey: ['employees-list-customers'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.employeesDirectory }),
       ]);
     } finally {
       setTimeout(() => setManualRefreshing(false), 500);
@@ -373,16 +350,15 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {activeRole === 'admin' && (
-              <button
-                type="button"
-                disabled={isSyncingZoho}
-                onClick={handleTriggerZohoSync}
-                className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
-                <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
-                <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
-              </button>
-            )}
+            <SyncBiginButton
+              show={isAdmin || employee?.role === 'salesperson'}
+              onSynced={() => {
+                queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+                queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
+                queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+                refetch();
+              }}
+            />
             <button
               onClick={handleRefresh}
               disabled={isFetching || manualRefreshing}
@@ -583,7 +559,7 @@ export default function CustomersPage() {
                       onMouseEnter={() => {
                         if (c.id) {
                           queryClient.prefetchQuery({
-                            queryKey: ['customer-detail', c.id],
+                            queryKey: ['customer-detail', c.id, effectivePhone],
                             queryFn: async () => {
                               const res = await customersApi.getOne(c.id);
                               return res?.data?.data || res?.data;

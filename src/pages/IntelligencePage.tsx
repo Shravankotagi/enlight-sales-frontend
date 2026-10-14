@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { customersApi, dealsApi } from '../lib/api';
+import SyncBiginButton from '../components/SyncBiginButton';
 import { useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -13,11 +14,11 @@ import {
 } from 'lucide-react';
 
 export default function IntelligencePage() {
-  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const { effectivePhone, isAdmin, employee, activeRole, activeMode } = useAuth();
   const salespersonPhone = effectivePhone || undefined;
 
   useEffect(() => {
-    document.title = 'Intelligence Center - Enlight Sales OS';
+    document.title = 'Intelligence Center - Enlight Sigma';
   }, []);
 
   // ── Real Data Queries ───────────────────────────────────────────────────────
@@ -205,6 +206,17 @@ export default function IntelligencePage() {
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
+          <SyncBiginButton
+            show={isAdmin || employee?.role === 'salesperson'}
+            onSynced={async () => {
+              await Promise.all([
+                refetchChurn(),
+                refetchReorder(),
+                refetchCustomers(),
+                refetchDeals(),
+              ]);
+            }}
+          />
           <button
             onClick={async () => {
               await Promise.all([

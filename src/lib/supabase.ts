@@ -1,8 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import type { QueryClient } from '@tanstack/react-query';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://supabase.enlightmetals.com';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTAwNjM2NjksImV4cCI6MTg5MzQ1NjAwMCwicm9sZSI6ImFub24iLCJpc3MiOiJzdXBhYmFzZSJ9.ZUUqJnSFw86p3RDih77HDSmN-CUQrAv6IaH1OrdzlFM';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Configure the frontend build for its deployment environment.',
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {
@@ -39,7 +45,6 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
     debounceTimers[keyId] = setTimeout(() => {
       keys.forEach((queryKey) => {
         queryClient.invalidateQueries({ queryKey, exact: false, refetchType: 'active' });
-        queryClient.refetchQueries({ queryKey, exact: false, type: 'active' });
       });
       delete debounceTimers[keyId];
     }, delayMs);
@@ -62,7 +67,7 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
           ['kanban'],
           ['kra-dashboard'],
           ['kra-sheets'],
-          ['home-inquiries'],
+          ['home-inquiries-list'],
           ['action-queue'],
           ['reports-overview-data'],
           ['customer-names-list'],
@@ -84,7 +89,7 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
           ['kanban'],
           ['kra-dashboard'],
           ['kra-sheets'],
-          ['home-inquiries'],
+          ['home-inquiries-list'],
           ['action-queue'],
           ['reports-overview-data'],
         ]);
@@ -206,8 +211,11 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         debounceInvalidate([
           ['customers'],
           ['customer'],
+          ['customer-detail'],
           ['customers-churn'],
           ['customers-churn-home'],
+          ['customer-names-list'],
+          ['customer-names-list-orders'],
           ['reorder-queue'],
           ['churn-risk'],
           ['recurring-customers-list'],

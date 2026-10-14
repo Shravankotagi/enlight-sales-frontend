@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag,
   Plus,
@@ -22,6 +22,7 @@ import {
   Layers,
   ArrowLeft,
   UserCheck,
+  ExternalLink,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -37,6 +38,8 @@ import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
+import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
+import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import {
   calculateLineItem,
   calculateQuotationBreakdown,
@@ -45,6 +48,8 @@ import {
   formatLineItemWeightMt,
   getOrderTonnage,
   normalizeUnit,
+  formatIndianCurrency,
+  resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
 
@@ -87,6 +92,7 @@ interface Order {
   deal_items?: DealItem[];
   raw_text?: string;
   source_channel?: string;
+  inquiry_type?: string;
   inquiries?: {
     source_channel?: string;
     inquiry_type?: string;
@@ -95,11 +101,29 @@ interface Order {
 
 export function getOrderSourceChannel(ord?: Order | null): string {
   if (!ord) return 'Dashboard';
+
+  if (
+    ord.po_source === 'upload' ||
+    ord.po_source === 'manual' ||
+    ord.po_source === 'dashboard'
+  ) {
+    return 'Dashboard';
+  }
+
   const channel = (
     ord.source_channel ||
     ord.inquiries?.source_channel ||
     ''
   ).toLowerCase().trim();
+
+  // If inquiry_type is purchase_order and it's not explicitly WhatsApp, default to Dashboard
+  if (
+    (ord.inquiry_type === 'purchase_order' || ord.inquiries?.inquiry_type === 'purchase_order') &&
+    !channel.includes('whatsapp') &&
+    !(ord.inquiries as any)?.whatsapp_message_id
+  ) {
+    return 'Dashboard';
+  }
 
   // AI Assistant signals
   if (
@@ -149,52 +173,170 @@ interface LineItemDetail {
   isManualAmount?: boolean;
   converted_mt?: number | string;
   is_manual_mt?: boolean;
-}
-
-function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
-  if (!inputName || !inputName.trim()) return false;
-  const cleanInput = inputName.trim().toLowerCase();
-  if (assignedList.some(c => c.trim().toLowerCase() === cleanInput)) return true;
-
-  const stripSuffixes = (str: string) =>
-    str
-      .toLowerCase()
-      .replace(/\b(private\s+limited|pvt\s+ltd|pvt\s+limited|private\s+ltd|co\s+ltd|llp|limited|pvt|ltd|inc|corp)\b/gi, '')
-      .replace(/[^a-z0-9]/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-  const strippedInput = stripSuffixes(cleanInput);
-  if (!strippedInput) return false;
-
-  return assignedList.some(c => {
-    const strippedC = stripSuffixes(c);
-    return Boolean(
-      strippedC &&
-      (strippedC === strippedInput || strippedInput.startsWith(strippedC) || strippedC.startsWith(strippedInput)),
-    );
-  });
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  is_inter_state?: boolean;
+  total_gst?: number;
+  final_amount?: number;
 }
 
 const GENERATED_SOURCE_PLACEHOLDER = /^\[(?:Inquiry Attachment|PO Document Attached|PO Document):/i;
+
+export function buildOrderStructuredSourceText(ord?: Order | null): string | null {
+  if (!ord) return null;
+  const items = Array.isArray(ord.deal_items) ? ord.deal_items : [];
+  const itemStrs = items
+    .map((item, idx) => {
+      const sku = String(item?.sku_text || (item as any)?.description || '').trim();
+      if (!sku && !Number(item?.quantity)) return '';
+      const dims = item?.dimensions ? ` (${String(item.dimensions).trim()})` : '';
+      const qty = Number(item?.quantity) > 0 ? ` - ${item.quantity} ${item.unit || 'MT'}` : '';
+      const rate = Number(item?.rate) > 0 ? ` @ ₹${Number(item.rate)}` : '';
+      return `${idx + 1}. ${sku || 'Item'}${dims}${qty}${rate}`.trim();
+    })
+    .filter(Boolean);
+
+  const rawDelivery = String(ord.delivery_location || '').trim();
+  const cleanDelivery = rawDelivery
+    .replace(/^[^,\n]*?\b(?:pvt\.?\s*ltd\.?|private\s+limited|limited|llp)\s*,\s*/i, '')
+    .trim();
+  const paymentTerms = String(ord.payment_terms || '').trim();
+  const inqObj = (ord as any).inquiries;
+  const aiJson = inqObj?.ai_extraction_json || (ord as any).ai_extraction_json || {};
+  const notes = String(
+    (ord as any).additional_notes ||
+      (ord as any).notes ||
+      aiJson.additional_notes ||
+      aiJson.notes ||
+      aiJson.remarks ||
+      '',
+  ).trim();
+  const poNumber = String(ord.po_number || '').trim();
+
+  if (itemStrs.length === 0 && !cleanDelivery && !paymentTerms && !notes) {
+    return null;
+  }
+
+  return [
+    itemStrs.length > 0 ? `Material:\n${itemStrs.join('\n')}` : '',
+    cleanDelivery ? `Delivery: ${cleanDelivery}` : '',
+    paymentTerms ? `Payment Terms: ${paymentTerms}` : '',
+    notes ? `Notes: ${notes}` : '',
+    poNumber ? `PO Number: ${poNumber}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
 
 export function getOrderOriginalSourceText(ord?: Order | null): string | null {
   if (!ord) return null;
   const candidate = String(
     ord.source_original_text ?? ord.raw_text ?? '',
   ).trim();
-  if (!candidate || GENERATED_SOURCE_PLACEHOLDER.test(candidate)) return null;
-  return candidate;
+
+  const strippedContent = candidate
+    .replace(
+      /^\[(?:Inquiry Attachment|PO Document Attached|PO Document):[^\n]*\](?:\s*-\s*[^\n]*)?\n*/i,
+      '',
+    )
+    .trim();
+
+  const isPurePlaceholder =
+    (GENERATED_SOURCE_PLACEHOLDER.test(candidate) &&
+      (!strippedContent || / - Original PO Document$/i.test(strippedContent))) ||
+    / - Original PO Document$/i.test(candidate);
+
+  if (candidate && !isPurePlaceholder && strippedContent) {
+    // Guard against stale/unrelated inquiry raw_text when this order has deal_items
+    if (Array.isArray(ord.deal_items) && ord.deal_items.length > 0) {
+      const candidateLower = candidate.toLowerCase();
+      const hasMatchingItem = ord.deal_items.some((item: any) => {
+        const name = String(item.sku_text || item.product_name || item.description || '')
+          .toLowerCase()
+          .trim();
+        if (!name) return false;
+        const cleanName = name.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const firstTwoWords = cleanName.split(' ').slice(0, 2).join(' ');
+        if (firstTwoWords.length >= 4 && candidateLower.includes(firstTwoWords)) {
+          return true;
+        }
+        const tokens = cleanName.split(' ').filter(w => w.length >= 5);
+        return tokens.some(t => candidateLower.includes(t));
+      });
+
+      if (!hasMatchingItem) {
+        return buildOrderStructuredSourceText(ord);
+      }
+    }
+
+    const poNumber = String(ord.po_number || '').trim();
+    if (poNumber && /^Material:/i.test(strippedContent)) {
+      if (/\bPO\s*Number\s*:/i.test(strippedContent)) {
+        return strippedContent.replace(
+          /(\bPO\s*Number\s*:\s*)([^\n\r]+)/i,
+          `$1${poNumber}`,
+        );
+      }
+      return `${strippedContent}\nPO Number: ${poNumber}`;
+    }
+    return strippedContent;
+  }
+
+  return buildOrderStructuredSourceText(ord);
 }
 
 export function getOrderSourceDocuments(ord?: Order | null): string[] {
   if (!ord) return [];
-  const urls = ord.source_media_urls || ord.media_urls || [];
-  return urls.filter(
-    url =>
-      typeof url === 'string' &&
-      (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')),
+  const urls = [
+    ...(ord.source_media_urls || []),
+    ...(ord.media_urls || []),
+    ...((ord as any).inquiries?.media_urls || []),
+  ];
+  return Array.from(
+    new Set(
+      urls.filter(
+        url =>
+          typeof url === 'string' &&
+          url !== 'attached_document' &&
+          (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')),
+      ),
+    ),
   );
+}
+
+export function openDocumentUrl(url?: string | null) {
+  if (!url) return;
+  if (url.startsWith('data:')) {
+    try {
+      const [header, base64Data] = url.split(',');
+      const mimeMatch = header.match(/:(.*?);/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'application/pdf';
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+      const newWin = window.open(blobUrl, '_blank');
+      if (!newWin) {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.target = '_blank';
+        a.rel = 'noreferrer';
+        a.click();
+      }
+      return;
+    } catch (err) {
+      console.error('Failed to open data URL as blob:', err);
+    }
+  }
+  window.open(url, '_blank', 'noreferrer');
 }
 
 export function formatOrderSourceText(ord?: Order | null): string {
@@ -206,7 +348,7 @@ export function formatOrderSourceText(ord?: Order | null): string {
   }
 
   if (getOrderSourceDocuments(ord).length > 0) {
-    return 'Original source is an attached document. Use the document preview above.';
+    return 'Original source is an attached document. Click "Open Source Document" above to view the uploaded file.';
   }
 
   return 'No original source text or document is available for this order.';
@@ -347,7 +489,7 @@ export default function OrdersPage() {
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const queryClient = useQueryClient();
-  const { effectivePhone, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
+  const { effectivePhone, employee, activeRole, activeMode, isAdmin, isSalesManager } = useAuth();
   const canViewSalesperson = isAdmin || isSalesManager;
   const [isSyncingZoho, setIsSyncingZoho] = useState(false);
 
@@ -365,8 +507,9 @@ export default function OrdersPage() {
         `Bigin customers synced. Created: ${data.recordsCreated ?? data.companiesImported ?? 0}, Updated: ${data.recordsUpdated ?? 0}, Skipped: ${data.recordsSkipped ?? 0}.`,
       );
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
       queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+      fetchOrders();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Could not sync with Zoho Bigin');
     } finally {
@@ -464,21 +607,19 @@ export default function OrdersPage() {
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
+    placeholderData: keepPreviousData,
   });
 
-  useEffect(() => {
-    const handleDbChange = (e: any) => {
-      const { table } = e.detail || {};
-      if (table === 'deals' || table === 'deal_items') {
-        fetchOrders();
-      }
-    };
-    window.addEventListener('enlight-db-change', handleDbChange);
-    return () => window.removeEventListener('enlight-db-change', handleDbChange);
-  }, [fetchOrders]);
+  const [customerMetaMap, setCustomerMetaMap] = useState<Record<string, { gstin?: string; state?: string; address?: string }>>({});
+
+  const lookupCustomerMeta = (companyName?: string) => {
+    if (!companyName) return undefined;
+    const key = companyName.trim().toLowerCase();
+    return customerMetaMap[key];
+  };
 
   const { data: rawCustomers = [] } = useQuery<string[]>({
-    queryKey: ['customer-names-list-orders', effectivePhone, activeRole, activeMode],
+    queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
       const params: any = {};
       if (effectivePhone) params.salesperson_phone = effectivePhone;
@@ -487,6 +628,18 @@ export default function OrdersPage() {
       const custRes = await customersApi.getAll(params).catch(() => null);
       const rawCust = custRes?.data;
       const cList = Array.isArray(rawCust) ? rawCust : (Array.isArray(rawCust?.data) ? rawCust.data : []);
+      const metaMap: Record<string, { gstin?: string; state?: string; address?: string }> = {};
+      cList.forEach((c: any) => {
+        const cName = String(c.customer_name || c.name || c.company_name || '').trim();
+        if (cName) {
+          metaMap[cName.toLowerCase()] = {
+            gstin: c.gst_number || c.gstin || undefined,
+            state: c.customer_state || c.state || undefined,
+            address: c.delivery_location || c.registered_address || c.address || undefined,
+          };
+        }
+      });
+      setCustomerMetaMap(metaMap);
       const fetchedNames: string[] = cList
         .map((c: any) => String(c.customer_name || c.name || c.company_name || '').trim())
         .filter(Boolean);
@@ -498,11 +651,10 @@ export default function OrdersPage() {
   });
 
   const { data: rawEmployees = [] } = useQuery<any[]>({
-    queryKey: ['employees-list-orders'],
+    queryKey: queryKeys.employeesDirectory,
     queryFn: async () => {
       const res = await employeesApi.getAll().catch(() => null);
-      const raw = res?.data;
-      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+      return normalizeListResponse(res?.data);
     },
     enabled: canViewSalesperson,
     staleTime: 5 * 60 * 1000,
@@ -604,6 +756,12 @@ export default function OrdersPage() {
   const poInputDirtyRef = useRef(false);
   const [formPoDate, setFormPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+  const [extractedCustomerExtras, setExtractedCustomerExtras] = useState<{ contactPerson: string; gstin: string }>({
+    contactPerson: '',
+    gstin: '',
+  });
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
   const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
     {
@@ -616,6 +774,40 @@ export default function OrdersPage() {
       amount: 0,
     },
   ]);
+
+  const formCustomerMeta = lookupCustomerMeta(formCustomerName);
+  const formPlaceOfSupply = useMemo(
+    () =>
+      resolvePlaceOfSupply({
+        deliveryLocation: formDeliveryLocation,
+        customerState: formCustomerMeta?.state,
+        customerGstin: formCustomerMeta?.gstin || extractedCustomerExtras.gstin || undefined,
+        customerAddress: formCustomerMeta?.address,
+      }),
+    [formDeliveryLocation, formCustomerMeta?.state, formCustomerMeta?.gstin, formCustomerMeta?.address, extractedCustomerExtras.gstin],
+  );
+  const isFormInterState = formPlaceOfSupply.isInterState;
+
+  useEffect(() => {
+    setFormLineItems(prev =>
+      prev.map(item => {
+        const calc = calculateLineItem(item, { isInterState: isFormInterState });
+        return {
+          ...item,
+          amount: calc.amount,
+          cgst_rate: calc.cgst_rate,
+          cgst_amount: calc.cgst_amount,
+          sgst_rate: calc.sgst_rate,
+          sgst_amount: calc.sgst_amount,
+          igst_rate: calc.igst_rate,
+          igst_amount: calc.igst_amount,
+          is_inter_state: calc.is_inter_state,
+          total_gst: calc.total_gst,
+          final_amount: calc.final_amount,
+        };
+      }),
+    );
+  }, [isFormInterState]);
 
   const createPoReservationToken = () =>
     `dashboard:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
@@ -770,9 +962,11 @@ export default function OrdersPage() {
           extraction.companyName ||
           extraction.company_name ||
           '';
+        let filledFromDocument = false;
         if (rawCust && String(rawCust).trim().length > 0) {
           const cleanCust = String(rawCust).trim();
           setFormCustomerName(cleanCust);
+          filledFromDocument = true;
         }
 
         const rawPhone =
@@ -797,15 +991,58 @@ export default function OrdersPage() {
           }
           setFormPoDate(formattedDate);
         }
-        if (extraction.delivery_location) {
-          setFormDeliveryLocation(String(extraction.delivery_location).trim());
+        if (extraction.delivery_location || extraction.deliveryLocation || extraction.customer_address || extraction.address || extraction.customer?.address) {
+          const rawDeliv = String(
+            extraction.delivery_location ||
+              extraction.deliveryLocation ||
+              extraction.customer_address ||
+              extraction.address ||
+              extraction.customer?.address,
+          )
+            .replace(/^[^,\n]*?\b(?:pvt\.?\s*ltd\.?|private\s+limited|limited|llp)\s*,\s*/i, '')
+            .replace(/,?\s*e-?mail\s*:\s*\S+/gi, '')
+            .trim();
+          setFormDeliveryLocation(rawDeliv);
         }
-        if (extraction.payment_terms) {
-          setFormPaymentTerms(String(extraction.payment_terms).trim());
+        const extractedNotes = String(
+          extraction.additional_notes || extraction.notes || extraction.remarks || '',
+        ).trim();
+        setFormNotes(extractedNotes);
+        setExtractedCustomerExtras({
+          contactPerson: String(
+            extraction.contact_person || extraction.contact_name || extraction.customer?.contact_person || '',
+          ).trim(),
+          gstin: String(extraction.customer_gst || extraction.gstin || extraction.gst || '').trim(),
+        });
+        if (extraction.payment_terms || extraction.paymentTerms) {
+          setFormPaymentTerms(String(extraction.payment_terms || extraction.paymentTerms).trim());
         }
 
-        if (Array.isArray(extraction.line_items) && extraction.line_items.length > 0) {
-          const mappedItems: LineItemDetail[] = extraction.line_items.map((i: any) => {
+        const extractedCustName = String(rawCust || formCustomerName || '').trim();
+        const extractedCustMeta = lookupCustomerMeta(extractedCustName);
+        const extractedDeliv = String(
+          extraction.delivery_location ||
+            extraction.deliveryLocation ||
+            extraction.customer_address ||
+            extraction.address ||
+            extraction.customer?.address ||
+            formDeliveryLocation ||
+            '',
+        ).trim();
+        const extractedPos = resolvePlaceOfSupply({
+          deliveryLocation: extractedDeliv,
+          customerState: extractedCustMeta?.state,
+          customerGstin: (extraction.gstin || extraction.customer?.gstin || extractedCustomerExtras.gstin || extractedCustMeta?.gstin || '').trim() || undefined,
+          customerAddress: extractedCustMeta?.address,
+        });
+
+        const extractedLines = Array.isArray(extraction.line_items)
+          ? extraction.line_items
+          : Array.isArray(extraction.lineItems)
+            ? extraction.lineItems
+            : [];
+        if (extractedLines.length > 0) {
+          const mappedItems: LineItemDetail[] = extractedLines.map((i: any) => {
             const skuText = (i.sku_text || i.description || i.product || 'Material').trim();
             const dims = (i.dimensions || '').trim();
             let rawUnit = (i.unit || 'MT').trim();
@@ -821,24 +1058,37 @@ export default function OrdersPage() {
               rawUnit = 'MT';
             }
 
+            const calc = calculateLineItem(
+              {
+                sku_text: skuText,
+                dimensions: dims,
+                hsn_code: (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '').trim(),
+                quantity: q,
+                unit: normalizeUnit(rawUnit) || 'MT',
+                rate: r,
+                amount: amt,
+              },
+              { isInterState: extractedPos.isInterState },
+            );
+
             return {
-              sku_text: skuText,
-              dimensions: dims,
+              ...calc,
               hsn_code: (i.hsn_code || i.hsn || detectHsnCode(skuText, dims) || '').trim(),
-              quantity: q,
-              unit: normalizeUnit(rawUnit) || 'MT',
-              rate: r,
-              amount: amt,
             };
           });
           setFormLineItems(mappedItems);
+          filledFromDocument = true;
         }
 
+        if (!filledFromDocument) {
+          throw new Error('Could not auto-extract PO details. You can enter the fields manually.');
+        }
         toast.success('PO Document parsed! All details auto-filled.');
       } catch (err: any) {
         console.error('Error parsing PO document:', err);
         setFormUploadedBase64(null);
         setPoFileName('');
+        setFormNotes('');
         toast.error(err?.message || 'Could not auto-extract PO details. You can enter the fields manually.');
       } finally {
         setIsParsingDoc(false);
@@ -859,7 +1109,7 @@ export default function OrdersPage() {
       }
       return;
     }
-    if (activeRole !== 'admin' && !isCustomerInAssignedList(formCustomerName, rawCustomers)) {
+    if (!isCustomerInAssignedList(formCustomerName, rawCustomers)) {
       toast.error('Cannot create order: Customer is not in your assigned customer list.');
       return;
     }
@@ -953,7 +1203,33 @@ export default function OrdersPage() {
     }
 
     const subtotal = formLineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    const qBreakdown = calculateQuotationBreakdown(subtotal);
+    const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems, { isInterState: isFormInterState });
+
+    const itemStrs = formLineItems
+      .map((item, idx) => {
+        const sku = (item.sku_text || 'Item').trim();
+        const dims = item.dimensions?.trim() ? ` (${item.dimensions.trim()})` : '';
+        const qty = item.quantity ? ` - ${item.quantity} ${item.unit || 'MT'}` : '';
+        const rate = Number(item.rate) > 0 ? ` @ ₹${Number(item.rate)}` : '';
+        return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
+      })
+      .filter(Boolean);
+    const cleanDeliveryForSource = formDeliveryLocation
+      .trim()
+      .replace(/^[^,\n]*?\b(?:pvt\.?\s*ltd\.?|private\s+limited|limited|llp)\s*,\s*/i, '')
+      .trim();
+    const reqDetails = [
+      itemStrs.length > 0 ? `Material:\n${itemStrs.join('\n')}` : '',
+      cleanDeliveryForSource ? `Delivery: ${cleanDeliveryForSource}` : '',
+      formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
+      formNotes.trim() ? `Notes: ${formNotes.trim()}` : '',
+      formPoNumber.trim() ? `PO Number: ${formPoNumber.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const sourceOriginalText = poFileName
+      ? `[Inquiry Attachment: ${poFileName}]\n${reqDetails}`
+      : reqDetails;
 
     try {
       setSubmitting(true);
@@ -968,19 +1244,40 @@ export default function OrdersPage() {
         po_date: formPoDate,
         total_amount: qBreakdown.grandTotal,
         delivery_location: formDeliveryLocation.trim(),
+        place_of_supply: formPlaceOfSupply.label,
+        is_inter_state: isFormInterState,
         payment_terms: formPaymentTerms.trim() || undefined,
+        additional_notes: formNotes.trim() || undefined,
+        source_original_text: sourceOriginalText || undefined,
         source_channel: 'web_dashboard',
-        line_items: formLineItems.map(i => ({
-          sku_text: i.sku_text.trim(),
-          dimensions: i.dimensions ? i.dimensions.trim() : undefined,
-          hsn_code: i.hsn_code ? i.hsn_code.trim() : undefined,
-          quantity: Number(i.quantity) || 0,
-          unit: i.unit || 'MT',
-          rate: Number(i.rate) || 0,
-          amount: Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0)),
-          converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
-          is_manual_mt: i.is_manual_mt || undefined,
-        })),
+        line_items: formLineItems.map(i => {
+          const baseAmt = Number(i.amount) || Math.round((Number(i.quantity) || 0) * (Number(i.rate) || 0));
+          const cgstAmt = isFormInterState ? 0 : (i.cgst_amount !== undefined ? Number(i.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+          const sgstAmt = isFormInterState ? 0 : (i.sgst_amount !== undefined ? Number(i.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+          const igstAmt = isFormInterState ? (i.igst_amount !== undefined && Number(i.igst_amount) > 0 ? Number(i.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100) : 0;
+          const totalGst = isFormInterState ? igstAmt : Math.round((cgstAmt + sgstAmt) * 100) / 100;
+          const finalAmt = i.final_amount !== undefined ? Number(i.final_amount) : Math.round((baseAmt + totalGst) * 100) / 100;
+          return {
+            sku_text: i.sku_text.trim(),
+            dimensions: i.dimensions ? i.dimensions.trim() : undefined,
+            hsn_code: i.hsn_code ? i.hsn_code.trim() : undefined,
+            quantity: Number(i.quantity) || 0,
+            unit: i.unit || 'MT',
+            rate: Number(i.rate) || 0,
+            amount: baseAmt,
+            cgst_rate: isFormInterState ? 0 : 9,
+            cgst_amount: cgstAmt,
+            sgst_rate: isFormInterState ? 0 : 9,
+            sgst_amount: sgstAmt,
+            igst_rate: isFormInterState ? 18 : 0,
+            igst_amount: igstAmt,
+            is_inter_state: isFormInterState,
+            total_gst: totalGst,
+            final_amount: finalAmt,
+            converted_mt: i.converted_mt !== undefined && i.converted_mt !== '' && !isNaN(Number(i.converted_mt)) ? Number(i.converted_mt) : undefined,
+            is_manual_mt: i.is_manual_mt || undefined,
+          };
+        }),
         media_urls: formUploadedBase64 ? [formUploadedBase64] : undefined,
       });
 
@@ -998,6 +1295,7 @@ export default function OrdersPage() {
       setFormPoDate(new Date().toISOString().split('T')[0]);
       setFormDeliveryLocation('');
       setFormPaymentTerms('');
+      setFormNotes('');
       setFormLineItems([
         {
           sku_text: '',
@@ -1013,7 +1311,7 @@ export default function OrdersPage() {
       setFormUploadedBase64(null);
 
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
-      queryClient.invalidateQueries({ queryKey: ['customer-names-list-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
       queryClient.invalidateQueries({ queryKey: ['inquiries-list'] });
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['all-deals-list'] });
@@ -1043,14 +1341,17 @@ export default function OrdersPage() {
   };
 
   const handleViewPoDocument = async (ord: Order) => {
-    // If order already has complete raw_text, open immediately with full details (0ms latency)
-    if (ord.raw_text) {
+    // Check if order already has genuine renderable documents
+    const hasRenderableDoc = getOrderSourceDocuments(ord).length > 0;
+
+    // If order already has renderable doc, open immediately (0ms latency)
+    if (hasRenderableDoc) {
       setSelectedPoOrder(ord);
       setPoImageViewerUrl(`extracted_preview://${ord.id}`);
       return;
     }
 
-    // Otherwise, fetch full deal details first before opening modal so user directly sees complete Image 2 details
+    // Otherwise, fetch full deal details first before opening modal so user directly sees complete document preview and text
     setLoadingPoId(ord.id);
 
     try {
@@ -1211,16 +1512,14 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {activeRole === 'admin' && (
-              <button
-                type="button"
-                disabled={isSyncingZoho}
-                onClick={handleTriggerZohoSync}
-                className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
-                <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
-                <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={isSyncingZoho}
+              onClick={handleTriggerZohoSync}
+              className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
+              <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
+              <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
+            </button>
             <button
               onClick={() => {
                 fetchOrders();
@@ -1235,8 +1534,8 @@ export default function OrdersPage() {
               onClick={handleOpenCreateOrder}
               disabled={allocatingPo}
               className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
-              {allocatingPo ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-              {allocatingPo ? 'Generating PO…' : 'Create New Order'}
+              <Plus size={15} />
+              Create New Order
             </button>
           </div>
         </div>
@@ -1576,7 +1875,22 @@ export default function OrdersPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                <span>Original Source</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700">Original Source Message</span>
+                  {getOrderSourceDocuments(selectedPoOrder).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openDocumentUrl(
+                          getOrderSourceDocuments(selectedPoOrder)[0],
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer">
+                      <ExternalLink size={12} />
+                      Open Source Document
+                    </button>
+                  )}
+                </div>
                 {(selectedPoOrder?.created_at || selectedPoOrder?.won_at) && (
                   <span className="font-mono">
                     Received: {new Date(selectedPoOrder.created_at || selectedPoOrder.won_at || '').toLocaleString('en-IN')}
@@ -1584,43 +1898,7 @@ export default function OrdersPage() {
                 )}
               </div>
 
-              {getOrderSourceDocuments(selectedPoOrder).slice(0, 1).map(sourceUrl => {
-                const isPdf =
-                  sourceUrl.toLowerCase().startsWith('data:application/pdf') ||
-                  /\.pdf(?:$|[?#])/i.test(sourceUrl);
-                return (
-                  <div key={sourceUrl} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-700">
-                        Original Source Document
-                      </span>
-                      <a
-                        href={sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        download={isPdf ? 'original-po.pdf' : undefined}
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-700">
-                        Open document
-                      </a>
-                    </div>
-                    {isPdf ? (
-                      <iframe
-                        title="Original PO document"
-                        src={sourceUrl}
-                        className="w-full h-[42vh] rounded-lg border border-slate-200 bg-white"
-                      />
-                    ) : (
-                      <img
-                        src={sourceUrl}
-                        alt="Original PO document"
-                        className="max-h-[42vh] w-full object-contain rounded-lg border border-slate-200 bg-white"
-                      />
-                    )}
-                  </div>
-                );
-              })}
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[140px] max-h-[60vh] overflow-y-auto">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed select-text min-h-[220px] max-h-[65vh] overflow-y-auto">
                 {formatOrderSourceText(selectedPoOrder)}
               </div>
             </div>
@@ -1630,7 +1908,7 @@ export default function OrdersPage() {
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingBag className="text-blue-600" size={20} />
@@ -1751,22 +2029,26 @@ export default function OrdersPage() {
                         ))}
                       {rawCustomers.filter(c => !formCustomerName || c.toLowerCase().includes(formCustomerName.toLowerCase())).length === 0 && (
                         <div className="px-3 py-2 text-xs text-slate-400 italic">
-                          {activeRole !== 'admin'
-                            ? 'This company is not in your assigned customer list.'
-                            : 'No matching company found. Typing will save as new company.'}
+                          This company is not in your assigned customer list.
                         </div>
                       )}
                     </div>
                   )}
                 </div>
-                {activeRole !== 'admin' && formCustomerName.trim() && !isCustomerInAssignedList(formCustomerName, rawCustomers) && (
+                {formCustomerName.trim() && !isCustomerInAssignedList(formCustomerName, rawCustomers) && (
                   <div className="mt-1.5 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">
                     <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
-                    <div>
+                    <div className="flex-1">
                       <span className="font-bold">Customer Not Assigned:</span>
                       <p className="text-[11px] text-rose-700 mt-0.5">
                         "{formCustomerName}" is not in your assigned customer list. You can only record orders for your assigned customers.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCustomer(true)}
+                        className="mt-2 px-3 py-1.5 bg-white border border-rose-300 text-rose-800 rounded-lg text-[11px] font-bold hover:bg-rose-100">
+                        Add this customer
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1794,11 +2076,6 @@ export default function OrdersPage() {
                   <p className="mt-1 text-[10px] text-slate-500">
                     Generated automatically and editable before confirmation.
                   </p>
-                  {checkingPoAvailability && (
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      Checking availability…
-                    </p>
-                  )}
                   {poConflict && (
                     <p className="mt-1 text-[10px] font-semibold text-rose-600">
                       {poConflict}
@@ -1838,25 +2115,41 @@ export default function OrdersPage() {
               </div>
 
               {/* Structured Line Items Table matching Img 2 */}
-              <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs text-slate-800 border-collapse">
+              <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
+                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center">#</th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[32%]">
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
                         HSN/SAC <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[23%] text-center">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
                         Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-center min-w-[95px]">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
                         Rate (₹)/ MT <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[13%] text-left">Amount (₹)</th>
-                      <th className="px-2 py-3 text-center w-[3%]"></th>
+                      {isFormInterState ? (
+                        <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[16%] min-w-[110px]">
+                          IGST (18%)
+                        </th>
+                      ) : (
+                        <>
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                            CGST (9%)
+                          </th>
+                          <th className="px-2.5 py-3 border-r border-slate-700 text-center align-middle text-[11px] w-[8%] min-w-[75px]">
+                            SGST (9%)
+                          </th>
+                        </>
+                      )}
+                      <th className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle">
+                        Amount (₹)
+                      </th>
+                      <th className="px-2 py-3 text-center w-[3%] align-middle"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -1878,13 +2171,27 @@ export default function OrdersPage() {
                                 const newAutoHsn = detectHsnCode(newSku, item.dimensions);
 
                                 let finalHsn = currentHsn;
-                                if (!currentHsn || currentHsn === prevAutoHsn) {
+                                if (!newSku.trim()) {
+                                  finalHsn = '';
+                                } else if (!currentHsn || currentHsn === prevAutoHsn) {
                                   finalHsn = newAutoHsn;
                                 }
 
                                 const currentItem = { ...updated[idx], sku_text: newSku, hsn_code: finalHsn };
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                updated[idx] = { ...currentItem, amount: calc.amount };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  is_inter_state: calc.is_inter_state,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
                                 setFormLineItems(updated);
                               }}
                               className="w-full px-2 py-1 bg-white border border-slate-300 rounded font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
@@ -1910,8 +2217,20 @@ export default function OrdersPage() {
                                   }
 
                                   const currentItem = { ...updated[idx], dimensions: newDim, hsn_code: finalHsn };
-                                  const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                  updated[idx] = { ...currentItem, amount: calc.amount };
+                                  const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                  updated[idx] = {
+                                    ...currentItem,
+                                    amount: calc.amount,
+                                    cgst_rate: calc.cgst_rate,
+                                    cgst_amount: calc.cgst_amount,
+                                    sgst_rate: calc.sgst_rate,
+                                    sgst_amount: calc.sgst_amount,
+                                    igst_rate: calc.igst_rate,
+                                    igst_amount: calc.igst_amount,
+                                    is_inter_state: calc.is_inter_state,
+                                    total_gst: calc.total_gst,
+                                    final_amount: calc.final_amount,
+                                  };
                                   setFormLineItems(updated);
                                 }}
                                 className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-500 text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
@@ -1949,12 +2268,25 @@ export default function OrdersPage() {
                                 const rawQ = val === '' ? 0 : parseFloat(val);
                                 const safeQ = isNaN(rawQ) || rawQ < 0 ? 0 : rawQ;
                                 const updated = [...formLineItems];
-                                let currentItem = { ...updated[idx], quantity: safeQ };
+                                const currentItem: any = { ...updated[idx], quantity: safeQ };
+                                delete currentItem.isManualAmount;
                                 if (normalizeUnit(currentItem.unit) === 'MT') {
                                   currentItem.converted_mt = safeQ;
                                 }
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                updated[idx] = { ...currentItem, amount: calc.amount };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  is_inter_state: calc.is_inter_state,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
                                 setFormLineItems(updated);
                               }}
                               placeholder="0"
@@ -1965,30 +2297,42 @@ export default function OrdersPage() {
                               onChange={(e) => {
                                 const newUnit = e.target.value;
                                 const updated = [...formLineItems];
-                                let currentItem = { ...updated[idx], unit: newUnit };
+                                const currentItem = { ...updated[idx], unit: newUnit };
+                                delete currentItem.is_manual_mt;
+                                delete currentItem.isManualAmount;
                                 if (newUnit === 'MT') {
                                   currentItem.converted_mt = currentItem.quantity;
-                                } else if (currentItem.is_manual_mt && (currentItem.converted_mt === undefined || currentItem.converted_mt === 0)) {
+                                } else {
                                   delete currentItem.converted_mt;
-                                  delete currentItem.is_manual_mt;
                                 }
-                                const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                updated[idx] = { ...currentItem, amount: calc.amount };
+                                const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                updated[idx] = {
+                                  ...currentItem,
+                                  amount: calc.amount,
+                                  cgst_rate: calc.cgst_rate,
+                                  cgst_amount: calc.cgst_amount,
+                                  sgst_rate: calc.sgst_rate,
+                                  sgst_amount: calc.sgst_amount,
+                                  igst_rate: calc.igst_rate,
+                                  igst_amount: calc.igst_amount,
+                                  is_inter_state: calc.is_inter_state,
+                                  total_gst: calc.total_gst,
+                                  final_amount: calc.final_amount,
+                                };
                                 setFormLineItems(updated);
                               }}
                               className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
-                              <option value="Pcs">Pcs</option>
                               <option value="KG">KG</option>
-                              <option value="Sheets">Sheets</option>
-                              <option value="Plates">Plates</option>
-                              <option value="Coils">Coils</option>
+                              {['Pcs', 'Sheets', 'Plates', 'Coils'].includes(normalizeUnit(item.unit) || '') && (
+                                <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
+                              )}
                             </select>
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
                               const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
-                              const displayMt = item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
+                              const displayMt = (item.is_manual_mt || normalizeUnit(item.unit) === 'MT') && item.converted_mt !== undefined && item.converted_mt !== null && item.converted_mt !== ''
                                 ? item.converted_mt
                                 : (hasFormulaWeight && itemWeight.mt !== null ? itemWeight.mt : '');
                               const hasWeight = (displayMt !== '' && Number(displayMt) > 0) || hasFormulaWeight;
@@ -2009,7 +2353,8 @@ export default function OrdersPage() {
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       const updated = [...formLineItems];
-                                      let currentItem = { ...updated[idx] };
+                                      const currentItem: any = { ...updated[idx] };
+                                      delete currentItem.isManualAmount;
 
                                       if (val === '') {
                                         delete currentItem.converted_mt;
@@ -2024,8 +2369,20 @@ export default function OrdersPage() {
                                         }
                                       }
 
-                                      const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                                      updated[idx] = { ...currentItem, amount: calc.amount };
+                                      const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                                      updated[idx] = {
+                                        ...currentItem,
+                                        amount: calc.amount,
+                                        cgst_rate: calc.cgst_rate,
+                                        cgst_amount: calc.cgst_amount,
+                                        sgst_rate: calc.sgst_rate,
+                                        sgst_amount: calc.sgst_amount,
+                                        igst_rate: calc.igst_rate,
+                                        igst_amount: calc.igst_amount,
+                                        is_inter_state: calc.is_inter_state,
+                                        total_gst: calc.total_gst,
+                                        final_amount: calc.final_amount,
+                                      };
                                       setFormLineItems(updated);
                                     }}
                                     placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
@@ -2051,30 +2408,121 @@ export default function OrdersPage() {
                               const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
                               const updated = [...formLineItems];
                               const currentItem = { ...updated[idx], rate: safeR };
-                              const calc = calculateLineItem({ ...currentItem, amount: 0 });
-                              updated[idx] = { ...currentItem, amount: calc.amount };
+                              delete currentItem.isManualAmount;
+                              const calc = calculateLineItem({ ...currentItem, amount: 0 }, { isInterState: isFormInterState });
+                              updated[idx] = {
+                                ...currentItem,
+                                amount: calc.amount,
+                                cgst_rate: calc.cgst_rate,
+                                cgst_amount: calc.cgst_amount,
+                                sgst_rate: calc.sgst_rate,
+                                sgst_amount: calc.sgst_amount,
+                                igst_rate: calc.igst_rate,
+                                igst_amount: calc.igst_amount,
+                                is_inter_state: calc.is_inter_state,
+                                total_gst: calc.total_gst,
+                                final_amount: calc.final_amount,
+                              };
                               setFormLineItems(updated);
                             }}
                             placeholder="0"
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
                           />
                         </td>
+                        {isFormInterState ? (
+                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                            {(() => {
+                              const baseAmt = Number(item.amount) || 0;
+                              const igst = item.igst_amount !== undefined && Number(item.igst_amount) > 0 ? Number(item.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100;
+                              return (
+                                <input
+                                  type="text"
+                                  readOnly
+                                  tabIndex={-1}
+                                  value={formatIndianCurrency(igst, true)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                />
+                              );
+                            })()}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(cgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              {(() => {
+                                const baseAmt = Number(item.amount) || 0;
+                                const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
+                                return (
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    tabIndex={-1}
+                                    value={formatIndianCurrency(sgst, true)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-center cursor-default select-all outline-none"
+                                  />
+                                );
+                              })()}
+                            </td>
+                          </>
+                        )}
                         <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
-                          <input
-                            type="number"
-                            min="0"
-                            value={item.amount === 0 ? '' : item.amount}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const rawA = val === '' ? 0 : parseFloat(val);
-                              const safeA = isNaN(rawA) || rawA < 0 ? 0 : rawA;
-                              const updated = [...formLineItems];
-                              updated[idx] = { ...updated[idx], amount: safeA, isManualAmount: true };
-                              setFormLineItems(updated);
-                            }}
-                            placeholder="0"
-                            className="w-full min-w-[90px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                          />
+                          {(() => {
+                            const baseAmt = Number(item.amount) || 0;
+                            const cgst = isFormInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                            const sgst = isFormInterState ? 0 : (item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
+                            const igst = isFormInterState ? (item.igst_amount !== undefined && Number(item.igst_amount) > 0 ? Number(item.igst_amount) : Math.round(baseAmt * 0.18 * 100) / 100) : 0;
+                            const finalAmt = item.final_amount !== undefined && item.final_amount > 0 ? Number(item.final_amount) : Math.round((baseAmt + cgst + sgst + igst) * 100) / 100;
+                            return (
+                              <input
+                                id={`form-item-amount-${idx}`}
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={finalAmt === 0 ? '' : finalAmt}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const rawA = val === '' ? 0 : parseFloat(val);
+                                  const safeFinal = isNaN(rawA) || rawA < 0 ? 0 : rawA;
+                                  const safeBase = Math.round((safeFinal / 1.18) * 100) / 100;
+                                  const cgstA = isFormInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                  const sgstA = isFormInterState ? 0 : Math.round(safeBase * 0.09 * 100) / 100;
+                                  const igstA = isFormInterState ? Math.round(safeBase * 0.18 * 100) / 100 : 0;
+                                  const updated = [...formLineItems];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    amount: safeBase,
+                                    isManualAmount: true,
+                                    cgst_rate: isFormInterState ? 0 : 9,
+                                    cgst_amount: cgstA,
+                                    sgst_rate: isFormInterState ? 0 : 9,
+                                    sgst_amount: sgstA,
+                                    igst_rate: isFormInterState ? 18 : 0,
+                                    igst_amount: igstA,
+                                    is_inter_state: isFormInterState,
+                                    total_gst: isFormInterState ? igstA : Math.round((cgstA + sgstA) * 100) / 100,
+                                    final_amount: safeFinal,
+                                  };
+                                  setFormLineItems(updated);
+                                }}
+                                placeholder="0"
+                                className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                              />
+                            );
+                          })()}
                         </td>
                         <td className="px-2 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1">
@@ -2096,7 +2544,24 @@ export default function OrdersPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '72083840', quantity: 0, unit: 'MT', rate: 0, amount: 0 },
+                                    {
+                                      sku_text: '',
+                                      dimensions: '',
+                                      hsn_code: '',
+                                      quantity: 0,
+                                      unit: 'MT',
+                                      rate: 0,
+                                      amount: 0,
+                                      cgst_rate: isFormInterState ? 0 : 9,
+                                      cgst_amount: 0,
+                                      sgst_rate: isFormInterState ? 0 : 9,
+                                      sgst_amount: 0,
+                                      igst_rate: isFormInterState ? 18 : 0,
+                                      igst_amount: 0,
+                                      is_inter_state: isFormInterState,
+                                      total_gst: 0,
+                                      final_amount: 0,
+                                    },
                                   ];
                                   setFormLineItems(updated);
                                 }}
@@ -2115,16 +2580,25 @@ export default function OrdersPage() {
                 {/* Standard Quotation Pricing Breakdown Layout */}
                 {(() => {
                   const subtotal = formLineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                  const qBreakdown = calculateQuotationBreakdown(subtotal);
+                  const qBreakdown = calculateQuotationBreakdown(subtotal, formLineItems, { isInterState: isFormInterState });
 
                   const totalTonnage = calculateTotalTonnageMt(formLineItems);
                   const formattedItemsInTotal = totalTonnage.formattedText;
 
                   return (
                     <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                      <div className="text-xs text-slate-700 pt-1">
-                        <span className="font-bold text-slate-900">Items in Total = </span>
-                        <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                      <div className="text-xs text-slate-700 pt-1 space-y-1">
+                        <div>
+                          <span className="font-bold text-slate-900">Items in Total = </span>
+                          <span className="font-mono text-slate-900 font-bold">{formattedItemsInTotal}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Place of Supply:{' '}
+                          <span className="font-semibold text-slate-800">{formPlaceOfSupply.label}</span>{' '}
+                          <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${isFormInterState ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                            {isFormInterState ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST 9% + SGST 9%)'}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
@@ -2132,14 +2606,23 @@ export default function OrdersPage() {
                           <span className="font-medium text-slate-600">Sub Total</span>
                           <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSubtotal}</span>
                         </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">CGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">SGST (9%)</span>
-                          <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
-                        </div>
+                        {isFormInterState ? (
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className="font-medium text-slate-600">IGST (18%)</span>
+                            <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedIGST}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">CGST (9%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedCGST}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className="font-medium text-slate-600">SGST (9%)</span>
+                              <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedSGST}</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex justify-between items-center py-0.5">
                           <span className="font-medium text-slate-600">Rounding</span>
                           <span className="font-mono text-slate-900 font-medium">{qBreakdown.formattedRounding}</span>
@@ -2193,7 +2676,7 @@ export default function OrdersPage() {
                   disabled={
                     submitting ||
                     isParsingDoc ||
-                    (activeRole !== 'admin' && !isCustomerInAssignedList(formCustomerName, rawCustomers))
+                    !isCustomerInAssignedList(formCustomerName, rawCustomers)
                   }
                   className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                   {submitting ? 'Saving Order...' : 'Create Order'}
@@ -2203,6 +2686,41 @@ export default function OrdersPage() {
           </div>
         </div>
       )}
+      <AddAssignedCustomerDialog
+        open={showAddCustomer}
+        assignPhone={effectivePhone || employee?.phone || ''}
+        seed={{
+          companyName: formCustomerName.trim(),
+          contactPerson: extractedCustomerExtras.contactPerson,
+          mobile: formCustomerPhone.trim(),
+          deliveryLocation: formDeliveryLocation.trim(),
+          gstin: extractedCustomerExtras.gstin,
+        }}
+        onClose={() => setShowAddCustomer(false)}
+        onSaved={(saved) => {
+          setFormCustomerName(saved.companyName);
+          setFormCustomerPhone(saved.mobile);
+          setFormDeliveryLocation(saved.deliveryLocation);
+          setCustomerMetaMap(prev => ({
+            ...prev,
+            [saved.companyName.trim().toLowerCase()]: {
+              gstin: saved.gstin,
+              state: saved.customerState,
+              address: saved.deliveryLocation,
+            },
+          }));
+          setShowAddCustomer(false);
+          queryClient.setQueryData<string[]>(
+            ['customer-names-list', effectivePhone, activeRole, activeMode],
+            (prev) => {
+              const list = Array.isArray(prev) ? prev : [];
+              if (list.some(c => c.trim().toLowerCase() === saved.companyName.trim().toLowerCase())) return list;
+              return [...list, saved.companyName].sort((a, b) => a.localeCompare(b));
+            },
+          );
+          queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
+        }}
+      />
     </div>
   );
 }
