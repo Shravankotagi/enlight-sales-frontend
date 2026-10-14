@@ -83,6 +83,8 @@ export interface InquiryItem {
   ai_extraction_json?: any;
   created_at: string;
   updated_at?: string;
+  procurement_employee_id?: string | null;
+  procurement_assigned_at?: string | null;
 }
 
 export interface LineItemDetail {
@@ -1193,9 +1195,12 @@ export default function InquiriesPage() {
     activeMode,
     isAdmin,
     isSalesManager,
+    isProcurement,
+    isProcurementManager,
     clearViewingAs,
   } = useAuth();
-  const canViewSalesperson = isAdmin || isSalesManager;
+  const canViewSalesperson = isAdmin || isSalesManager || isProcurement;
+  const canAssignProcurement = isAdmin || isProcurementManager;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'pipeline'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1224,16 +1229,16 @@ export default function InquiriesPage() {
       : null;
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('view') === 'pipeline') {
-      setViewMode('pipeline');
-    } else {
+    if (isProcurement || params.get('view') !== 'pipeline') {
       setViewMode('table');
+    } else {
+      setViewMode('pipeline');
     }
     const stageParam = params.get('stage') || params.get('status');
     if (stageParam) {
       setFilterStatus(stageParam);
     }
-  }, [location.search]);
+  }, [location.search, isProcurement]);
 
   useEffect(() => {
     document.title = viewMode === 'pipeline' ? 'Pipeline - Enlight Sigma' : 'Inquiries - Enlight Sigma';
@@ -1653,6 +1658,7 @@ export default function InquiriesPage() {
     },
     refetchInterval: 15000,
     refetchOnWindowFocus: true,
+    enabled: !isProcurement,
   });
 
   const lookupCustomerMeta = (name?: string) => {
@@ -1788,6 +1794,7 @@ export default function InquiriesPage() {
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
+    enabled: !isProcurement,
   });
 
   const [isSyncingZoho, setIsSyncingZoho] = useState(false);
@@ -2565,11 +2572,23 @@ export default function InquiriesPage() {
         media_urls: mediaUrlsPayload,
       };
 
-      await inquiriesApi.updateStatus(selectedInquiry.id, 'confirmed', payload);
+      const procurementBlocked = ['confirmed', 'won', 'lost', 'saved', 'processed'].includes(
+        (selectedInquiry.status || '').toLowerCase(),
+      );
+      if (isProcurement && procurementBlocked) {
+        toast.error('Procurement roles cannot change a confirmed, won, or lost inquiry.');
+        return;
+      }
+
+      await inquiriesApi.updateStatus(
+        selectedInquiry.id,
+        isProcurement ? selectedInquiry.status || 'review' : 'confirmed',
+        payload,
+      );
 
       const updatedObj: InquiryItem = {
         ...selectedInquiry,
-        status: 'confirmed',
+        status: isProcurement ? selectedInquiry.status || 'review' : 'confirmed',
         sender_name: editDetails.companyName,
         customer_name: editDetails.companyName,
         sender_phone: editDetails.customerPhone,
@@ -3500,6 +3519,7 @@ export default function InquiriesPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            {!isProcurement && (
             <button
               type="button"
               disabled={isSyncingZoho}
@@ -3508,12 +3528,16 @@ export default function InquiriesPage() {
               <RefreshCw size={14} className={isSyncingZoho ? 'animate-spin text-blue-600' : 'text-slate-500'} />
               <span>{isSyncingZoho ? 'Syncing with Bigin...' : 'Sync Bigin'}</span>
             </button>
+            )}
 
             <button
               type="button"
               disabled={dealsFetching || isFetching}
               onClick={async () => {
-                await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+                await Promise.all([
+                  fetchMonthlyInquiries(),
+                  isProcurement ? Promise.resolve() : fetchDeals(),
+                ]);
                 toast.success(viewMode === 'pipeline' ? 'Pipeline refreshed' : 'Inquiries list refreshed');
               }}
               title={viewMode === 'pipeline' ? 'Refresh Pipeline' : 'Refresh Inquiries'}
@@ -3521,17 +3545,21 @@ export default function InquiriesPage() {
               <RefreshCw size={15} className={dealsFetching || isFetching ? 'animate-spin text-blue-600' : ''} />
             </button>
 
+            {!isProcurement && (
             <button
               onClick={() => navigate('/orders')}
               className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0">
               <ShoppingBag size={14} className="text-emerald-600" /> View Confirmed Orders
             </button>
+            )}
 
+            {!isProcurement && (
             <button
               onClick={() => setShowModal(true)}
               className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
               <Plus size={15} /> Log New Inquiry
             </button>
+            )}
           </div>
         </div>
 
@@ -3642,6 +3670,7 @@ export default function InquiriesPage() {
         )}
 
         {/* 5. Kanban View Button (Very Right in the Same Row) */}
+        {!isProcurement && (
         <div className="flex items-center ml-auto">
           <button
             type="button"
@@ -3666,6 +3695,7 @@ export default function InquiriesPage() {
             <span>Kanban View</span>
           </button>
         </div>
+        )}
       </div>
       </div>
 
@@ -3790,8 +3820,8 @@ export default function InquiriesPage() {
                 const linkedDeal = getLinkedDeal(inq, details.companyName);
                 const dealIdDisplay = inq.id ? `INQ-${inq.id.substring(0, 6).toUpperCase()}` : (linkedDeal?.id ? `INQ-${linkedDeal.id.substring(0, 6).toUpperCase()}` : '-');
 
-                const showUpdateStatus = dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation' || dealStageKey === 'on_hold';
-                const showShareQuotation = dealStageKey === 'qualified' || dealStageKey === 'quoted';
+                const showUpdateStatus = !isProcurement && (dealStageKey === 'qualified' || dealStageKey === 'quoted' || dealStageKey === 'negotiation' || dealStageKey === 'on_hold');
+                const showShareQuotation = !isProcurement && (dealStageKey === 'qualified' || dealStageKey === 'quoted');
 
                 return (
                   <tr
@@ -3812,6 +3842,13 @@ export default function InquiriesPage() {
                         <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
                           <UserCheck size={12} className="text-slate-400 shrink-0" />
                           Rep: {details.salespersonName}
+                        </div>
+                      )}
+                      {(isProcurementManager || isAdmin) && (
+                        <div className="text-[11px] mt-0.5 font-semibold text-slate-500">
+                          {inq.procurement_employee_id
+                            ? `Procurement: ${rawEmployees.find((e: any) => e.id === inq.procurement_employee_id)?.name || 'Assigned'}`
+                            : 'Procurement: Unassigned'}
                         </div>
                       )}
                     </td>
@@ -4025,6 +4062,37 @@ export default function InquiriesPage() {
                       return `ID: ${inqIdDisplay.replace(/^#/, '')}`;
                     })()}
                   </p>
+                  {canAssignProcurement && (
+                    <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+                      Procurement owner
+                      <select
+                        value={selectedInquiry.procurement_employee_id || ''}
+                        onChange={async (e) => {
+                          const nextId = e.target.value || null;
+                          try {
+                            await inquiriesApi.assignProcurement(selectedInquiry.id, nextId);
+                            setSelectedInquiry((prev) =>
+                              prev ? { ...prev, procurement_employee_id: nextId } : prev,
+                            );
+                            toast.success(nextId ? 'Procurement owner assigned' : 'Procurement owner cleared');
+                            fetchMonthlyInquiries();
+                          } catch (err: any) {
+                            toast.error(err?.response?.data?.message || 'Could not assign procurement owner');
+                          }
+                        }}
+                        className="px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800"
+                      >
+                        <option value="">Unassigned</option>
+                        {rawEmployees
+                          .filter((emp: any) => emp.role === 'procurement_person' || emp.role === 'procurement_manager')
+                          .map((emp: any) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
                 </div>
               </div>
 
@@ -4931,7 +4999,7 @@ export default function InquiriesPage() {
               {(() => {
                 const currentDrawerDealStage = selectedInquiry ? getInquiryDealStageKey(selectedInquiry, editDetails?.companyName) : '';
                 const isQuotedDrawerStage = currentDrawerDealStage === 'quoted' || currentDrawerDealStage === 'qualified';
-                if (!selectedInquiry || !isQuotedDrawerStage) return null;
+                if (!selectedInquiry || !isQuotedDrawerStage || isProcurement) return null;
 
                 const shareAgain =
                   ['quoted', 'won'].includes((selectedInquiry?.status || '').toLowerCase()) ||

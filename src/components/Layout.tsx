@@ -39,6 +39,8 @@ function EmployeeFooter() {
     clearViewingAs,
     isAdmin,
     isSalesManager,
+    isProcurementManager,
+    isProcurementPerson,
   } = useAuth();
   const navigate = useNavigate();
 
@@ -57,7 +59,11 @@ function EmployeeFooter() {
     ? 'Admin'
     : isSalesManager
       ? 'Sales Manager'
-      : 'Salesperson';
+      : isProcurementManager
+        ? 'Procurement Manager'
+        : isProcurementPerson
+          ? 'Procurement Person'
+          : 'Salesperson';
 
   // Only true impersonation of ANOTHER employee should show "Viewing as"
   const isImpersonatingOther = Boolean(
@@ -123,7 +129,7 @@ function EmployeeFooter() {
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { employee, viewingAs, isAdmin } = useAuth();
+  const { employee, viewingAs, isAdmin, isProcurement } = useAuth();
 
   const isImpersonatingOther = Boolean(
     viewingAs &&
@@ -133,15 +139,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   );
 
   const showAdminTab = isAdmin && !isImpersonatingOther;
-  const visibleItems = [
-    ...(showAdminTab
-      ? [
-          { path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert },
-          { path: '/control-panel', label: 'Control Panel', icon: Settings },
-        ]
-      : []),
-    ...navItems,
-  ];
+  const visibleItems = isProcurement
+    ? navItems.filter((item) => item.path === '/inquiries')
+    : [
+        ...(showAdminTab
+          ? [
+              { path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert },
+              { path: '/control-panel', label: 'Control Panel', icon: Settings },
+            ]
+          : []),
+        ...navItems,
+      ];
 
   const isActive = (path: string) => {
     if (path === '/pipeline')

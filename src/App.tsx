@@ -22,7 +22,7 @@ import AssistantPage from './pages/AssistantPage';
 import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
-  const { isAuthenticated, employee, clearViewingAs } = useAuth();
+  const { isAuthenticated, employee, clearViewingAs, isProcurement } = useAuth();
   const location = useLocation();
   const isAdmin = employee?.role === 'admin';
 
@@ -48,6 +48,8 @@ function AppRoutes() {
             <Navigate to="/login" replace />
           ) : isAdmin ? (
             <Navigate to="/control-panel" replace />
+          ) : isProcurement ? (
+            <Navigate to="/inquiries" replace />
           ) : (
             <AdminSelectionPage />
           )
@@ -58,7 +60,13 @@ function AppRoutes() {
       {/* Authenticated Layout Hierarchy */}
       <Route
         element={
-          isAuthenticated ? <Layout /> : <Navigate to="/login" replace />
+          !isAuthenticated ? (
+            <Navigate to="/login" replace />
+          ) : isProcurement && location.pathname !== '/inquiries' ? (
+            <Navigate to="/inquiries" replace />
+          ) : (
+            <Layout />
+          )
         }
       >
         <Route path="/" element={<Navigate to="/home" replace />} />

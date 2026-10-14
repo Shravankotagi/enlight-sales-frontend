@@ -6,7 +6,7 @@ Supabase is the operational store. Calls to `supabase.from()` are the live autho
 
 | Family | Main tables | Used for |
 |---|---|---|
-| Commercial | `inquiries`, `inquiry_items`, `deals`, `deal_items`, `rate_sheets`, `rate_sheet_items`, `floor_margins`, `products` | quotation, negotiation, system PO, won orders, pricing |
+| Commercial | `inquiries` (`procurement_employee_id`, `procurement_assigned_at`), `inquiry_items`, `deals`, `deal_items`, `rate_sheets`, `rate_sheet_items`, `floor_margins`, `products` | quotation, negotiation, system PO, won orders, pricing |
 | CRM | `recurring_customers`, `employees`, `customer_visits`, `followup_tasks`, `crm_sync_log` | customer ownership, field visits, team scope, Bigin sync |
 | Operations | `complaints`, `complaint_attachments`, `payment_tracking`, `activity_logs`, `audit_log` | post-sales work and auditable activity |
 | Assistant | `conversation_sessions`, `chat_sessions`, `chat_messages`, `kb_documents`, `kb_chunks`, `daily_llm_usage` | assistant history, retrieval, knowledge base, quotas |

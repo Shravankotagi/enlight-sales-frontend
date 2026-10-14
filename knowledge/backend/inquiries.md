@@ -14,3 +14,8 @@ Uses product/HSN/pricing rules, PDF generation and image/text parsing. Quotation
 
 ## Safe modification path
 Trace controller → service → Supabase query before changing behavior. Preserve `supabase.guard`, role/scope checks, response envelope, activity/audit side effects, and related frontend `api.ts` contract.
+
+## Procurement roles
+`procurement_person` sees inquiries whose `procurement_employee_id` is their own employee id. `procurement_manager` also sees their team's rows and open unassigned inquiries (`new`, `pending`, `review`, `draft` with a null owner). Scope is applied in Node, not with a PostgREST `.or()`. They can edit non-terminal inquiries and cannot create inquiries, send or preview quotations, or move an inquiry to confirmed, won, or lost. A manager can delete only rows already assigned to the team. `PATCH /inquiries/:id/procurement-assignee` assigns an owner; admins are unrestricted, managers only within their team.
+
+Run `backend/supabase-procurement-acl.sql` before deploying the backend. The list and stats queries select `procurement_employee_id` and `procurement_assigned_at`, so those columns must exist or Inquiries fails for every role.
