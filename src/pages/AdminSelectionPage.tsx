@@ -25,6 +25,8 @@ import {
   Table,
   LayoutGrid,
   RefreshCw,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
 import { employeesApi } from '../lib/api';
@@ -85,6 +87,11 @@ export default function AdminSelectionPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+
+  // Delete Confirmation Modal state
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [form, setForm] = useState<EmployeeForm>({
     name: '',
     phone: '91',
@@ -266,7 +273,7 @@ export default function AdminSelectionPage() {
 
       setFormSuccess(
         isEditMode
-          ? `${form.name} (${roleDisplay}) updated successfully!`
+          ? `${form.name} (${roleDisplay}) profile updated! Any linked records and active sessions were automatically synchronized.`
           : `${roleDisplay} ${form.name} created successfully! They can now log in using WhatsApp OTP.`,
       );
       fetchEmployees();
@@ -283,10 +290,17 @@ export default function AdminSelectionPage() {
 
   const extractErrorMessage = (err: any): string => {
     const serverMsg =
-      err?.response?.data?.error ||
       err?.response?.data?.message ||
+      err?.response?.data?.error ||
       err?.message ||
       'An unexpected error occurred.';
+
+    if (
+      typeof serverMsg === 'string' &&
+      (serverMsg.includes('already registered to') || serverMsg.includes('already in use'))
+    ) {
+      return serverMsg;
+    }
 
     const lower = typeof serverMsg === 'string' ? serverMsg.toLowerCase() : '';
 
@@ -353,6 +367,27 @@ export default function AdminSelectionPage() {
       setFormError(extractErrorMessage(err));
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (emp: Employee, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteError('');
+    setEmployeeToDelete(emp);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!employeeToDelete) return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await employeesApi.delete(employeeToDelete.id);
+      setEmployeeToDelete(null);
+      fetchEmployees();
+    } catch (err: any) {
+      setDeleteError(extractErrorMessage(err));
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -964,13 +999,24 @@ export default function AdminSelectionPage() {
                             onClick={(e) => e.stopPropagation()}
                           >
                             {isAdmin && (
-                              <button
-                                onClick={(e) => handleOpenEditModal(emp, e)}
-                                title="Edit Account Details"
-                                className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
-                              >
-                                <Edit2 size={13} />
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={(e) => handleOpenEditModal(emp, e)}
+                                  title="Edit Account Details"
+                                  className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+                                {emp.id !== employee?.id && (
+                                  <button
+                                    onClick={(e) => handleDeleteClick(emp, e)}
+                                    title={`Delete ${emp.name} & Records`}
+                                    className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
                             )}
 
                             <button
@@ -1093,13 +1139,24 @@ export default function AdminSelectionPage() {
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                       {isAdmin ? (
-                        <button
-                          onClick={(e) => handleOpenEditModal(emp, e)}
-                          title="Edit Account Details"
-                          className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
-                        >
-                          <Edit2 size={13} />
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={(e) => handleOpenEditModal(emp, e)}
+                            title="Edit Account Details"
+                            className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          {emp.id !== employee?.id && (
+                            <button
+                              onClick={(e) => handleDeleteClick(emp, e)}
+                              title={`Delete ${emp.name} & Records`}
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <div />
                       )}
@@ -1344,6 +1401,76 @@ export default function AdminSelectionPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {employeeToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-2xl bg-rose-100 text-rose-600 shrink-0">
+                <Trash2 size={22} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900">
+                  Delete Employee Account?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Are you sure you want to permanently delete{' '}
+                  <strong className="text-slate-800">{employeeToDelete.name}</strong>{' '}
+                  (<span className="font-mono">{employeeToDelete.employee_id}</span>)?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 space-y-2 text-xs text-rose-800">
+              <div className="font-bold flex items-center gap-1.5 text-rose-900">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span>Permanent Deletion Warning</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-rose-700">
+                <li>All deals, quotations, inquiries, and visits for this user will be removed.</li>
+                <li>Assigned clients will be safely set to &apos;unassigned&apos;.</li>
+                <li>This action is irreversible and cannot be undone.</li>
+              </ul>
+            </div>
+
+            {deleteError && (
+              <div className="p-3 rounded-xl bg-rose-100 border border-rose-200 text-rose-800 text-xs font-semibold">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEmployeeToDelete(null)}
+                disabled={deleteLoading}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm shadow-rose-600/20 active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

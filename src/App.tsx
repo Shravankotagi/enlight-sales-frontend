@@ -43,7 +43,15 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/admin"
-        element={isAdmin ? <Navigate to="/control-panel" replace /> : <AdminSelectionPage />}
+        element={
+          !isAuthenticated ? (
+            <Navigate to="/login" replace />
+          ) : isAdmin ? (
+            <Navigate to="/control-panel" replace />
+          ) : (
+            <AdminSelectionPage />
+          )
+        }
       />
       <Route path="/404" element={<NotFoundPage />} />
 
@@ -67,8 +75,14 @@ function AppRoutes() {
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
-        {isAdmin && <Route path="/admin-dashboard" element={<AdminDashboard />} />}
-        {isAdmin && <Route path="/control-panel" element={<AdminSelectionPage />} />}
+        <Route
+          path="/admin-dashboard"
+          element={isAdmin ? <AdminDashboard /> : <Navigate to="/home" replace />}
+        />
+        <Route
+          path="/control-panel"
+          element={isAdmin ? <AdminSelectionPage /> : <Navigate to="/home" replace />}
+        />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
