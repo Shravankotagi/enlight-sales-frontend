@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
+import { useAuth } from '../context/AuthContext';
+import SyncBiginButton from '../components/SyncBiginButton';
 
 const normalizePhone = (phone?: string | null) =>
   String(phone || '').replace(/\D/g, '').slice(-10);
@@ -98,6 +100,7 @@ const buildOrderLeaderboard = (
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { setViewingAs } = useAuth();
   const [selectedPhone, setSelectedPhone] = useState<string>('');
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
@@ -110,7 +113,7 @@ export default function AdminDashboard() {
   const toDate = dateRange.to || formatLocalDate();
 
   useEffect(() => {
-    document.title = 'Admin Overview - Enlight Sales OS';
+    document.title = 'Admin Overview - Enlight Sigma';
   }, []);
 
   // Fetch employees list
@@ -127,6 +130,20 @@ export default function AdminDashboard() {
   const selectedSalesperson = salespeople.find(
     (s: any) => normalizePhone(s.phone) === normalizePhone(selectedPhone),
   );
+
+  const handleDetailedAnalytics = () => {
+    if (selectedSalesperson) {
+      setViewingAs({
+        ...selectedSalesperson,
+        role: 'salesperson',
+        original_role: selectedSalesperson.original_role || selectedSalesperson.role,
+        mode: 'personal',
+      });
+      navigate('/inquiries?returnTo=/admin-dashboard');
+      return;
+    }
+    navigate('/pipeline');
+  };
 
   const queryParams = {
     ...(selectedPhone ? { salesperson_phone: selectedPhone } : {}),
@@ -374,6 +391,7 @@ export default function AdminDashboard() {
 
           {/* Top Actions: Refresh, Create Order */}
           <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+            <SyncBiginButton onSynced={handleRefreshAll} />
             <button
               type="button"
               onClick={handleRefreshAll}
@@ -584,7 +602,7 @@ export default function AdminDashboard() {
           </div>
 
           <button
-            onClick={() => navigate('/pipeline')}
+            onClick={handleDetailedAnalytics}
             className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors shadow-2xs hover:bg-blue-100 self-start sm:self-auto"
           >
             Detailed Analytics <ChevronRight size={14} />

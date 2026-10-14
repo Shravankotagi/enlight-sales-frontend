@@ -5,6 +5,8 @@ import {
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
   formatIndianCurrency,
+  formatLineItemWeightMt,
+  resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
 
@@ -46,6 +48,13 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
 
   if (!deal) return null;
 
+  const placeOfSupply = resolvePlaceOfSupply({
+    deliveryLocation: deal.delivery_location,
+    customerState: (deal as any).place_of_supply || (deal as any).customer_state,
+    customerGstin: (deal as any).customer_gstin || (deal as any).gstin,
+  });
+  const isInterState = placeOfSupply.isInterState;
+
   const rawItems: DealItem[] = (deal.deal_items && deal.deal_items.length > 0)
     ? deal.deal_items
     : (deal.items && deal.items.length > 0)
@@ -63,10 +72,13 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
       ];
 
   const items = rawItems.map((item: any) => {
-    const calc = calculateLineItem({
-      ...item,
-      rate: item.rate || item.quoted_price || item.price_per_mt || 0,
-    });
+    const calc = calculateLineItem(
+      {
+        ...item,
+        rate: item.rate || item.quoted_price || item.price_per_mt || 0,
+      },
+      { isInterState },
+    );
     return {
       ...item,
       rate: calc.rate,
@@ -76,7 +88,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
 
   const computedSubtotal = items.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0) || Number(deal.total_amount || 0);
 
-  const breakdown = calculateQuotationBreakdown(computedSubtotal);
+  const breakdown = calculateQuotationBreakdown(computedSubtotal, items as any, { isInterState });
   const totalTonnage = calculateTotalTonnageMt(items);
 
   const dealRefId = deal.deal_number
@@ -199,7 +211,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
             <div className="text-left sm:text-right">
               <p className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Ship To / Delivery Destination</p>
               <h4 className="font-bold text-slate-900 text-sm mt-0.5">{deal.delivery_location || 'Customer Site / MIDC Warehouse'}</h4>
-              <p className="text-slate-500 mt-1">Dispatch Mode: Commercial Freight Heavy Transport</p>
+              <p className="text-slate-500 mt-1">Place of Supply: <span className="font-semibold text-slate-800">{placeOfSupply.label}</span></p>
               <p className="text-emerald-700 font-semibold mt-0.5">Status: Ready for Loading &amp; Dispatch</p>
             </div>
           </div>
@@ -219,11 +231,9 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white text-slate-900">
                 {items.map((item, idx) => {
-                  const qty = Number(item.quantity || 0);
                   const rate = Number(item.rate || item.quoted_price || item.price_per_mt || 0);
-                  const amt = Number(item.amount) || calculateLineItem({ ...item, rate }).amount || 0;
+                  const amt = Number(item.amount) || calculateLineItem({ ...item, rate }, { isInterState }).amount || 0;
                   const hsn = item.hsn_code || detectHsnCode(item.sku_text || '', item.dimensions);
-                  const unit = item.unit || 'MT';
 
                   return (
                     <tr key={idx} className="hover:bg-slate-50/70">
@@ -236,8 +246,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                       </td>
                       <td className="px-3 py-3 text-center font-mono text-slate-600 text-xs">{hsn}</td>
                       <td className="px-4 py-3 text-right">
-                        <div className="font-bold text-slate-900 font-mono text-xs">{formatIndianCurrency(qty, true)}</div>
-                        <div className="text-[10px] text-slate-500 font-semibold">{unit}</div>
+                        <div className="font-bold text-slate-900 font-mono text-xs">{formatLineItemWeightMt(item).text}</div>
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-slate-800 text-xs">
                         {rate > 0 ? formatIndianCurrency(rate, true) : '-'}
@@ -274,15 +283,24 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
                 <span className="font-mono font-medium">{breakdown.formattedSubtotal}</span>
               </div>
 
-              <div className="flex justify-between items-center py-1 text-slate-700">
-                <span className="font-medium">CGST (9%)</span>
-                <span className="font-mono font-medium">{breakdown.formattedCGST}</span>
-              </div>
+              {isInterState ? (
+                <div className="flex justify-between items-center py-1 text-slate-700">
+                  <span className="font-medium">IGST (18%)</span>
+                  <span className="font-mono font-medium">{breakdown.formattedIGST}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center py-1 text-slate-700">
+                    <span className="font-medium">CGST (9%)</span>
+                    <span className="font-mono font-medium">{breakdown.formattedCGST}</span>
+                  </div>
 
-              <div className="flex justify-between items-center py-1 text-slate-700">
-                <span className="font-medium">SGST (9%)</span>
-                <span className="font-mono font-medium">{breakdown.formattedSGST}</span>
-              </div>
+                  <div className="flex justify-between items-center py-1 text-slate-700">
+                    <span className="font-medium">SGST (9%)</span>
+                    <span className="font-mono font-medium">{breakdown.formattedSGST}</span>
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-between items-center py-1 text-slate-700">
                 <span className="font-medium">Rounding</span>

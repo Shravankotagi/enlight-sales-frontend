@@ -26,6 +26,8 @@ interface AuthContextType {
   isSalesManager: boolean;
   isSalesperson: boolean;
   isProcurement: boolean;
+  isProcurementManager: boolean;
+  isProcurementPerson: boolean;
   isAuthenticated: boolean;
   effectivePhone: string | null;
   activeRole: string;
@@ -104,10 +106,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const effectiveRole = prototypeRole || employee?.role;
-  const isAdmin = effectiveRole === 'admin';
+  const isAdmin = effectiveRole === 'admin' || effectiveRole === 'super_admin';
   const isSalesManager =
     !prototypeRole && (employee?.role === 'sales_manager' || employee?.role === 'manager');
-  const isProcurement = effectiveRole === 'procurement';
+  const isProcurementManager = !prototypeRole && employee?.role === 'procurement_manager';
+  const isProcurementPerson = !prototypeRole && employee?.role === 'procurement_person';
+  const isProcurement =
+    effectiveRole === 'procurement' || isProcurementManager || isProcurementPerson;
   const isSalesperson = !isAdmin && !isSalesManager && !isProcurement;
 
   // effectivePhone:
@@ -149,6 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSalesManager,
         isSalesperson,
         isProcurement,
+        isProcurementManager,
+        isProcurementPerson,
         isAuthenticated: !!token && !!employee,
         effectivePhone,
         activeRole,

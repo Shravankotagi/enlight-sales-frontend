@@ -66,6 +66,7 @@ function AppRoutes() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
         {isAdmin && <Route path="/admin-dashboard" element={<AdminDashboard />} />}
+        {isAdmin && <Route path="/control-panel" element={<AdminSelectionPage />} />}
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

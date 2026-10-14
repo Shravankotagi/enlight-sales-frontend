@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   History,
   Sparkles,
+  Settings,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -38,6 +39,8 @@ function EmployeeFooter() {
     clearViewingAs,
     isAdmin,
     isSalesManager,
+    isProcurementManager,
+    isProcurementPerson,
     prototypeRole,
     setPrototypeRole,
   } = useAuth();
@@ -58,6 +61,10 @@ function EmployeeFooter() {
     ? 'Admin'
     : isSalesManager
       ? 'Sales Manager'
+      : isProcurementManager
+        ? 'Procurement Manager'
+        : isProcurementPerson
+          ? 'Procurement Person'
       : 'Salesperson';
 
   // Only true impersonation of ANOTHER employee should show "Viewing as"
@@ -153,7 +160,10 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const showAdminTab = isAdmin && !isImpersonatingOther;
   const visibleItems = [
     ...(showAdminTab
-      ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }]
+      ? [
+          { path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert },
+          { path: '/control-panel', label: 'Control Panel', icon: Settings },
+        ]
       : []),
     ...(showAdminTab
       ? [{ path: '/procurement', label: 'Procurement', icon: ShoppingBag }]

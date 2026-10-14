@@ -119,6 +119,8 @@ export interface InquiryItem {
   ai_extraction_json?: any;
   created_at: string;
   updated_at?: string;
+  procurement_employee_id?: string | null;
+  procurement_assigned_at?: string | null;
 }
 
 export interface LineItemDetail {
@@ -1630,8 +1632,11 @@ export default function InquiriesPage() {
     activeMode,
     isAdmin,
     isSalesManager,
+    isProcurement,
+    isProcurementManager,
   } = useAuth();
-  const canViewSalesperson = isAdmin || isSalesManager;
+  const canViewSalesperson = isAdmin || isSalesManager || isProcurement;
+  const canAssignProcurement = isAdmin || isProcurementManager;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "pipeline">(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1663,7 +1668,7 @@ export default function InquiriesPage() {
     "Shravan Kotagi";
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get("view") === "pipeline") {
+    if (!isProcurement && params.get("view") === "pipeline") {
       setViewMode("pipeline");
     } else {
       setViewMode("table");
@@ -1672,7 +1677,7 @@ export default function InquiriesPage() {
     if (stageParam) {
       setFilterStatus(stageParam);
     }
-  }, [location.search]);
+  }, [location.search, isProcurement]);
 
   useEffect(() => {
     document.title =
@@ -2153,6 +2158,7 @@ export default function InquiriesPage() {
     },
     refetchInterval: 15000,
     refetchOnWindowFocus: true,
+    enabled: !isProcurement,
   });
 
   const { data: rawEmployees = [] } = useQuery<any[]>({
@@ -2193,6 +2199,7 @@ export default function InquiriesPage() {
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
+    enabled: !isProcurement,
   });
 
   const [isSyncingZoho, setIsSyncingZoho] = useState(false);
@@ -3326,6 +3333,13 @@ export default function InquiriesPage() {
 
   const executeSaveDrawerDetails = async (itemsToSave: LineItemDetail[]) => {
     if (!selectedInquiry || !editDetails) return;
+    const procurementBlocked = ["confirmed", "won", "lost", "saved", "processed"].includes(
+      (selectedInquiry.status || "").toLowerCase(),
+    );
+    if (isProcurement && procurementBlocked) {
+      toast.error("Procurement roles cannot change a confirmed, won, or lost inquiry.");
+      return;
+    }
     try {
       setSubmitting(true);
 
@@ -3373,7 +3387,10 @@ export default function InquiriesPage() {
         media_urls: mediaUrlsPayload,
       };
 
-      await inquiriesApi.updateStatus(selectedInquiry.id, "confirmed", payload);
+      const nextStatus = isProcurement
+        ? selectedInquiry.status || "review"
+        : "confirmed";
+      await inquiriesApi.updateStatus(selectedInquiry.id, nextStatus, payload);
 
       const updatedObj: InquiryItem = {
         ...selectedInquiry,
@@ -4997,12 +5014,14 @@ export default function InquiriesPage() {
                         : "-";
 
                     const showUpdateStatus =
-                      dealStageKey === "qualified" ||
+                      !isProcurement &&
+                      (dealStageKey === "qualified" ||
                       dealStageKey === "quoted" ||
                       dealStageKey === "negotiation" ||
-                      dealStageKey === "on_hold";
+                      dealStageKey === "on_hold");
                     const showShareQuotation =
-                      dealStageKey === "qualified" || dealStageKey === "quoted";
+                      !isProcurement &&
+                      (dealStageKey === "qualified" || dealStageKey === "quoted");
 
                     return (
                       <tr
@@ -5035,6 +5054,13 @@ export default function InquiriesPage() {
                                 className="text-slate-400 shrink-0"
                               />
                               Rep: {details.salespersonName}
+                            </div>
+                          )}
+                          {(isProcurementManager || isAdmin) && (
+                            <div className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                              {inq.procurement_employee_id
+                                ? `Procurement: ${rawEmployees.find((item: any) => item.id === inq.procurement_employee_id)?.name || "Assigned"}`
+                                : "Procurement: Unassigned"}
                             </div>
                           )}
                         </td>
@@ -5313,6 +5339,35 @@ export default function InquiriesPage() {
                       return `ID: ${inqIdDisplay.replace(/^#/, "")}`;
                     })()}
                   </p>
+                  {canAssignProcurement && (
+                    <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+                      Procurement owner
+                      <select
+                        value={selectedInquiry.procurement_employee_id || ""}
+                        onChange={async (event) => {
+                          const nextId = event.target.value || null;
+                          try {
+                            await inquiriesApi.assignProcurement(selectedInquiry.id, nextId);
+                            setSelectedInquiry((previous) =>
+                              previous
+                                ? { ...previous, procurement_employee_id: nextId }
+                                : previous,
+                            );
+                            toast.success(nextId ? "Procurement owner assigned" : "Procurement owner cleared");
+                            fetchMonthlyInquiries();
+                          } catch (error: any) {
+                            toast.error(error?.response?.data?.message || "Could not assign procurement owner");
+                          }
+                        }}
+                        className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Unassigned</option>
+                        {rawEmployees
+                          .filter((item: any) => item.role === "procurement_person" || item.role === "procurement_manager")
+                          .map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                      </select>
+                    </label>
+                  )}
                 </div>
               </div>
 

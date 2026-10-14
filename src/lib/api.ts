@@ -218,11 +218,15 @@ export const inquiriesApi = {
     API.post('/inquiries/parse-document', payload, { timeout: 150000 }),
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
   delete: (id: string) => API.delete(`/inquiries/${id}`),
+  assignProcurement: (id: string, procurement_employee_id: string | null) =>
+    API.patch(`/inquiries/${id}/procurement-assignee`, { procurement_employee_id }),
 };
 
 export const productsApi = {
   getAll: (params?: any) => API.get('/products', { params }),
   lookup: (name: string, dimensions?: string) => API.get('/products/lookup', { params: { name, dimensions } }),
+  create: (data: { product_name: string; dimensions?: string; hsn_code?: string; category?: string }) =>
+    API.post('/products', data),
 };
 
 export const reportsApi = {
@@ -240,6 +244,7 @@ export const employeesApi = {
   create: (data: any) => API.post('/employees', data),
   update: (id: string, data: any) => API.patch(`/employees/${id}`, data),
   deactivate: (id: string) => API.patch(`/employees/${id}/deactivate`),
+  delete: (id: string) => API.delete(`/employees/${id}`),
 };
 
 export const chatbotApi = {

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { render } from '@testing-library/react'
+import { AuthProvider } from '../context/AuthContext'
 
 /** Renders a page with a fresh, retry-free React Query client and a router. */
 export function renderWithProviders(ui: ReactElement, { route = '/' }: { route?: string } = {}) {
@@ -16,7 +17,9 @@ export function renderWithProviders(ui: ReactElement, { route = '/' }: { route?:
     queryClient,
     ...render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+        <MemoryRouter initialEntries={[route]}>
+          <AuthProvider>{ui}</AuthProvider>
+        </MemoryRouter>
       </QueryClientProvider>,
     ),
   }
