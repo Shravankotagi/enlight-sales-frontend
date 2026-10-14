@@ -15,19 +15,30 @@
 
 ## Commercial flow
 - [ ] Inquiry create/read/update and scoped listing.
+- [ ] Procurement scope: assigned inquiries + unassigned intake pool accessible to `procurement_person` and `procurement_manager`.
+- [ ] Procurement guardrails: commercial terminal statuses (`confirmed`, `won`, `lost`), deal conversion, and quotations are blocked for procurement roles.
+- [ ] Procurement inquiry assignment (`PATCH /inquiries/:id/procurement-assignee`) allowed for Admin and Procurement Manager.
 - [ ] Product/HSN and pricing parity.
 - [ ] Quotation/PDF behavior.
 - [ ] Stage transition and won-order view.
 - [ ] System PO allocation, conflict, release, and retry behavior.
 
+## Access Control and Administration
+- [ ] Control Panel manager dropdown enforces department hierarchy (`salesperson` → `sales_manager`, `procurement_person` → `procurement_manager`).
+- [ ] Cross-department manager assignment is rejected with 400.
+- [ ] Role Permissions Matrix (`RolePermissionsMatrixModal`) saves granular module permissions to `employees.permissions`.
+- [ ] Navigation sidebar in `Layout.tsx` hides unauthorized module links based on role and permissions.
+
 ## Visits, complaints, and KRA
 - [ ] Create/update, exact entity selection, attachments/follow-up status.
 - [ ] Salesperson, manager, admin visibility.
 - [ ] KRA/report date window and units.
+- [ ] Perimeter guard (`JwtAuthGuard`) rejects procurement access with 403.
 
 ## Assistant/bot
 - [ ] Message delivery through intended channel.
 - [ ] Tool authorization and direct tool reply behavior.
+- [ ] WhatsApp bot and WebChat isolate procurement users (informational message / 403 response).
 - [ ] Session/history persistence; interruption/resume if applicable.
 - [ ] Retry/idempotency behavior for mutations.
 

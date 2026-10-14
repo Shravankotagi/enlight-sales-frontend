@@ -9,7 +9,7 @@ The dashboard calls `/deals`, `/deals/kanban`, `/deals/pipeline`, `/deals/:id`, 
 ## Critical invariants
 - Stage transitions, PO allocation/release, lost reason, and generated/reference PO fields are coupled.
 - Keep a reservation token through allocation → save/update → release/finalize; do not allocate a System PO twice.
-- Role/salesperson scope affects reads and writes.
+- Role/salesperson scope affects reads and writes. Procurement roles (`procurement_person`, `procurement_manager`) are completely blocked from `/deals*` by `JwtAuthGuard` perimeter rules (`403 Forbidden`). Deals cannot be created from inquiries by procurement staff.
 - Item writes must retain `deal_items` consistency.
 
 Related UI: OrdersPage, InquiriesPage pipeline view, DealDetailDrawer, System PO helper. Related bot paths: sales agent and catalog flow.
