@@ -273,7 +273,7 @@ export default function AdminSelectionPage() {
 
       setFormSuccess(
         isEditMode
-          ? `${form.name} (${roleDisplay}) updated successfully!`
+          ? `${form.name} (${roleDisplay}) profile updated! Any linked records and active sessions were automatically synchronized.`
           : `${roleDisplay} ${form.name} created successfully! They can now log in using WhatsApp OTP.`,
       );
       fetchEmployees();
