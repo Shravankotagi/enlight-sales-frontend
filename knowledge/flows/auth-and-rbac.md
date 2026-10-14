@@ -1,11 +1,66 @@
 # Authentication and RBAC flow
 
-1. Frontend requests/verifies OTP with the backend.
-2. It stores the issued token and selected employee viewing context in session storage.
-3. Axios adds `Authorization` and a salesperson/mode filter to requests.
-4. Backend guards/decorators validate identity and roles; service queries enforce accessible salesperson scope.
-5. Bot separately resolves user scope by sender phone before running tools.
+The system enforces a multi-tier authorization perimeter spanning OTP authentication, NestJS perimeter guards, service-level database scoping, bot channel isolation, and granular UI permission matrices.
 
-Client filters are a convenience; server and bot scope checks are the authorization boundary. Test salesperson, manager, and admin cases for every new query/mutation.
+## 1. Authentication Lifecycle
 
-Procurement roles (`procurement_person`, `procurement_manager`) are limited by `JwtAuthGuard` to inquiries plus read-only products, pricing, and `GET /employees`. The dashboard AI assistant (`/chat`, `/chat/kb`) is rejected there, with no chatbot code change. WhatsApp and the web assistant reply that procurement access is not enabled yet. Check `isProcurementRole()` before any `role.includes('manager')` test, because `procurement_manager` contains "manager".
+1. Frontend initiates OTP request via `POST /auth/request-otp` and verifies code via `POST /auth/verify-otp`.
+2. Backend validates OTP session and issues a signed JWT containing employee claims:
+   - `sub`: Employee ID (UUID)
+   - `phone`: Normalized employee phone
+   - `role`: One of `admin`, `sales_manager`, `salesperson`, `procurement_manager`, `procurement_person`
+   - `permissions`: Custom JSONB permissions map (if assigned)
+3. Frontend stores token and viewing context in session storage; Axios interceptor injects `Authorization: Bearer <token>` on all outbound calls.
+
+## 2. Backend Perimeter Guard (`JwtAuthGuard`)
+
+`JwtAuthGuard` acts as an early perimeter firewall. For procurement roles (`procurement_person` and `procurement_manager`), it strictly enforces an endpoint allowlist:
+- **Permitted**:
+  - `/inquiries/*` (all HTTP verbs, subject to service-level operation guards)
+  - `GET /products*`
+  - `GET /pricing*`
+  - `GET /employees*`
+- **Denied**:
+  - Any request to `/deals*`, `/customers*`, `/customer-visits*`, `/complaints*`, `/reports*`, `/kra*`, `/zoho*`, or admin-only mutation endpoints.
+  - The dashboard AI assistant (`/chat`, `/chat/kb`) is rejected at the perimeter guard with HTTP 403, requiring no chatbot code modification.
+  - The guard immediately short-circuits and returns `403 Forbidden`, preventing procurement tokens from reaching business controllers or database queries for unpermitted modules.
+
+## 3. Backend Role-Ordering Invariant
+
+`procurement_manager` contains the substring `manager`. A naive substring or regex check (`role.includes('manager')`) will misidentify a procurement manager as a sales manager, leading to broken phone queries or leaked sales scopes.
+
+> [!IMPORTANT]
+> **Role-Ordering Rule**: Whenever branching on roles in backend code, always evaluate `isProcurementRole()` (`role === 'procurement_person' || role === 'procurement_manager'`) **BEFORE** evaluating any sales manager condition (`role === 'sales_manager'` or `role.includes('manager')`).
+
+## 4. Service-Level Scope Resolution
+
+Client query parameters (`salesperson_phone`, `viewing_as`) are untrusted hints. Services enforce server-resolved boundaries:
+- **Sales Scope** (`getAccessibleSalespersonPhones`):
+  - `admin`: All phones (unrestricted).
+  - `sales_manager`: Caller's phone + all direct report salespeople.
+  - `salesperson`: Caller's phone only.
+  - Procurement employees are never included in sales phone scopes.
+- **Procurement Scope** (`getAccessibleProcurementIds`):
+  - `admin`: All procurement IDs + unassigned pool (`unrestricted: true`).
+  - `procurement_manager`: Caller's employee ID + all direct report procurement persons + unassigned pool.
+  - `procurement_person`: Caller's employee ID + unassigned pool.
+  - Unassigned Intake Pool: inquiries where `stage IN ('new', 'pending', 'review', 'draft')` and `procurement_employee_id IS NULL`.
+
+## 5. WhatsApp Bot & Channel Isolation
+
+The WhatsApp Bot and assistant tools are strictly tailored for sales field workflows:
+- **WhatsApp Webhook (`webhook.js`)**: Resolves caller role from phone. If the sender is `procurement_person` or `procurement_manager`, the bot immediately sends an informational notice:
+  `"WhatsApp bot access is restricted to sales personnel. Please use the web portal to manage inquiries and base prices."`
+  and aborts processing. No state machine, conversation session, or database mutation is triggered.
+- **WebChat (`webChat.js`)**: Evaluates token role; rejects procurement users with `403 Forbidden`.
+
+## 6. Granular UI Permissions Matrix (Zoho Books Style)
+
+In addition to system role scoping, the frontend supports granular module-level ACLs stored in `employees.permissions` (JSONB):
+- Managed via `RolePermissionsMatrixModal.tsx` and `ZohoPermissionsTable.tsx` in the Control Panel (`/control-panel`).
+- Default permission sets are defined in `aclConstants.ts` for each role.
+- Controls View, Create, Edit, Delete capabilities across each functional module.
+- Supports fine-grained sub-permissions (e.g. `inquiries.fill_base_prices`, `inquiries.team_inquiries`).
+- Controls navigation visibility in `Layout.tsx` and conditional UI controls on pages.
+
+Client filters are a convenience; server perimeter guards and database scope checks are the actual authorization boundary. Test salesperson, sales manager, procurement person, procurement manager, and admin cases for every query/mutation.
