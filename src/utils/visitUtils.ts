@@ -33,7 +33,13 @@ export interface CustomerVisit {
   next_purchase_expected?: string | null;
   delivery_location?: string | null;
   preferred_make?: string | null;
+  preferred_make_other?: string | null;
   payment_terms?: string | null;
+  phone_verified?: boolean | null;
+  phone_verified_at?: string | null;
+  location_source?: 'gps' | 'manual' | string | null;
+  visit_latitude?: number | null;
+  visit_longitude?: number | null;
   gps_photo_url?: string | null;
   gps_latitude?: number | null;
   gps_longitude?: number | null;
