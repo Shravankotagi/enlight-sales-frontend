@@ -2,6 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
+import AssistantAttachMenu from '../../components/AssistantAttachMenu';
 import VisitBrandField from '../../components/VisitBrandField';
 import VisitCameraCapture from '../../components/VisitCameraCapture';
 import VisitLocationField from '../../components/VisitLocationField';
@@ -111,6 +112,22 @@ describe('issue 238 customer visit form', () => {
     );
     expect(screen.getByLabelText('Other brand')).toBeTruthy();
     expect(screen.getByText('Enter the other brand.')).toBeTruthy();
+  });
+
+  it('offers a device upload and a live camera from the assistant pin', async () => {
+    const user = userEvent.setup();
+    render(
+      <AssistantAttachMenu
+        onUpload={() => undefined}
+        readGps={async () => null}
+        onCapture={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /attach a file or take a photo/i }));
+    expect(screen.getByRole('button', { name: 'Upload from device' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Capture an image' }));
+    await user.click(screen.getByRole('button', { name: /take visit photo/i }));
+    expect(screen.getByText(/no camera/i)).toBeTruthy();
   });
 
   it('tells the user when this device has no camera', async () => {

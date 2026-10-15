@@ -42,7 +42,8 @@ Current regression tests:
 | Frontend | `admin-overview-date-filters.test.tsx` | No standalone Month filter; every preset sends `{from, to}` to all Overview queries |
 | Frontend | `admin-overview-recent-orders.test.tsx` | Review Queue is absent; recent filtered orders show order details and navigate to Orders |
 | Backend | `issue-238-customer-visit-form.test.ts` | New visits require a verified phone, GPS photo, and listed brand and payment terms; Meta 131047 returns the 24-hour message, and other codes return the code in the 400 |
-| Frontend | `issue-238-customer-visit-form.test.tsx` | Missing visit fields, locked GPS city, manual city, multi-brand, and no-camera message |
+| Frontend | `issue-238-customer-visit-form.test.tsx` | Missing visit fields, locked GPS city, manual city, multi-brand, no-camera message, and the assistant attach menu |
+| Bot | `issue-238-visit-required-fields.test.js` | A new bot visit is not inserted until the new fields, GPS photo, and correct code are present |
 
 ## Cross-repo parity fixture
 `pricing-parity.json` is copied identically to `em-os-bot/test/fixtures/`, `em-os-backend/src/test-utils/fixtures/`, and `em-os-frontend/src/test/fixtures/`. Each repo's parity test runs its own pricing/HSN code against it. Change all three copies together in the same set of PRs.
