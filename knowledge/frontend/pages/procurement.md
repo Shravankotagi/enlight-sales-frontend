@@ -4,7 +4,7 @@ Procurement users work on `/inquiries`. `/procurement` redirects there. Customer
 
 A procurement person or procurement manager can edit only the base price. Description, HSN, and quantity are read-only. Transport, loading, and margin are hidden. The drawer has one save control for them: Save Prices. A blank base price also has an optional note, stored as the reason that line is unavailable. A salesperson still has Save Prices and the footer Save. The drawer has one quotation button, Send quotation, which becomes Share Again after a quotation has already gone out. The email modal keeps its header and actions visible and scrolls the message. After the salesperson save, base, transport, loading, and margin collapse into the Rate column. The rate cell still opens those four components, and a later inquiry refresh does not replace that saved rate with zero. The GST column uses the same tax split as the total, so a saved row shows 18% IGST, or CGST and SGST inside Maharashtra, instead of zero.
 
-An admin assigns salespeople to a procurement person in the control panel. Inquiries for those salespeople are created with that person's `procurement_employee_id`.
+An admin assigns salespeople to a procurement person in the control panel. Inquiries for those salespeople are created with that person's `procurement_employee_id`. A procurement manager sees every inquiry stamped to a person on their team, plus unassigned inquiries for those persons' salespeople in any status.
 
 ## Workflow
 
