@@ -518,8 +518,8 @@ export default function AdminSelectionPage() {
   });
 
   return (
-    <div className={isAdmin ? 'flex flex-col h-[calc(100vh-3rem)] overflow-hidden space-y-4 animate-fade-in font-sans text-slate-900' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
-      <div className={isAdmin ? 'flex flex-col flex-1 min-h-0 space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
+    <div className={isAdmin ? 'space-y-4 animate-fade-in font-sans text-slate-900 pb-8' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
+      <div className={isAdmin ? 'space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
         {/* Top Executive Header Card */}
         <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -793,7 +793,7 @@ export default function AdminSelectionPage() {
         )}
 
         {/* Directory Management Console */}
-        <div className={`bg-white rounded-2xl border border-slate-200 shadow-xs ${isAdmin ? 'flex-1 min-h-0 overflow-auto' : 'overflow-hidden'}`}>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           {/* Card Header & Toolbar */}
           <div className="p-5 border-b border-slate-200 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

@@ -22,9 +22,10 @@ Faster local loops: backend `npm test` / `npm run test:regression`, bot `npm run
 - Frontend pages mock `lib/api` with `vi.mock` and a stable mock module (see `src/test/adminDashboardMocks.ts`) and render through `renderWithProviders`.
 
 ## Coverage today
-- Backend: employee phone helpers and salesperson scope (`getAccessibleSalespersonPhones`), procurement pricing workflow (anonymity, partial availability, sales override, GST, decline), `RolesGuard`/`RoleGuard`, report date ranges and `allowedPhones` scope, leaderboard identity, pricing parity, plus the existing deals/inquiries/KRA/reports/app specs.
-- Bot: JSON utils, pricing engine, HSN detector, pricing parity, catalog-flow helpers, new-customer catalog flow state machine, PO resolver, network guard.
-- Frontend: date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, recent order fields/navigation, and the Procurement UI prototype.
+- Backend: employee phone helpers and salesperson scope (`getAccessibleSalespersonPhones`), procurement scope (`getAccessibleProcurementIds`), procurement pricing workflow (anonymity, partial availability, sales override, GST, decline), manager hierarchy validation (`assertManagerFitsRole`), `JwtAuthGuard` perimeter allowlist for procurement roles, commercial mutation blocks, inquiry procurement assignment, `RolesGuard`/`RoleGuard`, report date ranges and `allowedPhones` scope, leaderboard identity, pricing parity, plus the existing deals/inquiries/KRA/reports/app specs.
+- Bot: phone and role resolution, fail-closed phone scope, WhatsApp webhook early exit for procurement roles, WebChat authorization guard, retrieval tools phone scoping, JSON utils, pricing engine, HSN detector, pricing parity, catalog-flow helpers, new-customer catalog flow state machine, PO resolver, network guard.
+- Frontend: Zoho Books permissions matrix, Control Panel role filters and manager hierarchy, procurement inquiries view and base price entry, action button visibility guards, date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, and recent order fields/navigation.
+
 
 ## Regression tests: one per fixed bug
 Every bug fix adds a test that fails before the fix and passes after it.

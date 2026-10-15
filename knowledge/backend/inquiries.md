@@ -4,7 +4,26 @@
 `InquiriesModule` manages early-stage customer demand in `inquiries` and `inquiry_items`, including intake, status/review queues, document/text parsing, quotation preview/send, and PDF generation.
 
 ## Interface
-Frontend calls `/inquiries`, `/inquiries/:id`, `/inquiries/review-queue`, `/inquiries/stats`, `/inquiries/:id/status`, quotation preview/send endpoints, `/inquiries/generate-pdf`, `/inquiries/parse-document`, and `/inquiries/parse-text`.
+Frontend calls `/inquiries`, `/inquiries/:id`, `/inquiries/review-queue`, `/inquiries/stats`, `/inquiries/:id/status`, `/inquiries/:id/procurement-assignee`, quotation preview/send endpoints, `/inquiries/generate-pdf`, `/inquiries/parse-document`, and `/inquiries/parse-text`.
+
+### Procurement Assignment Endpoint
+- `PATCH /inquiries/:id/procurement-assignee`:
+  - Body: `{ procurementEmployeeId: string | null }`
+  - Allowed for `admin` and `procurement_manager` (reassigning within their team).
+  - Sets `inquiries.procurement_employee_id` and stamps `inquiries.procurement_assigned_at = NOW()`.
+  - Passing `null` returns the inquiry to the unassigned intake pool.
+
+### Procurement Scoping & Intake Pool
+When an inquiry query is issued by a procurement role (`procurement_person` or `procurement_manager`), `InquiriesService` applies `procurementScope`:
+- Assigned Inquiries: inquiries where `procurement_employee_id` matches the accessible procurement IDs.
+- Unassigned Intake Pool: open inquiries where `stage IN ('new', 'pending', 'review', 'draft')` and `procurement_employee_id IS NULL`. This allows procurement specialists to view and claim incoming demands or populate supplier base prices.
+
+### Procurement Guardrails & Prohibitions
+To preserve commercial integrity, procurement roles are strictly restricted:
+- **Terminal Status Block**: Cannot transition inquiries to sales terminal states (`confirmed`, `won`, `lost`, `saved`, `processed`).
+- **Deal Conversion Block**: Cannot create deals or convert inquiries to orders.
+- **Quotation Block**: Cannot preview or send customer sales quotations (`POST /inquiries/quotation-preview/:id` and `POST /inquiries/send-quotation/:id` return `403 Forbidden`).
+- **Deletion Rules**: `procurement_person` cannot delete inquiries. `procurement_manager` may only delete inquiries assigned to their team (cannot delete from the unassigned pool).
 
 ### Quotation email CC contract
 `POST /inquiries/quotation-preview/:id` returns the resolved default `cc` list for the Share Quotation modal. The frontend may edit that list as normalized email chips and sends the final list as `cc: string[]` to `POST /inquiries/send-quotation/:id`. The backend validates and deduplicates submitted addresses, excludes the primary `customer_email`, and passes the resulting list to the email provider. If `cc` is omitted, the backend retains the existing default recipients.
