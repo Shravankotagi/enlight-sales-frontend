@@ -50,25 +50,27 @@ export default function AssistantAttachMenu({
           </button>
           <button
             type="button"
-            onClick={() => setCapturing(true)}
+            onClick={() => {
+              setOpen(false);
+              setCapturing(true);
+            }}
             className="block w-full rounded-lg px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50"
           >
             Capture an image
           </button>
-          {capturing && (
-            <div className="mt-2">
-              <VisitCameraCapture
-                disabled={disabled}
-                readGps={readGps}
-                onCapture={(photoUrl, coords) => {
-                  onCapture(photoUrl, coords);
-                  setCapturing(false);
-                  setOpen(false);
-                }}
-              />
-            </div>
-          )}
         </div>
+      )}
+      {capturing && (
+        <VisitCameraCapture
+          autoStart
+          disabled={disabled}
+          readGps={readGps}
+          onClose={() => setCapturing(false)}
+          onCapture={(photoUrl, coords) => {
+            onCapture(photoUrl, coords);
+            setCapturing(false);
+          }}
+        />
       )}
     </div>
   );

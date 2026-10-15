@@ -43,6 +43,7 @@ import {
   VISIT_BRANDS,
   VISIT_PAYMENT_TERMS,
   validateNewVisitForm,
+  visitCityLabel,
   visitDocumentError,
   type NewVisitFormInput,
 } from '../utils/visitForm';
@@ -483,6 +484,7 @@ export default function VisitsPage() {
   const [visitLat, setVisitLat] = useState<number | null>(null);
   const [visitLng, setVisitLng] = useState<number | null>(null);
   const [locationNotice, setLocationNotice] = useState('');
+  const [locationLocked, setLocationLocked] = useState(false);
   const [locating, setLocating] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [otpSending, setOtpSending] = useState(false);
@@ -535,6 +537,7 @@ export default function VisitsPage() {
       const coords = await captureGpsCoordinates();
       if (!coords) {
         setLocationSource('manual');
+        setLocationLocked(false);
         setVisitLat(null);
         setVisitLng(null);
         setLocationNotice('Location permission was denied or GPS is unavailable. Enter the city, or retry.');
@@ -544,14 +547,16 @@ export default function VisitsPage() {
       try {
         const res = await visitsApi.reverseGeocode(coords.latitude, coords.longitude);
         const body = res?.data?.data || res?.data;
-        city = String(body?.city || '');
+        city = visitCityLabel(body?.city);
       } catch {
         city = '';
       }
       setVisitLat(coords.latitude);
       setVisitLng(coords.longitude);
       setLocationSource('gps');
-      setFormLocation(city || `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
+      setLocationLocked(Boolean(city));
+      setFormLocation(city);
+      if (!city) setLocationNotice('Type the city.');
       setFormErrors(prev => ({ ...prev, location: false }));
     } finally {
       setLocating(false);
@@ -675,6 +680,7 @@ export default function VisitsPage() {
     setFormBrands([]);
     setFormBrandOther('');
     setLocationSource('');
+    setLocationLocked(false);
     setVisitLat(null);
     setVisitLng(null);
     setLocationNotice('');
@@ -2050,6 +2056,7 @@ export default function VisitsPage() {
                       <VisitLocationField
                         value={formLocation}
                         source={locationSource}
+                        cityLocked={locationLocked}
                         latitude={visitLat}
                         longitude={visitLng}
                         notice={locationNotice}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Camera } from 'lucide-react';
 import { visitPhotoStampLabel } from '../utils/visitForm';
 
@@ -10,8 +11,10 @@ interface GpsReading {
 
 interface VisitCameraCaptureProps {
   disabled?: boolean;
+  autoStart?: boolean;
   readGps: () => Promise<GpsReading | null>;
   onCapture: (photoUrl: string, coords: GpsReading) => void;
+  onClose?: () => void;
 }
 
 const NO_CAMERA = 'This device has no camera. A visit photo cannot be taken here.';
@@ -19,8 +22,10 @@ const NO_GPS = 'This photo has no GPS data. Allow location and take it again.';
 
 export default function VisitCameraCapture({
   disabled,
+  autoStart = false,
   readGps,
   onCapture,
+  onClose,
 }: VisitCameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -31,6 +36,12 @@ export default function VisitCameraCapture({
   const stop = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+  };
+
+  const close = () => {
+    setOpen(false);
+    stop();
+    onClose?.();
   };
 
   useEffect(() => () => stop(), []);
@@ -59,6 +70,12 @@ export default function VisitCameraCapture({
       stop();
     }
   };
+
+  useEffect(() => {
+    if (autoStart) void start();
+    // Start once when the assistant opens the camera. `start` closes over the latest refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   const capture = async () => {
     const video = videoRef.current;
@@ -94,46 +111,71 @@ export default function VisitCameraCapture({
       context.font = '16px Arial';
       context.fillText(label, 12, canvas.height - 14);
       onCapture(canvas.toDataURL('image/jpeg', 0.85), coords);
-      setOpen(false);
-      stop();
+      close();
     } finally {
       setBusy(false);
     }
   };
 
-  return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        onClick={start}
-        disabled={disabled}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-medium border border-blue-200 shadow-2xs transition-colors cursor-pointer disabled:opacity-60"
+  const dialog = (open || (autoStart && error)) && (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 p-4">
+      <div
+        role="dialog"
+        aria-label="Visit camera"
+        className="w-full max-w-3xl rounded-2xl bg-white p-4 shadow-xl"
       >
-        <Camera size={13} />
-        Take visit photo
-      </button>
-      {error && (
-        <p className="text-[11px] font-semibold text-rose-600">{error}</p>
-      )}
-      {open && (
-        <div className="space-y-2">
+        {open && (
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            className="w-full max-h-56 rounded-xl bg-slate-900"
+            className="h-[70vh] w-full rounded-xl bg-slate-900 object-cover"
           />
+        )}
+        {error && (
+          <p className="mt-2 text-sm font-semibold text-rose-600">{error}</p>
+        )}
+        <div className="mt-3 flex gap-2">
+          {open && (
+            <button
+              type="button"
+              onClick={capture}
+              disabled={busy}
+              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold cursor-pointer disabled:opacity-60"
+            >
+              {busy ? 'Capturing...' : 'Capture photo'}
+            </button>
+          )}
           <button
             type="button"
-            onClick={capture}
-            disabled={busy}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+            onClick={close}
+            className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-bold cursor-pointer"
           >
-            {busy ? 'Capturing...' : 'Capture photo'}
+            Cancel
           </button>
         </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      {!autoStart && (
+        <button
+          type="button"
+          onClick={start}
+          disabled={disabled}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-medium border border-blue-200 shadow-2xs transition-colors cursor-pointer disabled:opacity-60"
+        >
+          <Camera size={13} />
+          Take visit photo
+        </button>
       )}
+      {error && !open && !autoStart && (
+        <p className="text-[11px] font-semibold text-rose-600">{error}</p>
+      )}
+      {dialog && createPortal(dialog, document.body)}
     </div>
   );
 }

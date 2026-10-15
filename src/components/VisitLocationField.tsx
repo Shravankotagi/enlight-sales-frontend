@@ -1,6 +1,7 @@
 interface VisitLocationFieldProps {
   value: string;
   source: '' | 'gps' | 'manual';
+  cityLocked?: boolean;
   latitude: number | null;
   longitude: number | null;
   notice: string;
@@ -13,6 +14,7 @@ interface VisitLocationFieldProps {
 export default function VisitLocationField({
   value,
   source,
+  cityLocked,
   latitude,
   longitude,
   notice,
@@ -21,7 +23,7 @@ export default function VisitLocationField({
   onRetry,
   onManualChange,
 }: VisitLocationFieldProps) {
-  const locked = source === 'gps';
+  const locked = cityLocked ?? source === 'gps';
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">

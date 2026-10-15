@@ -61,6 +61,12 @@ export function visitPhotoStampLabel(
   return `GPS ${latitude.toFixed(5)}, ${longitude.toFixed(5)} · ${when}`;
 }
 
+export function visitCityLabel(city: unknown): string {
+  const text = String(city ?? '').trim();
+  if (/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(text)) return '';
+  return text;
+}
+
 export function visitDocumentError(file: {
   name?: string;
   type?: string;
@@ -104,10 +110,7 @@ export function validateNewVisitForm(
     errors.email = 'Please enter a valid email.';
   }
   if (!input.location.trim()) {
-    errors.location =
-      input.locationSource === 'manual'
-        ? 'Enter the city.'
-        : 'Retry location so the city can be read from the device.';
+    errors.location = 'Enter the city.';
   }
   if (!input.customerType) errors.customerType = 'Select a customer type.';
   if (!input.visitDate) errors.visitDate = 'Please enter the visit date.';
