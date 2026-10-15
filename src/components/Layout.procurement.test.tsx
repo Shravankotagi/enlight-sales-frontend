@@ -10,7 +10,7 @@ const employee = {
   employee_id: 'EMP-DEMO',
   name: 'Demo User',
   phone: '9000000000',
-  role: 'procurement',
+  role: 'procurement_person',
 };
 
 describe('procurement role navigation', () => {
@@ -29,8 +29,7 @@ describe('procurement role navigation', () => {
       </AuthProvider>,
     );
 
-    expect(screen.getByRole('link', { name: 'Procurement' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Inquiries' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Inquiries' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Orders' })).not.toBeInTheDocument();
   });
 });

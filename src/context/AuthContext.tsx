@@ -105,14 +105,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPrototypeRoleState(role);
   };
 
-  const effectiveRole = prototypeRole || employee?.role;
+  const effectiveRole = employee?.role;
   const isAdmin = effectiveRole === 'admin' || effectiveRole === 'super_admin';
   const isSalesManager =
-    !prototypeRole && (employee?.role === 'sales_manager' || employee?.role === 'manager');
-  const isProcurementManager = !prototypeRole && employee?.role === 'procurement_manager';
-  const isProcurementPerson = !prototypeRole && employee?.role === 'procurement_person';
-  const isProcurement =
-    effectiveRole === 'procurement' || isProcurementManager || isProcurementPerson;
+    employee?.role === 'sales_manager' || employee?.role === 'manager';
+  const isProcurementManager = employee?.role === 'procurement_manager';
+  const isProcurementPerson = employee?.role === 'procurement_person';
+  const isProcurement = isProcurementManager || isProcurementPerson;
   const isSalesperson = !isAdmin && !isSalesManager && !isProcurement;
 
   // effectivePhone:
@@ -125,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? employee?.phone || null
       : null;
 
-  const activeRole = prototypeRole || (viewingAs ? viewingAs.role : (employee?.role || 'salesperson'));
+  const activeRole = viewingAs ? viewingAs.role : (employee?.role || 'salesperson');
   const activeMode =
     viewingAs?.mode ||
     (activeRole === 'salesperson' &&

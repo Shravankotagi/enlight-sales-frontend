@@ -220,6 +220,13 @@ export const inquiriesApi = {
   delete: (id: string) => API.delete(`/inquiries/${id}`),
   assignProcurement: (id: string, procurement_employee_id: string | null) =>
     API.patch(`/inquiries/${id}/procurement-assignee`, { procurement_employee_id }),
+  getLinePricing: (id: string) => API.get(`/inquiries/${id}/line-pricing`),
+  saveProcurementPricing: (id: string, payload: any) =>
+    API.patch(`/inquiries/${id}/procurement-pricing`, payload),
+  saveSalesPricing: (id: string, payload: any) =>
+    API.patch(`/inquiries/${id}/sales-pricing`, payload),
+  previewDecline: (id: string) => API.post(`/inquiries/${id}/decline-preview`),
+  sendDecline: (id: string) => API.post(`/inquiries/${id}/decline-email`),
 };
 
 export const productsApi = {

@@ -12,6 +12,7 @@ export interface ProcurementLineItem {
   dimensions?: string;
   quantity: number;
   unit: string;
+  line_key?: string;
   base_price_per_mt?: number;
   line_status: ProcurementLineStatus;
   line_note?: string;
@@ -344,3 +345,114 @@ export const procurementStatusClasses: Record<ProcurementStatus, string> = {
   cannot_price: "bg-rose-50 text-rose-700 border-rose-200",
   quote_sent: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
+
+export function requestFromInquiry(inquiry: any): ProcurementRequest {
+  const ai = inquiry?.ai_extraction_json || {};
+  const source = ai.line_items || ai.lineItems || [];
+  const line_items = (source.length ? source : [{ sku_text: "Material", quantity: 0, unit: "MT" }]).map(
+    (item: any, index: number) => ({
+      line_key: String(item.id || item.line_key || `${index}:${item.sku_text || item.description || "Material"}`),
+      sku_text: item.sku_text || item.description || "Material",
+      dimensions: item.dimensions,
+      quantity: Number(item.original_quantity ?? item.quantity ?? item.qty) || 0,
+      unit: item.original_unit || item.unit || "MT",
+      line_status: "needs_price" as ProcurementLineStatus,
+    }),
+  );
+  return {
+    id: inquiry?.procurement_number || "",
+    inquiry_id: inquiry?.id,
+    salesperson_name: inquiry?.assigned_salesperson_name || inquiry?.salesperson_name || "Salesperson",
+    delivery_region: inquiry?.delivery_location || ai.delivery_location || "Delivery location pending",
+    requested_at: inquiry?.created_at || new Date().toISOString(),
+    request_note: inquiry?.procurement_note || "",
+    line_items,
+  };
+}
+
+export function mergeDrawerLineRates(previous: any[] | undefined, incoming: any[]) {
+  return incoming.map((item, index) => {
+    const prior = previous?.[index];
+    const incomingRate = Number(item?.rate) || 0;
+    const priorRate = Number(prior?.rate) || 0;
+    if (incomingRate > 0 || !priorRate) return item;
+    return {
+      ...item,
+      rate: prior.rate,
+      amount: prior.amount,
+      cgst_amount: prior.cgst_amount,
+      sgst_amount: prior.sgst_amount,
+      igst_amount: prior.igst_amount,
+      total_gst: prior.total_gst,
+      final_amount: prior.final_amount,
+    };
+  });
+}
+
+export function pricingResult(response: any) {
+  const body = response?.data ?? response;
+  const nested = body?.data;
+  const payload =
+    nested &&
+    typeof nested === "object" &&
+    (Array.isArray(nested.lines) || nested.pricing_status)
+      ? nested
+      : body;
+  return {
+    lines: Array.isArray(payload?.lines) ? payload.lines : [],
+    pricing_status: payload?.pricing_status,
+  };
+}
+
+export function applyServerLines(inquiry: any, rows: any[]) {
+  const request = requestFromInquiry(inquiry);
+  if (!rows?.length) {
+    return {
+      request,
+      pricing: {
+        lines: request.line_items.map(() => ({
+          basePricePerMt: "" as const,
+          transportPerMt: "" as const,
+          loadingPerMt: "" as const,
+          marginPerMt: "" as const,
+        })),
+        saved: inquiry?.pricing_status === "sales_priced",
+      },
+    };
+  }
+  request.line_items = rows.map((row) => ({
+    line_key: row.line_key,
+    sku_text: row.sku_text || "Material",
+    quantity: Number(row.quantity) || 0,
+    unit: row.unit || "MT",
+    base_price_per_mt: row.procurement_base_price_per_mt ?? undefined,
+    line_status: row.line_status || "needs_price",
+    line_note: row.procurement_line_note || undefined,
+  }));
+  return {
+    request,
+    pricing: {
+      saved: inquiry?.pricing_status === "sales_priced",
+      lines: rows.map((row) => ({
+        basePricePerMt: row.sales_base_price_per_mt ?? row.procurement_base_price_per_mt ?? "",
+        transportPerMt: row.transport_per_mt ?? "",
+        loadingPerMt: row.loading_per_mt ?? "",
+        marginPerMt: row.margin_per_mt ?? "",
+      })),
+    },
+  };
+}
+
+export function inquiryStatusFromServer(
+  inquiry: any,
+): InquiryPricingStatus | null {
+  if (inquiry?.pricing_status === "sales_priced") return "pricing_saved";
+  if (
+    inquiry?.pricing_status === "price_ready" ||
+    inquiry?.pricing_status === "unavailable" ||
+    inquiry?.pricing_status === "awaiting_price"
+  ) {
+    return inquiry.pricing_status;
+  }
+  return null;
+}

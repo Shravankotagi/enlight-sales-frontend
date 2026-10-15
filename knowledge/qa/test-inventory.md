@@ -22,7 +22,7 @@ Faster local loops: backend `npm test` / `npm run test:regression`, bot `npm run
 - Frontend pages mock `lib/api` with `vi.mock` and a stable mock module (see `src/test/adminDashboardMocks.ts`) and render through `renderWithProviders`.
 
 ## Coverage today
-- Backend: employee phone helpers and salesperson scope (`getAccessibleSalespersonPhones`), `RolesGuard`/`RoleGuard`, report date ranges and `allowedPhones` scope, leaderboard identity, pricing parity, plus the existing deals/inquiries/KRA/reports/app specs.
+- Backend: employee phone helpers and salesperson scope (`getAccessibleSalespersonPhones`), procurement pricing workflow (anonymity, partial availability, sales override, GST, decline), `RolesGuard`/`RoleGuard`, report date ranges and `allowedPhones` scope, leaderboard identity, pricing parity, plus the existing deals/inquiries/KRA/reports/app specs.
 - Bot: JSON utils, pricing engine, HSN detector, pricing parity, catalog-flow helpers, new-customer catalog flow state machine, PO resolver, network guard.
 - Frontend: date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, recent order fields/navigation, and the Procurement UI prototype.
 
@@ -41,7 +41,15 @@ Current regression tests:
 | Frontend | `admin-leaderboard-identity-and-orders.test.tsx` | Leaderboard shows names/IDs/phones, counts orders (not deals), excludes admins |
 | Frontend | `admin-overview-date-filters.test.tsx` | No standalone Month filter; every preset sends `{from, to}` to all Overview queries |
 | Frontend | `admin-overview-recent-orders.test.tsx` | Review Queue is absent; recent filtered orders show order details and navigate to Orders |
-| Frontend | `ProcurementPage.test.tsx`, `Layout.procurement.test.tsx`, `procurementPricing.test.ts` | Procurement queue anonymity, base-price status transition, pricing formula, and role-restricted navigation |
+| Frontend | `ProcurementPage.test.tsx`, `Layout.procurement.test.tsx`, `procurementPricing.test.ts`, `procurement-workflow.test.ts` | Procurement anonymity, base-price status, pricing formula, role-restricted navigation, and saved sales rates |
+| Frontend | `issue-procurement-routing-details.test.tsx` | Sales and procurement both show the stored product quantity and the `PR-` id; procurement does not show the customer name |
+| Frontend | `issue-historical-pricing-status.test.tsx` | An inquiry with no pricing status keeps its deal status; only an explicit `awaiting_price` shows Awaiting Price |
+| Frontend | `issue-procurement-search.test.tsx` | A procurement person can filter inquiries by procurement id and product |
+| Frontend | `issue-procurement-price-columns.test.tsx` | A wrapped pricing save keeps the base price; procurement edits only that column; a salesperson save collapses the price columns into Rate; a saved row shows 18% GST without a stored tax amount |
+| Frontend | `issue-send-quotation-button.test.tsx` | A priced inquiry drawer has one quotation button, and the email modal scrolls inside the screen |
+| Frontend | `issue-procurement-kanban-click.test.tsx` | A procurement person opens Kanban View on the first click |
+| Backend | `inquiry-pricing.workflow.spec.ts`, `inquiries.procurement-scope.spec.ts` | Procurement scope, customer-field stripping, partial and unavailable pricing, sales override, decline eligibility |
+| Backend | `issue-procurement-routing-details.spec.ts` | Mapped salesperson inquiries get that procurement person and a unique `PR-` number; product lines survive procurement detail |
 
 ## Cross-repo parity fixture
 `pricing-parity.json` is copied identically to `em-os-bot/test/fixtures/`, `em-os-backend/src/test-utils/fixtures/`, and `em-os-frontend/src/test/fixtures/`. Each repo's parity test runs its own pricing/HSN code against it. Change all three copies together in the same set of PRs.
@@ -54,6 +62,7 @@ Known divergences are listed under `knownDivergences` and run as `todo` tests un
 When one is resolved, move its case into the main fixture sections and delete the `todo`.
 
 ## Manual / integration scripts (not in CI)
+- [procurement-manual-test-suite.md](procurement-manual-test-suite.md) is the manual pass for procurement person, procurement manager, and salesperson. It is not part of CI.
 - Backend `src/scripts/` covers RBAC/RLS, chatbot, assistant operational parity, customer analytics, visits, complaints, products/HSN, KRA/tonnage, and PDF/voice work. E2E config is under `em-os-backend/test/`.
 - Bot `scripts/test-*.js` cover catalog, inquiries, order atomicity/parity, visits, complaints, query/retrieval, updates, and live flows.
 - Root `docs/` and `em-os-backend/docs/` contain module-specific manual/testing suites.
