@@ -22,6 +22,7 @@
 
 ## Visits, complaints, and KRA
 - [ ] Create/update, exact entity selection, attachments/follow-up status.
+- [ ] A new visit cannot be saved until every field except Add Document is filled, the phone code is verified, and the camera photo has GPS.
 - [ ] Salesperson, manager, admin visibility.
 - [ ] KRA/report date window and units.
 
