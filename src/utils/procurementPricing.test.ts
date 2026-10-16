@@ -15,6 +15,7 @@ describe("procurement pricing", () => {
       basePricePerMt: 50000,
       transportPerMt: 2000,
       loadingPerMt: 500,
+      creditPerMt: 0,
       marginPerMt: 1200,
       quantity: 7500,
       unit: "KG",
@@ -31,6 +32,7 @@ describe("procurement pricing", () => {
       basePricePerMt: -1,
       transportPerMt: -1,
       loadingPerMt: -1,
+      creditPerMt: -5,
       marginPerMt: -5,
       quantity: -10,
       unit: "MT",
@@ -47,10 +49,11 @@ describe("procurement pricing", () => {
         basePricePerMt: 50000,
         transportPerMt: 1000,
         loadingPerMt: 300,
+        creditPerMt: 200,
         marginPerMt: 700,
       }),
-    ).toBe(52000);
-    expect(calculateLineAmount(52000, 2, "MT")).toBe(104000);
+    ).toBe(52200);
+    expect(calculateLineAmount(52200, 2, "MT")).toBe(104400);
     expect(getGstSplit(1000, "Pune, Maharashtra")).toMatchObject({
       type: "cgst_sgst",
       cgst: 90,

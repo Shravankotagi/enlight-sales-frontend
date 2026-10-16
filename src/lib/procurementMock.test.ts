@@ -51,6 +51,7 @@ describe("procurement prototype store", () => {
           basePricePerMt: 50000,
           transportPerMt: 1000,
           loadingPerMt: 500,
+          creditPerMt: 0,
           marginPerMt: 1500,
         },
       ],

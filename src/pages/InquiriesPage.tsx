@@ -146,6 +146,7 @@ export interface LineItemDetail {
   base_price_per_mt?: number | "";
   transport_per_mt?: number | "";
   loading_per_mt?: number | "";
+  credit_per_mt?: number | "";
   margin_per_mt?: number | "";
   igst_amount?: number;
 }
@@ -3199,6 +3200,7 @@ export default function InquiriesPage() {
       basePricePerMt: baseFromProcurement ?? "",
       transportPerMt: "",
       loadingPerMt: "",
+      creditPerMt: "",
       marginPerMt: "",
     };
     const value = rawValue === "" ? "" : Math.max(0, Number(rawValue) || 0);
@@ -3212,6 +3214,7 @@ export default function InquiriesPage() {
       basePricePerMt: Number(line.basePricePerMt) || 0,
       transportPerMt: Number(line.transportPerMt) || 0,
       loadingPerMt: Number(line.loadingPerMt) || 0,
+      creditPerMt: Number(line.creditPerMt) || 0,
       marginPerMt: Number(line.marginPerMt) || 0,
     });
     const currentItem = editDetails.lineItems[index];
@@ -3229,6 +3232,7 @@ export default function InquiriesPage() {
       base_price_per_mt: line.basePricePerMt,
       transport_per_mt: line.transportPerMt,
       loading_per_mt: line.loadingPerMt,
+      credit_per_mt: line.creditPerMt,
       margin_per_mt: line.marginPerMt,
       cgst_amount: gst.cgst,
       sgst_amount: gst.sgst,
@@ -3261,6 +3265,12 @@ export default function InquiriesPage() {
       line_note: procurementRequest.line_items[index]?.line_note || null,
       transport_per_mt: line.transportPerMt === "" ? 0 : Number(line.transportPerMt),
       loading_per_mt: line.loadingPerMt === "" ? 0 : Number(line.loadingPerMt),
+      ...(isProcurement
+        ? {}
+        : {
+            credit_per_mt:
+              line.creditPerMt === "" ? 0 : Number(line.creditPerMt),
+          }),
       margin_per_mt: line.marginPerMt === "" ? 0 : Number(line.marginPerMt),
     }));
     const response = isProcurement
@@ -3314,7 +3324,7 @@ export default function InquiriesPage() {
 
   const copyPricingFieldToAll = (
     sourceIndex: number,
-    field: "transportPerMt" | "loadingPerMt" | "marginPerMt",
+    field: "transportPerMt" | "loadingPerMt" | "creditPerMt" | "marginPerMt",
   ) => {
     if (!editDetails || !procurementRequest) return;
     const sourceValue = inquiryPricing?.lines[sourceIndex]?.[field] ?? "";
@@ -3325,6 +3335,7 @@ export default function InquiriesPage() {
         basePricePerMt: procurementBase,
         transportPerMt: "",
         loadingPerMt: "",
+        creditPerMt: "",
         marginPerMt: "",
       };
       return procurementRequest.line_items[index]?.line_status === "cannot_price"
@@ -3337,6 +3348,7 @@ export default function InquiriesPage() {
         basePricePerMt: Number(line.basePricePerMt) || 0,
         transportPerMt: Number(line.transportPerMt) || 0,
         loadingPerMt: Number(line.loadingPerMt) || 0,
+        creditPerMt: Number(line.creditPerMt) || 0,
         marginPerMt: Number(line.marginPerMt) || 0,
       });
       const amount = calculateLineAmount(rate, item.quantity, item.unit || "MT");
@@ -3348,6 +3360,7 @@ export default function InquiriesPage() {
         base_price_per_mt: line.basePricePerMt,
         transport_per_mt: line.transportPerMt,
         loading_per_mt: line.loadingPerMt,
+        credit_per_mt: line.creditPerMt,
         margin_per_mt: line.marginPerMt,
         cgst_amount: gst.cgst,
         sgst_amount: gst.sgst,
@@ -5717,7 +5730,7 @@ export default function InquiriesPage() {
                         </th>
                         <th
                           rowSpan={isInquiryPricingSaved ? 2 : 1}
-                          className="px-2 py-3 border-r border-slate-700 w-[155px] text-center align-middle"
+                          className="px-2 py-3 border-r border-slate-700 w-[108px] text-center align-middle"
                         >
                           Quantity, Unit &amp; Wt (MT){" "}
                           <span className="text-red-500 font-bold">*</span>
@@ -5751,6 +5764,9 @@ export default function InquiriesPage() {
                             </th>
                             <th className="px-2 py-3 border-r border-slate-700 text-center">
                               Loading *
+                            </th>
+                            <th className="px-2 py-3 border-r border-slate-700 text-center">
+                              Credit *
                             </th>
                             <th className="px-2 py-3 border-r border-slate-700 text-center">
                               Margin *
@@ -6040,8 +6056,15 @@ export default function InquiriesPage() {
                               </span>
                             )}
                           </td>
-                          <td className="w-[155px] max-w-[155px] px-1.5 py-3.5 border-r border-slate-200">
-                            <div className="flex w-[150px] items-center gap-0.5">
+                          <td className="w-[108px] max-w-[108px] px-1.5 py-2 border-r border-slate-200">
+                            <div className="flex w-[100px] flex-col gap-1">
+                              <div
+                                className={`flex overflow-hidden rounded bg-white ${
+                                  fieldErrors[`qty_${idx}`]
+                                    ? "border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20"
+                                    : "border border-slate-300 focus-within:ring-2 focus-within:ring-blue-500"
+                                }`}
+                              >
                               <input
                                 type="number"
                                 readOnly={isProcurement}
@@ -6100,11 +6123,7 @@ export default function InquiriesPage() {
                                   }
                                 }}
                                 placeholder="0"
-                                className={`w-[48px] shrink-0 px-1 py-1.5 bg-white rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal text-center transition-all ${
-                                  fieldErrors[`qty_${idx}`]
-                                    ? "border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border"
-                                    : "border border-slate-300 focus:ring-blue-500"
-                                }`}
+                                className="w-[52px] min-w-0 shrink-0 border-0 bg-transparent px-1 py-1 text-center font-mono text-xs font-bold text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               />
                               <select
                                 value={normalizeUnit(item.unit) || "KG"}
@@ -6152,7 +6171,7 @@ export default function InquiriesPage() {
                                   });
                                   setSaveSuccess(false);
                                 }}
-                                className="w-[44px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[10px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-[48px] shrink-0 border-0 border-l border-slate-300 bg-slate-50 px-0.5 py-1 text-[10px] font-bold text-slate-700 outline-none"
                               >
                                 <option value="KG">KG</option>
                                 <option value="MT">MT</option>
@@ -6165,6 +6184,7 @@ export default function InquiriesPage() {
                                   </option>
                                 )}
                               </select>
+                              </div>
                               {(() => {
                                 const itemWeight = formatLineItemWeightMt(item);
                                 const hasFormulaWeight =
@@ -6187,13 +6207,16 @@ export default function InquiriesPage() {
 
                                 return (
                                   <div
-                                    className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                    className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] ${
                                       hasWeight
-                                        ? "bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400"
-                                        : "bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400"
+                                        ? "bg-blue-50/80 text-blue-900"
+                                        : "bg-slate-100 text-slate-400"
                                     }`}
                                     title="Weight in MT (Editable - Amount calculates as MT × Rate)"
                                   >
+                                    <span className="shrink-0 font-semibold">
+                                      Wt
+                                    </span>
                                     <input
                                       type="number"
                                       readOnly={isProcurement}
@@ -6261,9 +6284,9 @@ export default function InquiriesPage() {
                                           ? String(itemWeight.mt)
                                           : "0.000"
                                       }
-                                      className="w-[26px] bg-transparent text-[10px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                      className="min-w-0 flex-1 bg-transparent text-center font-mono text-[10px] font-bold text-blue-900 outline-none placeholder:font-normal placeholder:text-slate-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                     />
-                                    <span className="text-[9px] font-mono font-bold text-blue-700/80 select-none">
+                                    <span className="select-none font-mono font-bold text-blue-700/80">
                                       MT
                                     </span>
                                   </div>
@@ -6307,6 +6330,11 @@ export default function InquiriesPage() {
                                             inquiryPricing?.lines[idx]
                                               ?.loadingPerMt,
                                           ) || 0,
+                                        creditPerMt:
+                                          Number(
+                                            inquiryPricing?.lines[idx]
+                                              ?.creditPerMt,
+                                          ) || 0,
                                         marginPerMt:
                                           Number(
                                             inquiryPricing?.lines[idx]
@@ -6323,6 +6351,7 @@ export default function InquiriesPage() {
                                         ["Base price", "basePricePerMt"],
                                         ["Transport", "transportPerMt"],
                                         ["Loading", "loadingPerMt"],
+                                        ["Credit", "creditPerMt"],
                                         ["Margin", "marginPerMt"],
                                       ] as const
                                     ).map(([label, field]) => (
@@ -6399,6 +6428,7 @@ export default function InquiriesPage() {
                                   ],
                                   ["transportPerMt", undefined],
                                   ["loadingPerMt", undefined],
+                                  ["creditPerMt", undefined],
                                   ["marginPerMt", undefined],
                                 ] as const
                               )
@@ -6480,6 +6510,7 @@ export default function InquiriesPage() {
                                 basePricePerMt: Number(draftLine?.basePricePerMt ?? procurementRequest?.line_items[idx]?.base_price_per_mt) || 0,
                                 transportPerMt: Number(draftLine?.transportPerMt) || 0,
                                 loadingPerMt: Number(draftLine?.loadingPerMt) || 0,
+                                creditPerMt: Number(draftLine?.creditPerMt) || 0,
                                 marginPerMt: Number(draftLine?.marginPerMt) || 0,
                               });
                               const taxableAmount = isInquiryPricingSaved
@@ -7919,7 +7950,7 @@ export default function InquiriesPage() {
                       </th>
                       <th
                         rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle"
+                        className="w-[132px] border-r border-slate-700 px-2 py-3 text-center align-middle leading-tight"
                       >
                         Quantity, Unit &amp; Wt (MT){" "}
                         <span className="text-red-500 font-bold">*</span>
@@ -7959,7 +7990,7 @@ export default function InquiriesPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-blue-50/30">
+                      <tr key={idx} className="hover:bg-blue-50/30 [&>td]:align-middle">
                         <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">
                           {idx + 1}
                         </td>
@@ -8093,8 +8124,9 @@ export default function InquiriesPage() {
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200">
-                          <div className="flex items-center gap-1.5 w-full min-w-[170px]">
+                        <td className="w-[132px] border-r border-slate-200 px-1.5 py-3.5 align-middle">
+                          <div className="mx-auto flex w-full max-w-[124px] flex-col items-stretch gap-1">
+                            <div className="flex w-full rounded border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-blue-500">
                             <input
                               id={`form-item-qty-${idx}`}
                               type="number"
@@ -8132,7 +8164,7 @@ export default function InquiriesPage() {
                                 setFormLineItems(updated);
                               }}
                               placeholder="0"
-                              className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                              className="min-w-0 flex-1 rounded-l border-0 bg-transparent px-1 py-1.5 text-center font-mono text-xs font-bold text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             />
                             <select
                               value={normalizeUnit(item.unit) || "KG"}
@@ -8166,12 +8198,13 @@ export default function InquiriesPage() {
                                 };
                                 setFormLineItems(updated);
                               }}
-                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+                              className="w-14 shrink-0 rounded-r border-0 border-l border-slate-300 bg-slate-50 px-1 py-1.5 text-center text-[11px] font-bold text-slate-700 outline-none"
                             >
                               <option value="KG">KG</option>
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
                             </select>
+                            </div>
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
                               const hasFormulaWeight =
@@ -8194,13 +8227,16 @@ export default function InquiriesPage() {
 
                               return (
                                 <div
-                                  className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                  className={`flex w-full items-center justify-center gap-1 rounded px-1 py-0.5 text-[10px] ${
                                     hasWeight
-                                      ? "bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400"
-                                      : "bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400"
+                                      ? "bg-blue-50/80 text-blue-900"
+                                      : "bg-slate-100 text-slate-400"
                                   }`}
                                   title="Weight in MT (Editable - Amount calculates as MT × Rate)"
                                 >
+                                  <span className="shrink-0 font-semibold">
+                                    Wt
+                                  </span>
                                   <input
                                     type="number"
                                     step="any"
@@ -8249,9 +8285,9 @@ export default function InquiriesPage() {
                                         ? String(itemWeight.mt)
                                         : "0.000"
                                     }
-                                    className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                    className="min-w-0 flex-1 bg-transparent text-center font-mono text-[10px] font-bold text-blue-900 outline-none placeholder:font-normal placeholder:text-slate-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                   />
-                                  <span className="text-[10px] font-mono font-bold text-blue-700/80 select-none ml-0.5">
+                                  <span className="select-none font-mono font-bold text-blue-700/80">
                                     MT
                                   </span>
                                 </div>

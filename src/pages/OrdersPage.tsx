@@ -2126,7 +2126,7 @@ export default function OrdersPage() {
                       <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
                         HSN/SAC <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
+                      <th className="px-2 py-3 border-r border-slate-700 w-[108px] text-center align-middle">
                         Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
                       <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
@@ -2254,8 +2254,9 @@ export default function OrdersPage() {
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200">
-                          <div className="flex items-center gap-1.5 w-full min-w-[170px]">
+                        <td className="w-[108px] px-1.5 py-2 border-r border-slate-200">
+                          <div className="flex w-[100px] flex-col gap-1">
+                            <div className="flex overflow-hidden rounded border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-blue-500">
                             <input
                               id={`form-item-qty-${idx}`}
                               type="number"
@@ -2290,7 +2291,7 @@ export default function OrdersPage() {
                                 setFormLineItems(updated);
                               }}
                               placeholder="0"
-                              className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
+                              className="w-[52px] min-w-0 shrink-0 border-0 bg-transparent px-1 py-1 text-center font-mono text-xs font-bold text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             />
                             <select
                               value={normalizeUnit(item.unit) || 'MT'}
@@ -2321,7 +2322,7 @@ export default function OrdersPage() {
                                 };
                                 setFormLineItems(updated);
                               }}
-                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              className="w-[48px] shrink-0 border-0 border-l border-slate-300 bg-slate-50 px-0.5 py-1 text-[10px] font-bold text-slate-700 outline-none">
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
                               <option value="KG">KG</option>
@@ -2329,6 +2330,7 @@ export default function OrdersPage() {
                                 <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
                               )}
                             </select>
+                            </div>
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
                               const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
@@ -2339,12 +2341,13 @@ export default function OrdersPage() {
 
                               return (
                                 <div
-                                  className={`shrink-0 flex items-center border rounded px-1.5 py-1 transition-all ${
+                                  className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] ${
                                     hasWeight
-                                      ? 'bg-blue-50/80 border-blue-200 text-blue-900 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
-                                      : 'bg-slate-100 border-slate-200 text-slate-400 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400'
+                                      ? 'bg-blue-50/80 text-blue-900'
+                                      : 'bg-slate-100 text-slate-400'
                                   }`}
                                   title="Weight in MT (Editable - Amount calculates as MT × Rate)">
+                                  <span className="shrink-0 font-semibold">Wt</span>
                                   <input
                                     type="number"
                                     step="any"
@@ -2386,9 +2389,9 @@ export default function OrdersPage() {
                                       setFormLineItems(updated);
                                     }}
                                     placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
-                                    className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                    className="min-w-0 flex-1 bg-transparent text-center font-mono text-[10px] font-bold text-blue-900 outline-none placeholder:font-normal placeholder:text-slate-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                   />
-                                  <span className="text-[10px] font-mono font-bold text-blue-700/80 select-none ml-0.5">MT</span>
+                                  <span className="select-none font-mono font-bold text-blue-700/80">MT</span>
                                 </div>
                               );
                             })()}

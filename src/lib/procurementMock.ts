@@ -33,6 +33,7 @@ export interface InquirySalesPricingLine {
   basePricePerMt: number | "";
   transportPerMt: number | "";
   loadingPerMt: number | "";
+  creditPerMt: number | "";
   marginPerMt: number | "";
 }
 
@@ -414,6 +415,7 @@ export function applyServerLines(inquiry: any, rows: any[]) {
           basePricePerMt: "" as const,
           transportPerMt: "" as const,
           loadingPerMt: "" as const,
+          creditPerMt: "" as const,
           marginPerMt: "" as const,
         })),
         saved: inquiry?.pricing_status === "sales_priced",
@@ -437,6 +439,7 @@ export function applyServerLines(inquiry: any, rows: any[]) {
         basePricePerMt: row.sales_base_price_per_mt ?? row.procurement_base_price_per_mt ?? "",
         transportPerMt: row.transport_per_mt ?? "",
         loadingPerMt: row.loading_per_mt ?? "",
+        creditPerMt: row.credit_per_mt ?? "",
         marginPerMt: row.margin_per_mt ?? "",
       })),
     },

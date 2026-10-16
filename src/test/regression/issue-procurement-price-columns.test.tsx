@@ -109,6 +109,7 @@ describe('saved price columns', () => {
 
     expect(await screen.findByDisplayValue('61000')).toBeInTheDocument()
     expect(screen.queryByText('Transport *')).not.toBeInTheDocument()
+    expect(screen.queryByText('Credit *')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save Prices' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Save$/ })).not.toBeInTheDocument()
     expect(screen.getByDisplayValue('HR Coil')).toHaveAttribute('readonly')
@@ -143,12 +144,13 @@ describe('saved price columns', () => {
     renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
     await user.click(await screen.findByText('PR-10041'))
 
+    expect(await screen.findByText('Credit *')).toBeInTheDocument()
     const base = await screen.findByPlaceholderText('Enter base price')
     const extras = screen.getAllByPlaceholderText('₹ / MT')
     await user.type(base, '62000')
     await user.type(extras[0], '1000')
     await user.type(extras[1], '500')
-    await user.type(extras[2], '1500')
+    await user.type(extras[3], '1500')
     await user.click(screen.getByRole('button', { name: 'Save Prices' }))
 
     expect(await screen.findByRole('columnheader', { name: /Rate/ })).toBeInTheDocument()
@@ -190,6 +192,7 @@ describe('saved price columns', () => {
     expect(screen.getByRole('button', { name: '11,100.00' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '11,100.00' }))
     const base = screen.getByRole('spinbutton', { name: 'Base price' })
+    expect(screen.getByRole('spinbutton', { name: 'Credit' })).toBeInTheDocument()
     expect(base.closest('div')).toHaveClass('w-72')
   })
 

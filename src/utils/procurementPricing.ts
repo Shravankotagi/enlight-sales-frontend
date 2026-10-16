@@ -4,6 +4,7 @@ export interface ProcurementPricingInput {
   basePricePerMt: number;
   transportPerMt: number;
   loadingPerMt: number;
+  creditPerMt: number;
   marginPerMt: number;
   quantity: number;
   unit: string;
@@ -28,13 +29,14 @@ const money = (value: number) => Math.round(value * 100) / 100;
 export function calculateLineRate(
   input: Pick<
     ProcurementPricingInput,
-    "basePricePerMt" | "transportPerMt" | "loadingPerMt" | "marginPerMt"
+    "basePricePerMt" | "transportPerMt" | "loadingPerMt" | "creditPerMt" | "marginPerMt"
   >,
 ): number {
   return money(
     Math.max(0, Number(input.basePricePerMt) || 0) +
       Math.max(0, Number(input.transportPerMt) || 0) +
       Math.max(0, Number(input.loadingPerMt) || 0) +
+      Math.max(0, Number(input.creditPerMt) || 0) +
       Math.max(0, Number(input.marginPerMt) || 0),
   );
 }
