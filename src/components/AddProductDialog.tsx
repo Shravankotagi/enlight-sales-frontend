@@ -159,9 +159,9 @@ export default function AddProductDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 p-5 space-y-3">
-        <div className="flex items-center justify-between">
+    <div className="mobile-sheet-overlay fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4">
+      <div className="mobile-sheet bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 p-5 space-y-3 overflow-y-auto">
+        <div className="sheet-header flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900">Add this product</h3>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
             <X size={16} />

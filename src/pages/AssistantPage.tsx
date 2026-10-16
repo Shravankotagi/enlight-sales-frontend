@@ -574,9 +574,9 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+    <div className="flex flex-col min-h-[70dvh] lg:h-[calc(100dvh-3.5rem)] bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
       {/* Top Header Bar with Scope Indicator */}
-      <div className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-gray-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-50 text-blue-600 border border-blue-200/60 rounded-xl shadow-2xs">
             <Sparkles size={22} />
@@ -597,7 +597,14 @@ export default function AssistantPage() {
         </div>
 
         {/* Header Right: Knowledge Base Action + Scope Badge */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsSidebarCollapsed(false)}
+            className="lg:hidden px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
+          >
+            Chats
+          </button>
           {isManagerOrAdmin && (
             <button
               onClick={() => setKbModalOpen(true)}
@@ -629,8 +636,10 @@ export default function AssistantPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar / Session History */}
         <div
-          className={`bg-gray-50/70 border-r border-gray-200 flex flex-col shrink-0 transition-[width,padding] duration-200 ${
-            isSidebarCollapsed ? 'w-16 p-2' : 'w-72 p-4'
+          className={`bg-gray-50/70 border-r border-gray-200 flex-col shrink-0 transition-[width,padding] duration-200 ${
+            isSidebarCollapsed
+              ? 'hidden lg:flex w-16 p-2'
+              : 'absolute inset-y-0 left-0 z-20 flex w-72 p-4 shadow-xl lg:static lg:z-auto lg:shadow-none'
           }`}
         >
           <div className={`flex gap-2 ${isSidebarCollapsed ? 'flex-col' : 'items-center'}`}>
@@ -738,7 +747,7 @@ export default function AssistantPage() {
                 </div>
 
                 {/* Quick Prompts */}
-                <div className="grid grid-cols-2 gap-3 w-full text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
                   {quickPrompts.map((qp, idx) => {
                     const IconComp = qp.icon;
                     return (
@@ -896,7 +905,7 @@ export default function AssistantPage() {
           )}
 
           {/* Chat Input Bar */}
-          <div className="p-4 bg-white border-t border-gray-200">
+          <div className="sticky bottom-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white border-t border-gray-200">
             {/* Selected Photo & GPS Tag Preview Chip */}
             {selectedPhoto && (
               <div className="flex items-center gap-3 p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl mb-3 text-xs">

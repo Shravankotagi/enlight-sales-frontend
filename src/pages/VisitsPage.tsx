@@ -19,7 +19,6 @@ import {
   Calendar,
   MoreVertical,
   Eye,
-  ChevronDown,
   Save,
   ArrowLeft,
   AlertCircle,
@@ -57,6 +56,7 @@ import {
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 import PaginationControl from '../components/PaginationControl';
 import { getVisitsSalespersonFilterValue } from '../utils/visitFilters';
+import { Select } from '../components/ui/select';
 
 import { type CustomerVisit, type VisitAttachment, getFollowUpStatusInfo } from '../utils/visitUtils';
 export type { CustomerVisit, VisitAttachment };
@@ -622,6 +622,7 @@ export default function VisitsPage() {
             setFormGpsLng(coords.longitude);
             setFormGpsAccuracy(coords.accuracy);
           }
+          setFormErrors((prev) => ({ ...prev, attachments: false }));
         }
       };
       reader.readAsDataURL(file);
@@ -645,6 +646,7 @@ export default function VisitsPage() {
           setEditAttachments((prev) => [...prev, item]);
         } else {
           setFormAttachments((prev) => [...prev, item]);
+          setFormErrors((prev) => ({ ...prev, attachments: false }));
         }
       };
       reader.readAsDataURL(file);
@@ -1334,7 +1336,7 @@ export default function VisitsPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Stats, Filters) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
@@ -1479,122 +1481,116 @@ export default function VisitsPage() {
 
           {/* 2. Salesperson Filter Dropdown (Admin & Sales Manager only) */}
           {canViewSalesperson && (
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Users size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={filterSalesperson}
-                onChange={e => setFilterSalesperson(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>
-                  All Salespersons ({salespeopleList.length})
+            <Select
+              value={filterSalesperson}
+              onChange={e => setFilterSalesperson(e.target.value)}
+              prefixIcon={<Users size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All Salespersons ({salespeopleList.length})</option>
+              {salespeopleList.map((sp: any) => (
+                <option key={sp.phone || sp.name} value={sp.name}>
+                  {sp.name}
                 </option>
-                {salespeopleList.map((sp: any) => (
-                  <option
-                    key={sp.phone || sp.name}
-                    value={sp.name}
-                    className="font-normal text-slate-700"
-                    style={{ fontWeight: 'normal' }}>
-                    {sp.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+              ))}
+            </Select>
           )}
 
           {/* 3. Date Preset Dropdown with 'Last 30 Days' default */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            prefixIcon={<Calendar size={14} className="text-blue-600" />}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* 4. Outcome Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterOutcome}
-              onChange={e => setFilterOutcome(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Outcomes ({baseScopedVisits.length})</option>
-              <option value="positive" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Positive ({positiveVisits})</option>
-              <option value="neutral" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Neutral ({neutralVisits})</option>
-              <option value="negative" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Negative ({negativeVisits})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterOutcome}
+            onChange={e => setFilterOutcome(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Outcomes ({baseScopedVisits.length})</option>
+            <option value="positive">Positive ({positiveVisits})</option>
+            <option value="neutral">Neutral ({neutralVisits})</option>
+            <option value="negative">Negative ({negativeVisits})</option>
+          </Select>
 
           {/* 5. Follow-up Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterFollowup}
-              onChange={e => setFilterFollowup(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Follow-ups ({baseScopedVisits.length})</option>
-              <option value="due" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due / Overdue ({dueFollowupsCount})</option>
-              <option value="overdue" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Overdue ({overdueFollowupsCount})</option>
-              <option value="due_today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due Today ({dueTodayFollowupsCount})</option>
-              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Pending ({pendingFollowupsCount})</option>
-              <option value="completed" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Completed ({completedFollowupsCount})</option>
-              <option value="none" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>No Follow-up</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterFollowup}
+            onChange={e => setFilterFollowup(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-52"
+          >
+            <option value="all">All Follow-ups ({baseScopedVisits.length})</option>
+            <option value="due">Due / Overdue ({dueFollowupsCount})</option>
+            <option value="overdue">Overdue ({overdueFollowupsCount})</option>
+            <option value="due_today">Due Today ({dueTodayFollowupsCount})</option>
+            <option value="pending">All Pending ({pendingFollowupsCount})</option>
+            <option value="completed">Completed ({completedFollowupsCount})</option>
+            <option value="none">No Follow-up</option>
+          </Select>
 
           {/* 6. Customer Type Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterCustomerType}
-              onChange={e => setFilterCustomerType(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Customer Types</option>
-              <option value="OEM" className="font-normal text-slate-700">OEM</option>
-              <option value="Fabricator" className="font-normal text-slate-700">Fabricator</option>
-              <option value="EPC" className="font-normal text-slate-700">EPC</option>
-              <option value="Manufacturer" className="font-normal text-slate-700">Manufacturer</option>
-              <option value="Trader" className="font-normal text-slate-700">Trader</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterCustomerType}
+            onChange={e => setFilterCustomerType(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Customer Types</option>
+            <option value="OEM">OEM</option>
+            <option value="Fabricator">Fabricator</option>
+            <option value="EPC">EPC</option>
+            <option value="Manufacturer">Manufacturer</option>
+            <option value="Trader">Trader</option>
+          </Select>
 
           {/* 7. Customer Probability Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterProbability}
-              onChange={e => setFilterProbability(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Probabilities</option>
-              <option value="Hot" className="font-normal text-slate-700">Hot</option>
-              <option value="Warm" className="font-normal text-slate-700">Warm</option>
-              <option value="Cold" className="font-normal text-slate-700">Cold</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterProbability}
+            onChange={e => setFilterProbability(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Probabilities</option>
+            <option value="Hot">Hot</option>
+            <option value="Warm">Warm</option>
+            <option value="Cold">Cold</option>
+          </Select>
 
           {/* 8. Visit Type Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterVisitType}
-              onChange={e => setFilterVisitType(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Visit Types</option>
-              <option value="First Visit" className="font-normal text-slate-700">First Visit</option>
-              <option value="Follow-up 1" className="font-normal text-slate-700">Follow-up 1</option>
-              <option value="Follow-up 2" className="font-normal text-slate-700">Follow-up 2</option>
-              <option value="Follow-up 3" className="font-normal text-slate-700">Follow-up 3</option>
-              <option value="Regular Visit" className="font-normal text-slate-700">Regular Visit</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterVisitType}
+            onChange={e => setFilterVisitType(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Visit Types</option>
+            <option value="First Visit">First Visit</option>
+            <option value="Follow-up 1">Follow-up 1</option>
+            <option value="Follow-up 2">Follow-up 2</option>
+            <option value="Follow-up 3">Follow-up 3</option>
+            <option value="Regular Visit">Regular Visit</option>
+          </Select>
 
           {/* 9. Clear Filter Button */}
           {(searchTerm || filterOutcome !== 'all' || filterFollowup !== 'all' || filterSalesperson !== 'all' || filterCustomerType !== 'all' || filterProbability !== 'all' || filterVisitType !== 'all' || dayPreset !== 'all') && (
@@ -1609,7 +1605,7 @@ export default function VisitsPage() {
 
         {/* Custom Range Inputs */}
         {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+          <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
             <span className="text-slate-500 font-semibold">From:</span>
             <input
               type="date"
@@ -1634,7 +1630,7 @@ export default function VisitsPage() {
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="w-full text-left text-sm text-slate-700">
+          <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
@@ -1666,7 +1662,7 @@ export default function VisitsPage() {
                       key={v.id || idx}
                       className="hover:bg-slate-50/70 transition-colors group">
                       {/* 0. Serial Number */}
-                      <td className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                      <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
                       </td>
 
@@ -1787,7 +1783,7 @@ export default function VisitsPage() {
                           }
                           const isCompleted = fu.status === 'completed';
                           return (
-                            <div className="space-y-1.5 min-w-[200px] max-w-[280px]">
+                            <div className="space-y-1.5 lg:min-w-[200px] lg:max-w-[280px]">
                               <div className="flex items-start gap-2">
                                 <button
                                   type="button"
@@ -1825,7 +1821,7 @@ export default function VisitsPage() {
                       </td>
 
                       {/* 6. Actions */}
-                      <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
+                      <td data-label="Actions" className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative">
                         <div className="relative inline-block text-left">
                           <button
                             type="button"
@@ -1901,8 +1897,8 @@ export default function VisitsPage() {
 
       {/* Log Visit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <MapPin className="text-blue-600" size={18} />
@@ -1955,7 +1951,7 @@ export default function VisitsPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Person Met <span className="text-rose-500">*</span>
@@ -1989,8 +1985,8 @@ export default function VisitsPage() {
                             setFormDesignation(e.target.value);
                             if (formErrors.designation) setFormErrors(prev => ({ ...prev, designation: false }));
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 ${
-                            formErrors.designation ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                            formErrors.designation ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
                           }`}
                         />
                         {formErrors.designation && (
@@ -1999,7 +1995,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Contact Phone <span className="text-rose-500">*</span>
@@ -2041,8 +2037,8 @@ export default function VisitsPage() {
                             setFormEmail(e.target.value);
                             if (formErrors.email) setFormErrors(prev => ({ ...prev, email: false }));
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 ${
-                            formErrors.email ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                            formErrors.email ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
                           }`}
                         />
                         {formErrors.email && (
@@ -2051,7 +2047,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                       <VisitLocationField
                         value={formLocation}
@@ -2162,17 +2158,18 @@ export default function VisitsPage() {
                         <label className="block font-semibold text-slate-700 mb-1">
                           Outcome <span className="text-rose-500">*</span>
                         </label>
-                        <select
+                        <Select
                           value={formOutcome}
                           onChange={e => {
                             setFormOutcome(e.target.value);
                             if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
                           }}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                        >
                           <option value="positive">Positive</option>
                           <option value="neutral">Neutral</option>
                           <option value="negative">Negative</option>
-                        </select>
+                        </Select>
                       </div>
                     </div>
 
@@ -2180,7 +2177,7 @@ export default function VisitsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Customer Probability <span className="text-rose-500">*</span>
                       </label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {['Hot', 'Warm', 'Cold'].map(p => (
                           <button
                             key={p}
@@ -2216,7 +2213,7 @@ export default function VisitsPage() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Product Details <span className="text-rose-500">*</span>
@@ -2260,26 +2257,27 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                      <VisitBrandField
-                        selected={formBrands}
-                        other={formBrandOther}
-                        error={formErrors.brands}
-                        otherError={formErrors.brandOther}
-                        onToggle={brand => {
-                          setFormBrands(current => current.includes(brand)
-                            ? current.filter(item => item !== brand)
-                            : [...current, brand]);
-                          if (formErrors.brands || formErrors.brandOther) {
-                            setFormErrors(prev => ({ ...prev, brands: false, brandOther: false }));
-                          }
-                        }}
-                        onOtherChange={value => {
-                          setFormBrandOther(value);
-                          if (formErrors.brandOther) setFormErrors(prev => ({ ...prev, brandOther: false }));
-                        }}
-                      />
+                        <VisitBrandField
+                          selected={formBrands}
+                          other={formBrandOther}
+                          error={formErrors.brands}
+                          otherError={formErrors.brandOther}
+                          onToggle={brand => {
+                            setFormBrands(current => current.includes(brand)
+                              ? current.filter(item => item !== brand)
+                              : [...current, brand]);
+                            if (formErrors.brands || formErrors.brandOther) {
+                              setFormErrors(prev => ({ ...prev, brands: false, brandOther: false }));
+                            }
+                          }}
+                          onOtherChange={value => {
+                            setFormBrandOther(value);
+                            if (formErrors.brandOther) setFormErrors(prev => ({ ...prev, brandOther: false }));
+                          }}
+                        />
+                      </div>
 
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
@@ -2303,10 +2301,9 @@ export default function VisitsPage() {
                           <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.paymentTerms)}</p>
                         )}
                       </div>
-                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Delivery Location <span className="text-rose-500">*</span>
@@ -2397,7 +2394,7 @@ export default function VisitsPage() {
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-1 sm:grid-cols-3 gap-2">
                         <div className="sm:col-span-2">
                           <input
                             type="text"
@@ -2406,10 +2403,12 @@ export default function VisitsPage() {
                             onChange={e => {
                               const val = e.target.value;
                               setFormFollowup(val);
+                              if (formErrors.followup) setFormErrors(prev => ({ ...prev, followup: false }));
                               if (val.trim() && !formFollowupDate) {
                                 const nextWeek = new Date();
                                 nextWeek.setDate(nextWeek.getDate() + 7);
                                 setFormFollowupDate(formatLocalDate(nextWeek));
+                                setFormErrors(prev => ({ ...prev, followupDate: false }));
                               }
                             }}
                             className={`w-full px-2.5 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white ${
@@ -2424,7 +2423,10 @@ export default function VisitsPage() {
                           <input
                             type="date"
                             value={formFollowupDate}
-                            onChange={e => setFormFollowupDate(e.target.value)}
+                            onChange={e => {
+                              setFormFollowupDate(e.target.value);
+                              if (formErrors.followupDate) setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
                             className={`w-full px-2 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer bg-white ${
                               formErrors.followupDate ? 'border-rose-500' : 'border-slate-300'
                             }`}
@@ -2638,10 +2640,10 @@ export default function VisitsPage() {
       {/* Interactive Visit Details & Edit Modal */}
       {selectedVisit && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
           onClick={handleCloseVisitModal}>
           <div
-            className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto"
+            className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
@@ -2739,7 +2741,7 @@ export default function VisitsPage() {
                       <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
                         <Building2 size={13} /> Stakeholder &amp; Contact Info
                       </p>
-                      <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <div>
                           <p className="text-slate-400 font-medium">Person Met</p>
                           <p className="font-semibold text-slate-800 mt-0.5 flex items-center gap-1 text-sm">
@@ -2801,7 +2803,7 @@ export default function VisitsPage() {
                       <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
                         <Briefcase size={13} /> Commercial Intelligence
                       </p>
-                      <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <div>
                           <p className="text-slate-400 font-medium">Product Details</p>
                           <p className="font-semibold text-slate-800 mt-0.5">
@@ -3023,7 +3025,7 @@ export default function VisitsPage() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">
                             Person Met <span className="text-rose-500">*</span>
@@ -3052,7 +3054,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">
                             Contact Phone <span className="text-rose-500">*</span>
@@ -3090,7 +3092,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">City / Location</label>
                           <input
@@ -3103,17 +3105,19 @@ export default function VisitsPage() {
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
-                          <select
+                          <Select
                             value={editCustomerType}
                             onChange={e => setEditCustomerType(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                            placeholder="Select Customer Type"
+                          >
                             <option value="">Select Customer Type</option>
                             <option value="OEM">OEM</option>
                             <option value="Fabricator">Fabricator</option>
                             <option value="EPC">EPC</option>
                             <option value="Manufacturer">Manufacturer</option>
                             <option value="Trader">Trader</option>
-                          </select>
+                          </Select>
                         </div>
                       </div>
 
@@ -3140,34 +3144,36 @@ export default function VisitsPage() {
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Visit Type</label>
-                          <select
+                          <Select
                             value={editVisitType}
                             onChange={e => setEditVisitType(e.target.value)}
-                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                          >
                             <option value="First Visit">First Visit</option>
                             <option value="Follow-up 1">Follow-up 1</option>
                             <option value="Follow-up 2">Follow-up 2</option>
                             <option value="Follow-up 3">Follow-up 3</option>
                             <option value="Regular Visit">Regular Visit</option>
-                          </select>
+                          </Select>
                         </div>
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Visit Outcome</label>
-                          <select
+                          <Select
                             value={editOutcome}
                             onChange={e => setEditOutcome(e.target.value)}
-                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                          >
                             <option value="positive">Positive</option>
                             <option value="neutral">Neutral</option>
                             <option value="negative">Negative</option>
-                          </select>
+                          </Select>
                         </div>
                       </div>
 
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Customer Probability</label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           {['Hot', 'Warm', 'Cold'].map(p => (
                             <button
                               key={p}
@@ -3197,7 +3203,7 @@ export default function VisitsPage() {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Product Details</label>
                           <input
@@ -3221,7 +3227,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Preferred Brand / Make</label>
                           <input
@@ -3245,7 +3251,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Delivery Location</label>
                           <input
@@ -3332,13 +3338,14 @@ export default function VisitsPage() {
                             />
                           </div>
                           <div>
-                            <select
+                            <Select
                               value={editFollowupStatus}
                               onChange={e => setEditFollowupStatus(e.target.value as 'pending' | 'completed')}
-                              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                            >
                               <option value="pending">Pending</option>
                               <option value="completed">Completed</option>
-                            </select>
+                            </Select>
                           </div>
                         </div>
                       </div>

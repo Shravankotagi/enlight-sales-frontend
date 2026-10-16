@@ -41,6 +41,7 @@ import {
   INDIAN_GST_STATES,
   resolveCustomerState,
 } from '../utils/pricingEngine';
+import { Select } from '../components/ui/select';
 
 function safeStr(val: any): string {
   if (val === null || val === undefined) return '';
@@ -669,7 +670,7 @@ function CustomerProfilePageContent() {
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Top Header & Navigation */}
       <div className="flex flex-col gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             onClick={() => navigate(isFromDashboard ? '/home' : '/customers')}
             className="h-9 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white hover:bg-slate-50 px-3.5 rounded-xl border border-slate-200 transition-colors cursor-pointer shadow-2xs">
@@ -921,7 +922,7 @@ function CustomerProfilePageContent() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                         <th className="py-2.5 px-3">PO / Deal</th>
@@ -1168,7 +1169,7 @@ function CustomerProfilePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                     <th className="py-3 px-3">#</th>
@@ -1250,7 +1251,7 @@ function CustomerProfilePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                     <th className="py-3 px-3">#</th>
@@ -1356,7 +1357,7 @@ function CustomerProfilePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                     <th className="py-3 px-3">#</th>
@@ -1432,7 +1433,7 @@ function CustomerProfilePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                     <th className="py-3 px-3">#</th>
@@ -1519,9 +1520,9 @@ function CustomerProfilePageContent() {
 
       {/* Edit Customer Profile Modal */}
       {isEditing && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+            <div className="sheet-header flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Edit2 size={16} className="text-blue-600" />
                 Edit Profile — {customer.customer_name}
@@ -1551,7 +1552,7 @@ function CustomerProfilePageContent() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Contact Person
@@ -1574,7 +1575,8 @@ function CustomerProfilePageContent() {
                     Contact Phone
                   </label>
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="tel"
                     value={editForm.customer_phone}
                     onChange={e =>
                       setEditForm({
@@ -1587,7 +1589,7 @@ function CustomerProfilePageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     GSTIN Number
@@ -1612,7 +1614,7 @@ function CustomerProfilePageContent() {
                   <label className="block text-slate-600 font-semibold mb-1">
                     State (Place of Supply)
                   </label>
-                  <select
+                  <Select
                     value={editForm.customer_state || ''}
                     onChange={e =>
                       setEditForm({
@@ -1620,18 +1622,20 @@ function CustomerProfilePageContent() {
                         customer_state: e.target.value,
                       })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                    placeholder="Auto-detect from GSTIN / Address"
+                  >
                     <option value="">Auto-detect from GSTIN / Address</option>
                     {INDIAN_GST_STATES.map(st => (
                       <option key={st.code} value={st.label}>
                         {st.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Registered Address
@@ -1675,12 +1679,12 @@ function CustomerProfilePageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Assigned Salesperson
                   </label>
-                  <select
+                  <Select
                     value={editForm.assigned_salesperson_phone}
                     onChange={e =>
                       setEditForm({
@@ -1688,34 +1692,37 @@ function CustomerProfilePageContent() {
                         assigned_salesperson_phone: e.target.value,
                       })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                    placeholder="Unassigned"
+                  >
                     <option value="">Unassigned</option>
                     {safeEmployees.map(emp => (
                       <option key={emp.id} value={emp.phone}>
                         {emp.name} ({emp.phone})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
 
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Customer Segment
                   </label>
-                  <select
+                  <Select
                     value={editForm.segment}
                     onChange={e =>
                       setEditForm({ ...editForm, segment: e.target.value })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                  >
                     <option value="key_account">Key Account</option>
                     <option value="growth">Growth</option>
                     <option value="new">New</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0">
+              <div className="sheet-actions pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}

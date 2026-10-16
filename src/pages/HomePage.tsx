@@ -41,6 +41,7 @@ import {
   UserCheck,
   ShieldAlert,
 } from 'lucide-react';
+import { Select } from '../components/ui/select';
 
 interface CarouselItem {
   id: string;
@@ -872,10 +873,10 @@ export default function HomePage() {
       </div>
 
       {/* ── Nav Bar ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
 
         {/* Left: Customer Search Dropdown */}
-        <div ref={searchContainerRef} className="relative flex-1 max-w-sm sm:max-w-md">
+        <div ref={searchContainerRef} className="relative flex-1 w-full max-lg:max-w-none max-w-sm sm:max-w-md">
           <div className="relative flex items-center">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
@@ -981,7 +982,7 @@ export default function HomePage() {
         </div>
 
         {/* Right: Refresh · Date filter · Custom date inputs (inline) · Clear Filter */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto">
 
           {showSyncBigin && (
             <button
@@ -1007,21 +1008,21 @@ export default function HomePage() {
           </button>
 
           {/* Date Filter dropdown */}
-          <div className="relative inline-flex items-center">
-            <Calendar size={13} className="absolute left-2.5 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="h-9 pl-7 pr-7 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="7_days">Last 7 Days</option>
-              <option value="30_days">Last 30 Days</option>
-              <option value="90_days">Last 90 Days</option>
-              <option value="custom">Custom Range</option>
-            </select>
-            <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            prefixIcon={<Calendar size={13} className="text-blue-600" />}
+            wrapperClassName="w-auto inline-flex"
+            className="h-9 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* Custom date inputs - inline in the same row when Custom Range is active */}
           {showCustomDate && (
@@ -1250,7 +1251,7 @@ export default function HomePage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
+            <table className="stack-table w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-3">Sales Representative</th>
@@ -1264,7 +1265,7 @@ export default function HomePage() {
               <tbody className="divide-y divide-slate-100">
                 {salesRepLeaderboard.map((rep, idx) => (
                   <tr key={rep.id || idx} className="hover:bg-blue-50/30 transition-colors">
-                    <td className="px-4 py-3.5 font-bold text-slate-900 flex items-center gap-2.5">
+                    <td data-label="Sales Representative" className="px-4 py-3.5 font-bold text-slate-900 flex items-center gap-2.5">
                       <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
                         {idx + 1}
                       </span>
@@ -1273,14 +1274,14 @@ export default function HomePage() {
                         <p className="text-[10px] text-slate-400 font-mono">{rep.phone || 'No phone'}</p>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td data-label="Delivered Tonnage" className="px-4 py-3.5">
                       <span className="font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 text-xs font-mono">
                         {formatTonnage(rep.deliveredTonnage)} MT
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 font-semibold text-slate-800">{rep.ordersCount} Orders</td>
-                    <td className="px-4 py-3.5 font-semibold text-slate-800">{rep.visitsCount} Visits</td>
-                    <td className="px-4 py-3.5">
+                    <td data-label="Won Orders" className="px-4 py-3.5 font-semibold text-slate-800">{rep.ordersCount} Orders</td>
+                    <td data-label="Customer Visits" className="px-4 py-3.5 font-semibold text-slate-800">{rep.visitsCount} Visits</td>
+                    <td data-label="Pending Complaints" className="px-4 py-3.5">
                       {rep.complaintsCount > 0 ? (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
                           {rep.complaintsCount} Pending
@@ -1289,7 +1290,7 @@ export default function HomePage() {
                         <span className="text-slate-400 font-medium">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-right">
+                    <td data-label="Action" className="px-4 py-3.5 text-right">
                       <button
                         onClick={() => setViewingAs(rep)}
                         className="px-3 py-1 bg-white hover:bg-blue-600 text-slate-700 hover:text-white border border-slate-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer">
@@ -1411,6 +1412,7 @@ export default function HomePage() {
                       fill="transparent"
                       onMouseEnter={() => setActiveBarHover(idx)}
                       onMouseLeave={() => setActiveBarHover(null)}
+                      onClick={() => setActiveBarHover(activeBarHover === idx ? null : idx)}
                     />
 
                     {/* Point circle */}

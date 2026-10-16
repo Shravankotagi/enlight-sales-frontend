@@ -18,7 +18,6 @@ import {
   ArrowRight,
   Phone,
   Mail,
-  Calendar,
   CheckCircle2,
   TrendingUp,
   Building2,
@@ -30,6 +29,7 @@ import {
 } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
 import { employeesApi } from '../lib/api';
+import { Select } from '../components/ui/select';
 
 
 
@@ -425,10 +425,7 @@ export default function AdminSelectionPage() {
 
   const pageTitle = isSalesManager
     ? 'Sales Manager Portal'
-    : 'Admin Control Center';
-  const pageSubtitle = isSalesManager
-    ? `Manage and monitor your assigned sales team · ${employee?.name}`
-    : `Executive employee & admin account management · ${employee?.name}`;
+    : 'User Management';
 
   // Filter accounts based on search query and role filter
   const filteredEmployees = employees.filter((emp) => {
@@ -457,13 +454,6 @@ export default function AdminSelectionPage() {
     (e) => e.role !== 'admin' && e.role !== 'sales_manager' && e.role !== 'manager',
   ).length;
 
-  const todayStr = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
   return (
     <div className={isAdmin ? 'space-y-6 animate-fade-in pb-12 font-sans text-slate-900' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
       <div className={isAdmin ? 'space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
@@ -483,17 +473,6 @@ export default function AdminSelectionPage() {
                     <CheckCircle2 size={12} /> {isAdmin ? 'Super Admin System Authority' : 'Assigned Team Authority'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {pageSubtitle}
-                </p>
-                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-medium flex-wrap">
-                  <Calendar size={13} className="text-slate-400" />
-                  <span>{todayStr}</span>
-                  <span className="text-slate-300">·</span>
-                  <span>
-                    Signed in as <strong className="text-slate-700">{employee?.name}</strong> ({employee?.employee_id})
-                  </span>
-                </p>
               </div>
             </div>
 
@@ -1184,8 +1163,8 @@ export default function AdminSelectionPage() {
 
       {/* Add / Edit Account Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="mobile-sheet bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150 max-h-[100dvh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -1279,17 +1258,17 @@ export default function AdminSelectionPage() {
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Role &amp; Permissions <span className="text-rose-500">*</span>
                   </label>
-                  <select
+                  <Select
                     value={form.role}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, role: e.target.value }))
                     }
-                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium hover:border-blue-400 cursor-pointer"
                   >
                     <option value="salesperson">Salesperson (Standard Access)</option>
                     <option value="sales_manager">Sales Manager (Team Scoped Access)</option>
                     <option value="admin">Admin (Full Company Access &amp; Management)</option>
-                  </select>
+                  </Select>
                 </div>
 
                 {/* Notice for Admin role */}
@@ -1309,7 +1288,7 @@ export default function AdminSelectionPage() {
                       Assigned Sales Manager{' '}
                       <span className="text-slate-400 text-xs font-normal">(optional)</span>
                     </label>
-                    <select
+                    <Select
                       value={form.manager_id || ''}
                       onChange={(e) =>
                         setForm((f) => ({
@@ -1320,7 +1299,8 @@ export default function AdminSelectionPage() {
                               ?.phone || '',
                         }))
                       }
-                      className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                      className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium hover:border-blue-400 cursor-pointer"
+                      placeholder="-- None (Direct to Admin) --"
                     >
                       <option value="">-- None (Direct to Admin) --</option>
                       {allManagers.map((mgr) => (
@@ -1328,7 +1308,7 @@ export default function AdminSelectionPage() {
                           {mgr.name} ({mgr.employee_id})
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 )}
 
@@ -1362,7 +1342,7 @@ export default function AdminSelectionPage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-3 border-t border-slate-100">
+                <div className="sheet-actions flex gap-3 pt-3 border-t border-slate-100">
                   {isEditMode && form.id !== employee?.id && (
                     <button
                       type="button"

@@ -13,4 +13,4 @@ Supabase is used for realtime invalidation, not direct application data reads. T
 | `/visits`, `/complaints`, `/kra`, `/reports`, `/logs` | field operations and analytics |
 | `/admin-dashboard` | admin only |
 
-Use the page guides in [pages/](pages/) and [shared-components.md](shared-components.md) before modifying a workflow.
+Use the page guides in [pages/](pages/) and [shared-components.md](shared-components.md) before modifying a workflow. Mobile layout rules are in [responsive-ui.md](responsive-ui.md).

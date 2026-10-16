@@ -14,7 +14,6 @@ import {
   User,
   Check,
   MessageSquare,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Save,
@@ -39,6 +38,7 @@ import {
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 import DealProductCombobox, { type SelectedDealItem } from '../components/DealProductCombobox';
 import PaginationControl from '../components/PaginationControl';
+import { Select } from '../components/ui/select';
 
 export interface ComplaintAttachment {
   id?: string;
@@ -941,7 +941,7 @@ export default function ComplaintsPage() {
   const paginatedComplaints = filtered.slice(startIndex, endIndex);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Stats, Filters) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
@@ -1041,38 +1041,38 @@ export default function ComplaintsPage() {
           </div>
 
           {/* 2. Date Preset Dropdown with 'All Time' default */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            prefixIcon={<Calendar size={14} className="text-blue-600" />}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* 3. Status Filter Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterStatus}
-              onChange={e => {
-                setFilterStatus(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Status ({safeComplaints.length})</option>
-              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Pending ({pendingCount})</option>
-              <option value="reopened" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Reopened ({reopenedCount})</option>
-              <option value="resolved" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Resolved ({resolvedCount})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterStatus}
+            onChange={e => {
+              setFilterStatus(e.target.value);
+              setCurrentPage(1);
+            }}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Status ({safeComplaints.length})</option>
+            <option value="pending">Pending ({pendingCount})</option>
+            <option value="reopened">Reopened ({reopenedCount})</option>
+            <option value="resolved">Resolved ({resolvedCount})</option>
+          </Select>
 
           {/* 4. Clear Filter Button */}
           {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
@@ -1112,12 +1112,13 @@ export default function ComplaintsPage() {
       {/* Complaints Table Card */}
       <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="w-full text-left text-sm text-slate-700">
+          <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 text-left min-w-[220px]">Customer</th>
-                <th className="px-4 py-3.5 text-left min-w-[190px]">Deal / PO &amp; Product</th>
+                <th className="px-4 py-3.5 text-left min-w-[160px]">Deal / PO</th>
+                <th className="px-4 py-3.5 text-left min-w-[180px]">Product</th>
                 <th className="px-4 py-3.5 text-center min-w-[120px]">Status</th>
               </tr>
             </thead>
@@ -1145,12 +1146,12 @@ export default function ComplaintsPage() {
                       onClick={() => openComplaintDetails(comp)}
                       className="hover:bg-slate-50/70 cursor-pointer transition-colors group">
                       {/* 0. Serial Number */}
-                      <td className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                      <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
                       </td>
 
                       {/* 1. Customer (+ Date & Time + Sales Rep) */}
-                      <td className="px-5 py-3.5">
+                      <td data-label="Customer" className="px-5 py-3.5">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {comp.customer_name || 'Customer'}
                         </div>
@@ -1164,49 +1165,33 @@ export default function ComplaintsPage() {
                         )}
                       </td>
 
-                      {/* 2. Deal / PO & Product */}
-                      <td className="px-4 py-3.5 text-xs">
-                        {comp.po_number ? (
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                      <td data-label="Deal / PO" className="px-4 py-3.5 text-xs">
+                        {comp.po_number || cleanDealCode ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {comp.po_number && (
                               <span className="font-mono font-bold text-slate-800 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded text-[11px] shadow-2xs">
                                 PO: {comp.po_number}
                               </span>
-                              {cleanDealCode && (
-                                <span className="font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
-                                  #{`INQ-${cleanDealCode}`}
-                                </span>
-                              )}
-                            </div>
-                            {prodDisplay && (
-                              <div className="text-slate-700 font-medium mt-1 truncate max-w-[240px]">
-                                {prodDisplay}
-                              </div>
                             )}
-                          </div>
-                        ) : cleanDealCode ? (
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[11px]">
+                            {cleanDealCode && (
+                              <span className="font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
                                 #{`INQ-${cleanDealCode}`}
                               </span>
-                            </div>
-                            {prodDisplay && (
-                              <div className="text-slate-700 font-medium mt-1 truncate max-w-[240px]">
-                                {prodDisplay}
-                              </div>
                             )}
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5 font-medium text-slate-800">
-                            <Package size={13} className="text-blue-500 shrink-0" />
-                            <span className="truncate max-w-[240px]">{prodDisplay || 'General Steel Material'}</span>
-                          </div>
+                          <span className="text-slate-400">-</span>
                         )}
+                      </td>
+                      <td data-label="Product" className="px-4 py-3.5 text-xs">
+                        <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                          <Package size={13} className="text-blue-500 shrink-0" />
+                          <span>{prodDisplay || 'General Steel Material'}</span>
+                        </div>
                       </td>
 
                       {/* 3. Status */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <td data-label="Status" className="px-4 py-3.5 text-center">
                         {renderStatusBadge(comp.status)}
                       </td>
                     </tr>
@@ -1239,10 +1224,10 @@ export default function ComplaintsPage() {
       {/* Complaint Details Modal */}
       {selectedComplaint && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
           onClick={handleCloseComplaintModal}>
           <div
-            className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto space-y-3.5"
+            className="mobile-sheet bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto space-y-3.5"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
@@ -1300,7 +1285,7 @@ export default function ComplaintsPage() {
                     <span>STAKEHOLDER &amp; COMPLAINT DETAILS</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-3 text-xs">
                     <div>
                       <p className="text-slate-400 font-medium text-[11px]">Complaint Raised By</p>
                       <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-xs mt-0.5">
@@ -1375,7 +1360,7 @@ export default function ComplaintsPage() {
                     <span>ACTION &amp; RESOLUTION INTELLIGENCE</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-3 text-xs">
                     <div>
                       <p className="text-slate-400 font-medium text-[11px]">Corrective Action Taken</p>
                       <p className="text-slate-800 font-semibold text-xs leading-snug mt-0.5 break-words">
@@ -1562,8 +1547,8 @@ export default function ComplaintsPage() {
 
       {/* Edit Complaint Modal */}
       {editingComplaint && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Edit3 className="text-blue-600" size={18} />
@@ -1656,21 +1641,19 @@ export default function ComplaintsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Complaint Type <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative flex items-center">
-                        <select
-                          value={editType}
-                          onChange={e => setEditType(e.target.value)}
-                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                          <option value="Quality Defect">Quality Defect</option>
-                          <option value="Physical Damage">Physical Damage</option>
-                          <option value="Quantity Shortage">Quantity Shortage</option>
-                          <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
-                          <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
-                          <option value="Specification Mismatch">Specification Mismatch</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                      </div>
+                      <Select
+                        value={editType}
+                        onChange={e => setEditType(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
+                      >
+                        <option value="Quality Defect">Quality Defect</option>
+                        <option value="Physical Damage">Physical Damage</option>
+                        <option value="Quantity Shortage">Quantity Shortage</option>
+                        <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
+                        <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
+                        <option value="Specification Mismatch">Specification Mismatch</option>
+                        <option value="Other">Other</option>
+                      </Select>
                     </div>
                     <div>
                       <label className="block font-semibold text-slate-500 mb-1">
@@ -1746,17 +1729,15 @@ export default function ComplaintsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Status <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative flex items-center">
-                        <select
-                          value={editStatus}
-                          onChange={e => setEditStatus(e.target.value)}
-                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                          <option value="reported">Pending (Open)</option>
-                          <option value="resolved">Resolved (Closed)</option>
-                          <option value="reopened">Reopened</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                      </div>
+                      <Select
+                        value={editStatus}
+                        onChange={e => setEditStatus(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
+                      >
+                        <option value="reported">Pending (Open)</option>
+                        <option value="resolved">Resolved (Closed)</option>
+                        <option value="reopened">Reopened</option>
+                      </Select>
                     </div>
 
                     <div>
@@ -1812,8 +1793,8 @@ export default function ComplaintsPage() {
 
       {/* Log Complaint Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <AlertTriangle className="text-blue-600" size={18} />
@@ -1917,24 +1898,22 @@ export default function ComplaintsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Complaint Type <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative flex items-center">
-                        <select
-                          value={formType}
-                          onChange={e => {
-                            setFormType(e.target.value);
-                            if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
-                          }}
-                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                          <option value="Quality Defect">Quality Defect</option>
-                          <option value="Physical Damage">Physical Damage</option>
-                          <option value="Quantity Shortage">Quantity Shortage</option>
-                          <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
-                          <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
-                          <option value="Specification Mismatch">Specification Mismatch</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                      </div>
+                      <Select
+                        value={formType}
+                        onChange={e => {
+                          setFormType(e.target.value);
+                          if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
+                      >
+                        <option value="Quality Defect">Quality Defect</option>
+                        <option value="Physical Damage">Physical Damage</option>
+                        <option value="Quantity Shortage">Quantity Shortage</option>
+                        <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
+                        <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
+                        <option value="Specification Mismatch">Specification Mismatch</option>
+                        <option value="Other">Other</option>
+                      </Select>
                     </div>
 
                     <div>
@@ -2053,23 +2032,21 @@ export default function ComplaintsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Initial Status <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative flex items-center">
-                        <select
-                          value={formStatus}
-                          onChange={e => {
-                            setFormStatus(e.target.value);
-                            if (e.target.value === 'resolved' && !formResolutionDate) {
-                              setFormResolutionDate(formatLocalDate());
-                            }
-                            if (formErrors.status) setFormErrors(prev => ({ ...prev, status: false }));
-                          }}
-                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                          <option value="reported">Pending (Open)</option>
-                          <option value="resolved">Resolved (Closed)</option>
-                          <option value="reopened">Reopened</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                      </div>
+                      <Select
+                        value={formStatus}
+                        onChange={e => {
+                          setFormStatus(e.target.value);
+                          if (e.target.value === 'resolved' && !formResolutionDate) {
+                            setFormResolutionDate(formatLocalDate());
+                          }
+                          if (formErrors.status) setFormErrors(prev => ({ ...prev, status: false }));
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
+                      >
+                        <option value="reported">Pending (Open)</option>
+                        <option value="resolved">Resolved (Closed)</option>
+                        <option value="reopened">Reopened</option>
+                      </Select>
                     </div>
 
                     <div>
@@ -2130,7 +2107,7 @@ export default function ComplaintsPage() {
       {/* Attachment Preview Modal */}
       {viewerAttachmentUrl && (
         <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
               <div className="flex items-center gap-2.5 min-w-0">
