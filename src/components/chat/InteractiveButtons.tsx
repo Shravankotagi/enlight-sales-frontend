@@ -61,7 +61,7 @@ export default function InteractiveButtons({
         className: disabled
           ? 'bg-gray-100 text-gray-400 border-gray-200'
           : 'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent shadow-xs hover:shadow-sm active:scale-98',
-        payload: btn.payload || 'yes',
+        payload: id === 'btn_price_save' ? (btn.id || 'btn_price_save') : (btn.payload || 'yes'),
       };
     }
 

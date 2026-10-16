@@ -49,21 +49,23 @@ export default function InteractiveCatalogMenu({
 
   const getRowIcon = (id: string, title: string) => {
     const key = `${id} ${title}`.toLowerCase();
+    const number = (String(title || '').match(/^(\d+)\./) || [])[1] || '';
+    if (key.includes('menu_price') || key.includes('add price')) return IndianRupee;
     if (key.includes('pending price') || key.includes('proc_1')) return Clock;
     if (key.includes('current inquir') || key.includes('proc_2')) return CheckSquare;
     if (key.includes('base price') || key.includes('proc_3')) return IndianRupee;
     if (key.includes('my team') || key.includes('proc_4')) return Users;
     if (/^pr-\d+/i.test(id)) return Sparkles;
-    if (key.includes('1') || key.includes('log new inquiry') || key.includes('log inquiry')) return FilePlus;
-    if (key.includes('2') || key.includes('update inquiry')) return FileEdit;
-    if (key.includes('3') || key.includes('log new order') || key.includes('log order')) return ShoppingCart;
-    if (key.includes('4') || key.includes('update order')) return PackageCheck;
-    if (key.includes('5') || key.includes('field visit') || key.includes('log visit')) return MapPin;
-    if (key.includes('6') || key.includes('update field visit') || key.includes('update visit')) return CalendarCheck;
-    if (key.includes('7') || key.includes('new customer') || key.includes('acquisition')) return UserPlus;
-    if (key.includes('8') || key.includes('log complaint')) return AlertCircle;
-    if (key.includes('9') || key.includes('update complaint')) return CheckSquare;
-    if (key.includes('10') || key.includes('general query') || key.includes('query')) return HelpCircle;
+    if (number === '1' || key.includes('log new inquiry') || key.includes('log inquiry')) return FilePlus;
+    if (number === '2' || key.includes('update inquiry')) return FileEdit;
+    if (number === '3' || key.includes('log new order') || key.includes('log order')) return ShoppingCart;
+    if (number === '4' || key.includes('update order')) return PackageCheck;
+    if (number === '5' || key.includes('field visit') || key.includes('log visit')) return MapPin;
+    if (number === '6' || key.includes('update field visit') || key.includes('update visit')) return CalendarCheck;
+    if (number === '7' || key.includes('new customer') || key.includes('acquisition')) return UserPlus;
+    if (number === '8' || key.includes('log complaint')) return AlertCircle;
+    if (number === '9' || key.includes('update complaint')) return CheckSquare;
+    if (number === '10' || number === '11' || key.includes('general query') || key.includes('query')) return HelpCircle;
     return Sparkles;
   };
 

@@ -101,6 +101,9 @@ const TECHNICAL_PAYLOAD_DISPLAY_MAP: Record<string, string> = {
   proc_2: 'Current inquiries',
   proc_3: 'Log a Base Price',
   proc_4: 'My team',
+
+  menu_price: 'Add Price to Inquiry',
+  btn_price_save: 'Save',
 };
 
 export function formatUserDisplayMessage(content?: string): string {
@@ -111,6 +114,8 @@ export function formatUserDisplayMessage(content?: string): string {
   if (TECHNICAL_PAYLOAD_DISPLAY_MAP[lower]) {
     return TECHNICAL_PAYLOAD_DISPLAY_MAP[lower];
   }
+
+  if (lower.startsWith('btn_price_current')) return 'Price the current inquiry';
 
   // Dynamic fallback for any pattern like menu_X or btn_repeat_X
   if (/^menu_([1-9]|10)$/i.test(lower)) {
@@ -381,7 +386,7 @@ export default function AssistantPage() {
         lastAssistantMsg.interactiveList.sections.length > 0;
 
       if (isAwaitingCatalogMenu) {
-        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?([1-9]|10)\.?$/i);
+        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?(11|10|[1-9])\.?$/i);
         if (numMatch) {
           const selectedNum = numMatch[1];
           for (const sec of lastAssistantMsg.interactiveList?.sections || []) {
@@ -585,7 +590,12 @@ export default function AssistantPage() {
         } else if (raw.includes('To start an activity, please select')) {
           prefix = 'To start an activity, please select the relevant option from the menu below:\n\n';
         }
-        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–10) or type what you'd like to do.`;
+        const rowCount = (msg.interactiveList?.sections || []).reduce(
+          (sum, section) => sum + (section.rows?.length || 0),
+          0,
+        );
+        const range = rowCount > 1 ? rowCount : 10;
+        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–${range}) or type what you'd like to do.`;
       }
       if (raw.includes('Procurement assistant') && raw.includes('Pending prices')) {
         const prefix = raw.includes('procurement manager')
