@@ -1673,10 +1673,10 @@ export default function OrdersPage() {
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
-                <th className="px-5 py-3 text-left w-[26%]">Customers</th>
+                <th className="px-5 py-3 text-left w-[22%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
                 <th className="px-4 py-3 text-center w-[14%]">Reference PO</th>
-                <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
+                <th className="px-4 py-3 text-center w-[16%] whitespace-nowrap">Items Summary</th>
                 <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
@@ -1749,10 +1749,10 @@ export default function OrdersPage() {
                           </span>
                         )}
                       </td>
-                      <td data-label="Items Summary" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
+                      <td data-label="Items Summary" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                         {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
                         {tonnageFormatted && (
-                          <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
+                          <span className="text-slate-600 font-semibold">{` ${tonnageFormatted}`}</span>
                         )}
                       </td>
                       <td data-label="Source Channel" className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
