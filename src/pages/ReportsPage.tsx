@@ -1,10 +1,10 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { reportsApi, ordersApi, inquiriesApi, activityLogsApi } from '../lib/api';
+import { reportsApi, ordersApi, inquiriesApi, visitsApi, activityLogsApi } from '../lib/api';
 import { formatIstDateTime, formatSessionDuration } from '../utils/istDateTime';
 import SyncBiginButton from '../components/SyncBiginButton';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
-import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3 } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3, MapPin } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import { formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
@@ -90,6 +90,21 @@ export default function ReportsPage() {
         orders: orders,
         inquiries_count: inquiries.length || monthly.summary?.total_inquiries || monthly.summary?.total_deals || 0,
       };
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30000,
+  });
+
+  const {
+    data: reportVisits = [],
+  } = useQuery({
+    queryKey: ['reports-visits', dateRange, effectivePhone, activeRole, activeMode],
+    queryFn: async () => {
+      const res = await visitsApi.getAll(getParams());
+      const raw = res?.data;
+      if (Array.isArray(raw)) return raw;
+      if (Array.isArray(raw?.data)) return raw.data;
+      return [];
     },
     placeholderData: keepPreviousData,
     staleTime: 30000,
@@ -494,6 +509,63 @@ export default function ReportsPage() {
                 )}
               </div>
             )}
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <MapPin size={16} className="text-blue-600" /> Customer Visits
+            </h3>
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-slate-700">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-5 py-3.5 text-left">Customer</th>
+                      <th className="px-5 py-3.5 text-left">Verification</th>
+                      <th className="px-5 py-3.5 text-left">Location</th>
+                      <th className="px-5 py-3.5 text-left">Photo</th>
+                      <th className="px-5 py-3.5 text-left">Documents</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {reportVisits.map((visit: any) => (
+                      <tr key={visit.id} className="hover:bg-slate-50/80">
+                        <td className="px-5 py-3.5 font-bold text-slate-900">{visit.customer_name || '-'}</td>
+                        <td className="px-5 py-3.5 text-xs">
+                          {typeof visit.phone_verified === 'boolean'
+                            ? (visit.phone_verified ? 'Phone verified' : 'Phone not verified')
+                            : '-'}
+                        </td>
+                        <td className="px-5 py-3.5 text-xs">
+                          <div>{visit.location || visit.customer_address || '-'}</div>
+                          {visit.location_source && (
+                            <div className="text-slate-500">{visit.location_source === 'manual' ? 'Typed location' : 'GPS location'}</div>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {visit.gps_photo_url ? (
+                            <img src={visit.gps_photo_url} alt="Visit photo" className="h-12 w-12 rounded-lg object-cover border border-slate-200" />
+                          ) : (
+                            <span className="text-slate-400 text-xs">No photo</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-xs">
+                          {Array.isArray(visit.attachments) && visit.attachments.length > 0
+                            ? `${visit.attachments.length} document${visit.attachments.length === 1 ? '' : 's'}`
+                            : 'None'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {reportVisits.length === 0 && (
+                <div className="text-center py-12 text-slate-400">
+                  <MapPin size={28} className="mx-auto mb-2 text-slate-300" />
+                  <p className="font-semibold text-slate-700">No customer visits in this period</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

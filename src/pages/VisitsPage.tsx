@@ -35,6 +35,17 @@ import {
   Compass,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
+import VisitLocationField from '../components/VisitLocationField';
+import VisitBrandField from '../components/VisitBrandField';
+import VisitCameraCapture from '../components/VisitCameraCapture';
+import {
+  VISIT_BRANDS,
+  VISIT_PAYMENT_TERMS,
+  validateNewVisitForm,
+  visitCityLabel,
+  visitDocumentError,
+  type NewVisitFormInput,
+} from '../utils/visitForm';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -317,7 +328,7 @@ export default function VisitsPage() {
       setFormContactPhone(clean);
       if (formErrors.contactPhone) setFormErrors(prev => ({ ...prev, contactPhone: false }));
     }
-    if (cust.location && !formLocation) {
+    if (cust.location && !formLocation && locationSource !== 'gps') {
       setFormLocation(cust.location);
       if (formErrors.location) setFormErrors(prev => ({ ...prev, location: false }));
     }
@@ -325,8 +336,20 @@ export default function VisitsPage() {
     if (cust.designation && !formDesignation) setFormDesignation(cust.designation);
     if (cust.customer_type && !formCustomerType) setFormCustomerType(cust.customer_type);
     if (cust.delivery_location && !formDeliveryLocation) setFormDeliveryLocation(cust.delivery_location);
-    if (cust.preferred_make && !formPreferredMake) setFormPreferredMake(cust.preferred_make);
-    if (cust.payment_terms && !formPaymentTerms) setFormPaymentTerms(cust.payment_terms);
+    if (cust.preferred_make && formBrands.length === 0) {
+      const brands = String(cust.preferred_make)
+        .split(',')
+        .map(brand => brand.trim())
+        .filter(brand => VISIT_BRANDS.includes(brand as (typeof VISIT_BRANDS)[number]));
+      if (brands.length > 0) setFormBrands(brands);
+    }
+    if (
+      cust.payment_terms &&
+      !formPaymentTerms &&
+      VISIT_PAYMENT_TERMS.includes(cust.payment_terms as (typeof VISIT_PAYMENT_TERMS)[number])
+    ) {
+      setFormPaymentTerms(cust.payment_terms);
+    }
     if (cust.monthly_consumption && !formMonthlyConsumption) setFormMonthlyConsumption(cust.monthly_consumption);
   };
 
@@ -449,13 +472,26 @@ export default function VisitsPage() {
   const [formCurrentRequirement, setFormCurrentRequirement] = useState('');
   const [formNextPurchaseExpected, setFormNextPurchaseExpected] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
-  const [formPreferredMake, setFormPreferredMake] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
   const [formGpsPhotoUrl, setFormGpsPhotoUrl] = useState<string | null>(null);
   const [formGpsLat, setFormGpsLat] = useState<number | null>(null);
   const [formGpsLng, setFormGpsLng] = useState<number | null>(null);
   const [formGpsAccuracy, setFormGpsAccuracy] = useState<number | null>(null);
   const [formAttachments, setFormAttachments] = useState<VisitAttachment[]>([]);
+  const [formBrands, setFormBrands] = useState<string[]>([]);
+  const [formBrandOther, setFormBrandOther] = useState('');
+  const [locationSource, setLocationSource] = useState<'' | 'gps' | 'manual'>('');
+  const [visitLat, setVisitLat] = useState<number | null>(null);
+  const [visitLng, setVisitLng] = useState<number | null>(null);
+  const [locationNotice, setLocationNotice] = useState('');
+  const [locationLocked, setLocationLocked] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState('');
+  const [otpNotice, setOtpNotice] = useState('');
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [capturingGps, setCapturingGps] = useState(false);
 
   // Preset Days Helper
@@ -493,6 +529,76 @@ export default function VisitsPage() {
       );
     });
   };
+
+  const refreshVisitLocation = async () => {
+    setLocating(true);
+    setLocationNotice('');
+    try {
+      const coords = await captureGpsCoordinates();
+      if (!coords) {
+        setLocationSource('manual');
+        setLocationLocked(false);
+        setVisitLat(null);
+        setVisitLng(null);
+        setLocationNotice('Location permission was denied or GPS is unavailable. Enter the city, or retry.');
+        return;
+      }
+      let city = '';
+      try {
+        const res = await visitsApi.reverseGeocode(coords.latitude, coords.longitude);
+        const body = res?.data?.data || res?.data;
+        city = visitCityLabel(body?.city);
+      } catch {
+        city = '';
+      }
+      setVisitLat(coords.latitude);
+      setVisitLng(coords.longitude);
+      setLocationSource('gps');
+      setLocationLocked(Boolean(city));
+      setFormLocation(city);
+      if (!city) setLocationNotice('Type the city.');
+      setFormErrors(prev => ({ ...prev, location: false }));
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timer = window.setTimeout(() => setResendSeconds(seconds => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendSeconds]);
+
+  const newVisitInput = (): NewVisitFormInput => ({
+    customerName: formCustomerName,
+    personMet: formPersonMet,
+    designation: formDesignation,
+    contactPhone: formContactPhone,
+    email: formEmail,
+    location: formLocation,
+    locationSource,
+    customerType: formCustomerType,
+    visitDate: formVisitDate,
+    visitTime: formVisitTime,
+    visitType: formVisitType,
+    outcome: formOutcome,
+    probability: formCustomerProbability,
+    productDetails: formProductDetails,
+    monthlyConsumption: formMonthlyConsumption,
+    brands: formBrands,
+    brandOther: formBrandOther,
+    paymentTerms: formPaymentTerms,
+    deliveryLocation: formDeliveryLocation,
+    nextPurchase: formNextPurchaseExpected,
+    currentRequirement: formCurrentRequirement,
+    followup: formFollowup,
+    followupDate: formFollowupDate,
+    remarks: formRemarks,
+    photoUrl: formGpsPhotoUrl,
+    photoLatitude: formGpsLat,
+    photoLongitude: formGpsLng,
+    otpVerified,
+  });
 
   const handlePhotoFileChange = async (file: File | null, isEdit = false) => {
     if (!file) return;
@@ -572,8 +678,19 @@ export default function VisitsPage() {
     setFormCurrentRequirement('');
     setFormNextPurchaseExpected('');
     setFormDeliveryLocation('');
-    setFormPreferredMake('');
     setFormPaymentTerms('');
+    setFormBrands([]);
+    setFormBrandOther('');
+    setLocationSource('');
+    setLocationLocked(false);
+    setVisitLat(null);
+    setVisitLng(null);
+    setLocationNotice('');
+    setOtpCode('');
+    setOtpVerified(false);
+    setVerificationToken('');
+    setOtpNotice('');
+    setResendSeconds(0);
     setFormGpsPhotoUrl(null);
     setFormGpsLat(null);
     setFormGpsLng(null);
@@ -581,6 +698,7 @@ export default function VisitsPage() {
     setFormAttachments([]);
 
     setShowModal(true);
+    void refreshVisitLocation();
   };
 
   // Edit Form state
@@ -669,49 +787,62 @@ export default function VisitsPage() {
     };
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
+  const sendVisitCode = async () => {
+    const errors = validateNewVisitForm(newVisitInput(), { requireOtp: false });
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setOtpNotice('Complete the form before sending the code.');
+      return;
+    }
+    try {
+      setOtpSending(true);
+      setOtpNotice('');
+      const res = await visitsApi.requestVisitOtp(formContactPhone);
+      const body = res?.data?.data || res?.data;
+      setResendSeconds(Number(body?.resend_after_seconds) || 60);
+      setOtpNotice(body?.message || 'Code sent to the customer WhatsApp number.');
+      setOtpVerified(false);
+      setVerificationToken('');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || 'The visit code could not be sent.';
+      setOtpNotice(Array.isArray(message) ? message.join(' ') : String(message));
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const confirmVisitCode = async () => {
+    if (!otpCode.trim()) {
+      setOtpNotice('Enter the code from WhatsApp.');
+      return;
+    }
+    try {
+      setOtpSending(true);
+      const res = await visitsApi.verifyVisitOtp(formContactPhone, otpCode.trim());
+      const body = res?.data?.data || res?.data;
+      if (!body?.verification_token) {
+        setOtpNotice('That code is incorrect.');
+        setOtpVerified(false);
+        return;
+      }
+      setVerificationToken(body.verification_token);
+      setOtpVerified(true);
+      setOtpNotice('Phone verified.');
+      setFormErrors(prev => ({ ...prev, otp: false }));
+    } catch (err: any) {
+      const message = err?.response?.data?.message || 'That code is incorrect.';
+      setOtpVerified(false);
+      setVerificationToken('');
+      setOtpNotice(Array.isArray(message) ? message.join(' ') : String(message));
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Required Field Validation & Highlighting
-    const errors: Record<string, string | boolean> = {};
-    if (!formCustomerName.trim()) errors.customerName = true;
-    if (!formPersonMet.trim()) errors.personMet = true;
-
-    const cleanContactPhone = formContactPhone.replace(/\D/g, '');
-    if (!cleanContactPhone) {
-      errors.contactPhone = 'Please enter contact phone.';
-    } else if (cleanContactPhone.length !== 10) {
-      errors.contactPhone = 'Please enter a valid 10-digit mobile number.';
-    }
-
-    if (!formLocation.trim()) errors.location = true;
-    if (!formVisitDate) errors.visitDate = true;
-    if (!formVisitTime) errors.visitTime = true;
-    if (!formOutcome) errors.outcome = true;
-    if (!formRemarks.trim()) errors.remarks = true;
-    if (!formDesignation.trim()) errors.designation = true;
-    const email = formEmail.trim();
-    if (!email) {
-      errors.email = 'Please enter an email address.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Please enter a valid email address.';
-    }
-    if (!formCustomerType) errors.customerType = true;
-    if (!formVisitType) errors.visitType = true;
-    if (!formCustomerProbability) errors.customerProbability = true;
-    if (!formProductDetails.trim()) errors.productDetails = true;
-    if (!formMonthlyConsumption.trim()) errors.monthlyConsumption = true;
-    if (!formPreferredMake.trim()) errors.preferredMake = true;
-    if (!formPaymentTerms.trim()) errors.paymentTerms = true;
-    if (!formDeliveryLocation.trim()) errors.deliveryLocation = true;
-    if (!formNextPurchaseExpected) errors.nextPurchaseExpected = true;
-    if (!formCurrentRequirement.trim()) errors.currentRequirement = true;
-    if (!formFollowup.trim()) errors.followup = true;
-    if (!formFollowupDate) errors.followupDate = true;
-    if (!formGpsPhotoUrl && formAttachments.length === 0) {
-      errors.attachments = 'Please add a visit photo or a document.';
-    }
-
+    const errors = validateNewVisitForm(newVisitInput());
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -722,34 +853,40 @@ export default function VisitsPage() {
       const [vYear, vMonth, vDay] = formVisitDate.split('-').map(Number);
       const [vHour, vMinute] = (formVisitTime || formatLocalTime()).split(':').map(Number);
       const visitedAtDate = new Date(vYear, vMonth - 1, vDay, vHour, vMinute, 0);
+      const cleanContactPhone = formContactPhone.replace(/\D/g, '');
 
       await visitsApi.create({
         customer_name: formCustomerName.trim(),
         person_met: formPersonMet.trim(),
         contact_phone: cleanContactPhone,
         location: formLocation.trim(),
+        location_source: locationSource,
+        visit_latitude: visitLat,
+        visit_longitude: visitLng,
         outcome: formOutcome,
         remarks: formRemarks.trim(),
-        follow_up_action: formFollowup.trim() || undefined,
-        follow_up_date: formFollowup.trim() ? (formFollowupDate || undefined) : undefined,
+        follow_up_action: formFollowup.trim(),
+        follow_up_date: formFollowupDate,
         visited_at: visitedAtDate.toISOString(),
-        email: formEmail.trim() || undefined,
-        designation: formDesignation.trim() || undefined,
-        customer_type: formCustomerType || undefined,
-        visit_type: formVisitType || undefined,
-        customer_probability: formCustomerProbability || undefined,
-        product_details: formProductDetails.trim() || undefined,
-        monthly_consumption: formMonthlyConsumption.trim() || undefined,
-        current_requirement: formCurrentRequirement.trim() || undefined,
-        next_purchase_expected: formNextPurchaseExpected.trim() || undefined,
-        delivery_location: formDeliveryLocation.trim() || undefined,
-        preferred_make: formPreferredMake.trim() || undefined,
-        payment_terms: formPaymentTerms.trim() || undefined,
-        gps_photo_url: formGpsPhotoUrl || undefined,
-        gps_latitude: formGpsLat ?? undefined,
-        gps_longitude: formGpsLng ?? undefined,
-        gps_accuracy: formGpsAccuracy ?? undefined,
-        attachments: formAttachments.length > 0 ? formAttachments : undefined,
+        email: formEmail.trim(),
+        designation: formDesignation.trim(),
+        customer_type: formCustomerType,
+        visit_type: formVisitType,
+        customer_probability: formCustomerProbability,
+        product_details: formProductDetails.trim(),
+        monthly_consumption: formMonthlyConsumption.trim(),
+        current_requirement: formCurrentRequirement.trim(),
+        next_purchase_expected: formNextPurchaseExpected,
+        delivery_location: formDeliveryLocation.trim(),
+        preferred_make: formBrands,
+        preferred_make_other: formBrandOther.trim(),
+        payment_terms: formPaymentTerms,
+        gps_photo_url: formGpsPhotoUrl,
+        gps_latitude: formGpsLat,
+        gps_longitude: formGpsLng,
+        gps_accuracy: formGpsAccuracy,
+        attachments: formAttachments,
+        verification_token: verificationToken,
       });
 
       queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
@@ -783,7 +920,6 @@ export default function VisitsPage() {
         setFormCurrentRequirement('');
         setFormNextPurchaseExpected('');
         setFormDeliveryLocation('');
-        setFormPreferredMake('');
         setFormPaymentTerms('');
         setFormGpsPhotoUrl(null);
         setFormGpsLat(null);
@@ -1606,6 +1742,19 @@ export default function VisitsPage() {
                           <MapIcon size={12} className="text-slate-400 shrink-0" />
                           {formatCityLocality(v.location, v.customer_address)}
                         </div>
+                        {v.location_source && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            {v.location_source === 'manual' ? 'Typed location' : 'GPS location'}
+                          </div>
+                        )}
+                        {typeof v.phone_verified === 'boolean' && (
+                          <div className={`text-[10px] font-bold mt-0.5 ${v.phone_verified ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {v.phone_verified ? 'Phone verified' : 'Phone not verified'}
+                          </div>
+                        )}
+                        {Array.isArray(v.attachments) && v.attachments.length > 0 && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">{v.attachments.length} document{v.attachments.length === 1 ? '' : 's'}</div>
+                        )}
                       </td>
 
                       {/* 4. Outcome */}
@@ -1841,7 +1990,7 @@ export default function VisitsPage() {
                           }`}
                         />
                         {formErrors.designation && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter designation.</p>
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.designation)}</p>
                         )}
                       </div>
                     </div>
@@ -1859,6 +2008,10 @@ export default function VisitsPage() {
                           onChange={e => {
                             const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                             setFormContactPhone(val);
+                            setOtpVerified(false);
+                            setVerificationToken('');
+                            setOtpCode('');
+                            setOtpNotice('');
                             if (formErrors.contactPhone) setFormErrors(prev => ({ ...prev, contactPhone: false }));
                           }}
                           className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
@@ -1889,59 +2042,52 @@ export default function VisitsPage() {
                           }`}
                         />
                         {formErrors.email && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">
-                            {typeof formErrors.email === 'string' ? formErrors.email : 'Please enter an email address.'}
-                          </p>
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.email)}</p>
                         )}
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          City / Location <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Chakan, Pune"
-                          value={formLocation}
-                          onChange={e => {
-                            setFormLocation(e.target.value);
-                            if (formErrors.location) setFormErrors(prev => ({ ...prev, location: false }));
-                          }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
-                            formErrors.location ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                          }`}
-                        />
-                        {formErrors.location && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter location.</p>
-                        )}
+                      <VisitLocationField
+                        value={formLocation}
+                        source={locationSource}
+                        cityLocked={locationLocked}
+                        latitude={visitLat}
+                        longitude={visitLng}
+                        notice={locationNotice}
+                        locating={locating}
+                        error={formErrors.location}
+                        onRetry={() => { void refreshVisitLocation(); }}
+                        onManualChange={value => {
+                          setFormLocation(value);
+                          if (formErrors.location) setFormErrors(prev => ({ ...prev, location: false }));
+                        }}
+                      />
                       </div>
 
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Customer Type <span className="text-rose-500">*</span>
                         </label>
-                        <Select
+                        <select
                           value={formCustomerType}
                           onChange={e => {
                             setFormCustomerType(e.target.value);
                             if (formErrors.customerType) setFormErrors(prev => ({ ...prev, customerType: false }));
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400 ${
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
                             formErrors.customerType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
-                          }`}
-                          placeholder="Select Customer Type"
-                        >
+                          }`}>
                           <option value="">Select Customer Type</option>
                           <option value="OEM">OEM</option>
                           <option value="Fabricator">Fabricator</option>
                           <option value="EPC">EPC</option>
                           <option value="Manufacturer">Manufacturer</option>
                           <option value="Trader">Trader</option>
-                        </Select>
+                        </select>
                         {formErrors.customerType && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select a customer type.</p>
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.customerType)}</p>
                         )}
                       </div>
                     </div>
@@ -1975,32 +2121,37 @@ export default function VisitsPage() {
                             setFormVisitTime(e.target.value);
                             if (formErrors.visitTime) setFormErrors(prev => ({ ...prev, visitTime: false }));
                           }}
-                          className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none cursor-pointer font-medium ${
-                            formErrors.visitTime ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium ${
+                            formErrors.visitTime ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
                           }`}
                         />
+                        {formErrors.visitTime && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitTime)}</p>
+                        )}
                       </div>
 
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Visit Type <span className="text-rose-500">*</span>
                         </label>
-                        <Select
+                        <select
                           value={formVisitType}
                           onChange={e => {
                             setFormVisitType(e.target.value);
                             if (formErrors.visitType) setFormErrors(prev => ({ ...prev, visitType: false }));
                           }}
-                          className={`w-full px-2.5 py-2 border rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400 ${
+                          className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
                             formErrors.visitType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
-                          }`}
-                        >
+                          }`}>
                           <option value="First Visit">First Visit</option>
                           <option value="Follow-up 1">Follow-up 1</option>
                           <option value="Follow-up 2">Follow-up 2</option>
                           <option value="Follow-up 3">Follow-up 3</option>
                           <option value="Regular Visit">Regular Visit</option>
-                        </Select>
+                        </select>
+                        {formErrors.visitType && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitType)}</p>
+                        )}
                       </div>
 
                       <div>
@@ -2033,7 +2184,7 @@ export default function VisitsPage() {
                             type="button"
                             onClick={() => {
                               setFormCustomerProbability(p);
-                              if (formErrors.customerProbability) setFormErrors(prev => ({ ...prev, customerProbability: false }));
+                              if (formErrors.probability) setFormErrors(prev => ({ ...prev, probability: false }));
                             }}
                             className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                               formCustomerProbability === p
@@ -2048,8 +2199,8 @@ export default function VisitsPage() {
                           </button>
                         ))}
                       </div>
-                      {formErrors.customerProbability && (
-                        <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select Hot, Warm, or Cold.</p>
+                      {formErrors.probability && (
+                        <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.probability)}</p>
                       )}
                     </div>
                   </div>
@@ -2075,10 +2226,13 @@ export default function VisitsPage() {
                             setFormProductDetails(e.target.value);
                             if (formErrors.productDetails) setFormErrors(prev => ({ ...prev, productDetails: false }));
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
-                            formErrors.productDetails ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                            formErrors.productDetails ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
                           }`}
                         />
+                        {formErrors.productDetails && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.productDetails)}</p>
+                        )}
                       </div>
 
                       <div>
@@ -2093,29 +2247,35 @@ export default function VisitsPage() {
                             setFormMonthlyConsumption(e.target.value);
                             if (formErrors.monthlyConsumption) setFormErrors(prev => ({ ...prev, monthlyConsumption: false }));
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
-                            formErrors.monthlyConsumption ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                            formErrors.monthlyConsumption ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
                           }`}
                         />
+                        {formErrors.monthlyConsumption && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.monthlyConsumption)}</p>
+                        )}
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          Preferred Brand / Make <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. JSW, Jindal, Tata"
-                          value={formPreferredMake}
-                          onChange={e => {
-                            setFormPreferredMake(e.target.value);
-                            if (formErrors.preferredMake) setFormErrors(prev => ({ ...prev, preferredMake: false }));
+                        <VisitBrandField
+                          selected={formBrands}
+                          other={formBrandOther}
+                          error={formErrors.brands}
+                          otherError={formErrors.brandOther}
+                          onToggle={brand => {
+                            setFormBrands(current => current.includes(brand)
+                              ? current.filter(item => item !== brand)
+                              : [...current, brand]);
+                            if (formErrors.brands || formErrors.brandOther) {
+                              setFormErrors(prev => ({ ...prev, brands: false, brandOther: false }));
+                            }
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
-                            formErrors.preferredMake ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                          }`}
+                          onOtherChange={value => {
+                            setFormBrandOther(value);
+                            if (formErrors.brandOther) setFormErrors(prev => ({ ...prev, brandOther: false }));
+                          }}
                         />
                       </div>
 
@@ -2123,18 +2283,23 @@ export default function VisitsPage() {
                         <label className="block font-semibold text-slate-700 mb-1">
                           Payment Terms <span className="text-rose-500">*</span>
                         </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 30 Days PDC, Advance"
+                        <select
                           value={formPaymentTerms}
                           onChange={e => {
                             setFormPaymentTerms(e.target.value);
                             if (formErrors.paymentTerms) setFormErrors(prev => ({ ...prev, paymentTerms: false }));
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
-                            formErrors.paymentTerms ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                          }`}
-                        />
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
+                            formErrors.paymentTerms ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}>
+                          <option value="">Select Payment Terms</option>
+                          {VISIT_PAYMENT_TERMS.map(term => (
+                            <option key={term} value={term}>{term}</option>
+                          ))}
+                        </select>
+                        {formErrors.paymentTerms && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.paymentTerms)}</p>
+                        )}
                       </div>
                     </div>
 
@@ -2151,10 +2316,13 @@ export default function VisitsPage() {
                             setFormDeliveryLocation(e.target.value);
                             if (formErrors.deliveryLocation) setFormErrors(prev => ({ ...prev, deliveryLocation: false }));
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
-                            formErrors.deliveryLocation ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                            formErrors.deliveryLocation ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
                           }`}
                         />
+                        {formErrors.deliveryLocation && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.deliveryLocation)}</p>
+                        )}
                       </div>
 
                       <div>
@@ -2166,12 +2334,15 @@ export default function VisitsPage() {
                           value={formNextPurchaseExpected}
                           onChange={e => {
                             setFormNextPurchaseExpected(e.target.value);
-                            if (formErrors.nextPurchaseExpected) setFormErrors(prev => ({ ...prev, nextPurchaseExpected: false }));
+                            if (formErrors.nextPurchase) setFormErrors(prev => ({ ...prev, nextPurchase: false }));
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium cursor-pointer ${
-                            formErrors.nextPurchaseExpected ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer ${
+                            formErrors.nextPurchase ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
                           }`}
                         />
+                        {formErrors.nextPurchase && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.nextPurchase)}</p>
+                        )}
                       </div>
                     </div>
 
@@ -2187,10 +2358,13 @@ export default function VisitsPage() {
                           setFormCurrentRequirement(e.target.value);
                           if (formErrors.currentRequirement) setFormErrors(prev => ({ ...prev, currentRequirement: false }));
                         }}
-                        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
-                          formErrors.currentRequirement ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                          formErrors.currentRequirement ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
                         }`}
                       />
+                      {formErrors.currentRequirement && (
+                        <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.currentRequirement)}</p>
+                      )}
                     </div>
 
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
@@ -2237,10 +2411,13 @@ export default function VisitsPage() {
                                 setFormErrors(prev => ({ ...prev, followupDate: false }));
                               }
                             }}
-                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs outline-none font-medium bg-white ${
-                              formErrors.followup ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white ${
+                              formErrors.followup ? 'border-rose-500' : 'border-slate-300'
                             }`}
                           />
+                          {formErrors.followup && (
+                            <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.followup)}</p>
+                          )}
                         </div>
                         <div>
                           <input
@@ -2250,10 +2427,13 @@ export default function VisitsPage() {
                               setFormFollowupDate(e.target.value);
                               if (formErrors.followupDate) setFormErrors(prev => ({ ...prev, followupDate: false }));
                             }}
-                            className={`w-full px-2 py-1.5 border rounded-lg text-xs outline-none font-medium cursor-pointer bg-white ${
-                              formErrors.followupDate ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                            className={`w-full px-2 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer bg-white ${
+                              formErrors.followupDate ? 'border-rose-500' : 'border-slate-300'
                             }`}
                           />
+                          {formErrors.followupDate && (
+                            <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.followupDate)}</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2283,41 +2463,55 @@ export default function VisitsPage() {
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
                       <div className="flex items-center justify-between">
                         <label className="block font-semibold text-slate-700">
-                          Attachments <span className="text-rose-500">*</span>
+                          Visit photo <span className="text-rose-500">*</span>
                         </label>
-                        <span className="text-[11px] text-slate-400">Photo or document</span>
+                        <span className="text-[11px] text-slate-400">Add Document is optional</span>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* Customer Visit Photo (GPS Tagged) */}
-                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-medium border border-blue-200 shadow-2xs transition-colors">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            onChange={e => handlePhotoFileChange(e.target.files?.[0] || null, false)}
-                          />
-                          <Camera size={13} />
-                          <span>{capturingGps ? 'Capturing GPS...' : formGpsPhotoUrl ? 'Replace Photo' : 'Visit Photo (GPS)'}</span>
-                        </label>
+                        <VisitCameraCapture
+                          readGps={captureGpsCoordinates}
+                          onCapture={(photoUrl, coords) => {
+                            setFormGpsPhotoUrl(photoUrl);
+                            setFormGpsLat(coords.latitude);
+                            setFormGpsLng(coords.longitude);
+                            setFormGpsAccuracy(coords.accuracy);
+                            if (formErrors.photo) setFormErrors(prev => ({ ...prev, photo: false }));
+                          }}
+                        />
 
-                        {/* Other Attachments */}
                         <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-medium border border-slate-200 shadow-2xs transition-colors">
                           <input
                             type="file"
                             multiple
+                            accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                             className="hidden"
-                            onChange={e => handleOtherFilesChange(e.target.files, false)}
+                            onChange={e => {
+                              const files = e.target.files;
+                              if (!files) return;
+                              const accepted: File[] = [];
+                              for (const file of Array.from(files)) {
+                                const message = visitDocumentError(file);
+                                if (message) {
+                                  toast.error(message);
+                                  continue;
+                                }
+                                accepted.push(file);
+                              }
+                              if (accepted.length > 0) {
+                                const list = new DataTransfer();
+                                accepted.forEach(file => list.items.add(file));
+                                handleOtherFilesChange(list.files, false);
+                              }
+                              e.target.value = '';
+                            }}
                           />
                           <Paperclip size={13} />
                           <span>Add Documents</span>
                         </label>
                       </div>
-                      {formErrors.attachments && (
-                        <p className="text-[11px] text-rose-500 font-semibold">
-                          {typeof formErrors.attachments === 'string' ? formErrors.attachments : 'Please add a visit photo or a document.'}
-                        </p>
+                      {formErrors.photo && (
+                        <p className="text-[11px] text-rose-500 font-semibold">{String(formErrors.photo)}</p>
                       )}
 
                       {/* GPS Photo Preview Card */}
@@ -2370,6 +2564,52 @@ export default function VisitsPage() {
                             </div>
                           ))}
                         </div>
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+                      <label className="block font-semibold text-slate-700">
+                        WhatsApp verification <span className="text-rose-500">*</span>
+                      </label>
+                      <p className="text-[11px] text-slate-500">
+                        After the form is complete, send a code to the customer from Enlight Metals – Customer Visits.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { void sendVisitCode(); }}
+                          disabled={otpSending || resendSeconds > 0}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                        >
+                          {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : otpVerified ? 'Resend code' : 'Send code'}
+                        </button>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          aria-label="Visit verification code"
+                          placeholder="Enter code"
+                          value={otpCode}
+                          onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          className="w-28 px-3 py-1.5 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { void confirmVisitCode(); }}
+                          disabled={otpSending || otpCode.length !== 6}
+                          className="px-3 py-1.5 bg-slate-100 text-slate-800 rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                        >
+                          Verify
+                        </button>
+                        {otpVerified && (
+                          <span className="text-[11px] font-bold text-emerald-700">Verified</span>
+                        )}
+                      </div>
+                      {otpNotice && (
+                        <p className={`text-[11px] font-semibold ${otpVerified ? 'text-emerald-700' : 'text-slate-600'}`}>{otpNotice}</p>
+                      )}
+                      {formErrors.otp && (
+                        <p className="text-[11px] text-rose-500 font-semibold">{String(formErrors.otp)}</p>
                       )}
                     </div>
                   </div>
@@ -2521,6 +2761,11 @@ export default function VisitsPage() {
                             <Phone size={12} className="text-slate-400 shrink-0" />
                             {selectedVisit.contact_phone || (selectedVisit as any).contact_no || '-'}
                           </p>
+                          {typeof selectedVisit.phone_verified === 'boolean' && (
+                            <p className={`text-[11px] font-bold mt-1 ${selectedVisit.phone_verified ? 'text-emerald-700' : 'text-amber-700'}`}>
+                              {selectedVisit.phone_verified ? 'Phone verified' : 'Phone not verified'}
+                            </p>
+                          )}
                         </div>
                         <div>
                           <p className="text-slate-400 font-medium">Email ID</p>
@@ -2534,6 +2779,14 @@ export default function VisitsPage() {
                           <p className="font-semibold text-slate-800 mt-0.5">
                             {selectedVisit.location || (selectedVisit as any).customer_address || '-'}
                           </p>
+                          {selectedVisit.location_source && (
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {selectedVisit.location_source === 'manual' ? 'Typed location' : 'GPS location'}
+                              {selectedVisit.visit_latitude != null && selectedVisit.visit_longitude != null
+                                ? ` · ${Number(selectedVisit.visit_latitude).toFixed(5)}, ${Number(selectedVisit.visit_longitude).toFixed(5)}`
+                                : ''}
+                            </p>
+                          )}
                         </div>
                         <div>
                           <p className="text-slate-400 font-medium">Delivery Location</p>
@@ -2566,7 +2819,7 @@ export default function VisitsPage() {
                         <div>
                           <p className="text-slate-400 font-medium">Preferred Make / Brand</p>
                           <p className="font-semibold text-slate-800 mt-0.5">
-                            {selectedVisit.preferred_make || '-'}
+                            {[selectedVisit.preferred_make, selectedVisit.preferred_make_other].filter(Boolean).join(' · ') || '-'}
                           </p>
                         </div>
                         <div>

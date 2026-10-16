@@ -19,12 +19,12 @@ import {
   BarChart2,
   Users,
   Search,
-  Paperclip,
   FileText,
   MapPin,
   X,
   Loader2,
 } from 'lucide-react';
+import AssistantAttachMenu from '../components/AssistantAttachMenu';
 import KnowledgeBaseModal from '../components/KnowledgeBaseModal';
 import MarkdownMessage from '../components/MarkdownMessage';
 import InteractiveButtons, { type InteractiveButton } from '../components/chat/InteractiveButtons';
@@ -965,15 +965,41 @@ export default function AssistantPage() {
               }}
               className="flex items-center gap-2 bg-gray-50 border border-gray-300 focus-within:border-blue-500 focus-within:bg-white px-3 py-2 rounded-xl transition-all shadow-2xs"
             >
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
+              <AssistantAttachMenu
                 disabled={loading}
-                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-200/60 rounded-lg transition-all shrink-0"
-                title="Attach image or PDF"
-              >
-                <Paperclip size={18} />
-              </button>
+                onUpload={() => fileInputRef.current?.click()}
+                readGps={() =>
+                  new Promise((resolve) => {
+                    if (!navigator.geolocation) {
+                      resolve(null);
+                      return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                      (position) =>
+                        resolve({
+                          latitude: position.coords.latitude,
+                          longitude: position.coords.longitude,
+                          accuracy: position.coords.accuracy,
+                        }),
+                      () => resolve(null),
+                      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+                    );
+                  })
+                }
+                onCapture={(photoUrl, coords) => {
+                  setSelectedPhoto({
+                    file: new File([photoUrl], 'visit-photo.jpg', { type: 'image/jpeg' }),
+                    previewUrl: photoUrl,
+                    base64: photoUrl,
+                  });
+                  setGpsLocation(coords);
+                  setGpsStatus('acquired');
+                  setGpsStatusText(
+                    `GPS Tagged: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)} (±${Math.round(coords.accuracy)}m)`,
+                  );
+                  focusInput();
+                }}
+              />
               <input
                 ref={fileInputRef}
                 type="file"

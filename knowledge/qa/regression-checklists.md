@@ -22,6 +22,8 @@
 
 ## Visits, complaints, and KRA
 - [ ] Create/update, exact entity selection, attachments/follow-up status.
+- [ ] A new visit cannot be saved until every field except Add Document is filled, the phone code is verified, and the camera photo has GPS.
+- [ ] A new WhatsApp or assistant visit asks for every required field together, then only for anything still missing. It requires a GPS photo or a typed city, and saves only after the customer code. Existing visit edits stay unchanged.
 - [ ] Salesperson, manager, admin visibility.
 - [ ] KRA/report date window and units.
 
