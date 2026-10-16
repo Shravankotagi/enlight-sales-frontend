@@ -163,6 +163,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
+    setMobileOpen(false);
   }, [location.pathname]);
 
   const isImpersonatingOther = Boolean(
@@ -207,12 +208,12 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const isEnlarged = sidebarOpen && isHovered;
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden relative">
+    <div className="flex h-dvh bg-slate-50 font-sans overflow-hidden relative">
       {/* Spacer Rail: holds page layout position so content never shifts on hover */}
       <div
         className={`${
           sidebarOpen ? 'w-72' : 'w-20'
-        } shrink-0 hidden md:block transition-all duration-300 ease-in-out`}
+        } shrink-0 hidden lg:block transition-all duration-300 ease-in-out`}
         aria-hidden="true"
       />
 
@@ -230,7 +231,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       {mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-30 bg-slate-900/30 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-30 bg-slate-900/30 backdrop-blur-xs lg:hidden"
           aria-hidden="true"
         />
       )}
@@ -245,16 +246,16 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         onMouseLeave={() => {
           setIsHovered(false);
         }}
-        className={`fixed top-0 bottom-0 left-0 bg-white border-r border-slate-200/90 flex flex-col justify-between transition-all duration-300 ease-in-out select-none ${
+        className={`fixed top-0 bottom-0 left-0 bg-white border-r border-slate-200/90 flex flex-col justify-between transition-all duration-300 ease-in-out select-none pb-[env(safe-area-inset-bottom)] ${
           mobileOpen
             ? 'translate-x-0 w-72 z-50 shadow-2xl'
-            : '-translate-x-full md:translate-x-0'
+            : '-translate-x-full lg:translate-x-0'
         } ${
           !sidebarOpen
-            ? 'md:w-20 md:shadow-xs z-20'
+            ? 'lg:w-20 lg:shadow-xs z-20'
             : isHovered
-              ? 'md:w-[22rem] md:shadow-2xl md:shadow-slate-900/25 md:ring-1 md:ring-black/5 z-40'
-              : 'md:w-72 md:shadow-xs z-20'
+              ? 'lg:w-[22rem] lg:shadow-2xl lg:shadow-slate-900/25 lg:ring-1 lg:ring-black/5 z-40'
+              : 'lg:w-72 lg:shadow-xs z-20'
         }`}
       >
         {/* Top Header: Centered Logo, Centered Enlight Sigma with Collapse Button in front */}
@@ -353,7 +354,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 to={item.path}
                 onClick={() => setMobileOpen(false)}
                 title={!sidebarOpen ? item.label : undefined}
-                className={`flex items-center rounded-xl font-semibold transition-all duration-300 ${
+                className={`touch-target flex items-center rounded-xl font-semibold transition-all duration-300 ${
                   !sidebarOpen
                     ? 'justify-center px-0 w-11 h-11 mx-auto'
                     : isEnlarged
@@ -388,7 +389,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       {/* Main Page Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50/70">
         {/* Mobile Header Bar */}
-        <div className="md:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
+        <div className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <img
               src="/enlight-metals-logo.png"
@@ -402,7 +403,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 cursor-pointer"
+            className="touch-target p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 cursor-pointer"
             aria-label="Toggle Navigation"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

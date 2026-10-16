@@ -259,7 +259,7 @@ export default function DealProductCombobox({
 
       {/* Dropdown Menu */}
       {isOpen && !disabled && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 max-h-64 max-sm:max-h-[50dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
           {wonDeals.length === 0 ? (
             <div className="px-4 py-4 text-center text-xs text-slate-500">
               <AlertCircle size={20} className="mx-auto text-amber-500 mb-1.5" />
@@ -279,7 +279,7 @@ export default function DealProductCombobox({
                 <div
                   key={opt.key}
                   onClick={() => toggleItem(opt)}
-                  className={`px-3.5 py-2 hover:bg-blue-50/70 transition-colors cursor-pointer flex items-center justify-between gap-2.5 text-xs ${
+                  className={`px-3.5 py-2 max-sm:min-h-11 hover:bg-blue-50/70 transition-colors cursor-pointer flex items-center justify-between gap-2.5 text-xs ${
                     selected ? 'bg-blue-50/50' : ''
                   }`}>
                   <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">

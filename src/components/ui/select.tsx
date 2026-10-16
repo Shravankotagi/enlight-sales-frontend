@@ -216,9 +216,9 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
           <div
             ref={listRef}
             role="listbox"
-            className={`absolute top-full mt-1.5 left-0 z-[100] min-w-full w-max max-w-sm bg-white border border-slate-200/90 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${menuClassName}`}
+            className={`absolute top-full mt-1.5 left-0 z-[100] min-w-full w-max max-w-sm max-sm:max-w-[calc(100vw-2rem)] bg-white border border-slate-200/90 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${menuClassName}`}
           >
-            <div className="max-h-60 overflow-y-auto p-1 space-y-0.5 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+            <div className="max-h-60 max-sm:max-h-[50dvh] overflow-y-auto p-1 space-y-0.5 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
               {options.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-slate-400 text-center font-medium">
                   No options available
@@ -234,7 +234,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
                       onClick={() => !opt.disabled && handleSelect(opt.value)}
                       role="option"
                       aria-selected={isSelected}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg text-left transition-colors font-medium select-none cursor-pointer ${
+                      className={`w-full flex items-center justify-between px-3 py-2 max-sm:min-h-11 max-sm:text-sm text-xs rounded-lg text-left transition-colors font-medium select-none cursor-pointer ${
                         opt.disabled
                           ? 'opacity-40 cursor-not-allowed'
                           : isSelected

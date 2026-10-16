@@ -3486,7 +3486,7 @@ export default function InquiriesPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, KPI Summary Cards, Filters, Search) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
@@ -3507,7 +3507,7 @@ export default function InquiriesPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
             <button
               type="button"
               disabled={isSyncingZoho}
@@ -3677,10 +3677,10 @@ export default function InquiriesPage() {
 
       {viewMode === 'pipeline' ? (
         /* Kanban Board View */
-        <div className="flex-1 min-h-0 overflow-auto pb-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-[1250px] xl:min-w-0">
+        <div className="flex-1 min-h-0 overflow-auto pb-2 snap-x snap-mandatory">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 xl:min-w-0">
             {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
-              <div key={key} className={`rounded-xl border-2 ${color} p-3 flex flex-col min-w-[190px]`}>
+              <div key={key} className={`rounded-xl border-2 ${color} p-3 flex flex-col w-[85vw] sm:w-auto sm:min-w-0 snap-start`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
                   <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
@@ -3709,7 +3709,7 @@ export default function InquiriesPage() {
         /* Standard Inquiries Table View */
         <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
           <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-            <table className="w-full table-fixed text-left border-collapse text-xs">
+            <table className="stack-table w-full table-fixed text-left border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider shadow-2xs">
                 <tr>
                   <th className="px-3 py-3.5 text-center w-[4%]">#</th>
@@ -3804,8 +3804,8 @@ export default function InquiriesPage() {
                     key={inq.id || idx}
                     onClick={() => handleOpenDrawer(inq)}
                     className="group hover:bg-slate-50/75 transition-colors cursor-pointer">
-                    <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                    <td className="px-5 py-3.5 text-left">
+                    <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                    <td data-label="Customer" className="px-5 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
                         <span className="group-hover:text-blue-600 transition-colors inline-block">
                           {details.companyName || <span className="text-slate-300 font-normal italic">-</span>}
@@ -3821,19 +3821,19 @@ export default function InquiriesPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                    <td data-label="Inquiry ID" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {dealIdDisplay}
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                    <td data-label="Items Summary" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
                       {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
                       {tonnageFormatted && (
                         <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
+                    <td data-label="Source Channel" className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
                       {formatSourceChannel(inq.source_channel)}
                     </td>
-                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                    <td data-label="Inquiry Status" className="px-4 py-3.5 text-center">
                       {dealStageInfo ? (
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full border ${dealStageInfo.className}`}>
                           {dealStageInfo.label}
@@ -3842,7 +3842,7 @@ export default function InquiriesPage() {
                         <span className="text-slate-400 font-normal italic">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                    <td data-label="Actions" className="px-4 py-3.5 text-center">
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -4008,13 +4008,13 @@ export default function InquiriesPage() {
       {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
       {showEditDrawer && selectedInquiry && editDetails && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overscroll-contain animate-in fade-in duration-150"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overscroll-contain animate-in fade-in duration-150"
           onClick={handleCloseDrawer}>
           <div
-            className="bg-white rounded-2xl max-w-7xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
+            className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={e => e.stopPropagation()}>
             {/* Drawer Header (Fixed Top) */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
+            <div className="sheet-header flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-200">
                   <FileText size={22} />
@@ -4229,7 +4229,7 @@ export default function InquiriesPage() {
 
                 {/* Structured Inquiry Table Layout */}
                 <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
-                  <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                  <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
                         <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
@@ -4271,8 +4271,8 @@ export default function InquiriesPage() {
                         : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: editDetails.productType ? (detectHsnCode(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || findCustomProductMatch(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), rawDbProducts)?.hsn_code || '') : '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
-                          <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
-                          <td className="px-4 py-3.5 border-r border-slate-200">
+                          <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                          <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                             <div className="space-y-1">
                               <input
                                 type="text"
@@ -4389,7 +4389,7 @@ export default function InquiriesPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                          <td data-label="HSN/SAC" className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                             <input
                               id={`edit-item-hsn-${idx}`}
                               type="text"
@@ -4415,7 +4415,7 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`hsn_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-2.5 py-3.5 border-r border-slate-200">
+                          <td data-label="Qty" className="px-2.5 py-3.5 border-r border-slate-200">
                             <div className="flex items-center gap-1.5 w-full min-w-[170px]">
                               <input
                                 type="number"
@@ -4569,7 +4569,7 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block text-center mt-0.5">{fieldErrors[`qty_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
+                          <td data-label="Rate" className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono lg:min-w-[95px]">
                             <input
                               type="number"
                               min="0"
@@ -4617,7 +4617,7 @@ export default function InquiriesPage() {
                             )}
                           </td>
                           {isEditInterState ? (
-                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                            <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[110px]">
                               {(() => {
                                 const baseAmt = Number(item.amount) || 0;
                                 const igst =
@@ -4637,7 +4637,7 @@ export default function InquiriesPage() {
                             </td>
                           ) : (
                             <>
-                              <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[75px]">
                                 {(() => {
                                   const baseAmt = Number(item.amount) || 0;
                                   const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
@@ -4652,7 +4652,7 @@ export default function InquiriesPage() {
                                   );
                                 })()}
                               </td>
-                              <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[75px]">
                                 {(() => {
                                   const baseAmt = Number(item.amount) || 0;
                                   const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
@@ -4669,7 +4669,7 @@ export default function InquiriesPage() {
                               </td>
                             </>
                           )}
-                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
+                          <td data-label="Amount" className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 lg:min-w-[100px]">
                             {(() => {
                               const baseAmt = Number(item.amount) || 0;
                               const cgst = isEditInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
@@ -4714,7 +4714,7 @@ export default function InquiriesPage() {
                               );
                             })()}
                           </td>
-                          <td className="px-2 py-3.5 text-center">
+                          <td data-label="" className="px-2 py-3.5 text-center">
                             <div className="flex items-center justify-center gap-1">
                               {(editDetails.lineItems || []).length > 1 && (
                                 <button
@@ -4892,7 +4892,7 @@ export default function InquiriesPage() {
             </div>
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
-            <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+            <div className="sheet-actions px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex flex-wrap items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
               <button
                 type="button"
                 onClick={() => {
@@ -4982,7 +4982,7 @@ export default function InquiriesPage() {
                       )}
                     </button>
                     {lastSharedLabel && (
-                      <span className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden group-hover:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg">
+                      <span className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden lg:group-hover:block max-lg:static max-lg:block max-lg:mt-1 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg">
                         {lastSharedLabel}
                       </span>
                     )}
@@ -5510,9 +5510,9 @@ export default function InquiriesPage() {
 
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+            <div className="sheet-header flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={20} />
                 Log New Inquiry
@@ -5720,7 +5720,7 @@ export default function InquiriesPage() {
 
               {/* Structured Line Items Table matching Image 3 / Orders */}
               <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
-                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
                       <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
@@ -5759,8 +5759,8 @@ export default function InquiriesPage() {
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/30">
-                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
-                        <td className="px-4 py-3.5 border-r border-slate-200">
+                        <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input
                               id={`form-item-sku-${idx}`}
@@ -5861,7 +5861,7 @@ export default function InquiriesPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                        <td data-label="HSN/SAC" className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                           <input
                             id={`form-item-hsn-${idx}`}
                             type="text"
@@ -5875,7 +5875,7 @@ export default function InquiriesPage() {
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200">
+                        <td data-label="Qty" className="px-2.5 py-3.5 border-r border-slate-200">
                           <div className="flex items-center gap-1.5 w-full min-w-[170px]">
                             <input
                               id={`form-item-qty-${idx}`}
@@ -6013,7 +6013,7 @@ export default function InquiriesPage() {
                             })()}
                           </div>
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
+                        <td data-label="Rate" className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono lg:min-w-[95px]">
                           <input
                             id={`form-item-rate-${idx}`}
                             type="number"
@@ -6047,7 +6047,7 @@ export default function InquiriesPage() {
                           />
                         </td>
                         {isFormInterState ? (
-                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                          <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[110px]">
                             {(() => {
                               const baseAmt = Number(item.amount) || 0;
                               const igst =
@@ -6067,7 +6067,7 @@ export default function InquiriesPage() {
                           </td>
                         ) : (
                           <>
-                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                            <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[75px]">
                               {(() => {
                                 const baseAmt = Number(item.amount) || 0;
                                 const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
@@ -6082,7 +6082,7 @@ export default function InquiriesPage() {
                                 );
                               })()}
                             </td>
-                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                            <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[75px]">
                               {(() => {
                                 const baseAmt = Number(item.amount) || 0;
                                 const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
@@ -6099,7 +6099,7 @@ export default function InquiriesPage() {
                             </td>
                           </>
                         )}
-                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
+                        <td data-label="Amount" className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 lg:min-w-[100px]">
                           {(() => {
                             const baseAmt = Number(item.amount) || 0;
                             const cgst = isFormInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
@@ -6143,7 +6143,7 @@ export default function InquiriesPage() {
                             );
                           })()}
                         </td>
-                        <td className="px-2 py-3.5 text-center">
+                        <td data-label="" className="px-2 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {formLineItems.length > 1 && (
                               <button
@@ -6311,7 +6311,7 @@ export default function InquiriesPage() {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="sheet-actions pt-2 flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
                   onClick={handleCancelCreateInquiry}
@@ -6517,10 +6517,10 @@ export default function InquiriesPage() {
 
       {showProductListModal && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+          className="mobile-sheet-overlay fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
           onClick={() => setShowProductListModal(false)}>
           <div
-            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
+            className="mobile-sheet bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
               <h3 className="text-sm font-bold text-slate-900">Product List &amp; HSN Catalog</h3>
@@ -6532,7 +6532,7 @@ export default function InquiriesPage() {
               </button>
             </div>
             <div className="p-5 overflow-y-auto">
-              <table className="w-full border-collapse border border-slate-800 text-xs text-slate-900">
+              <table className="stack-table w-full border-collapse border border-slate-800 text-xs text-slate-900">
                 <thead>
                   <tr className="bg-slate-100 font-bold text-center">
                     <th className="border border-slate-800 px-3 py-2 w-[26%]">Product Name</th>
@@ -6614,7 +6614,7 @@ export default function InquiriesPage() {
       {/* Pipeline Mark as Lost Modal */}
       {pipelineLostModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-96 shadow-xl">
+          <div className="mobile-sheet bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
             <h3 className="text-lg font-bold text-gray-900 mb-1">Mark as Lost</h3>
             <p className="text-sm text-gray-500 mb-4">Please select a reason (required)</p>
             <div className="space-y-2 mb-4">
@@ -6706,7 +6706,7 @@ export default function InquiriesPage() {
         <div 
           onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-[360px] max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+          <div className="mobile-sheet bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-lg font-bold text-slate-900 mb-1">Mark as Lost</h3>
             <p className="text-sm text-slate-500 mb-4">Please select a reason (required)</p>
             <div className="space-y-2.5 mb-5">
@@ -6748,7 +6748,7 @@ export default function InquiriesPage() {
         <div
           onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-[420px] max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
+          <div className="mobile-sheet bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
                 <CheckCircle size={22} />

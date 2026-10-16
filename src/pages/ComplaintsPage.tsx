@@ -941,7 +941,7 @@ export default function ComplaintsPage() {
   const paginatedComplaints = filtered.slice(startIndex, endIndex);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Stats, Filters) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
@@ -1112,7 +1112,7 @@ export default function ComplaintsPage() {
       {/* Complaints Table Card */}
       <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="w-full text-left text-sm text-slate-700">
+          <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
@@ -1239,10 +1239,10 @@ export default function ComplaintsPage() {
       {/* Complaint Details Modal */}
       {selectedComplaint && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
           onClick={handleCloseComplaintModal}>
           <div
-            className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto space-y-3.5"
+            className="mobile-sheet bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto space-y-3.5"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
@@ -1300,7 +1300,7 @@ export default function ComplaintsPage() {
                     <span>STAKEHOLDER &amp; COMPLAINT DETAILS</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-3 text-xs">
                     <div>
                       <p className="text-slate-400 font-medium text-[11px]">Complaint Raised By</p>
                       <p className="text-slate-800 font-semibold flex items-center gap-1.5 text-xs mt-0.5">
@@ -1375,7 +1375,7 @@ export default function ComplaintsPage() {
                     <span>ACTION &amp; RESOLUTION INTELLIGENCE</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-3 text-xs">
                     <div>
                       <p className="text-slate-400 font-medium text-[11px]">Corrective Action Taken</p>
                       <p className="text-slate-800 font-semibold text-xs leading-snug mt-0.5 break-words">
@@ -1562,8 +1562,8 @@ export default function ComplaintsPage() {
 
       {/* Edit Complaint Modal */}
       {editingComplaint && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Edit3 className="text-blue-600" size={18} />
@@ -1808,8 +1808,8 @@ export default function ComplaintsPage() {
 
       {/* Log Complaint Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <AlertTriangle className="text-blue-600" size={18} />
@@ -2122,7 +2122,7 @@ export default function ComplaintsPage() {
       {/* Attachment Preview Modal */}
       {viewerAttachmentUrl && (
         <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
               <div className="flex items-center gap-2.5 min-w-0">

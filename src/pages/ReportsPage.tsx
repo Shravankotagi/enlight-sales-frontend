@@ -161,7 +161,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-wrap flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <BarChart3 className="text-blue-600" size={28} />
@@ -395,7 +395,7 @@ export default function ReportsPage() {
             {/* SKU Table */}
             <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm text-slate-700">
+                <table className="w-full text-sm text-slate-700 [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-slate-50 [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                   <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <tr>
                       <th className="px-5 py-3.5 text-left w-[36%]">SKU / Product Specification</th>
@@ -459,7 +459,7 @@ export default function ReportsPage() {
                   <p className="px-5 py-8 text-center text-xs text-slate-400">No login activity in this period</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="w-full text-xs [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-slate-50 [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                       <thead className="bg-slate-50 text-slate-500">
                         <tr>
                           <th className="px-5 py-2.5 text-left font-semibold">Name</th>

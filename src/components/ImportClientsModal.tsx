@@ -168,8 +168,8 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-2xl w-full max-w-2xl p-6 border border-slate-700 shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="mobile-sheet-overlay fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="mobile-sheet bg-slate-800 rounded-2xl w-full max-w-2xl p-6 border border-slate-700 shadow-2xl flex flex-col max-h-[90vh]">
         
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-700">

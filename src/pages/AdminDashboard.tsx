@@ -423,7 +423,7 @@ export default function AdminDashboard() {
             <Select
               value={selectedPhone}
               onChange={(e) => setSelectedPhone(e.target.value)}
-              wrapperClassName="w-auto min-w-[200px] max-w-[280px]"
+              wrapperClassName="w-full sm:w-auto sm:min-w-[200px] sm:max-w-[280px]"
               className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold text-xs hover:border-blue-500 cursor-pointer"
               menuClassName="w-64"
             >

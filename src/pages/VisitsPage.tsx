@@ -1200,7 +1200,7 @@ export default function VisitsPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Stats, Filters) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
@@ -1469,7 +1469,7 @@ export default function VisitsPage() {
 
         {/* Custom Range Inputs */}
         {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+          <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
             <span className="text-slate-500 font-semibold">From:</span>
             <input
               type="date"
@@ -1494,7 +1494,7 @@ export default function VisitsPage() {
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="w-full text-left text-sm text-slate-700">
+          <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
@@ -1748,8 +1748,8 @@ export default function VisitsPage() {
 
       {/* Log Visit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <MapPin className="text-blue-600" size={18} />
@@ -1802,7 +1802,7 @@ export default function VisitsPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Person Met <span className="text-rose-500">*</span>
@@ -1846,7 +1846,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Contact Phone <span className="text-rose-500">*</span>
@@ -1896,7 +1896,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           City / Location <span className="text-rose-500">*</span>
@@ -2026,7 +2026,7 @@ export default function VisitsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Customer Probability <span className="text-rose-500">*</span>
                       </label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {['Hot', 'Warm', 'Cold'].map(p => (
                           <button
                             key={p}
@@ -2062,7 +2062,7 @@ export default function VisitsPage() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Product Details <span className="text-rose-500">*</span>
@@ -2100,7 +2100,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Preferred Brand / Make <span className="text-rose-500">*</span>
@@ -2138,7 +2138,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Delivery Location <span className="text-rose-500">*</span>
@@ -2220,7 +2220,7 @@ export default function VisitsPage() {
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-1 sm:grid-cols-3 gap-2">
                         <div className="sm:col-span-2">
                           <input
                             type="text"
@@ -2400,10 +2400,10 @@ export default function VisitsPage() {
       {/* Interactive Visit Details & Edit Modal */}
       {selectedVisit && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
           onClick={handleCloseVisitModal}>
           <div
-            className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto"
+            className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
@@ -2501,7 +2501,7 @@ export default function VisitsPage() {
                       <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
                         <Building2 size={13} /> Stakeholder &amp; Contact Info
                       </p>
-                      <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <div>
                           <p className="text-slate-400 font-medium">Person Met</p>
                           <p className="font-semibold text-slate-800 mt-0.5 flex items-center gap-1 text-sm">
@@ -2550,7 +2550,7 @@ export default function VisitsPage() {
                       <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
                         <Briefcase size={13} /> Commercial Intelligence
                       </p>
-                      <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <div>
                           <p className="text-slate-400 font-medium">Product Details</p>
                           <p className="font-semibold text-slate-800 mt-0.5">
@@ -2772,7 +2772,7 @@ export default function VisitsPage() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">
                             Person Met <span className="text-rose-500">*</span>
@@ -2801,7 +2801,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">
                             Contact Phone <span className="text-rose-500">*</span>
@@ -2839,7 +2839,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">City / Location</label>
                           <input
@@ -2920,7 +2920,7 @@ export default function VisitsPage() {
 
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Customer Probability</label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           {['Hot', 'Warm', 'Cold'].map(p => (
                             <button
                               key={p}
@@ -2950,7 +2950,7 @@ export default function VisitsPage() {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Product Details</label>
                           <input
@@ -2974,7 +2974,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Preferred Brand / Make</label>
                           <input
@@ -2998,7 +2998,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Delivery Location</label>
                           <input

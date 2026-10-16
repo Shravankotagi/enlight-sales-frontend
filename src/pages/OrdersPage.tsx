@@ -1501,7 +1501,7 @@ export default function OrdersPage() {
   const paginatedOrders = filtered.slice(startIndex, endIndex);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, KPI Cards, Search & Filters) */}
       <div className="shrink-0 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1512,7 +1512,7 @@ export default function OrdersPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
             <button
               type="button"
               disabled={isSyncingZoho}
@@ -1669,7 +1669,7 @@ export default function OrdersPage() {
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="w-full text-left text-sm text-slate-700">
+          <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
@@ -1704,8 +1704,8 @@ export default function OrdersPage() {
                     <tr
                       key={ord.id || idx}
                       className="group hover:bg-slate-50/80 transition-colors">
-                      <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                      <td className="px-5 py-3.5 text-left">
+                      <td data-label="#" className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                      <td data-label="Customer" className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm">
                           <span className="truncate group-hover:text-blue-600 transition-colors inline-block">
                             {ord.customer_name || 'Customer'}
@@ -1829,10 +1829,10 @@ export default function OrdersPage() {
 
       {poImageViewerUrl && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={handleClosePoViewer}>
           <div
-            className="relative w-full max-h-[90vh] max-w-3xl bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col"
+            className="mobile-sheet relative w-full max-h-[90vh] max-w-3xl bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}>
             <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -1908,8 +1908,8 @@ export default function OrdersPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingBag className="text-blue-600" size={20} />
@@ -2117,7 +2117,7 @@ export default function OrdersPage() {
 
               {/* Structured Line Items Table matching Img 2 */}
               <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
-                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
                       <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
@@ -2674,7 +2674,7 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="sheet-actions pt-2 flex flex-wrap justify-end gap-2">
                 
                 <button
                   type="submit"

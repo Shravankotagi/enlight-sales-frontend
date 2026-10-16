@@ -337,7 +337,7 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Metric Cards, Search & Filters) */}
       <div className="shrink-0 space-y-4">
         {/* 1. Header */}
@@ -370,7 +370,7 @@ export default function CustomersPage() {
         </div>
 
         {/* 2. Top 4 Metric Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-500 font-medium">Total Customers</p>
@@ -500,7 +500,7 @@ export default function CustomersPage() {
 
           {/* Custom Range Inputs */}
           {showCustomDate && (
-            <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
               <span className="text-slate-500 font-semibold">From:</span>
               <input
                 type="date"
@@ -524,12 +524,12 @@ export default function CustomersPage() {
 
       {/* 4. Customer Listing Data Table */}
       <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
-        <div className={`flex-1 min-h-0 overflow-auto ${!isLoading && filteredCustomers.length === 0 ? 'flex flex-col' : ''}`}>
+        <div className={`flex-1 min-h-0 overflow-x-auto ${!isLoading && filteredCustomers.length === 0 ? 'flex flex-col' : ''}`}>
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3.5 text-center w-12">#</th>
-                <th className="px-5 py-3.5 min-w-[220px]">Customer</th>
+                <th className="px-5 py-3.5 min-w-[220px] sticky left-0 bg-slate-50 z-10">Customer</th>
                 <th className="px-4 py-3.5 min-w-[140px]">Segment</th>
                 <th className="px-4 py-3.5 min-w-[170px]">Order Activity</th>
                 <th className="px-4 py-3.5 min-w-[140px]">Health</th>
@@ -576,7 +576,7 @@ export default function CustomersPage() {
                       </td>
 
                       {/* 1. Customer Column */}
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 sticky left-0 bg-white z-10">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {c.customer_name || 'Customer'}
                         </div>

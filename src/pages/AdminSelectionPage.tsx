@@ -1163,8 +1163,8 @@ export default function AdminSelectionPage() {
 
       {/* Add / Edit Account Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="mobile-sheet bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150 max-h-[100dvh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -1342,7 +1342,7 @@ export default function AdminSelectionPage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-3 border-t border-slate-100">
+                <div className="sheet-actions flex gap-3 pt-3 border-t border-slate-100">
                   {isEditMode && form.id !== employee?.id && (
                     <button
                       type="button"
