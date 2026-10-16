@@ -1,5 +1,5 @@
 # Assistant and intelligence
 
-`AssistantPage.tsx` sends text/image/GPS payloads with `chatbotApi`; `IntelligencePage.tsx` presents business intelligence. Intelligence shows Sync Bigin only for a signed-in admin or salesperson. The backend client uses a 120-second assistant timeout. Interactive chat components may call bot-focused paths depending on deployment configuration.
+`AssistantPage.tsx` sends text, image, and GPS payloads with `chatbotApi` to `POST /chat/message`, which the backend forwards to the bot. Procurement sees AI Assistant in the nav. The suggested prompts and the bot reply use the same interactive buttons as WhatsApp: pending prices, current inquiries, and log a base price. A procurement manager also gets My team. Log a base price lists the first 7 waiting procurement numbers, and says to open the Inquiries tab when more are waiting. A question such as how many inquiries a salesperson has left to price is answered with that count. Sales still uses the catalog menu, then *Price this inquiry* after the base price is ready. Intelligence shows Sync Bigin only for a signed-in admin or salesperson. The backend client uses a 120-second assistant timeout.
 
 Keep retries idempotent for mutation-capable messages, avoid logging prompt/image contents, and render model output with the existing markdown safety components rather than raw HTML.

@@ -17,7 +17,7 @@ Record the result of each case as Pass or Fail. A case fails if the expected res
 - Procurement responses never show customer name, phone, email, or the raw inquiry text. Sales and admin still see them.
 - A positive base price makes a line available. A blank base price saved by procurement makes that line unavailable. A note is optional.
 - One available line makes the inquiry **Price Ready**. Every line blank makes it **Unavailable**. A new inquiry starts as **Awaiting Price**. An inquiry created before 15 Oct 2026 keeps its original status unless a price was already saved. There is no **Price Hold** status.
-- Rate per MT is base + transport + loading + margin. Maharashtra shows CGST 9% and SGST 9%. Every other delivery state shows IGST 18%.
+- Rate per MT is base + transport + loading + credit + margin. A blank credit is 0. Maharashtra shows CGST 9% and SGST 9%. Every other delivery state shows IGST 18%.
 - Procurement cannot create an inquiry, send a quotation, or move an inquiry to confirmed, won, or lost.
 
 ## Procurement person

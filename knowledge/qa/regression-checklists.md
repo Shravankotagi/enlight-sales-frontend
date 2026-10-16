@@ -28,11 +28,11 @@
 - [ ] A salesperson assigned to a procurement person has their unassigned inquiries, including older rows, land in that person's list.
 - [ ] The procurement id is a unique `PR-` number and is not the inquiry id.
 - [ ] Sales and procurement both see the stored product, original quantity, and unit. Procurement still does not see customer identity.
-- [ ] Procurement person sees only assigned inquiries and only the Inquiries tab.
+- [ ] Procurement person sees assigned inquiries, Inquiries, and AI Assistant.
 - [ ] Procurement manager also sees the team and the open unassigned pool.
 - [ ] Customer name, phone, email, and raw text are absent for both procurement roles.
 - [ ] A blank base price becomes unavailable. One priced line is Price Ready. All blank lines are Unavailable.
-- [ ] Procurement can edit only Base Price and has one Save Prices button. A salesperson save collapses Base, Transport, Loading, and Margin into Rate.
+- [ ] Procurement can edit only Base Price and has one Save Prices button. A salesperson save collapses Base, Transport, Loading, Credit, and Margin into Rate.
 - [ ] Sales can price before procurement responds, copy transport, loading, and margin to available rows, and quote only those rows.
 - [ ] Maharashtra shows CGST and SGST. Every other state shows IGST.
 - [ ] Decline is available only when every line is unavailable.

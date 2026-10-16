@@ -1,9 +1,9 @@
 # Inquiry-to-order flow
 
-1. An inquiry is created through dashboard APIs, bot sales/catalog/OCR flow, or document parsing; data is stored in `inquiries`/`inquiry_items`.
-2. Sourcing & Base Pricing: Procurement specialists claim inquiries or access the unassigned intake pool to populate supplier base prices (`inquiry_items.base_price_per_unit`). Admins and Procurement Managers assign owners via `PATCH /inquiries/:id/procurement-assignee`.
-3. Products, HSN, pricing, and quotation are evaluated under shared business rules. Quotations can only be generated and dispatched by sales personnel or admins.
-4. A commercial record progresses through deal/pipeline stages in `deals`/`deal_items`. Procurement roles cannot create deals or confirm orders.
+1. An inquiry is created through dashboard APIs, the bot catalog, or document parsing, and is stored in `inquiries` / `inquiry_items`. A new inquiry starts as `awaiting_price` with a procurement number. A price typed while logging is a customer target in the notes. It is not the sell rate.
+2. Procurement enters one base price per line, on the inquiries page or in the assistant. One priced line makes the inquiry `price_ready`. Every line blank makes it `unavailable`. Admins and procurement managers assign owners via `PATCH /inquiries/:id/procurement-assignee`.
+3. After the base price is ready, sales adds transport, loading, credit, and margin, in rupees per MT. The sell rate is `base + transport + loading + credit + margin`. Blank credit is 0. The inquiry becomes `sales_priced`. Quotations and the decline email stay on the dashboard for sales and admins. The assistant does not send the decline.
+4. A commercial record progresses through deal stages in `deals` / `deal_items`. Recording an order needs the saved sales rate. Procurement cannot create deals, send quotations, or confirm orders. An older inquiry with no `pricing_status` can still be ordered.
 5. System PO allocation uses a reservation token; processing persists generated/reference PO fields and finalizes/release behavior.
 6. A won deal is rendered as an order by `OrdersPage` (restricted to sales personnel and admins).
 

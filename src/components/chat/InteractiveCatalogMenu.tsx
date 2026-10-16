@@ -11,6 +11,9 @@ import {
   HelpCircle,
   ChevronRight,
   Sparkles,
+  Clock,
+  IndianRupee,
+  Users,
 } from 'lucide-react';
 
 export interface CatalogMenuRow {
@@ -46,6 +49,11 @@ export default function InteractiveCatalogMenu({
 
   const getRowIcon = (id: string, title: string) => {
     const key = `${id} ${title}`.toLowerCase();
+    if (key.includes('pending price') || key.includes('proc_1')) return Clock;
+    if (key.includes('current inquir') || key.includes('proc_2')) return CheckSquare;
+    if (key.includes('base price') || key.includes('proc_3')) return IndianRupee;
+    if (key.includes('my team') || key.includes('proc_4')) return Users;
+    if (/^pr-\d+/i.test(id)) return Sparkles;
     if (key.includes('1') || key.includes('log new inquiry') || key.includes('log inquiry')) return FilePlus;
     if (key.includes('2') || key.includes('update inquiry')) return FileEdit;
     if (key.includes('3') || key.includes('log new order') || key.includes('log order')) return ShoppingCart;
@@ -61,7 +69,7 @@ export default function InteractiveCatalogMenu({
 
   const getSectionBadgeStyle = (sectionTitle: string) => {
     const t = sectionTitle.toLowerCase();
-    if (t.includes('inquir') || t.includes('order')) {
+    if (t.includes('inquir') || t.includes('order') || t.includes('procurement') || t.includes('awaiting')) {
       return 'bg-blue-50 text-blue-700 border-blue-200';
     }
     if (t.includes('visit') || t.includes('customer')) {

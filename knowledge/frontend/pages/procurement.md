@@ -11,9 +11,9 @@ An admin assigns salespeople to a procurement person in the control panel. Inqui
 1. A new inquiry starts as `awaiting_price`.
 2. Procurement saves base prices with `PATCH /inquiries/:id/procurement-pricing`. A positive base price is available. A blank base price is unavailable.
 3. At least one available line makes the inquiry `price_ready`. Every line blank makes it `unavailable`.
-4. Sales saves base, transport, loading, and margin with `PATCH /inquiries/:id/sales-pricing`. The server stores `rate = base + transport + loading + margin` and the GST split. Maharashtra is CGST 9% + SGST 9%. Every other delivery state is IGST 18%.
+4. Sales saves transport, loading, credit, and margin with `PATCH /inquiries/:id/sales-pricing`. The server stores `rate = base + transport + loading + credit + margin` and the GST split. A blank credit is 0. Maharashtra is CGST 9% + SGST 9%. Every other delivery state is IGST 18%. The same step is available in the assistant with *Price this inquiry* once the inquiry is `price_ready`.
 5. Quotation sending uses those saved rates for available lines. When every line is unavailable, sales can preview and send a decline email.
 
-Procurement cannot create inquiries, send quotations, or move an inquiry to confirmed, won, or lost.
+Procurement cannot create inquiries, send quotations, or move an inquiry to confirmed, won, or lost. The same limits apply in WhatsApp and the AI Assistant. There they can list pending and current inquiries, log a base price, and, for a manager, see the team. A later base-price save does not wipe credit, transport, loading, or margin. Apply `supabase-inquiry-line-credit.sql` before credit can be stored.
 
 The manual role pass is [qa/procurement-manual-test-suite.md](../../qa/procurement-manual-test-suite.md). Automated coverage is listed in [qa/test-inventory.md](../../qa/test-inventory.md).

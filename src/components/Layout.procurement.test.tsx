@@ -30,6 +30,7 @@ describe('procurement role navigation', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Inquiries' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'AI Assistant' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Orders' })).not.toBeInTheDocument();
   });
 });

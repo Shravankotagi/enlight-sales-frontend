@@ -17,12 +17,13 @@ The system enforces a multi-tier authorization perimeter spanning OTP authentica
 `JwtAuthGuard` acts as an early perimeter firewall. For procurement roles (`procurement_person` and `procurement_manager`), it strictly enforces an endpoint allowlist:
 - **Permitted**:
   - `/inquiries/*` (all HTTP verbs, subject to service-level operation guards)
+  - `GET` and `POST` `/chat/message` and `/chat/sessions`
   - `GET /products*`
   - `GET /pricing*`
   - `GET /employees*`
 - **Denied**:
   - Any request to `/deals*`, `/customers*`, `/customer-visits*`, `/complaints*`, `/reports*`, `/kra*`, `/zoho*`, or admin-only mutation endpoints.
-  - The dashboard AI assistant (`/chat`, `/chat/kb`) is rejected at the perimeter guard with HTTP 403, requiring no chatbot code modification.
+  - `/chat/kb` stays denied. A path such as `/inquiries-x` does not match the inquiries allow.
   - The guard immediately short-circuits and returns `403 Forbidden`, preventing procurement tokens from reaching business controllers or database queries for unpermitted modules.
 
 ## 3. Backend Role-Ordering Invariant
@@ -46,13 +47,12 @@ Client query parameters (`salesperson_phone`, `viewing_as`) are untrusted hints.
   - Open unassigned pool: inquiries where `status IN ('new', 'pending', 'review', 'draft')` and `procurement_employee_id IS NULL`.
   - Pricing is saved on the inquiry, so it stays inside the inquiries surface the guard already allows.
 
-## 5. WhatsApp Bot & Channel Isolation
+## 5. WhatsApp Bot and the dashboard assistant
 
-The WhatsApp Bot and assistant tools are strictly tailored for sales field workflows:
-- **WhatsApp Webhook (`webhook.js`)**: Resolves caller role from phone. If the sender is `procurement_person` or `procurement_manager`, the bot immediately sends an informational notice:
-  `"WhatsApp bot access is restricted to sales personnel. Please use the web portal to manage inquiries and base prices."`
-  and aborts processing. No state machine, conversation session, or database mutation is triggered.
-- **WebChat (`webChat.js`)**: Evaluates token role; rejects procurement users with `403 Forbidden`.
+Procurement can use WhatsApp and the dashboard AI Assistant. `JwtAuthGuard` allows procurement `GET` and `POST` for `/chat/message` and `/chat/sessions`. `/chat/kb` stays denied. The nav shows AI Assistant beside Inquiries.
+- Caller resolution checks `procurement_person` and `procurement_manager` before any `manager` match, and forwards that role to the bot.
+- The bot uses the employee row, not a collapsed sales role. Procurement gets the procurement menu. Sales keeps the catalog menu.
+- A procurement reply stays inside the inquiries scope and does not include customer name, phone, email, or raw inquiry text.
 
 ## 6. Granular UI Permissions Matrix (Zoho Books Style)
 

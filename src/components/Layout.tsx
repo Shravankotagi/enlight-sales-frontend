@@ -147,7 +147,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         ]
       : []),
     ...(isProcurement
-      ? navItems.filter((item) => item.path === '/inquiries')
+      ? navItems.filter(
+          (item) => item.path === '/inquiries' || item.path === '/assistant',
+        )
       : navItems),
   ];
 

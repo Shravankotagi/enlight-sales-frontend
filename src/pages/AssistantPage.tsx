@@ -187,6 +187,8 @@ export default function AssistantPage() {
   const role = (activeEmployee?.role || 'salesperson').toLowerCase();
   const isManagerOrAdmin =
     role === 'manager' || role === 'sales_manager' || role === 'admin';
+  const isProcurement =
+    role === 'procurement_person' || role === 'procurement_manager';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -512,7 +514,16 @@ export default function AssistantPage() {
   };
 
   // Quick prompt suggestions based on role
-  const quickPrompts = isManagerOrAdmin
+  const quickPrompts = isProcurement
+    ? [
+        { label: 'Pending prices', text: 'pending prices', icon: TrendingUp },
+        { label: 'Current inquiries', text: 'current inquiries', icon: Search },
+        { label: 'Log a base price', text: 'log a base price', icon: FileText },
+        ...(role === 'procurement_manager'
+          ? [{ label: 'My team', text: 'my team', icon: Users }]
+          : []),
+      ]
+    : isManagerOrAdmin
     ? [
         { label: 'Team Pipeline Summary', text: 'Show me the team pipeline summary and grand value across sales reps.', icon: TrendingUp },
         { label: 'Customer Churn Radar', text: 'Which customer accounts have high or medium churn risk right now?', icon: Users },
@@ -569,6 +580,13 @@ export default function AssistantPage() {
         }
         return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–10) or type what you'd like to do.`;
       }
+      if (raw.includes('Procurement assistant') && raw.includes('Pending prices')) {
+        const prefix = raw.includes('procurement manager')
+          ? raw.split('Procurement assistant')[0].trim()
+          : '';
+        const intro = 'Procurement assistant. Choose an action.';
+        return prefix ? `${prefix}\n\n${intro}` : intro;
+      }
     }
     return raw;
   };
@@ -591,7 +609,9 @@ export default function AssistantPage() {
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              Conversational Sales OS & Knowledge Base RAG Assistant
+              {isProcurement
+                ? 'Pending prices, current inquiries, and base prices'
+                : 'Conversational Sales OS & Knowledge Base RAG Assistant'}
             </p>
           </div>
         </div>
@@ -733,7 +753,9 @@ export default function AssistantPage() {
                     Welcome to Enlight Sales OS Assistant
                   </h2>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.
+                    {isProcurement
+                      ? 'List pending or current inquiries, or log a base price in rupees per MT.'
+                      : 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'}
                   </p>
                 </div>
 
@@ -977,7 +999,7 @@ export default function AssistantPage() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder={selectedPhoto ? "Add notes for this attachment..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
+                placeholder={selectedPhoto ? "Add notes for this attachment..." : isProcurement ? "Reply with a procurement number or a menu choice..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
                 className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />
