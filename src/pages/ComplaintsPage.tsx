@@ -1117,7 +1117,8 @@ export default function ComplaintsPage() {
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
                 <th className="px-5 py-3.5 text-left min-w-[220px]">Customer</th>
-                <th className="px-4 py-3.5 text-left min-w-[190px]">Deal / PO &amp; Product</th>
+                <th className="px-4 py-3.5 text-left min-w-[160px]">Deal / PO</th>
+                <th className="px-4 py-3.5 text-left min-w-[180px]">Product</th>
                 <th className="px-4 py-3.5 text-center min-w-[120px]">Status</th>
               </tr>
             </thead>
@@ -1145,12 +1146,12 @@ export default function ComplaintsPage() {
                       onClick={() => openComplaintDetails(comp)}
                       className="hover:bg-slate-50/70 cursor-pointer transition-colors group">
                       {/* 0. Serial Number */}
-                      <td className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                      <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
                       </td>
 
                       {/* 1. Customer (+ Date & Time + Sales Rep) */}
-                      <td className="px-5 py-3.5">
+                      <td data-label="Customer" className="px-5 py-3.5">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {comp.customer_name || 'Customer'}
                         </div>
@@ -1164,49 +1165,33 @@ export default function ComplaintsPage() {
                         )}
                       </td>
 
-                      {/* 2. Deal / PO & Product */}
-                      <td className="px-4 py-3.5 text-xs">
-                        {comp.po_number ? (
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                      <td data-label="Deal / PO" className="px-4 py-3.5 text-xs">
+                        {comp.po_number || cleanDealCode ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {comp.po_number && (
                               <span className="font-mono font-bold text-slate-800 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded text-[11px] shadow-2xs">
                                 PO: {comp.po_number}
                               </span>
-                              {cleanDealCode && (
-                                <span className="font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
-                                  #{`INQ-${cleanDealCode}`}
-                                </span>
-                              )}
-                            </div>
-                            {prodDisplay && (
-                              <div className="text-slate-700 font-medium mt-1 truncate max-w-[240px]">
-                                {prodDisplay}
-                              </div>
                             )}
-                          </div>
-                        ) : cleanDealCode ? (
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[11px]">
+                            {cleanDealCode && (
+                              <span className="font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
                                 #{`INQ-${cleanDealCode}`}
                               </span>
-                            </div>
-                            {prodDisplay && (
-                              <div className="text-slate-700 font-medium mt-1 truncate max-w-[240px]">
-                                {prodDisplay}
-                              </div>
                             )}
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5 font-medium text-slate-800">
-                            <Package size={13} className="text-blue-500 shrink-0" />
-                            <span className="truncate max-w-[240px]">{prodDisplay || 'General Steel Material'}</span>
-                          </div>
+                          <span className="text-slate-400">-</span>
                         )}
+                      </td>
+                      <td data-label="Product" className="px-4 py-3.5 text-xs">
+                        <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                          <Package size={13} className="text-blue-500 shrink-0" />
+                          <span>{prodDisplay || 'General Steel Material'}</span>
+                        </div>
                       </td>
 
                       {/* 3. Status */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <td data-label="Status" className="px-4 py-3.5 text-center">
                         {renderStatusBadge(comp.status)}
                       </td>
                     </tr>

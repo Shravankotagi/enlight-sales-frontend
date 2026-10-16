@@ -278,9 +278,10 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               />
 
               {/* Row below logo: Enlight Sigma centered, Collapse button in front/on the right */}
-              <div className="relative flex items-center justify-center w-full mt-2.5 transition-all duration-300">
+              <div className="grid grid-cols-[2.25rem_1fr_2.25rem] items-center w-full mt-2.5">
+                <span />
                 <span
-                  className={`font-black text-slate-900 tracking-tight transition-all duration-300 text-center ${
+                  className={`font-black text-slate-900 tracking-tight text-center truncate ${
                     isEnlarged ? 'text-base' : 'text-sm'
                   }`}
                 >
@@ -297,12 +298,10 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                       setIsHovered(false);
                     }
                   }}
-                  className={`absolute right-0 inline-flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all duration-300 cursor-pointer ${
-                    isEnlarged ? 'h-8 w-8' : 'h-7 w-7'
-                  }`}
+                  className="justify-self-end inline-flex items-center justify-center h-9 w-9 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
                   title="Collapse sidebar"
                 >
-                  <PanelLeft className={isEnlarged ? 'h-5 w-5' : 'h-4 w-4'} />
+                  <PanelLeft className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -390,13 +389,13 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50/70">
         {/* Mobile Header Bar */}
         <div className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <img
               src="/enlight-metals-logo.png"
               alt="Enlight Metals"
-              className="h-7 w-auto object-contain"
+              className="h-7 w-auto max-w-[9rem] object-contain"
             />
-            <span className="text-xs font-bold text-slate-800">
+            <span className="text-xs font-bold text-slate-800 truncate">
               Enlight <span className="text-[#1f4bb8]">Sigma</span>
             </span>
           </div>

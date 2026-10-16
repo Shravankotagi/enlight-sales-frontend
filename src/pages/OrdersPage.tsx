@@ -1727,7 +1727,7 @@ export default function OrdersPage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center">
+                      <td data-label="PO Number" className="px-4 py-3.5 text-center">
                         {poNumber ? (
                           <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
                             {poNumber}
@@ -1738,7 +1738,7 @@ export default function OrdersPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center">
+                      <td data-label="Reference PO" className="px-4 py-3.5 text-center">
                         {referencePoNumber ? (
                           <span className="font-mono text-xs font-medium text-slate-700">
                             {referencePoNumber}
@@ -1749,19 +1749,19 @@ export default function OrdersPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                      <td data-label="Items Summary" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
                         {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
                         {tonnageFormatted && (
                           <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
+                      <td data-label="Source Channel" className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
                         {getOrderSourceChannel(ord)}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
+                      <td data-label="Delivery Location" className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center" title={ord.delivery_location || '-'}>
                         {formatDeliveryLocation(ord.delivery_location)}
                       </td>
-                      <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
+                      <td data-label="Actions" className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative">
                         <div className="relative inline-block text-left">
                           <button
                             type="button"
@@ -2156,8 +2156,8 @@ export default function OrdersPage() {
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/30">
-                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
-                        <td className="px-4 py-3.5 border-r border-slate-200">
+                        <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input
                               id={`form-item-sku-${idx}`}

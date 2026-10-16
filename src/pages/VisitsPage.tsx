@@ -1526,7 +1526,7 @@ export default function VisitsPage() {
                       key={v.id || idx}
                       className="hover:bg-slate-50/70 transition-colors group">
                       {/* 0. Serial Number */}
-                      <td className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                      <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
                       </td>
 
@@ -1634,7 +1634,7 @@ export default function VisitsPage() {
                           }
                           const isCompleted = fu.status === 'completed';
                           return (
-                            <div className="space-y-1.5 min-w-[200px] max-w-[280px]">
+                            <div className="space-y-1.5 lg:min-w-[200px] lg:max-w-[280px]">
                               <div className="flex items-start gap-2">
                                 <button
                                   type="button"
@@ -1672,7 +1672,7 @@ export default function VisitsPage() {
                       </td>
 
                       {/* 6. Actions */}
-                      <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
+                      <td data-label="Actions" className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative">
                         <div className="relative inline-block text-left">
                           <button
                             type="button"
