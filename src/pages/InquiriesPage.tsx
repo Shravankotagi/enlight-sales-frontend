@@ -5159,9 +5159,9 @@ export default function InquiriesPage() {
 
       {/* Send Official Quotation Email Modal (Resend API Integration) */}
       {showQuotationModal && shareDetails && shareInquiry && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 animate-in fade-in duration-150">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-lg w-full max-h-[100dvh] flex flex-col overflow-hidden shadow-2xl border border-slate-200">
+            <div className="sheet-header shrink-0 flex justify-between items-center px-6 pt-6 pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Send className="text-blue-600" size={22} />
                 Share Quotation
@@ -5181,6 +5181,7 @@ export default function InquiriesPage() {
               </button>
             </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {/* Small Relevant Info Message */}
             <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
               <FileText size={18} className="text-blue-600 shrink-0 mt-0.5" />
@@ -5252,11 +5253,6 @@ export default function InquiriesPage() {
                 />
               </div>
 
-              {quotationPreviewLoading && (
-                <div className="text-xs text-slate-500 flex items-center gap-2">
-                  <RefreshCw size={13} className="animate-spin" /> Preparing email preview…
-                </div>
-              )}
               {quotationPreviewError && (
                 <div className="p-3 rounded-xl text-xs font-bold border bg-rose-50 text-rose-900 border-rose-200">
                   {quotationPreviewError}
@@ -5374,21 +5370,10 @@ export default function InquiriesPage() {
                 </div>
               )}
             </div>
+            </div>
 
-            <div className="pt-2 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowQuotationModal(false);
-                  setShareInquiry(null);
-                  setShareDetails(null);
-                  setResendNotice('');
-                  setQuotationCcDraft('');
-                  setQuotationCcError('');
-                }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
-                Cancel
-              </button>
+            <div className="sheet-actions shrink-0 px-6 py-4 flex flex-wrap justify-end gap-2 border-t border-slate-100">
+              
 
               <button
                 type="button"

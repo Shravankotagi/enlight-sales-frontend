@@ -480,9 +480,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                     <th className="px-3 py-2.5 text-center w-[5%] font-bold">#</th>
                     <th className="px-4 py-2.5 w-[39%] font-bold">Item &amp; Description</th>
                     <th className="px-3 py-2.5 text-center w-[15%] font-bold">HSN/SAC</th>
-                    <th className="px-4 py-2.5 text-right w-[13%] font-bold">Qty</th>
+                    <th className="px-4 py-2.5 text-center w-[13%] font-bold">Qty</th>
                     <th className="px-4 py-2.5 text-right w-[13%] font-bold">Rate</th>
-                    <th className="px-4 py-2.5 text-right w-[15%] font-bold">Amount</th>
+                    <th className="px-4 py-2.5 pr-6 text-right w-[15%] font-bold">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-900 bg-white">
@@ -505,13 +505,13 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                           )}
                         </td>
                         <td className="px-3 py-3 text-center font-normal text-slate-700 text-[12px]">{hsn}</td>
-                        <td className="px-4 py-3 text-right font-normal text-slate-900 text-[12px] whitespace-nowrap">
+                        <td className="px-4 py-3 text-center font-normal text-slate-900 text-[12px] whitespace-nowrap">
                           {formatLineItemWeightMt(item).text}
                         </td>
                         <td className="px-4 py-3 text-right font-normal text-slate-800 text-[12px]">
                           {rate > 0 ? formatIndianCurrency(rate, true) : '0.00'}
                         </td>
-                        <td className="px-4 py-3 text-right font-normal text-slate-900 text-[12px]">
+                        <td className="px-4 py-3 pr-6 text-right font-normal text-slate-900 text-[12px]">
                           {amt > 0 ? formatIndianCurrency(amt, true) : '0.00'}
                         </td>
                       </tr>
