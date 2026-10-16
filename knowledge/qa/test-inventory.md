@@ -37,7 +37,7 @@ Every bug fix adds a test that fails before the fix and passes after it.
 Current regression tests:
 | Repo | File | Guards |
 |---|---|---|
-| Bot | `issue-procurement-chatbot.test.js` | Procurement scope, base-price status, customer-field hiding, and a salesperson log that does not save a sell rate |
+| Bot | `issue-procurement-chatbot.test.js` | Procurement scope, exact awaiting-price match, text-only base-price list, inquiry details, cancel then menu, customer-field hiding, and a salesperson log that does not save a sell rate |
 | Bot | `duplicate-customer-discard-draft.test.js` | Duplicate-customer warning shows only **Discard Draft**; blocked state ignores other text; discard finalizes the draft |
 | Backend | `leaderboard-salesperson-identity.test.ts` | Mixed phone formats resolve to one named row; never "Unknown" |
 | Frontend | `admin-leaderboard-identity-and-orders.test.tsx` | Leaderboard shows names/IDs/phones, counts orders (not deals), excludes admins |

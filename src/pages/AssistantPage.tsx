@@ -96,6 +96,11 @@ const TECHNICAL_PAYLOAD_DISPLAY_MAP: Record<string, string> = {
   btn_resume_yes: 'Yes, Continue',
   btn_resume_no: 'No, Go to Menu',
   btn_att_no: 'No',
+
+  proc_1: 'Pending prices',
+  proc_2: 'Current inquiries',
+  proc_3: 'Log a Base Price',
+  proc_4: 'My team',
 };
 
 export function formatUserDisplayMessage(content?: string): string {
@@ -362,9 +367,10 @@ export default function AssistantPage() {
     if ((!textToSend && !selectedPhoto) || loading) return;
 
     const isPdfAttachment = selectedPhoto?.file.type === 'application/pdf';
-    let userDisplayText = displayTitle ||
-      formatUserDisplayMessage(textToSend) ||
-      (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : '');
+    const mappedSend = formatUserDisplayMessage(textToSend);
+    let userDisplayText = mappedSend !== textToSend
+      ? mappedSend
+      : (displayTitle || mappedSend || (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : ''));
 
     // Parity with WhatsApp list selection: if user typed a menu number (1–10) while looking at the Catalog Menu
     if (!promptTextOverride && textToSend) {
@@ -384,7 +390,8 @@ export default function AssistantPage() {
             );
             if (foundRow) {
               textToSend = foundRow.id || `menu_${selectedNum}`;
-              userDisplayText = foundRow.title;
+              userDisplayText = formatUserDisplayMessage(textToSend);
+              if (userDisplayText === textToSend) userDisplayText = foundRow.title;
               break;
             }
           }
