@@ -19,7 +19,6 @@ import {
   Calendar,
   MoreVertical,
   Eye,
-  ChevronDown,
   Save,
   ArrowLeft,
   AlertCircle,
@@ -46,6 +45,7 @@ import {
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 import PaginationControl from '../components/PaginationControl';
 import { getVisitsSalespersonFilterValue } from '../utils/visitFilters';
+import { Select } from '../components/ui/select';
 
 import { type CustomerVisit, type VisitAttachment, getFollowUpStatusInfo } from '../utils/visitUtils';
 export type { CustomerVisit, VisitAttachment };
@@ -516,6 +516,7 @@ export default function VisitsPage() {
             setFormGpsLng(coords.longitude);
             setFormGpsAccuracy(coords.accuracy);
           }
+          setFormErrors((prev) => ({ ...prev, attachments: false }));
         }
       };
       reader.readAsDataURL(file);
@@ -539,6 +540,7 @@ export default function VisitsPage() {
           setEditAttachments((prev) => [...prev, item]);
         } else {
           setFormAttachments((prev) => [...prev, item]);
+          setFormErrors((prev) => ({ ...prev, attachments: false }));
         }
       };
       reader.readAsDataURL(file);
@@ -684,8 +686,31 @@ export default function VisitsPage() {
 
     if (!formLocation.trim()) errors.location = true;
     if (!formVisitDate) errors.visitDate = true;
+    if (!formVisitTime) errors.visitTime = true;
     if (!formOutcome) errors.outcome = true;
     if (!formRemarks.trim()) errors.remarks = true;
+    if (!formDesignation.trim()) errors.designation = true;
+    const email = formEmail.trim();
+    if (!email) {
+      errors.email = 'Please enter an email address.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = 'Please enter a valid email address.';
+    }
+    if (!formCustomerType) errors.customerType = true;
+    if (!formVisitType) errors.visitType = true;
+    if (!formCustomerProbability) errors.customerProbability = true;
+    if (!formProductDetails.trim()) errors.productDetails = true;
+    if (!formMonthlyConsumption.trim()) errors.monthlyConsumption = true;
+    if (!formPreferredMake.trim()) errors.preferredMake = true;
+    if (!formPaymentTerms.trim()) errors.paymentTerms = true;
+    if (!formDeliveryLocation.trim()) errors.deliveryLocation = true;
+    if (!formNextPurchaseExpected) errors.nextPurchaseExpected = true;
+    if (!formCurrentRequirement.trim()) errors.currentRequirement = true;
+    if (!formFollowup.trim()) errors.followup = true;
+    if (!formFollowupDate) errors.followupDate = true;
+    if (!formGpsPhotoUrl && formAttachments.length === 0) {
+      errors.attachments = 'Please add a visit photo or a document.';
+    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -1320,122 +1345,116 @@ export default function VisitsPage() {
 
           {/* 2. Salesperson Filter Dropdown (Admin & Sales Manager only) */}
           {canViewSalesperson && (
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Users size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={filterSalesperson}
-                onChange={e => setFilterSalesperson(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>
-                  All Salespersons ({salespeopleList.length})
+            <Select
+              value={filterSalesperson}
+              onChange={e => setFilterSalesperson(e.target.value)}
+              prefixIcon={<Users size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All Salespersons ({salespeopleList.length})</option>
+              {salespeopleList.map((sp: any) => (
+                <option key={sp.phone || sp.name} value={sp.name}>
+                  {sp.name}
                 </option>
-                {salespeopleList.map((sp: any) => (
-                  <option
-                    key={sp.phone || sp.name}
-                    value={sp.name}
-                    className="font-normal text-slate-700"
-                    style={{ fontWeight: 'normal' }}>
-                    {sp.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+              ))}
+            </Select>
           )}
 
           {/* 3. Date Preset Dropdown with 'Last 30 Days' default */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            prefixIcon={<Calendar size={14} className="text-blue-600" />}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* 4. Outcome Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterOutcome}
-              onChange={e => setFilterOutcome(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Outcomes ({baseScopedVisits.length})</option>
-              <option value="positive" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Positive ({positiveVisits})</option>
-              <option value="neutral" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Neutral ({neutralVisits})</option>
-              <option value="negative" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Negative ({negativeVisits})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterOutcome}
+            onChange={e => setFilterOutcome(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Outcomes ({baseScopedVisits.length})</option>
+            <option value="positive">Positive ({positiveVisits})</option>
+            <option value="neutral">Neutral ({neutralVisits})</option>
+            <option value="negative">Negative ({negativeVisits})</option>
+          </Select>
 
           {/* 5. Follow-up Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterFollowup}
-              onChange={e => setFilterFollowup(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Follow-ups ({baseScopedVisits.length})</option>
-              <option value="due" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due / Overdue ({dueFollowupsCount})</option>
-              <option value="overdue" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Overdue ({overdueFollowupsCount})</option>
-              <option value="due_today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due Today ({dueTodayFollowupsCount})</option>
-              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Pending ({pendingFollowupsCount})</option>
-              <option value="completed" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Completed ({completedFollowupsCount})</option>
-              <option value="none" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>No Follow-up</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterFollowup}
+            onChange={e => setFilterFollowup(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-52"
+          >
+            <option value="all">All Follow-ups ({baseScopedVisits.length})</option>
+            <option value="due">Due / Overdue ({dueFollowupsCount})</option>
+            <option value="overdue">Overdue ({overdueFollowupsCount})</option>
+            <option value="due_today">Due Today ({dueTodayFollowupsCount})</option>
+            <option value="pending">All Pending ({pendingFollowupsCount})</option>
+            <option value="completed">Completed ({completedFollowupsCount})</option>
+            <option value="none">No Follow-up</option>
+          </Select>
 
           {/* 6. Customer Type Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterCustomerType}
-              onChange={e => setFilterCustomerType(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Customer Types</option>
-              <option value="OEM" className="font-normal text-slate-700">OEM</option>
-              <option value="Fabricator" className="font-normal text-slate-700">Fabricator</option>
-              <option value="EPC" className="font-normal text-slate-700">EPC</option>
-              <option value="Manufacturer" className="font-normal text-slate-700">Manufacturer</option>
-              <option value="Trader" className="font-normal text-slate-700">Trader</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterCustomerType}
+            onChange={e => setFilterCustomerType(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Customer Types</option>
+            <option value="OEM">OEM</option>
+            <option value="Fabricator">Fabricator</option>
+            <option value="EPC">EPC</option>
+            <option value="Manufacturer">Manufacturer</option>
+            <option value="Trader">Trader</option>
+          </Select>
 
           {/* 7. Customer Probability Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterProbability}
-              onChange={e => setFilterProbability(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Probabilities</option>
-              <option value="Hot" className="font-normal text-slate-700">Hot</option>
-              <option value="Warm" className="font-normal text-slate-700">Warm</option>
-              <option value="Cold" className="font-normal text-slate-700">Cold</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterProbability}
+            onChange={e => setFilterProbability(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Probabilities</option>
+            <option value="Hot">Hot</option>
+            <option value="Warm">Warm</option>
+            <option value="Cold">Cold</option>
+          </Select>
 
           {/* 8. Visit Type Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterVisitType}
-              onChange={e => setFilterVisitType(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Visit Types</option>
-              <option value="First Visit" className="font-normal text-slate-700">First Visit</option>
-              <option value="Follow-up 1" className="font-normal text-slate-700">Follow-up 1</option>
-              <option value="Follow-up 2" className="font-normal text-slate-700">Follow-up 2</option>
-              <option value="Follow-up 3" className="font-normal text-slate-700">Follow-up 3</option>
-              <option value="Regular Visit" className="font-normal text-slate-700">Regular Visit</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterVisitType}
+            onChange={e => setFilterVisitType(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Visit Types</option>
+            <option value="First Visit">First Visit</option>
+            <option value="Follow-up 1">Follow-up 1</option>
+            <option value="Follow-up 2">Follow-up 2</option>
+            <option value="Follow-up 3">Follow-up 3</option>
+            <option value="Regular Visit">Regular Visit</option>
+          </Select>
 
           {/* 9. Clear Filter Button */}
           {(searchTerm || filterOutcome !== 'all' || filterFollowup !== 'all' || filterSalesperson !== 'all' || filterCustomerType !== 'all' || filterProbability !== 'all' || filterVisitType !== 'all' || dayPreset !== 'all') && (
@@ -1806,14 +1825,24 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Designation</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Designation <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. Purchase Head"
                           value={formDesignation}
-                          onChange={e => setFormDesignation(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                          onChange={e => {
+                            setFormDesignation(e.target.value);
+                            if (formErrors.designation) setFormErrors(prev => ({ ...prev, designation: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                            formErrors.designation ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
+                        {formErrors.designation && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter designation.</p>
+                        )}
                       </div>
                     </div>
 
@@ -1844,14 +1873,26 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Email ID</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Email ID <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="email"
                           placeholder="e.g. suresh@company.com"
                           value={formEmail}
-                          onChange={e => setFormEmail(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                          onChange={e => {
+                            setFormEmail(e.target.value);
+                            if (formErrors.email) setFormErrors(prev => ({ ...prev, email: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                            formErrors.email ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
+                        {formErrors.email && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">
+                            {typeof formErrors.email === 'string' ? formErrors.email : 'Please enter an email address.'}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -1878,18 +1919,30 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
-                        <select
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Customer Type <span className="text-rose-500">*</span>
+                        </label>
+                        <Select
                           value={formCustomerType}
-                          onChange={e => setFormCustomerType(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                          onChange={e => {
+                            setFormCustomerType(e.target.value);
+                            if (formErrors.customerType) setFormErrors(prev => ({ ...prev, customerType: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400 ${
+                            formErrors.customerType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}
+                          placeholder="Select Customer Type"
+                        >
                           <option value="">Select Customer Type</option>
                           <option value="OEM">OEM</option>
                           <option value="Fabricator">Fabricator</option>
                           <option value="EPC">EPC</option>
                           <option value="Manufacturer">Manufacturer</option>
                           <option value="Trader">Trader</option>
-                        </select>
+                        </Select>
+                        {formErrors.customerType && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select a customer type.</p>
+                        )}
                       </div>
                     </div>
 
@@ -1912,55 +1965,76 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Visit Time</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Visit Time <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="time"
                           value={formVisitTime}
-                          onChange={e => setFormVisitTime(e.target.value)}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
+                          onChange={e => {
+                            setFormVisitTime(e.target.value);
+                            if (formErrors.visitTime) setFormErrors(prev => ({ ...prev, visitTime: false }));
+                          }}
+                          className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none cursor-pointer font-medium ${
+                            formErrors.visitTime ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Visit Type</label>
-                        <select
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Visit Type <span className="text-rose-500">*</span>
+                        </label>
+                        <Select
                           value={formVisitType}
-                          onChange={e => setFormVisitType(e.target.value)}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                          onChange={e => {
+                            setFormVisitType(e.target.value);
+                            if (formErrors.visitType) setFormErrors(prev => ({ ...prev, visitType: false }));
+                          }}
+                          className={`w-full px-2.5 py-2 border rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400 ${
+                            formErrors.visitType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}
+                        >
                           <option value="First Visit">First Visit</option>
                           <option value="Follow-up 1">Follow-up 1</option>
                           <option value="Follow-up 2">Follow-up 2</option>
                           <option value="Follow-up 3">Follow-up 3</option>
                           <option value="Regular Visit">Regular Visit</option>
-                        </select>
+                        </Select>
                       </div>
 
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Outcome <span className="text-rose-500">*</span>
                         </label>
-                        <select
+                        <Select
                           value={formOutcome}
                           onChange={e => {
                             setFormOutcome(e.target.value);
                             if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
                           }}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                        >
                           <option value="positive">Positive</option>
                           <option value="neutral">Neutral</option>
                           <option value="negative">Negative</option>
-                        </select>
+                        </Select>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Customer Probability</label>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Customer Probability <span className="text-rose-500">*</span>
+                      </label>
                       <div className="grid grid-cols-3 gap-2">
                         {['Hot', 'Warm', 'Cold'].map(p => (
                           <button
                             key={p}
                             type="button"
-                            onClick={() => setFormCustomerProbability(prev => prev === p ? '' : p)}
+                            onClick={() => {
+                              setFormCustomerProbability(p);
+                              if (formErrors.customerProbability) setFormErrors(prev => ({ ...prev, customerProbability: false }));
+                            }}
                             className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                               formCustomerProbability === p
                                 ? p === 'Hot'
@@ -1974,6 +2048,9 @@ export default function VisitsPage() {
                           </button>
                         ))}
                       </div>
+                      {formErrors.customerProbability && (
+                        <p className="text-[11px] text-rose-500 font-semibold mt-1">Please select Hot, Warm, or Cold.</p>
+                      )}
                     </div>
                   </div>
 
@@ -1987,89 +2064,140 @@ export default function VisitsPage() {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Product Details</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Product Details <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. SS 304 Sheets 2mm, Pipe 4 inch"
                           value={formProductDetails}
-                          onChange={e => setFormProductDetails(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          onChange={e => {
+                            setFormProductDetails(e.target.value);
+                            if (formErrors.productDetails) setFormErrors(prev => ({ ...prev, productDetails: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
+                            formErrors.productDetails ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Monthly Consumption</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Monthly Consumption <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. 50 MT/month"
                           value={formMonthlyConsumption}
-                          onChange={e => setFormMonthlyConsumption(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          onChange={e => {
+                            setFormMonthlyConsumption(e.target.value);
+                            if (formErrors.monthlyConsumption) setFormErrors(prev => ({ ...prev, monthlyConsumption: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
+                            formErrors.monthlyConsumption ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Preferred Brand / Make</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Preferred Brand / Make <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. JSW, Jindal, Tata"
                           value={formPreferredMake}
-                          onChange={e => setFormPreferredMake(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          onChange={e => {
+                            setFormPreferredMake(e.target.value);
+                            if (formErrors.preferredMake) setFormErrors(prev => ({ ...prev, preferredMake: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
+                            formErrors.preferredMake ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Payment Terms</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Payment Terms <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. 30 Days PDC, Advance"
                           value={formPaymentTerms}
-                          onChange={e => setFormPaymentTerms(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          onChange={e => {
+                            setFormPaymentTerms(e.target.value);
+                            if (formErrors.paymentTerms) setFormErrors(prev => ({ ...prev, paymentTerms: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
+                            formErrors.paymentTerms ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Delivery Location</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Delivery Location <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. Plant 2, Bhosari MIDC"
                           value={formDeliveryLocation}
-                          onChange={e => setFormDeliveryLocation(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          onChange={e => {
+                            setFormDeliveryLocation(e.target.value);
+                            if (formErrors.deliveryLocation) setFormErrors(prev => ({ ...prev, deliveryLocation: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
+                            formErrors.deliveryLocation ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Next Purchase Expected</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Next Purchase Expected <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="date"
                           value={formNextPurchaseExpected}
-                          onChange={e => setFormNextPurchaseExpected(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer"
+                          onChange={e => {
+                            setFormNextPurchaseExpected(e.target.value);
+                            if (formErrors.nextPurchaseExpected) setFormErrors(prev => ({ ...prev, nextPurchaseExpected: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium cursor-pointer ${
+                            formErrors.nextPurchaseExpected ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Current Requirement Collected</label>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Current Requirement Collected <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         placeholder="e.g. Needs 10 MT HR Coil within 4 days"
                         value={formCurrentRequirement}
-                        onChange={e => setFormCurrentRequirement(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        onChange={e => {
+                          setFormCurrentRequirement(e.target.value);
+                          if (formErrors.currentRequirement) setFormErrors(prev => ({ ...prev, currentRequirement: false }));
+                        }}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none font-medium ${
+                          formErrors.currentRequirement ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                        }`}
                       />
                     </div>
 
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="block font-semibold text-slate-700">Follow-up Action &amp; Due Date</label>
+                        <label className="block font-semibold text-slate-700">
+                          Follow-up Action &amp; Due Date <span className="text-rose-500">*</span>
+                        </label>
                         <div className="flex items-center gap-1.5 text-[10px]">
                           <span className="text-slate-400 font-medium">Quick Due:</span>
                           <button
@@ -2101,21 +2229,30 @@ export default function VisitsPage() {
                             onChange={e => {
                               const val = e.target.value;
                               setFormFollowup(val);
+                              if (formErrors.followup) setFormErrors(prev => ({ ...prev, followup: false }));
                               if (val.trim() && !formFollowupDate) {
                                 const nextWeek = new Date();
                                 nextWeek.setDate(nextWeek.getDate() + 7);
                                 setFormFollowupDate(formatLocalDate(nextWeek));
+                                setFormErrors(prev => ({ ...prev, followupDate: false }));
                               }
                             }}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white"
+                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs outline-none font-medium bg-white ${
+                              formErrors.followup ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                            }`}
                           />
                         </div>
                         <div>
                           <input
                             type="date"
                             value={formFollowupDate}
-                            onChange={e => setFormFollowupDate(e.target.value)}
-                            className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer bg-white"
+                            onChange={e => {
+                              setFormFollowupDate(e.target.value);
+                              if (formErrors.followupDate) setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
+                            className={`w-full px-2 py-1.5 border rounded-lg text-xs outline-none font-medium cursor-pointer bg-white ${
+                              formErrors.followupDate ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                            }`}
                           />
                         </div>
                       </div>
@@ -2145,8 +2282,10 @@ export default function VisitsPage() {
                     {/* Attachments Section */}
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <label className="block font-semibold text-slate-700">Attachments</label>
-                        <span className="text-[11px] text-slate-400">Optional</span>
+                        <label className="block font-semibold text-slate-700">
+                          Attachments <span className="text-rose-500">*</span>
+                        </label>
+                        <span className="text-[11px] text-slate-400">Photo or document</span>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
@@ -2175,6 +2314,11 @@ export default function VisitsPage() {
                           <span>Add Documents</span>
                         </label>
                       </div>
+                      {formErrors.attachments && (
+                        <p className="text-[11px] text-rose-500 font-semibold">
+                          {typeof formErrors.attachments === 'string' ? formErrors.attachments : 'Please add a visit photo or a document.'}
+                        </p>
+                      )}
 
                       {/* GPS Photo Preview Card */}
                       {formGpsPhotoUrl && (
@@ -2708,17 +2852,19 @@ export default function VisitsPage() {
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
-                          <select
+                          <Select
                             value={editCustomerType}
                             onChange={e => setEditCustomerType(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                            placeholder="Select Customer Type"
+                          >
                             <option value="">Select Customer Type</option>
                             <option value="OEM">OEM</option>
                             <option value="Fabricator">Fabricator</option>
                             <option value="EPC">EPC</option>
                             <option value="Manufacturer">Manufacturer</option>
                             <option value="Trader">Trader</option>
-                          </select>
+                          </Select>
                         </div>
                       </div>
 
@@ -2745,28 +2891,30 @@ export default function VisitsPage() {
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Visit Type</label>
-                          <select
+                          <Select
                             value={editVisitType}
                             onChange={e => setEditVisitType(e.target.value)}
-                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                          >
                             <option value="First Visit">First Visit</option>
                             <option value="Follow-up 1">Follow-up 1</option>
                             <option value="Follow-up 2">Follow-up 2</option>
                             <option value="Follow-up 3">Follow-up 3</option>
                             <option value="Regular Visit">Regular Visit</option>
-                          </select>
+                          </Select>
                         </div>
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Visit Outcome</label>
-                          <select
+                          <Select
                             value={editOutcome}
                             onChange={e => setEditOutcome(e.target.value)}
-                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                          >
                             <option value="positive">Positive</option>
                             <option value="neutral">Neutral</option>
                             <option value="negative">Negative</option>
-                          </select>
+                          </Select>
                         </div>
                       </div>
 
@@ -2937,13 +3085,14 @@ export default function VisitsPage() {
                             />
                           </div>
                           <div>
-                            <select
+                            <Select
                               value={editFollowupStatus}
                               onChange={e => setEditFollowupStatus(e.target.value as 'pending' | 'completed')}
-                              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                            >
                               <option value="pending">Pending</option>
                               <option value="completed">Completed</option>
-                            </select>
+                            </Select>
                           </div>
                         </div>
                       </div>

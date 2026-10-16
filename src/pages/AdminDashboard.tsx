@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
 import { useAuth } from '../context/AuthContext';
 import SyncBiginButton from '../components/SyncBiginButton';
+import { Select } from '../components/ui/select';
 
 const normalizePhone = (phone?: string | null) =>
   String(phone || '').replace(/\D/g, '').slice(-10);
@@ -419,10 +420,12 @@ export default function AdminDashboard() {
 
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 self-start sm:self-auto">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">Filter:</span>
-            <select
+            <Select
               value={selectedPhone}
               onChange={(e) => setSelectedPhone(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px] max-w-[280px] truncate cursor-pointer"
+              wrapperClassName="w-auto min-w-[200px] max-w-[280px]"
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold text-xs hover:border-blue-500 cursor-pointer"
+              menuClassName="w-64"
             >
               <option value="">All Salespeople (Global)</option>
               {salespeople.map((sp: any) => (
@@ -430,7 +433,7 @@ export default function AdminDashboard() {
                   {sp.name} ({sp.employee_id})
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
       </div>

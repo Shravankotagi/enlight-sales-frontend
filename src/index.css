@@ -1,4 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-poppins: 'Poppins', sans-serif;
+}
+
+/* 
+ * Global 80% root font scaling on desktop displays (>= 1024px)
+ * Scales all rem-based layout spacing, cards, tables, and dimensions to 80%
+ * while keeping 100vh full-height with zero bottom gaps.
+ */
+@media (min-width: 1024px) {
+  html {
+    font-size: 80%; /* 12.8px (0.8 scale of 16px) */
+  }
+
+  /* Readability safety floor: ensure text does not fall below 12px */
+  body {
+    font-size: 13px;
+  }
+
+  .text-xs,
+  [class*="text-[10px]"],
+  [class*="text-[11px]"] {
+    font-size: max(0.75rem, 12px);
+  }
+}
+
+/* Smooth, hardware-accelerated scrolling without event hijacking */
+html,
+body,
+.overflow-auto,
+.overflow-y-auto {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 
+ * Windows paints the native select popup black for 1 frame unless document root enforces light scheme.
+ * Enforce 'only light' scheme globally across root, body, and all form controls.
+ */
+:root,
+html,
+body,
+select,
+option,
+input,
+textarea {
+  color-scheme: only light;
+}
+
+select,
+option {
+  background-color: #fff;
+  color: #0f172a;
+}
 
 @media print {
   body * {

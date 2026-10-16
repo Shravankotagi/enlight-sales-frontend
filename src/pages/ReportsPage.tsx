@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { reportsApi, ordersApi, inquiriesApi } from '../lib/api';
+import { reportsApi, ordersApi, inquiriesApi, activityLogsApi } from '../lib/api';
+import { formatIstDateTime, formatSessionDuration } from '../utils/istDateTime';
 import SyncBiginButton from '../components/SyncBiginButton';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
@@ -117,6 +118,36 @@ export default function ReportsPage() {
     overview?.summary?.won ||
     (overview?.orders || []).length ||
     0;
+
+  const { data: loginActivity = [] } = useQuery({
+    queryKey: ['reports-login-activity', dateRange, effectivePhone, activeMode, isAdmin],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const params = getParams();
+      let from = params.from as string | undefined;
+      let to = params.to as string | undefined;
+      if (dateRange.preset === 'monthly' && dateRange.year != null && dateRange.month != null) {
+        const start = new Date(dateRange.year, dateRange.month, 1);
+        const end = new Date(dateRange.year, dateRange.month + 1, 0);
+        const ymd = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        from = ymd(start);
+        to = ymd(end);
+      }
+      const res = await activityLogsApi.getAll({
+        module: 'Auth',
+        salesperson_phone: effectivePhone || undefined,
+        mode: activeMode,
+        from,
+        to,
+        limit: 100,
+      });
+      const raw = res?.data;
+      if (Array.isArray(raw)) return raw;
+      if (Array.isArray(raw?.data)) return raw.data;
+      return [];
+    },
+  });
 
   const funnelList: any[] = Array.isArray(overview?.funnel)
     ? overview.funnel
@@ -419,6 +450,50 @@ export default function ReportsPage() {
                 </div>
               )}
             </div>
+            {isAdmin && (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100">
+                  <h2 className="text-sm font-bold text-slate-900">Login activity</h2>
+                </div>
+                {loginActivity.length === 0 ? (
+                  <p className="px-5 py-8 text-center text-xs text-slate-400">No login activity in this period</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 text-slate-500">
+                        <tr>
+                          <th className="px-5 py-2.5 text-left font-semibold">Name</th>
+                          <th className="px-5 py-2.5 text-left font-semibold">Activity</th>
+                          <th className="px-5 py-2.5 text-left font-semibold">When</th>
+                          <th className="px-5 py-2.5 text-left font-semibold">Logout</th>
+                          <th className="px-5 py-2.5 text-left font-semibold">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loginActivity.map((log: any, i: number) => {
+                          const when = formatIstDateTime(log.timestamp);
+                          return (
+                            <tr key={log.id || i} className="border-t border-slate-100">
+                              <td className="px-5 py-3 font-semibold text-slate-900">{log.salesperson_name || '-'}</td>
+                              <td className="px-5 py-3 text-slate-700">{log.action_type === 'login' ? 'Login' : log.description || 'Logout'}</td>
+                              <td className="px-5 py-3 text-slate-600">{when.label}</td>
+                              <td className="px-5 py-3 text-slate-600">
+                                {log.action_type !== 'login'
+                                  ? '-'
+                                  : log.logout_at
+                                    ? `${log.logout_status || 'Logout'} · ${formatIstDateTime(log.logout_at).label}`
+                                    : 'No logout recorded'}
+                              </td>
+                              <td className="px-5 py-3 text-slate-600">{formatSessionDuration(log.duration_minutes) || '-'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

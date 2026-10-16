@@ -52,6 +52,7 @@ import {
   resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
+import { Select } from '../components/ui/select';
 
 interface DealItem {
   id?: string;
@@ -1599,36 +1600,36 @@ export default function OrdersPage() {
               )}
             </div>
 
-            {/* 2. Days Filter Dropdown (Bold closed, normal dropdown options) */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={dayPreset}
-                onChange={e => handleDayPresetChange(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-                <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-                <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-                <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-                <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-                <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            {/* 2. Days Filter Dropdown */}
+            <Select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              prefixIcon={<Calendar size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-44"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </Select>
 
-            {/* 3. Tonnage Filter Dropdown (<500, 500-1000, >1000) (Bold closed, normal dropdown options) */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value)}
-                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Orders ({safeOrders.length})</option>
-                <option value="under_500" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&lt; 500 MT ({under500Count})</option>
-                <option value="500_to_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>500 – 1000 MT ({mid500To1000Count})</option>
-                <option value="above_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&gt; 1000 MT ({above1000Count})</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            {/* 3. Tonnage Filter Dropdown */}
+            <Select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-52"
+            >
+              <option value="all">All Orders ({safeOrders.length})</option>
+              <option value="under_500">&lt; 500 MT ({under500Count})</option>
+              <option value="500_to_1000">500 – 1000 MT ({mid500To1000Count})</option>
+              <option value="above_1000">&gt; 1000 MT ({above1000Count})</option>
+            </Select>
 
             {/* 4. Clear Filter Button */}
             {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
@@ -2292,7 +2293,7 @@ export default function OrdersPage() {
                               placeholder="0"
                               className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                             />
-                            <select
+                            <Select
                               value={normalizeUnit(item.unit) || 'MT'}
                               onChange={(e) => {
                                 const newUnit = e.target.value;
@@ -2321,14 +2322,18 @@ export default function OrdersPage() {
                                 };
                                 setFormLineItems(updated);
                               }}
-                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              wrapperClassName="w-[58px] shrink-0"
+                              className="w-full px-1 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 hover:border-blue-400"
+                              menuClassName="w-24"
+                              chevronClassName="h-3 w-3 shrink-0 opacity-60"
+                            >
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
                               <option value="KG">KG</option>
                               {['Pcs', 'Sheets', 'Plates', 'Coils'].includes(normalizeUnit(item.unit) || '') && (
                                 <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
                               )}
-                            </select>
+                            </Select>
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
                               const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;

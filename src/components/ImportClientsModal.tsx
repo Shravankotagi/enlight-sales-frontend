@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Upload, Download, FileSpreadsheet, Check, AlertCircle, Loader2, Users } from 'lucide-react';
 import { customersApi } from '../lib/api';
+import { Select } from './ui/select';
 
 interface Salesperson {
   name: string;
@@ -196,18 +197,20 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
                 <Users size={14} className="text-blue-400" />
                 Assign All Clients To Salesperson
               </label>
-              <select
+              <Select
                 value={selectedSalesperson}
                 onChange={e => setSelectedSalesperson(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-xs hover:border-blue-400"
+                placeholder='Use CSV "Assigned Salesperson" Column / Unassigned'
+                menuClassName="w-full text-slate-800"
               >
-                <option value="">Use CSV "Assigned Salesperson" Column / Unassigned</option>
+                <option value=''>Use CSV "Assigned Salesperson" Column / Unassigned</option>
                 {salespeople.map(sp => (
                   <option key={sp.phone} value={sp.phone}>
                     {sp.name} ({sp.employee_id}) - +{sp.phone}
                   </option>
                 ))}
-              </select>
+              </Select>
               <p className="text-[11px] text-slate-400 mt-1">
                 If selected, overrides any unassigned rows in the spreadsheet.
               </p>

@@ -14,7 +14,6 @@ import {
   User,
   Check,
   MessageSquare,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Save,
@@ -39,6 +38,7 @@ import {
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 import DealProductCombobox, { type SelectedDealItem } from '../components/DealProductCombobox';
 import PaginationControl from '../components/PaginationControl';
+import { Select } from '../components/ui/select';
 
 export interface ComplaintAttachment {
   id?: string;
@@ -1041,38 +1041,38 @@ export default function ComplaintsPage() {
           </div>
 
           {/* 2. Date Preset Dropdown with 'All Time' default */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            prefixIcon={<Calendar size={14} className="text-blue-600" />}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* 3. Status Filter Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterStatus}
-              onChange={e => {
-                setFilterStatus(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Status ({safeComplaints.length})</option>
-              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Pending ({pendingCount})</option>
-              <option value="reopened" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Reopened ({reopenedCount})</option>
-              <option value="resolved" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Resolved ({resolvedCount})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterStatus}
+            onChange={e => {
+              setFilterStatus(e.target.value);
+              setCurrentPage(1);
+            }}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Status ({safeComplaints.length})</option>
+            <option value="pending">Pending ({pendingCount})</option>
+            <option value="reopened">Reopened ({reopenedCount})</option>
+            <option value="resolved">Resolved ({resolvedCount})</option>
+          </Select>
 
           {/* 4. Clear Filter Button */}
           {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
@@ -1656,21 +1656,19 @@ export default function ComplaintsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Complaint Type <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative flex items-center">
-                        <select
-                          value={editType}
-                          onChange={e => setEditType(e.target.value)}
-                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                          <option value="Quality Defect">Quality Defect</option>
-                          <option value="Physical Damage">Physical Damage</option>
-                          <option value="Quantity Shortage">Quantity Shortage</option>
-                          <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
-                          <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
-                          <option value="Specification Mismatch">Specification Mismatch</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                      </div>
+                      <Select
+                        value={editType}
+                        onChange={e => setEditType(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
+                      >
+                        <option value="Quality Defect">Quality Defect</option>
+                        <option value="Physical Damage">Physical Damage</option>
+                        <option value="Quantity Shortage">Quantity Shortage</option>
+                        <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
+                        <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
+                        <option value="Specification Mismatch">Specification Mismatch</option>
+                        <option value="Other">Other</option>
+                      </Select>
                     </div>
                     <div>
                       <label className="block font-semibold text-slate-500 mb-1">
@@ -1746,17 +1744,15 @@ export default function ComplaintsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Status <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative flex items-center">
-                        <select
-                          value={editStatus}
-                          onChange={e => setEditStatus(e.target.value)}
-                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                          <option value="reported">Pending (Open)</option>
-                          <option value="resolved">Resolved (Closed)</option>
-                          <option value="reopened">Reopened</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                      </div>
+                      <Select
+                        value={editStatus}
+                        onChange={e => setEditStatus(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
+                      >
+                        <option value="reported">Pending (Open)</option>
+                        <option value="resolved">Resolved (Closed)</option>
+                        <option value="reopened">Reopened</option>
+                      </Select>
                     </div>
 
                     <div>
@@ -1917,24 +1913,22 @@ export default function ComplaintsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Complaint Type <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative flex items-center">
-                        <select
-                          value={formType}
-                          onChange={e => {
-                            setFormType(e.target.value);
-                            if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
-                          }}
-                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                          <option value="Quality Defect">Quality Defect</option>
-                          <option value="Physical Damage">Physical Damage</option>
-                          <option value="Quantity Shortage">Quantity Shortage</option>
-                          <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
-                          <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
-                          <option value="Specification Mismatch">Specification Mismatch</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                      </div>
+                      <Select
+                        value={formType}
+                        onChange={e => {
+                          setFormType(e.target.value);
+                          if (formErrors.type) setFormErrors(prev => ({ ...prev, type: false }));
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
+                      >
+                        <option value="Quality Defect">Quality Defect</option>
+                        <option value="Physical Damage">Physical Damage</option>
+                        <option value="Quantity Shortage">Quantity Shortage</option>
+                        <option value="Delivery Delay">Delivery Delay / Wrong Delivery</option>
+                        <option value="Billing Mismatch">Billing / Invoicing Dispute</option>
+                        <option value="Specification Mismatch">Specification Mismatch</option>
+                        <option value="Other">Other</option>
+                      </Select>
                     </div>
 
                     <div>
@@ -2053,23 +2047,21 @@ export default function ComplaintsPage() {
                       <label className="block font-semibold text-slate-700 mb-1">
                         Initial Status <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative flex items-center">
-                        <select
-                          value={formStatus}
-                          onChange={e => {
-                            setFormStatus(e.target.value);
-                            if (e.target.value === 'resolved' && !formResolutionDate) {
-                              setFormResolutionDate(formatLocalDate());
-                            }
-                            if (formErrors.status) setFormErrors(prev => ({ ...prev, status: false }));
-                          }}
-                          className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer appearance-none">
-                          <option value="reported">Pending (Open)</option>
-                          <option value="resolved">Resolved (Closed)</option>
-                          <option value="reopened">Reopened</option>
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-                      </div>
+                      <Select
+                        value={formStatus}
+                        onChange={e => {
+                          setFormStatus(e.target.value);
+                          if (e.target.value === 'resolved' && !formResolutionDate) {
+                            setFormResolutionDate(formatLocalDate());
+                          }
+                          if (formErrors.status) setFormErrors(prev => ({ ...prev, status: false }));
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
+                      >
+                        <option value="reported">Pending (Open)</option>
+                        <option value="resolved">Resolved (Closed)</option>
+                        <option value="reopened">Reopened</option>
+                      </Select>
                     </div>
 
                     <div>

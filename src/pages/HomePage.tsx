@@ -41,6 +41,7 @@ import {
   UserCheck,
   ShieldAlert,
 } from 'lucide-react';
+import { Select } from '../components/ui/select';
 
 interface CarouselItem {
   id: string;
@@ -1007,21 +1008,21 @@ export default function HomePage() {
           </button>
 
           {/* Date Filter dropdown */}
-          <div className="relative inline-flex items-center">
-            <Calendar size={13} className="absolute left-2.5 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="h-9 pl-7 pr-7 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="7_days">Last 7 Days</option>
-              <option value="30_days">Last 30 Days</option>
-              <option value="90_days">Last 90 Days</option>
-              <option value="custom">Custom Range</option>
-            </select>
-            <ChevronDown size={13} className="absolute right-2 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            prefixIcon={<Calendar size={13} className="text-blue-600" />}
+            wrapperClassName="w-auto inline-flex"
+            className="h-9 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* Custom date inputs - inline in the same row when Custom Range is active */}
           {showCustomDate && (

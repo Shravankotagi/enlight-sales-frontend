@@ -41,6 +41,7 @@ import {
   INDIAN_GST_STATES,
   resolveCustomerState,
 } from '../utils/pricingEngine';
+import { Select } from '../components/ui/select';
 
 function safeStr(val: any): string {
   if (val === null || val === undefined) return '';
@@ -1612,7 +1613,7 @@ function CustomerProfilePageContent() {
                   <label className="block text-slate-600 font-semibold mb-1">
                     State (Place of Supply)
                   </label>
-                  <select
+                  <Select
                     value={editForm.customer_state || ''}
                     onChange={e =>
                       setEditForm({
@@ -1620,14 +1621,16 @@ function CustomerProfilePageContent() {
                         customer_state: e.target.value,
                       })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                    placeholder="Auto-detect from GSTIN / Address"
+                  >
                     <option value="">Auto-detect from GSTIN / Address</option>
                     {INDIAN_GST_STATES.map(st => (
                       <option key={st.code} value={st.label}>
                         {st.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
@@ -1680,7 +1683,7 @@ function CustomerProfilePageContent() {
                   <label className="block text-slate-600 font-semibold mb-1">
                     Assigned Salesperson
                   </label>
-                  <select
+                  <Select
                     value={editForm.assigned_salesperson_phone}
                     onChange={e =>
                       setEditForm({
@@ -1688,30 +1691,33 @@ function CustomerProfilePageContent() {
                         assigned_salesperson_phone: e.target.value,
                       })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                    placeholder="Unassigned"
+                  >
                     <option value="">Unassigned</option>
                     {safeEmployees.map(emp => (
                       <option key={emp.id} value={emp.phone}>
                         {emp.name} ({emp.phone})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
 
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Customer Segment
                   </label>
-                  <select
+                  <Select
                     value={editForm.segment}
                     onChange={e =>
                       setEditForm({ ...editForm, segment: e.target.value })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                  >
                     <option value="key_account">Key Account</option>
                     <option value="growth">Growth</option>
                     <option value="new">New</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 

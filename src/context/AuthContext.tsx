@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect, type ReactNode } from 'react';
+import { postAuthLogout } from '../lib/api';
 
 export interface Employee {
   id: string;
@@ -19,7 +20,7 @@ interface AuthContextType {
   employee: Employee | null;
   viewingAs: Employee | null;
   login: (token: string, employee: Employee) => void;
-  logout: () => void;
+  logout: (reason?: 'manual' | 'session_expired') => void;
   setViewingAs: (emp: Employee) => void;
   clearViewingAs: () => void;
   isAdmin: boolean;
@@ -63,21 +64,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('enlight_employee', JSON.stringify(newEmployee));
     sessionStorage.removeItem('enlight_active_chat_session_id');
     sessionStorage.removeItem('enlight_viewing_as');
+    sessionStorage.setItem('enlight_last_activity', String(Date.now()));
     setToken(newToken);
     setEmployee(newEmployee);
     setViewingAsState(null);
   };
 
-  const logout = () => {
+  const logout = useCallback((reason: 'manual' | 'session_expired' = 'manual') => {
+    postAuthLogout(reason);
     sessionStorage.removeItem('enlight_token');
     sessionStorage.removeItem('enlight_employee');
     sessionStorage.removeItem('enlight_viewing_as');
     sessionStorage.removeItem('enlight_active_chat_session_id');
+    sessionStorage.removeItem('enlight_last_activity');
     setToken(null);
     setEmployee(null);
     setViewingAsState(null);
-  };
+  }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    const idleMs = 30 * 60 * 1000;
+    const key = 'enlight_last_activity';
+    if (!sessionStorage.getItem(key)) sessionStorage.setItem(key, String(Date.now()));
+    let lastWrite = 0;
+    const mark = () => {
+      const now = Date.now();
+      if (now - lastWrite < 15000) return;
+      lastWrite = now;
+      sessionStorage.setItem(key, String(now));
+    };
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const;
+    events.forEach((event) => window.addEventListener(event, mark, { passive: true }));
+    const timer = window.setInterval(() => {
+      const last = Number(sessionStorage.getItem(key) || Date.now());
+      if (Date.now() - last >= idleMs) {
+        logout('session_expired');
+        window.location.href = '/login';
+      }
+    }, 15000);
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, mark));
+      window.clearInterval(timer);
+    };
+  }, [token, logout]);
   const setViewingAs = (emp: Employee) => {
     sessionStorage.setItem('enlight_viewing_as', JSON.stringify(emp));
     sessionStorage.removeItem('enlight_active_chat_session_id');

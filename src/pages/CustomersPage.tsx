@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Calendar,
   X,
-  ChevronDown,
   Award,
   TrendingUp,
   Sparkles,
@@ -22,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
 import SyncBiginButton from '../components/SyncBiginButton';
+import { Select } from '../components/ui/select';
 
 function HealthBadge({ risk }: { risk: string }) {
   const r = (risk || '').toLowerCase();
@@ -437,55 +437,55 @@ export default function CustomersPage() {
             </div>
 
             {/* Date Preset Dropdown with 'All Time' default */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={dayPreset}
-                onChange={e => handleDayPresetChange(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-                <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-                <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-                <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-                <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-                <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            <Select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              prefixIcon={<Calendar size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-44"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </Select>
 
             {/* Health Filter Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={filterHealth}
-                onChange={e => {
-                  setFilterHealth(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Health Statuses ({totalCustomers})</option>
-                <option value="active" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Active ({activeCount})</option>
-                <option value="at_risk" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>At Risk ({atRiskCount})</option>
-                <option value="churning" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Churning ({churningCount})</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            <Select
+              value={filterHealth}
+              onChange={e => {
+                setFilterHealth(e.target.value);
+                setCurrentPage(1);
+              }}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All Health Statuses ({totalCustomers})</option>
+              <option value="active">Active ({activeCount})</option>
+              <option value="at_risk">At Risk ({atRiskCount})</option>
+              <option value="churning">Churning ({churningCount})</option>
+            </Select>
 
             {/* Segment Filter Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={filterSegment}
-                onChange={e => {
-                  setFilterSegment(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Segments ({totalCustomers})</option>
-                <option value="key_account" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Key Accounts ({keyAccountsCount})</option>
-                <option value="growth" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Growth Accounts ({growthAccountsCount})</option>
-                <option value="new" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>New Customers ({newAccountsCount})</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            <Select
+              value={filterSegment}
+              onChange={e => {
+                setFilterSegment(e.target.value);
+                setCurrentPage(1);
+              }}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All Segments ({totalCustomers})</option>
+              <option value="key_account">Key Accounts ({keyAccountsCount})</option>
+              <option value="growth">Growth Accounts ({growthAccountsCount})</option>
+              <option value="new">New Customers ({newAccountsCount})</option>
+            </Select>
 
             {/* Clear Filter Button */}
             {(searchTerm || filterHealth !== 'all' || filterSegment !== 'all' || dayPreset !== 'all') && (

@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { customersApi } from '../lib/api';
 import { INDIAN_GST_STATES, resolveCustomerState } from '../utils/pricingEngine';
+import { Select } from './ui/select';
 
 export function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
   if (!inputName || !inputName.trim()) return false;
@@ -193,23 +194,25 @@ export default function AddAssignedCustomerDialog({
               className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
             />
           </label>
-          <label className="block text-xs font-semibold text-slate-700">
-            State (GST)
-            <select
+          <div className="block text-xs font-semibold text-slate-700">
+            <span className="block mb-1">State (GST)</span>
+            <Select
               value={customerState}
               onChange={e => {
                 setCustomerState(e.target.value);
                 setStateManuallyEdited(true);
               }}
-              className="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white hover:border-blue-400"
+              placeholder="Auto-detect"
+            >
               <option value="">Auto-detect</option>
               {INDIAN_GST_STATES.map(st => (
                 <option key={st.code} value={st.label}>
                   {st.label}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </div>
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg">

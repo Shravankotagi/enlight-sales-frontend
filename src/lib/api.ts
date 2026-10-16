@@ -86,7 +86,9 @@ API.interceptors.response.use(
       requestUrl,
     );
 
-    if (error.response?.status === 401 && !isOtpAuthRequest) {
+    const isLogoutRequest = /\/auth\/logout(?:$|[/?])/.test(requestUrl);
+    if (error.response?.status === 401 && !isOtpAuthRequest && !isLogoutRequest) {
+      postAuthLogout('session_expired');
       sessionStorage.removeItem('enlight_token');
       sessionStorage.removeItem('enlight_employee');
       sessionStorage.removeItem('enlight_viewing_as');
@@ -282,11 +284,26 @@ export const activityLogsApi = {
     to?: string;
     module?: string;
     search?: string;
+    action_type?: string;
     salesperson_phone?: string;
     mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
 };
+
+export function postAuthLogout(reason: 'manual' | 'session_expired') {
+  const token = sessionStorage.getItem('enlight_token');
+  if (!token) return;
+  fetch(`${BACKEND_URL}/auth/logout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
 
 export const authApi = {
   requestOtp: (phone: string) =>

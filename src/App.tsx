@@ -19,6 +19,7 @@ import OrdersPage from './pages/OrdersPage';
 import NotFoundPage from './pages/NotFoundPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AssistantPage from './pages/AssistantPage';
+import SidebarDemo from './components/SidebarDemo';
 import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
@@ -54,6 +55,7 @@ function AppRoutes() {
         }
       />
       <Route path="/404" element={<NotFoundPage />} />
+      <Route path="/sidebar-demo" element={<SidebarDemo />} />
 
       {/* Authenticated Layout Hierarchy */}
       <Route
