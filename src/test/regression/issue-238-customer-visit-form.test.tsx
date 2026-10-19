@@ -111,6 +111,7 @@ describe('issue 238 customer visit form', () => {
         source="gps"
         latitude={18.5204}
         longitude={73.8567}
+        accuracy={12}
         notice=""
         locating={false}
         onRetry={() => undefined}
@@ -120,6 +121,7 @@ describe('issue 238 customer visit form', () => {
     expect(
       screen.getByDisplayValue('12, MG Road, Camp, Pune, Maharashtra, 411001, India'),
     ).toHaveAttribute('readonly');
+    expect(screen.getByText(/18\.52040, 73\.85670 · ±12 m/)).toBeTruthy();
   });
 
   it('lets several brands be selected and asks for a name when Others is chosen', async () => {

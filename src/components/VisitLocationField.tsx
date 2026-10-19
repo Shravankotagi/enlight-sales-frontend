@@ -4,6 +4,7 @@ interface VisitLocationFieldProps {
   cityLocked?: boolean;
   latitude: number | null;
   longitude: number | null;
+  accuracy?: number | null;
   notice: string;
   locating: boolean;
   error?: string | boolean;
@@ -17,6 +18,7 @@ export default function VisitLocationField({
   cityLocked,
   latitude,
   longitude,
+  accuracy,
   notice,
   locating,
   error,
@@ -57,6 +59,7 @@ export default function VisitLocationField({
       {latitude != null && longitude != null && (
         <p className="mt-1 text-[11px] font-mono text-slate-500">
           Coordinates: {latitude.toFixed(5)}, {longitude.toFixed(5)}
+          {accuracy != null ? ` · ±${accuracy} m` : ''}
         </p>
       )}
       {notice && (

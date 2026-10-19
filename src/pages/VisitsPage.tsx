@@ -483,6 +483,7 @@ export default function VisitsPage() {
   const [locationSource, setLocationSource] = useState<'' | 'gps' | 'manual'>('');
   const [visitLat, setVisitLat] = useState<number | null>(null);
   const [visitLng, setVisitLng] = useState<number | null>(null);
+  const [visitAccuracy, setVisitAccuracy] = useState<number | null>(null);
   const [locationNotice, setLocationNotice] = useState('');
   const [locationLocked, setLocationLocked] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -508,24 +509,39 @@ export default function VisitsPage() {
 
   // GPS Coordinates & File Upload Helpers
   const captureGpsCoordinates = (): Promise<{ latitude: number; longitude: number; accuracy: number } | null> => {
+    const targetMeters = 20;
+    const watchMs = 15000;
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
         resolve(null);
         return;
       }
-      navigator.geolocation.getCurrentPosition(
+      let settled = false;
+      let watchId = 0;
+      let best: { latitude: number; longitude: number; accuracy: number } | null = null;
+      const finish = (reading: { latitude: number; longitude: number; accuracy: number } | null) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        resolve(reading);
+      };
+      const timer = window.setTimeout(() => finish(best), watchMs);
+      watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          resolve({
+          const reading = {
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
             accuracy: Math.round(pos.coords.accuracy),
-          });
+          };
+          if (!best || reading.accuracy < best.accuracy) best = reading;
+          if (reading.accuracy <= targetMeters) finish(best);
         },
         (err) => {
           console.warn('Geolocation capture failed or denied:', err);
-          resolve(null);
+          finish(best);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: watchMs },
       );
     });
   };
@@ -540,6 +556,7 @@ export default function VisitsPage() {
         setLocationLocked(false);
         setVisitLat(null);
         setVisitLng(null);
+        setVisitAccuracy(null);
         setLocationNotice('Location permission was denied or GPS is unavailable. Enter the city, or retry.');
         return;
       }
@@ -553,10 +570,17 @@ export default function VisitsPage() {
       }
       setVisitLat(coords.latitude);
       setVisitLng(coords.longitude);
+      setVisitAccuracy(coords.accuracy);
       setLocationSource('gps');
       setLocationLocked(Boolean(city));
       setFormLocation(city);
-      if (!city) setLocationNotice('Type the city.');
+      if (coords.accuracy > 50) {
+        setLocationNotice(
+          `The device could only locate within ${coords.accuracy} meters. Retry outdoors.${city ? '' : ' Or type the location.'}`,
+        );
+      } else if (!city) {
+        setLocationNotice('Type the city.');
+      }
       setFormErrors(prev => ({ ...prev, location: false }));
     } finally {
       setLocating(false);
@@ -2055,6 +2079,7 @@ export default function VisitsPage() {
                         cityLocked={locationLocked}
                         latitude={visitLat}
                         longitude={visitLng}
+                        accuracy={visitAccuracy}
                         notice={locationNotice}
                         locating={locating}
                         error={formErrors.location}
