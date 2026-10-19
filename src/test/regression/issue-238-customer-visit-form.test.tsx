@@ -1,5 +1,5 @@
 // Issue 238: new customer visits require every field, a locked GPS city, and a camera photo.
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import AssistantAttachMenu from '../../components/AssistantAttachMenu';
@@ -104,6 +104,22 @@ describe('issue 238 customer visit form', () => {
     expect(screen.getByPlaceholderText('Enter the city')).not.toHaveAttribute('readonly');
     expect(screen.getByText('Type the city.')).toBeTruthy();
     expect(screen.getByText(/18.52000, 73.85000/)).toBeTruthy();
+
+    rerender(
+      <VisitLocationField
+        value="12, MG Road, Camp, Pune, Maharashtra, 411001, India"
+        source="gps"
+        latitude={18.5204}
+        longitude={73.8567}
+        notice=""
+        locating={false}
+        onRetry={() => undefined}
+        onManualChange={() => undefined}
+      />,
+    );
+    expect(
+      screen.getByDisplayValue('12, MG Road, Camp, Pune, Maharashtra, 411001, India'),
+    ).toHaveAttribute('readonly');
   });
 
   it('lets several brands be selected and asks for a name when Others is chosen', async () => {
@@ -150,6 +166,58 @@ describe('issue 238 customer visit form', () => {
     expect(dialog.parentElement?.parentElement).toBe(document.body);
     expect(screen.queryByRole('button', { name: 'Upload from device' })).toBeNull();
     expect(screen.getByText(/no camera/i)).toBeTruthy();
+  });
+
+  it('attaches the camera stream without a timer and falls back when the rear camera fails', async () => {
+    const stop = vi.fn();
+    const stream = { getTracks: () => [{ stop }] };
+    const getUserMedia = vi.fn()
+      .mockRejectedValueOnce(new Error('OverconstrainedError'))
+      .mockResolvedValueOnce(stream);
+    const previous = navigator.mediaDevices;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    const realSetTimeout = window.setTimeout.bind(window);
+    const timeout = vi.spyOn(window, 'setTimeout').mockImplementation(((
+      handler: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (delay === 0) return 0 as unknown as ReturnType<typeof setTimeout>;
+      return realSetTimeout(handler, delay, ...args);
+    }) as typeof window.setTimeout);
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    try {
+      render(
+        <VisitCameraCapture
+          readGps={async () => null}
+          onCapture={() => undefined}
+        />,
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /take visit photo/i }));
+      });
+      const video = document.querySelector('video');
+      expect(video?.srcObject).toBe(stream);
+      expect(getUserMedia).toHaveBeenNthCalledWith(1, {
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      expect(getUserMedia).toHaveBeenNthCalledWith(2, { video: true, audio: false });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      });
+      expect(stop).toHaveBeenCalled();
+    } finally {
+      timeout.mockRestore();
+      play.mockRestore();
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: previous,
+      });
+    }
   });
 
   it('opens a large camera overlay', async () => {

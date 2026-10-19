@@ -18,7 +18,13 @@ interface VisitCameraCaptureProps {
 }
 
 const NO_CAMERA = 'This device has no camera. A visit photo cannot be taken here.';
+const NO_PREVIEW = 'The camera opened but no picture is coming through. Check the camera permission and try again.';
 const NO_GPS = 'This photo has no GPS data. Allow location and take it again.';
+const REAR_CAMERA = {
+  video: { facingMode: { ideal: 'environment' } },
+  audio: false,
+};
+const ANY_CAMERA = { video: true, audio: false };
 
 export default function VisitCameraCapture({
   disabled,
@@ -46,6 +52,18 @@ export default function VisitCameraCapture({
 
   useEffect(() => () => stop(), []);
 
+  const openCamera = async () => {
+    let lastError: unknown;
+    for (const constraints of [REAR_CAMERA, ANY_CAMERA]) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  };
+
   const start = async () => {
     setError('');
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -53,18 +71,9 @@ export default function VisitCameraCapture({
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
-      });
+      const stream = await openCamera();
       streamRef.current = stream;
       setOpen(true);
-      window.setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => undefined);
-        }
-      }, 0);
     } catch {
       setError(NO_CAMERA);
       stop();
@@ -76,6 +85,31 @@ export default function VisitCameraCapture({
     // Start once when the assistant opens the camera. `start` closes over the latest refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!open || !video || !stream) return;
+    video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    const play = () => {
+      const result = video.play();
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => setError(NO_PREVIEW));
+      }
+    };
+    if (video.readyState >= 1) play();
+    else video.addEventListener('loadedmetadata', play);
+    const previewTimer = window.setTimeout(() => {
+      if (video.videoWidth > 0) return;
+      setError(NO_PREVIEW);
+    }, 4000);
+    return () => {
+      window.clearTimeout(previewTimer);
+      video.removeEventListener('loadedmetadata', play);
+    };
+  }, [open]);
 
   const capture = async () => {
     const video = videoRef.current;

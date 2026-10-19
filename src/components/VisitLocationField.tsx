@@ -39,8 +39,8 @@ export default function VisitLocationField({
           {locating ? 'Reading location...' : 'Retry'}
         </button>
       </div>
-      <input
-        type="text"
+      <textarea
+        rows={2}
         readOnly={locked}
         aria-readonly={locked}
         placeholder={locked ? 'Reading location...' : 'Enter the city'}
@@ -48,7 +48,7 @@ export default function VisitLocationField({
         onChange={(event) => {
           if (!locked) onManualChange(event.target.value);
         }}
-        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all resize-none ${
           error
             ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500'
             : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
