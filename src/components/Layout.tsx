@@ -26,7 +26,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuItem,
 } from './ui/dropdown-menu';
-import { Button } from './ui/button';
 
 /* ---------------- Footer User Menu ---------------- */
 function UserMenu({
@@ -66,53 +65,47 @@ function UserMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {sidebarOpen ? (
-          <Button
-            variant="ghost"
-            className={`w-full justify-between gap-2.5 rounded-xl cursor-pointer hover:bg-slate-100 transition-all duration-300 ${
-              isEnlarged ? 'h-14 px-3.5' : 'h-12 px-3'
+        <button
+          type="button"
+          className={`touch-target group flex items-center h-12 w-full rounded-xl hover:bg-slate-100 transition-[padding,background-color] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none cursor-pointer overflow-hidden select-none outline-hidden ${
+            isEnlarged ? 'px-3' : 'px-2'
+          }`}
+          title={!sidebarOpen ? employee?.name || 'Account' : undefined}
+          aria-label={employee?.name || 'Account settings'}
+        >
+          {/* Avatar (centered in collapsed rail, scales gently on enlarge with GPU transform) */}
+          <div className={`w-10 h-10 shrink-0 flex items-center justify-center transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] will-change-transform ${
+            isEnlarged ? 'scale-105' : 'scale-100'
+          }`}>
+            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-[#d71920] to-[#1f4bb8] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+              {employee?.name ? employee.name.slice(0, 2).toUpperCase() : 'EM'}
+            </div>
+          </div>
+
+          {/* User Info (fades smoothly when expanded) */}
+          <div
+            className={`flex flex-col min-w-0 text-left transition-[opacity,max-width,margin] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none overflow-hidden whitespace-nowrap ${
+              sidebarOpen
+                ? 'opacity-100 max-w-[160px] ml-2.5'
+                : 'opacity-0 max-w-0 ml-0 pointer-events-none'
             }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0 text-left">
-              <div
-                className={`rounded-full bg-gradient-to-br from-[#d71920] to-[#1f4bb8] text-white flex items-center justify-center font-bold shrink-0 shadow-xs transition-all duration-300 ${
-                  isEnlarged ? 'h-10 w-10 text-sm' : 'h-9 w-9 text-xs'
-                }`}
-              >
-                {employee?.name ? employee.name.slice(0, 2).toUpperCase() : 'EM'}
-              </div>
-              <div className="flex flex-col min-w-0 transition-all duration-300">
-                <span
-                  className={`font-bold text-slate-800 truncate transition-all duration-300 ${
-                    isEnlarged ? 'text-sm' : 'text-xs'
-                  }`}
-                >
-                  {employee?.name || 'Employee'}
-                </span>
-                <span
-                  className={`text-slate-400 font-medium truncate transition-all duration-300 ${
-                    isEnlarged ? 'text-xs' : 'text-[10px]'
-                  }`}
-                >
-                  {employee?.employee_id || 'EMP'} · {ownRoleLabel}
-                </span>
-              </div>
-            </div>
-            <ChevronsUpDown
-              className={`text-slate-400 shrink-0 transition-all duration-300 ${
-                isEnlarged ? 'h-5 w-5' : 'h-4 w-4'
-              }`}
-            />
-          </Button>
-        ) : (
-          <button
-            type="button"
-            className="h-10 w-10 mx-auto rounded-full bg-gradient-to-br from-[#d71920] to-[#1f4bb8] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
-            title={employee?.name || 'Account'}
-          >
-            {employee?.name ? employee.name.slice(0, 2).toUpperCase() : 'EM'}
-          </button>
-        )}
+            <span className="font-bold text-slate-800 text-xs truncate">
+              {employee?.name || 'Employee'}
+            </span>
+            <span className="text-slate-400 font-medium text-[10px] truncate">
+              {employee?.employee_id || 'EMP'} · {ownRoleLabel}
+            </span>
+          </div>
+
+          {/* Chevrons */}
+          <ChevronsUpDown
+            size={16}
+            className={`text-slate-400 shrink-0 ml-auto transition-opacity duration-150 motion-reduce:transition-none ${
+              sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+          />
+        </button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent className="w-56 mb-2" align="start">
@@ -149,14 +142,39 @@ function UserMenu({
   );
 }
 
+const SIDEBAR_STORAGE_KEY = 'em_sidebar_open';
+
 /* ---------------- Main Layout Component ---------------- */
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch {
+      // ignore
+    }
+    return true;
+  });
   const [isHovered, setIsHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { employee, viewingAs, isAdmin, clearViewingAs } = useAuth();
+  const { employee, viewingAs, isAdmin, isSalesManager, clearViewingAs } = useAuth();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const toggleSidebar = () => {
+    setSidebarOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+    setIsHovered(false);
+  };
 
   // Reset scroll to top on route navigation
   useEffect(() => {
@@ -175,6 +193,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   );
 
   const showAdminTab = isAdmin && !isImpersonatingOther;
+  const showUserManagement = (isAdmin || isSalesManager) && !isImpersonatingOther;
 
   const isActive = (path: string) => {
     if (path === '/pipeline')
@@ -188,10 +207,10 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const navItems = [
     { path: '/home', label: 'Dashboard', icon: Home },
     ...(showAdminTab
-      ? [
-          { path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert },
-          { path: '/control-panel', label: 'User Management', icon: Settings },
-        ]
+      ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }]
+      : []),
+    ...(showUserManagement
+      ? [{ path: '/control-panel', label: 'User Management', icon: Settings }]
       : []),
     { path: '/assistant', label: 'AI Assistant', icon: Sparkles },
     { path: '/inquiries', label: 'Inquiries', icon: FileText },
@@ -204,25 +223,23 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     { path: '/logs', label: 'Logs', icon: History },
   ];
 
-  // Enlargement and background blur only active when sidebar is OPEN and user hovers over it
+  // Hover enlargement only active when sidebar is OPEN and user hovers over it
   const isEnlarged = sidebarOpen && isHovered;
 
   return (
     <div className="flex h-dvh bg-slate-50 font-sans overflow-hidden relative">
-      {/* Spacer Rail: holds page layout position so content never shifts on hover */}
+      {/* Spacer Rail: holds the main page layout position firmly so page content never shifts on hover */}
       <div
-        className={`${
+        className={`shrink-0 hidden lg:block transition-[width] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${
           sidebarOpen ? 'w-72' : 'w-20'
-        } shrink-0 hidden lg:block transition-all duration-300 ease-in-out`}
+        }`}
         aria-hidden="true"
       />
 
-      {/* Dim and Blur Backdrop Overlay: only active when sidebar is open and hovered */}
+      {/* Dim Backdrop Overlay: pure GPU alpha blend without expensive blur shaders */}
       <div
-        className={`fixed inset-0 z-30 transition-all duration-300 pointer-events-none ${
-          isEnlarged
-            ? 'bg-slate-900/20 backdrop-blur-[2px] opacity-100'
-            : 'opacity-0'
+        className={`fixed inset-0 z-20 bg-slate-900/15 pointer-events-none hidden lg:block motion-reduce:hidden transition-opacity duration-200 ease-[cubic-bezier(0.2,0,0,1)] will-change-[opacity] ${
+          isEnlarged ? 'opacity-100' : 'opacity-0'
         }`}
         aria-hidden="true"
       />
@@ -231,7 +248,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       {mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-30 bg-slate-900/30 backdrop-blur-xs lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-xs lg:hidden"
           aria-hidden="true"
         />
       )}
@@ -239,93 +256,105 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       {/* Sidebar */}
       <aside
         onMouseEnter={() => {
-          if (sidebarOpen) {
-            setIsHovered(true);
-          }
+          if (sidebarOpen) setIsHovered(true);
         }}
         onMouseLeave={() => {
           setIsHovered(false);
         }}
-        className={`fixed top-0 bottom-0 left-0 bg-white border-r border-slate-200/90 flex flex-col justify-between transition-all duration-300 ease-in-out select-none pb-[env(safe-area-inset-bottom)] ${
-          mobileOpen
-            ? 'translate-x-0 w-72 z-50 shadow-2xl'
-            : '-translate-x-full lg:translate-x-0'
-        } ${
-          !sidebarOpen
-            ? 'lg:w-20 lg:shadow-xs z-20'
-            : isHovered
-              ? 'lg:w-[22rem] lg:shadow-2xl lg:shadow-slate-900/25 lg:ring-1 lg:ring-black/5 z-40'
-              : 'lg:w-72 lg:shadow-xs z-20'
-        }`}
+        className={`fixed top-0 bottom-0 left-0 bg-white border-r border-slate-200/90 flex flex-col justify-between select-none pb-[env(safe-area-inset-bottom)]
+          transition-[width,transform] duration-200 ease-[cubic-bezier(0.2,0,0,1)] will-change-[width,transform] motion-reduce:transition-none ${
+            mobileOpen
+              ? 'translate-x-0 w-72 z-50 shadow-2xl'
+              : '-translate-x-full lg:translate-x-0'
+          } ${
+            !sidebarOpen
+              ? 'lg:w-20 lg:shadow-xs z-20'
+              : isHovered
+                ? 'lg:w-[22rem] z-40'
+                : 'lg:w-72 z-20'
+          }
+        `}
       >
-        {/* Top Header: Centered Logo, Centered Enlight Sigma with Collapse Button in front */}
+        {/* Hardware-composited shadow overlay: fades opacity without CPU shadow re-painting */}
         <div
-          className={`border-b border-slate-100 flex items-center shrink-0 transition-all duration-300 ${
-            sidebarOpen ? 'p-4 flex-col' : 'p-3.5 justify-center'
+          className={`absolute inset-0 -z-10 shadow-2xl shadow-slate-900/25 pointer-events-none transition-opacity duration-200 ease-[cubic-bezier(0.2,0,0,1)] will-change-[opacity] ${
+            isEnlarged ? 'opacity-100' : 'opacity-0'
+          }`}
+          aria-hidden="true"
+        />
+
+        {/* Header */}
+        <div
+          className={`border-b border-slate-100 shrink-0 relative transition-[height,padding] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none overflow-hidden flex items-center justify-center ${
+            sidebarOpen ? 'h-[7.75rem] px-3 pt-5 pb-3' : 'h-14 p-2'
           }`}
         >
-          {sidebarOpen ? (
-            <div className="flex flex-col items-center w-full">
-              {/* Centered Enlight Metals Logo */}
-              <img
-                src="/enlight-metals-logo.png"
-                alt="Enlight Metals"
-                className={`w-auto object-contain transition-all duration-300 ${
-                  isEnlarged
-                    ? 'h-13 max-w-[230px]'
-                    : 'h-10 sm:h-11 max-w-[190px]'
-                }`}
-              />
-
-              {/* Row below logo: Enlight Sigma centered, Collapse button in front/on the right */}
-              <div className="grid grid-cols-[2.25rem_1fr_2.25rem] items-center w-full mt-2.5">
-                <span />
-                <span
-                  className={`font-black text-slate-900 tracking-tight text-center truncate ${
-                    isEnlarged ? 'text-base' : 'text-sm'
-                  }`}
-                >
-                  Enlight <span className="text-[#1f4bb8]">Sigma</span>
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (mobileOpen) {
-                      setMobileOpen(false);
-                    } else {
-                      setSidebarOpen(false);
-                      setIsHovered(false);
-                    }
-                  }}
-                  className="justify-self-end inline-flex items-center justify-center h-9 w-9 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                  title="Collapse sidebar"
-                >
-                  <PanelLeft className="h-5 w-5" />
-                </button>
-              </div>
+          {/* Expanded Header Content */}
+          <div
+            className={`w-full flex flex-col items-center transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none ${
+              sidebarOpen
+                ? 'opacity-100 translate-y-0'
+                : 'opacity-0 -translate-y-2 pointer-events-none absolute'
+            }`}
+          >
+            <img
+              src="/enlight-metals-logo.png"
+              alt="Enlight Metals"
+              className={`w-auto object-contain h-12 sm:h-14 max-w-[220px] transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] will-change-transform origin-center ${
+                isEnlarged ? 'scale-105' : 'scale-100'
+              }`}
+            />
+            <div className="grid grid-cols-[2.25rem_1fr_2.25rem] items-center w-full mt-2">
+              <span />
+              <span className={`font-black text-slate-900 tracking-tight text-center truncate text-base transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] will-change-transform origin-center ${
+                isEnlarged ? 'scale-105' : 'scale-100'
+              }`}>
+                Enlight <span className="text-[#1f4bb8]">Sigma</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (mobileOpen) setMobileOpen(false);
+                  else toggleSidebar();
+                }}
+                className="justify-self-end inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+              >
+                <PanelLeft className="h-4.5 w-4.5" />
+              </button>
             </div>
-          ) : (
+          </div>
+
+          {/* Collapsed Header Content (Expand button centered) */}
+          <div
+            className={`flex items-center justify-center transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none ${
+              !sidebarOpen
+                ? 'opacity-100 scale-100'
+                : 'opacity-0 scale-90 pointer-events-none absolute'
+            }`}
+          >
             <button
               type="button"
-              onClick={() => {
-                if (mobileOpen) {
-                  setMobileOpen(false);
-                } else {
-                  setSidebarOpen(true);
-                }
-              }}
+              onClick={toggleSidebar}
               className="inline-flex items-center justify-center h-9 w-9 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
               title="Expand sidebar"
+              aria-label="Expand sidebar"
             >
               <PanelLeft className="h-5 w-5" />
             </button>
-          )}
+          </div>
         </div>
 
         {/* Impersonation Banner if active */}
-        {isImpersonatingOther && sidebarOpen && (
-          <div className="mx-4 mt-3 bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs shrink-0 shadow-xs">
+        {isImpersonatingOther && (
+          <div
+            className={`mx-3 mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs shrink-0 shadow-xs transition-[opacity,max-height,margin,padding] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none overflow-hidden ${
+              sidebarOpen
+                ? 'opacity-100 max-h-24'
+                : 'opacity-0 max-h-0 mt-0 py-0 border-0 pointer-events-none'
+            }`}
+          >
             <div className="text-[11px] font-semibold text-amber-800">
               Viewing as:{' '}
               <strong className="block truncate text-amber-950 font-bold">
@@ -334,7 +363,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             </div>
             <button
               onClick={() => clearViewingAs()}
-              className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+              className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
             >
               <ShieldAlert size={12} />
               Exit Impersonation
@@ -342,8 +371,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           </div>
         )}
 
-        {/* Flat List of Navigation Menu Items (elements scale up smoothly when enlarged) */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-1.5 [scrollbar-width:thin] [scrollbar-color:#e2e8f0_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+        {/* Flat List of Navigation Menu Items */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-2.5 space-y-1 [scrollbar-width:thin] [scrollbar-color:#e2e8f0_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
           {navItems.map((item) => {
             const active = isActive(item.path);
             const Icon = item.icon;
@@ -353,34 +382,36 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 to={item.path}
                 onClick={() => setMobileOpen(false)}
                 title={!sidebarOpen ? item.label : undefined}
-                className={`touch-target flex items-center rounded-xl font-semibold transition-all duration-300 ${
-                  !sidebarOpen
-                    ? 'justify-center px-0 w-11 h-11 mx-auto'
-                    : isEnlarged
-                      ? 'gap-3.5 px-4 h-12 text-sm'
-                      : 'gap-3 px-3.5 h-11 text-xs'
+                className={`touch-target group flex items-center h-11 w-full rounded-xl font-semibold text-xs select-none outline-hidden overflow-hidden
+                  transition-[padding,gap,background-color,color] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${
+                  isEnlarged ? 'px-4 gap-3.5' : 'px-3.5 gap-3'
                 } ${
                   active
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
-                <Icon
-                  size={!sidebarOpen ? 19 : isEnlarged ? 22 : 19}
-                  className="shrink-0 transition-all duration-300"
-                />
-                {sidebarOpen && (
-                  <span className="truncate transition-all duration-300">
-                    {item.label}
-                  </span>
-                )}
+                <div className={`w-5 h-5 shrink-0 flex items-center justify-center transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] will-change-transform ${
+                  isEnlarged ? 'scale-110' : 'scale-100'
+                }`}>
+                  <Icon size={19} className="shrink-0" />
+                </div>
+                <span
+                  className={`truncate whitespace-nowrap transition-[opacity,transform,max-width] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${
+                    sidebarOpen
+                      ? 'opacity-100 translate-x-0 max-w-[220px]'
+                      : 'opacity-0 -translate-x-2 max-w-0 pointer-events-none'
+                  }`}
+                >
+                  {item.label}
+                </span>
               </Link>
             );
           })}
         </div>
 
         {/* Footer User Profile Menu */}
-        <div className="p-3 border-t border-slate-100 shrink-0">
+        <div className="p-2.5 border-t border-slate-100 shrink-0">
           <UserMenu sidebarOpen={sidebarOpen} isEnlarged={isEnlarged} />
         </div>
       </aside>
@@ -409,7 +440,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Page Content with Lenis smooth scroll attached */}
+        {/* Page Content */}
         <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           {children || <Outlet />}
         </div>

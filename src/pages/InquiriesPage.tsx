@@ -5159,8 +5159,8 @@ export default function InquiriesPage() {
 
       {/* Send Official Quotation Email Modal (Resend API Integration) */}
       {showQuotationModal && shareDetails && shareInquiry && (
-        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 animate-in fade-in duration-150">
-          <div className="mobile-sheet bg-white rounded-2xl max-w-lg w-full max-h-[100dvh] flex flex-col overflow-hidden shadow-2xl border border-slate-200">
+        <div className="quotation-share-overlay mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-start justify-center overflow-hidden px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4 animate-in fade-in duration-150">
+          <div className="quotation-share-sheet mobile-sheet bg-white rounded-2xl max-w-lg w-full max-h-[calc(100dvh-3rem)] mt-2 flex flex-col overflow-hidden shadow-2xl border border-slate-200">
             <div className="sheet-header shrink-0 flex justify-between items-center px-6 pt-6 pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Send className="text-blue-600" size={22} />

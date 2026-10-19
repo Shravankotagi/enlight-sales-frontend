@@ -147,6 +147,16 @@ option {
     background: #fff;
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
+  .quotation-share-overlay {
+    padding: max(1.25rem, env(safe-area-inset-top)) 0.75rem 0.75rem !important;
+    align-items: flex-start !important;
+  }
+  .quotation-share-sheet {
+    height: auto !important;
+    max-height: calc(100dvh - 2.5rem) !important;
+    border-radius: 1rem !important;
+    margin: 0.5rem 0 0 !important;
+  }
 }
 
 /* Animated Login Page Background Effects */
@@ -225,5 +235,17 @@ option {
   }
   .no-print {
     display: none !important;
+  }
+}
+
+/* Reduced motion accessibility: disable all animations/transitions */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

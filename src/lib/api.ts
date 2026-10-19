@@ -87,12 +87,19 @@ API.interceptors.response.use(
     );
 
     const isLogoutRequest = /\/auth\/logout(?:$|[/?])/.test(requestUrl);
+    const body = error.response?.data;
+    const message = String(body?.error || body?.message || '');
+    const deactivated = /deactivat/i.test(message);
     if (error.response?.status === 401 && !isOtpAuthRequest && !isLogoutRequest) {
       postAuthLogout('session_expired');
       sessionStorage.removeItem('enlight_token');
       sessionStorage.removeItem('enlight_employee');
       sessionStorage.removeItem('enlight_viewing_as');
-      window.location.href = '/login';
+      sessionStorage.removeItem('enlight_active_chat_session_id');
+      sessionStorage.removeItem('enlight_last_activity');
+      window.location.href = deactivated
+        ? '/login?reason=deactivated'
+        : '/login';
     }
     return Promise.reject(error);
   }
