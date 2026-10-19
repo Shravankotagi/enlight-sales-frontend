@@ -547,7 +547,7 @@ export default function VisitsPage() {
       try {
         const res = await visitsApi.reverseGeocode(coords.latitude, coords.longitude);
         const body = res?.data?.data || res?.data;
-        city = visitCityLabel(body?.city);
+        city = visitCityLabel(body?.address) || visitCityLabel(body?.city);
       } catch {
         city = '';
       }
