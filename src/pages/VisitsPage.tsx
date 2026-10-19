@@ -46,6 +46,7 @@ import {
   visitDocumentError,
   type NewVisitFormInput,
 } from '../utils/visitForm';
+import { createVisitGpsSession } from '../utils/visitGps';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -494,6 +495,8 @@ export default function VisitsPage() {
   const [otpNotice, setOtpNotice] = useState('');
   const [resendSeconds, setResendSeconds] = useState(0);
   const [capturingGps, setCapturingGps] = useState(false);
+  const gpsSessionRef = useRef<ReturnType<typeof createVisitGpsSession> | null>(null);
+  if (!gpsSessionRef.current) gpsSessionRef.current = createVisitGpsSession();
 
   // Preset Days Helper
   const setFollowupPresetDays = (days: number, isEdit = false) => {
@@ -508,49 +511,14 @@ export default function VisitsPage() {
   };
 
   // GPS Coordinates & File Upload Helpers
-  const captureGpsCoordinates = (): Promise<{ latitude: number; longitude: number; accuracy: number } | null> => {
-    const targetMeters = 20;
-    const watchMs = 15000;
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        resolve(null);
-        return;
-      }
-      let settled = false;
-      let watchId = 0;
-      let best: { latitude: number; longitude: number; accuracy: number } | null = null;
-      const finish = (reading: { latitude: number; longitude: number; accuracy: number } | null) => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timer);
-        if (watchId) navigator.geolocation.clearWatch(watchId);
-        resolve(reading);
-      };
-      const timer = window.setTimeout(() => finish(best), watchMs);
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const reading = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracy: Math.round(pos.coords.accuracy),
-          };
-          if (!best || reading.accuracy < best.accuracy) best = reading;
-          if (reading.accuracy <= targetMeters) finish(best);
-        },
-        (err) => {
-          console.warn('Geolocation capture failed or denied:', err);
-          finish(best);
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: watchMs },
-      );
-    });
-  };
+  const watchVisitGps = () => gpsSessionRef.current!.watchForAddress();
+  const readPhotoGps = () => gpsSessionRef.current!.readForPhoto();
 
   const refreshVisitLocation = async () => {
     setLocating(true);
     setLocationNotice('');
     try {
-      const coords = await captureGpsCoordinates();
+      const coords = await watchVisitGps();
       if (!coords) {
         setLocationSource('manual');
         setLocationLocked(false);
@@ -628,7 +596,7 @@ export default function VisitsPage() {
     if (!file) return;
     setCapturingGps(true);
     try {
-      const coords = await captureGpsCoordinates();
+      const coords = await readPhotoGps();
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
@@ -2495,7 +2463,7 @@ export default function VisitsPage() {
 
                       <div className="flex flex-wrap items-center gap-2">
                         <VisitCameraCapture
-                          readGps={captureGpsCoordinates}
+                          readGps={readPhotoGps}
                           onCapture={(photoUrl, coords) => {
                             setFormGpsPhotoUrl(photoUrl);
                             setFormGpsLat(coords.latitude);

@@ -7,6 +7,12 @@ import VisitBrandField from '../../components/VisitBrandField';
 import VisitCameraCapture from '../../components/VisitCameraCapture';
 import VisitLocationField from '../../components/VisitLocationField';
 import { validateNewVisitForm, visitCityLabel, type NewVisitFormInput } from '../../utils/visitForm';
+import {
+  ADDRESS_WATCH_MS,
+  PHOTO_GPS_WAIT_MS,
+  createVisitGpsSession,
+  type VisitGpsSource,
+} from '../../utils/visitGps';
 
 const emptyVisit = (): NewVisitFormInput => ({
   customerName: '',
@@ -265,7 +271,156 @@ describe('issue 238 customer visit form', () => {
     await user.click(screen.getByRole('button', { name: /take visit photo/i }));
     expect(screen.getByText(/no camera/i)).toBeTruthy();
   });
+
+  it('returns a cached GPS fix to the photo without waiting for the address watch', async () => {
+    vi.useFakeTimers();
+    try {
+      const gps = fakeGps();
+      const session = createVisitGpsSession(gps.source);
+      const address = session.watchForAddress();
+      gps.emit(40);
+      await expect(session.readForPhoto()).resolves.toEqual({
+        latitude: 18.95,
+        longitude: 72.82,
+        accuracy: 40,
+      });
+      expect(gps.watchPosition).toHaveBeenCalledTimes(1);
+      expect(gps.watchPosition).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        { enableHighAccuracy: true, maximumAge: 0, timeout: ADDRESS_WATCH_MS },
+      );
+      let addressDone = false;
+      void address.then(() => {
+        addressDone = true;
+      });
+      await Promise.resolve();
+      expect(addressDone).toBe(false);
+      await vi.advanceTimersByTimeAsync(ADDRESS_WATCH_MS);
+      await expect(address).resolves.toEqual({
+        latitude: 18.95,
+        longitude: 72.82,
+        accuracy: 40,
+      });
+      expect(gps.clearWatch).toHaveBeenCalledWith(7);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives the photo the first GPS fix and does not run out the address watch', async () => {
+    vi.useFakeTimers();
+    try {
+      const gps = fakeGps();
+      const session = createVisitGpsSession(gps.source);
+      const address = session.watchForAddress();
+      let photo: { latitude: number; longitude: number; accuracy: number } | null = null;
+      const pending = session.readForPhoto().then((reading) => {
+        photo = reading;
+      });
+      await vi.advanceTimersByTimeAsync(PHOTO_GPS_WAIT_MS - 1);
+      expect(photo).toBeNull();
+      gps.emit(80);
+      await pending;
+      expect(photo).toEqual({ latitude: 18.95, longitude: 72.82, accuracy: 80 });
+      expect(gps.watchPosition).toHaveBeenCalledTimes(1);
+      let addressDone = false;
+      void address.then(() => {
+        addressDone = true;
+      });
+      await Promise.resolve();
+      expect(addressDone).toBe(false);
+      await vi.advanceTimersByTimeAsync(ADDRESS_WATCH_MS);
+      await expect(address).resolves.toEqual({
+        latitude: 18.95,
+        longitude: 72.82,
+        accuracy: 80,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stamps the frame from the moment Capture is tapped', async () => {
+    const drawImage = vi.fn();
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage,
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      fillStyle: '',
+      font: '',
+    } as unknown as CanvasRenderingContext2D);
+    const toDataURL = vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(
+      'data:image/jpeg;base64,frame',
+    );
+    const stop = vi.fn();
+    const getUserMedia = vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] });
+    const previous = navigator.mediaDevices;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    let release: (reading: { latitude: number; longitude: number; accuracy: number }) => void = () => undefined;
+    const readGps = vi.fn(
+      () => new Promise<{ latitude: number; longitude: number; accuracy: number }>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const onCapture = vi.fn();
+    try {
+      render(<VisitCameraCapture readGps={readGps} onCapture={onCapture} />);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /take visit photo/i }));
+      });
+      const video = document.querySelector('video');
+      expect(video).toBeTruthy();
+      Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+      Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Capture photo' }));
+      });
+      expect(drawImage).toHaveBeenCalled();
+      expect(onCapture).not.toHaveBeenCalled();
+      expect(drawImage.mock.invocationCallOrder[0]).toBeLessThan(readGps.mock.invocationCallOrder[0]);
+      await act(async () => {
+        release({ latitude: 18.95, longitude: 72.82, accuracy: 12 });
+      });
+      expect(onCapture).toHaveBeenCalledWith('data:image/jpeg;base64,frame', {
+        latitude: 18.95,
+        longitude: 72.82,
+        accuracy: 12,
+      });
+    } finally {
+      getContext.mockRestore();
+      toDataURL.mockRestore();
+      play.mockRestore();
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: previous,
+      });
+    }
+  });
 });
+
+function fakeGps() {
+  let success: ((position: {
+    coords: { latitude: number; longitude: number; accuracy: number };
+  }) => void) | null = null;
+  const watchPosition = vi.fn((ok: NonNullable<typeof success>) => {
+    success = ok;
+    return 7;
+  });
+  const clearWatch = vi.fn();
+  return {
+    source: { watchPosition, clearWatch } as unknown as VisitGpsSource,
+    watchPosition,
+    clearWatch,
+    emit(accuracy: number) {
+      success?.({ coords: { latitude: 18.95, longitude: 72.82, accuracy } });
+    },
+  };
+}
 
 function viManual() {
   const holder = { value: '', change: (value: string) => { holder.value = value; } };
