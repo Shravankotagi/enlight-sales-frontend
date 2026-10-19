@@ -1198,6 +1198,7 @@ export default function InquiriesPage() {
     isProcurement,
     isProcurementManager,
     clearViewingAs,
+    guardAction,
   } = useAuth();
   const canViewSalesperson = isAdmin || isSalesManager || isProcurement;
   const canAssignProcurement = isAdmin || isProcurementManager;
@@ -2628,6 +2629,7 @@ export default function InquiriesPage() {
   };
 
   const handleSaveDrawerDetails = async () => {
+    if (!guardAction('inquiries.edit')) return;
     if (!selectedInquiry || !editDetails) return;
     if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
 
@@ -2923,6 +2925,7 @@ export default function InquiriesPage() {
 
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('inquiries.manage')) return;
 
     // Read directly from ref to avoid React state batching delays
     const extractedJson = formExtractedJsonRef.current;
@@ -5478,6 +5481,7 @@ export default function InquiriesPage() {
                   setQuotationCc(finalCc);
                   setQuotationCcDraft('');
                   try {
+                    if (!guardAction('inquiries.send_quote')) return;
                     setSendingQuotation(true);
                     setResendNotice('');
                     const pricedItems = (shareDetails.lineItems || []).filter(
@@ -6726,7 +6730,10 @@ export default function InquiriesPage() {
               <button
                 type="button"
                 disabled={deleteDealMutation.isPending}
-                onClick={() => deleteDealMutation.mutate(confirmDeleteDeal.id)}
+                onClick={() => {
+                  if (!guardAction('inquiries.delete')) return;
+                  deleteDealMutation.mutate(confirmDeleteDeal.id);
+                }}
                 className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
                 {deleteDealMutation.isPending ? 'Deleting...' : 'Yes, Delete Deal'}

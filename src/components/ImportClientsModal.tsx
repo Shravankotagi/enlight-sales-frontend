@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Upload, Download, FileSpreadsheet, Check, AlertCircle, Loader2, Users } from 'lucide-react';
 import { customersApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 interface Salesperson {
   name: string;
@@ -32,6 +33,7 @@ export default function ImportClientsModal({
   salespeople,
   onSuccess,
 }: ImportClientsModalProps) {
+  const { guardAction } = useAuth();
   const [selectedSalesperson, setSelectedSalesperson] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
   const [parsedClients, setParsedClients] = useState<ParsedClient[]>([]);
@@ -132,6 +134,7 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
 
   // Submit Import
   const handleImportSubmit = async () => {
+    if (!guardAction('clients.import_csv')) return;
     if (parsedClients.length === 0) {
       setErrorMsg('Please select a valid CSV/XLSX file with client records');
       return;

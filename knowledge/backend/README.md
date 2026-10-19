@@ -8,7 +8,7 @@ Two identity systems coexist: Supabase Auth for legacy/onboarding admin routes a
 - Commercial: [deals](deals.md), [inquiries](inquiries.md), [products](products.md), [pricing](pricing.md), [customers](customers.md)
 - Operational: [KRA](kra.md), [reports](reports.md), [employees](employees.md), [activity logs](activity-logs.md), [Zoho](zoho.md)
 - AI/assistant: [chatbot](chatbot.md)
-- Identity/configuration: [auth and OTP](auth-and-otp.md), [template modules](template-modules.md)
+- Identity/configuration: [auth and OTP](auth-and-otp.md), [roles and permissions](roles-and-permissions.md), [template modules](template-modules.md)
 - Cross-cutting: [common and infrastructure](common-and-infrastructure.md), [scripts](scripts.md)
 
 The frontend’s exact public client contract is [../../src/lib/api.ts](../../src/lib/api.ts). Update it deliberately when the REST shape changes.

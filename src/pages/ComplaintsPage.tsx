@@ -99,7 +99,7 @@ export default function ComplaintsPage() {
   const autoOpenedComplaintRef = useRef<string | null>(null);
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
-  const { isSalesManager, isAdmin, employee, effectivePhone, activeRole, activeMode } = useAuth();
+  const { isSalesManager, isAdmin, employee, effectivePhone, activeRole, activeMode, guardAction } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -454,6 +454,7 @@ export default function ComplaintsPage() {
   };
 
   const handleOpenAddModal = () => {
+    if (!guardAction('complaints.log')) return;
     resetCreateForm();
     setShowCreateModal(true);
   };
@@ -619,6 +620,7 @@ export default function ComplaintsPage() {
   // Create Complaint
   const handleCreateComplaint = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('complaints.log')) return;
 
     const errors: Record<string, boolean> = {};
     if (!formCustomerName.trim()) errors.customerName = true;
@@ -701,6 +703,7 @@ export default function ComplaintsPage() {
   // Save Edited Complaint
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('complaints.update')) return;
     if (!editingComplaint) return;
 
     if (!editRaisedBy.trim()) {
@@ -810,6 +813,7 @@ export default function ComplaintsPage() {
 
   // Resolve inside Details Modal
   const handleResolveInModal = async () => {
+    if (!guardAction('complaints.resolve')) return;
     if (!selectedComplaint) return;
     const notes = modalResolutionNotes.trim();
     if (!notes) {

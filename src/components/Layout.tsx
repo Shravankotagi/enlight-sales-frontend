@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { routeAllowed } from '../utils/aclConstants';
 
 const navItems = [
   { path: '/home', label: 'Dashboard', icon: Home },
@@ -41,6 +42,7 @@ function EmployeeFooter() {
     isSalesManager,
     isProcurementManager,
     isProcurementPerson,
+    roleName,
   } = useAuth();
   const navigate = useNavigate();
 
@@ -54,16 +56,27 @@ function EmployeeFooter() {
     navigate(isAdmin ? '/control-panel' : '/admin');
   };
 
+  const formatRole = (r?: string) => {
+    if (!r) return '';
+    return r
+      .split(/[_\s]+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
   // Always reflect the user's own true identity & role (never overridden by impersonated user's role)
-  const ownRoleLabel = isAdmin
-    ? 'Admin'
-    : isSalesManager
-      ? 'Sales Manager'
-      : isProcurementManager
-        ? 'Procurement Manager'
-        : isProcurementPerson
-          ? 'Procurement Person'
-          : 'Salesperson';
+  const ownRoleLabel =
+    (roleName && !['salesperson', 'admin', 'sales_manager', 'manager', 'procurement_manager', 'procurement_person'].includes(roleName.toLowerCase()))
+      ? formatRole(roleName)
+      : isAdmin
+        ? 'Admin'
+        : isSalesManager
+          ? 'Sales Manager'
+          : isProcurementManager
+            ? 'Procurement Manager'
+            : isProcurementPerson
+              ? 'Procurement Person'
+              : 'Salesperson';
 
   // Only true impersonation of ANOTHER employee should show "Viewing as"
   const isImpersonatingOther = Boolean(
@@ -129,7 +142,8 @@ function EmployeeFooter() {
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { employee, viewingAs, isAdmin, isProcurement } = useAuth();
+  const { employee, viewingAs, can } = useAuth();
+  const isAdminRole = employee?.role === 'admin';
 
   const isImpersonatingOther = Boolean(
     viewingAs &&
@@ -138,18 +152,22 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     viewingAs.phone?.replace(/\D/g, '').slice(-10) !== employee.phone?.replace(/\D/g, '').slice(-10)
   );
 
-  const showAdminTab = isAdmin && !isImpersonatingOther;
-  const visibleItems = isProcurement
-    ? navItems.filter((item) => item.path === '/inquiries')
-    : [
-        ...(showAdminTab
-          ? [
-              { path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert },
-              { path: '/control-panel', label: 'Control Panel', icon: Settings },
-            ]
-          : []),
-        ...navItems,
-      ];
+  const staffKeys = ['staff.view', 'staff.create', 'staff.manage', 'staff.delete', 'staff.manage_acl'];
+  const showAdminTab = (isAdminRole || can('staff.view')) && !isImpersonatingOther;
+  const showUserAdmin = (isAdminRole || staffKeys.some((key) => can(key))) && !isImpersonatingOther;
+  const visibleItems = [
+    ...(showAdminTab
+      ? [{ path: '/admin-dashboard', label: 'Admin Overview', icon: ShieldAlert }]
+      : []),
+    ...(showUserAdmin
+      ? [{ path: '/control-panel', label: 'Control Panel', icon: Settings }]
+      : []),
+    ...navItems,
+  ].filter((item) =>
+    isAdminRole && (item.path === '/admin-dashboard' || item.path === '/control-panel')
+      ? true
+      : routeAllowed(item.path, can),
+  );
 
   const isActive = (path: string) => {
     if (path === '/pipeline')

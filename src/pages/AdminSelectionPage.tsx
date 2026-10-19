@@ -35,7 +35,7 @@ import ImportClientsModal from '../components/ImportClientsModal';
 import { EmployeeAclSection } from '../components/EmployeeAclSection';
 import { RolePermissionsMatrixModal } from '../components/RolePermissionsMatrixModal';
 import { RoleSelectDropdown } from '../components/RoleSelectDropdown';
-import { getRoleTemplate, countOverrides } from '../utils/aclConstants';
+import { getRoleTemplate, countOverrides, getCachedRoles } from '../utils/aclConstants';
 import { employeesApi } from '../lib/api';
 
 interface Employee {
@@ -112,6 +112,7 @@ export default function AdminSelectionPage() {
     manager_phone: '',
     permissions: getRoleTemplate('salesperson'),
   });
+  const [aclTouched, setAclTouched] = useState(false);
 
   const fetchEmployees = () => {
     setLoading(true);
@@ -198,6 +199,7 @@ export default function AdminSelectionPage() {
       manager_phone: '',
       permissions: getRoleTemplate('salesperson'),
     });
+    setAclTouched(false);
     setShowModal(true);
   };
 
@@ -229,6 +231,7 @@ export default function AdminSelectionPage() {
       is_active: emp.is_active,
       permissions: emp.permissions ? { ...emp.permissions } : getRoleTemplate(emp.role),
     });
+    setAclTouched(false);
     setShowModal(true);
   };
 
@@ -264,7 +267,7 @@ export default function AdminSelectionPage() {
         phone: form.phone.replace(/\D/g, ''),
         role: form.role,
         employee_id: form.employee_id.trim(),
-        permissions: form.permissions || getRoleTemplate(form.role),
+        permissions: aclTouched ? form.permissions ?? null : null,
       };
       if (form.email.trim()) {
         payload.email = form.email.trim();
@@ -1071,6 +1074,7 @@ export default function AdminSelectionPage() {
                                   Procurement Person
                                 </>
                               ) : (
+                                getCachedRoles().find((r) => r.id === emp.role)?.name ||
                                 'Salesperson'
                               )}
                             </span>
@@ -1296,7 +1300,8 @@ export default function AdminSelectionPage() {
                                 ? 'Proc Mgr'
                                 : isProcPerson
                                   ? 'Proc Person'
-                                  : 'Sales Rep'}
+                                  : getCachedRoles().find((r) => r.id === emp.role)?.name ||
+                                    'Sales Rep'}
                         </span>
                         {emp.permissions &&
                           countOverrides(emp.role, emp.permissions) > 0 && (
@@ -1499,10 +1504,11 @@ export default function AdminSelectionPage() {
                     label=""
                     required={true}
                     onChange={(newRole) => {
+                      setAclTouched(false);
                       setForm((f) => ({
                         ...f,
                         role: newRole,
-                        permissions: getRoleTemplate(newRole),
+                        permissions: undefined,
                       }));
                     }}
                   />
@@ -1605,9 +1611,10 @@ export default function AdminSelectionPage() {
                 <EmployeeAclSection
                   role={form.role}
                   permissions={form.permissions || getRoleTemplate(form.role)}
-                  onChange={(updated) =>
-                    setForm((f) => ({ ...f, permissions: updated }))
-                  }
+                  onChange={(updated) => {
+                    setAclTouched(true);
+                    setForm((f) => ({ ...f, permissions: updated }));
+                  }}
                 />
 
                 {/* Employee ID */}

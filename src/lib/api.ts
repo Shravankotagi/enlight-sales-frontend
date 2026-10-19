@@ -85,12 +85,17 @@ API.interceptors.response.use(
     const isOtpAuthRequest = /\/auth\/(?:request-otp|verify-otp)(?:$|[/?])/.test(
       requestUrl,
     );
+    const isAuthMe = /\/auth\/me(?:$|[/?])/.test(requestUrl);
 
-    if (error.response?.status === 401 && !isOtpAuthRequest) {
+    if (error.response?.status === 401 && !isOtpAuthRequest && !isAuthMe) {
       sessionStorage.removeItem('enlight_token');
       sessionStorage.removeItem('enlight_employee');
       sessionStorage.removeItem('enlight_viewing_as');
+      sessionStorage.removeItem('enlight_access');
       window.location.href = '/login';
+    }
+    if (error.response?.status === 403) {
+      window.dispatchEvent(new CustomEvent('enlight_permissions_stale'));
     }
     return Promise.reject(error);
   }
@@ -276,6 +281,29 @@ export const zohoApi = {
   pullInitialSync: () => API.post('/zoho/pull-initial-sync'),
   sync: () => API.post('/zoho/sync'),
   getStatus: () => API.get('/zoho/status'),
+};
+
+export const rolesApi = {
+  me: () => API.get('/auth/me').then(unwrapApiResponse),
+  list: () => API.get('/roles').then(unwrapApiResponse),
+  catalog: () => API.get('/roles/catalog'),
+  assignees: (id: string) => API.get(`/roles/${id}/assignees`).then(unwrapApiResponse),
+  create: (body: {
+    name: string;
+    description?: string;
+    data_scope?: string;
+    permissions: Record<string, boolean>;
+  }) => API.post('/roles', body).then(unwrapApiResponse),
+  update: (
+    id: string,
+    body: {
+      name?: string;
+      description?: string;
+      data_scope?: string;
+      permissions?: Record<string, boolean>;
+    },
+  ) => API.put(`/roles/${id}`, body).then(unwrapApiResponse),
+  remove: (id: string) => API.delete(`/roles/${id}`).then(unwrapApiResponse),
 };
 
 export const activityLogsApi = {

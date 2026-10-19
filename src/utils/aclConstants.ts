@@ -553,6 +553,7 @@ export interface RoleItem {
   name: string;
   description: string;
   isSystem: boolean;
+  data_scope?: 'own' | 'team' | 'all';
   permissions: Record<string, boolean>;
 }
 
@@ -611,6 +612,7 @@ export const INITIAL_SYSTEM_ROLES: RoleItem[] = [
 const ROLES_LIST_STORAGE_KEY = 'enlight_custom_roles_list';
 
 export function getAllRoles(): RoleItem[] {
+  if (rolesCache && rolesCache.length > 0) return rolesCache;
   if (typeof window === 'undefined') {
     return INITIAL_SYSTEM_ROLES;
   }
@@ -694,5 +696,44 @@ export function deleteRole(id: string): void {
   const current = getAllRoles();
   const filtered = current.filter((r) => r.id !== id || r.isSystem);
   saveAllRoles(filtered);
+}
+
+export const ROUTE_PERMISSIONS: Record<string, string[]> = {
+  '/customers': ['customers.view'],
+  '/visits': ['visits.view'],
+  '/inquiries': ['inquiries.view'],
+  '/pipeline': ['inquiries.view'],
+  '/orders': ['orders.view'],
+  '/complaints': ['complaints.view'],
+  '/admin-dashboard': ['staff.view'],
+  '/control-panel': [
+    'staff.view',
+    'staff.create',
+    'staff.manage',
+    'staff.delete',
+    'staff.manage_acl',
+  ],
+};
+
+export function routeAllowed(
+  path: string,
+  can: (key: string) => boolean,
+): boolean {
+  const keys = ROUTE_PERMISSIONS[path];
+  if (!keys) return true;
+  return keys.some((key) => can(key));
+}
+
+let rolesCache: RoleItem[] | null = null;
+
+export function setRolesCache(roles: RoleItem[]) {
+  rolesCache = roles;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('enlight_roles_updated'));
+  }
+}
+
+export function getCachedRoles(): RoleItem[] {
+  return rolesCache && rolesCache.length > 0 ? rolesCache : getAllRoles();
 }
 

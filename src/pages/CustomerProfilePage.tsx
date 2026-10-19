@@ -288,7 +288,7 @@ function CustomerProfilePageContent() {
     location.state?.from === 'dashboard' ||
     new URLSearchParams(location.search).get('from') === 'dashboard';
   const queryClient = useQueryClient();
-  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, guardAction, can } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits'>('overview');
@@ -444,6 +444,7 @@ function CustomerProfilePageContent() {
   };
 
   const handleOpenEdit = () => {
+    if (!guardAction('customers.edit')) return;
     if (!customer) return;
     const derivedState =
       customer.customer_state ||
@@ -468,6 +469,7 @@ function CustomerProfilePageContent() {
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('customers.edit')) return;
     if (!editForm.customer_name || !editForm.customer_name.trim()) {
       toast.error('Customer name is required');
       return;
@@ -678,7 +680,7 @@ function CustomerProfilePageContent() {
           </button>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {!String(customer.id || '').startsWith('virtual-') && (
+            {can('customers.edit') && !String(customer.id || '').startsWith('virtual-') && (
               <button
                 onClick={handleOpenEdit}
                 className="h-9 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 px-3.5 rounded-xl border border-slate-300 transition-colors cursor-pointer shadow-2xs">

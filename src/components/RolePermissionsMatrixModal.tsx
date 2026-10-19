@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   getAllRoles,
-  createNewRole,
-  updateExistingRole,
-  deleteRole,
   resetRoleTemplate,
-  saveRoleTemplate,
   DEFAULT_ROLE_TEMPLATES,
+  setRolesCache,
   type RoleItem,
 } from '../utils/aclConstants';
 import { ZohoPermissionsTable } from './ZohoPermissionsTable';
 import { RoleSelectDropdown } from './RoleSelectDropdown';
-import { employeesApi } from '../lib/api';
+import { employeesApi, rolesApi } from '../lib/api';
 import {
   X,
   Shield,
@@ -65,6 +62,8 @@ export const RolePermissionsMatrixModal: React.FC<
   const [activePermissions, setActivePermissions] = useState<
     Record<string, boolean>
   >({});
+  const [dataScope, setDataScope] = useState<'own' | 'team' | 'all'>('own');
+  const [localImportCount, setLocalImportCount] = useState(0);
   const [feedbackMsg, setFeedbackMsg] = useState('');
 
   // Users Tab State
@@ -95,14 +94,36 @@ export const RolePermissionsMatrixModal: React.FC<
   // Load roles & employees on open
   useEffect(() => {
     if (isOpen) {
-      const all = getAllRoles();
-      setRoles(all);
+      rolesApi
+        .list()
+        .then((res) => {
+          const items: RoleItem[] = (Array.isArray(res.data) ? res.data : [])
+            .filter((row: any) => row.is_active !== false)
+            .map((row: any) => ({
+              id: row.id,
+              name: row.name,
+              description: row.description || '',
+              isSystem: Boolean(row.is_system ?? row.isSystem),
+              data_scope: row.data_scope || 'own',
+              permissions: row.permissions || {},
+            }));
+          if (items.length) {
+            setRolesCache(items);
+            setRoles(items);
+          } else {
+            setRoles(getAllRoles());
+          }
+          const saved = localStorage.getItem('enlight_custom_roles_list');
+          const local = saved ? JSON.parse(saved) : [];
+          const known = new Set(items.map((role) => role.id));
+          setLocalImportCount(
+            Array.isArray(local)
+              ? local.filter((role: any) => role?.id && !known.has(role.id) && !role.isSystem).length
+              : 0,
+          );
+        })
+        .catch(() => setRoles(getAllRoles()));
 
-      if (!selectedRoleId || !all.find((r) => r.id === selectedRoleId)) {
-        setSelectedRoleId(all[0]?.id || 'salesperson');
-      }
-
-      // If employees not passed, fetch
       if (!propEmployees || propEmployees.length === 0) {
         employeesApi
           .getAll()
@@ -116,7 +137,7 @@ export const RolePermissionsMatrixModal: React.FC<
         setUserList(propEmployees);
       }
     }
-  }, [isOpen, propEmployees, selectedRoleId]);
+  }, [isOpen, propEmployees]);
 
   // Sync active permissions when selected role changes
   useEffect(() => {
@@ -129,6 +150,7 @@ export const RolePermissionsMatrixModal: React.FC<
       const current = roles.find((r) => r.id === selectedRoleId);
       if (current) {
         setActivePermissions({ ...current.permissions });
+        setDataScope(current.data_scope || (current.id === 'admin' ? 'all' : current.id === 'sales_manager' ? 'team' : 'own'));
       }
     }
     setFeedbackMsg('');
@@ -142,47 +164,146 @@ export const RolePermissionsMatrixModal: React.FC<
   };
 
   // Roles Tab Actions
-  const handleSaveCurrentRolePermissions = () => {
+  const handleSaveCurrentRolePermissions = async () => {
     if (isCreatingRole) {
       if (!newRoleName.trim()) {
         showToast('Please enter a role name');
         return;
       }
-      const created = createNewRole(
-        newRoleName.trim(),
-        newRoleDesc.trim(),
-        activePermissions,
+      const nameTaken = roles.some(
+        (role) =>
+          role.name.trim().toLowerCase() === newRoleName.trim().toLowerCase(),
       );
-      setRoles(getAllRoles());
-      setSelectedRoleId(created.id);
-      setIsCreatingRole(false);
-      setNewRoleName('');
-      setNewRoleDesc('');
-      showToast(`Role "${created.name}" created successfully!`);
+      if (nameTaken) {
+        showToast(`A role named "${newRoleName.trim()}" already exists.`);
+        return;
+      }
+      try {
+        const res = await rolesApi.create({
+          name: newRoleName.trim(),
+          description: newRoleDesc.trim(),
+          data_scope: dataScope,
+          permissions: activePermissions,
+        });
+        const created = res.data;
+        if (!created?.id || !created?.name) {
+          showToast('Could not create role');
+          return;
+        }
+        const next = [
+          ...roles,
+          {
+            id: created.id,
+            name: created.name,
+            description: created.description || '',
+            isSystem: false,
+            data_scope: created.data_scope,
+            permissions: created.permissions,
+          },
+        ];
+        setRolesCache(next);
+        setRoles(next);
+        setSelectedRoleId(created.id);
+        setIsCreatingRole(false);
+        setNewRoleName('');
+        setNewRoleDesc('');
+        showToast(`Role "${created.name}" created successfully!`);
+      } catch (err: any) {
+        showToast(
+          err?.response?.data?.error ||
+            err?.response?.data?.message ||
+            'Could not create role',
+        );
+      }
     } else {
-      updateExistingRole(selectedRoleId, { permissions: activePermissions });
-      saveRoleTemplate(selectedRoleId, activePermissions);
-      setRoles(getAllRoles());
-      showToast('Permissions saved successfully!');
+      try {
+        await rolesApi.update(selectedRoleId, {
+          permissions: activePermissions,
+          data_scope: dataScope,
+        });
+        const next = roles.map((role) =>
+          role.id === selectedRoleId
+            ? { ...role, permissions: activePermissions, data_scope: dataScope }
+            : role,
+        );
+        setRolesCache(next);
+        setRoles(next);
+        showToast('Permissions saved successfully!');
+      } catch (err: any) {
+        showToast(err?.response?.data?.message || 'Could not save permissions');
+      }
     }
   };
 
-  const handleResetCurrentRoleToStandard = () => {
+  const handleResetCurrentRoleToStandard = async () => {
     const factory = resetRoleTemplate(selectedRoleId);
     setActivePermissions({ ...factory });
-    updateExistingRole(selectedRoleId, { permissions: factory });
-    setRoles(getAllRoles());
-    showToast('Role permissions reset to default template.');
+    try {
+      await rolesApi.update(selectedRoleId, { permissions: factory });
+      const next = roles.map((role) =>
+        role.id === selectedRoleId ? { ...role, permissions: factory } : role,
+      );
+      setRolesCache(next);
+      setRoles(next);
+      showToast('Role permissions reset to default template.');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Could not reset role');
+    }
   };
 
-  const handleDeleteRole = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this custom role?')) {
-      deleteRole(id);
-      const remaining = getAllRoles();
+  const handleDeleteRole = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this custom role?')) return;
+    try {
+      const count = await rolesApi.assignees(id);
+      if ((count.data?.count || 0) > 0) {
+        showToast(`This role is still assigned to ${count.data.count} people.`);
+        return;
+      }
+      await rolesApi.remove(id);
+      const remaining = roles.filter((role) => role.id !== id);
+      setRolesCache(remaining);
       setRoles(remaining);
       setSelectedRoleId(remaining[0]?.id || 'salesperson');
       showToast('Role deleted.');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Could not delete role');
     }
+  };
+
+  const handleImportLocalRoles = async () => {
+    const saved = localStorage.getItem('enlight_custom_roles_list');
+    const local = saved ? JSON.parse(saved) : [];
+    const known = new Set(roles.map((role) => role.id));
+    let imported = 0;
+    for (const role of Array.isArray(local) ? local : []) {
+      if (!role?.id || role.isSystem || known.has(role.id)) continue;
+      try {
+        await rolesApi.create({
+          name: role.name,
+          description: role.description,
+          data_scope: 'own',
+          permissions: role.permissions || {},
+        });
+        imported += 1;
+      } catch {
+        /* skip a role the server rejected */
+      }
+    }
+    localStorage.removeItem('enlight_custom_roles_list');
+    localStorage.removeItem('enlight_role_template_salesperson');
+    setLocalImportCount(0);
+    const res = await rolesApi.list();
+    const items = (res.data || []).map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      isSystem: Boolean(row.is_system),
+      data_scope: row.data_scope,
+      permissions: row.permissions || {},
+    }));
+    setRolesCache(items);
+    setRoles(items);
+    showToast(`Imported ${imported} roles from this browser.`);
   };
 
   // Open "Invite User" Modal (Matching img2)
@@ -422,6 +543,29 @@ export const RolePermissionsMatrixModal: React.FC<
                     />
                   </div>
                 </div>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  Data scope
+                  <select
+                    value={dataScope}
+                    onChange={(event) =>
+                      setDataScope(event.target.value as 'own' | 'team' | 'all')
+                    }
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
+                  >
+                    <option value="own">Own records</option>
+                    <option value="team">Team</option>
+                    <option value="all">All company</option>
+                  </select>
+                </label>
+                {localImportCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleImportLocalRoles}
+                    className="text-xs font-semibold text-indigo-700 underline"
+                  >
+                    Import {localImportCount} roles saved in this browser
+                  </button>
+                )}
 
                 <button
                   type="button"
