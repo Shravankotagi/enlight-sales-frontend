@@ -24,7 +24,7 @@ Faster local loops: backend `npm test` / `npm run test:regression`, bot `npm run
 ## Coverage today
 - Backend: employee phone helpers and salesperson scope (`getAccessibleSalespersonPhones`), `RolesGuard`/`RoleGuard`, report date ranges and `allowedPhones` scope, leaderboard identity, pricing parity, plus the existing deals/inquiries/KRA/reports/app specs.
 - Bot: JSON utils, pricing engine, HSN detector, pricing parity, catalog-flow helpers, new-customer catalog flow state machine, PO resolver, network guard.
-- Frontend: date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, recent order fields/navigation, and the new customer visit form.
+- Frontend: date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, recent order fields/navigation, the new customer visit form, and `Layout.sidebar` (sidebar 200ms ease-out timing, `will-change-[width,transform]`, reduced motion safety, `localStorage` persistence, and hover enlargement/collapse).
 
 ## Regression tests: one per fixed bug
 Every bug fix adds a test that fails before the fix and passes after it.
