@@ -481,6 +481,23 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
   };
 }
 
+const ORDER_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
+
+function orderPaymentTerm(raw: string): string {
+  const text = raw.trim().toLowerCase();
+  const exact = ORDER_PAYMENT_TERMS.find((term) => term.toLowerCase() === text);
+  if (exact) return exact;
+  if (/\b30\b/.test(text)) return '30 Days';
+  if (/\b45\b/.test(text)) return '45 Days';
+  if (/\b60\b/.test(text)) return '60 Days';
+  if (/\blc\b/.test(text)) return 'LC';
+  if (/\bbg\b/.test(text)) return 'BG';
+  if (/\bpdc\b/.test(text)) return 'PDC';
+  if (text.includes('immediate')) return 'Immediate';
+  if (text.includes('advance')) return 'Advance';
+  return '';
+}
+
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -829,13 +846,44 @@ export default function OrdersPage() {
       });
   };
 
-  const handleCancelCreateOrder = () => {
-    const token = poReservationToken;
-    const poNumber = formGeneratedPoNumber || formPoNumber;
-    setShowModal(false);
+  const resetCreateOrderForm = () => {
+    setFormCustomerName('');
+    setFormCustomerPhone('');
+    setFormPoNumber('');
+    setFormGeneratedPoNumber('');
+    setFormReferencePoNumber('');
     setPoReservationToken('');
     setPoConflict(null);
     poInputDirtyRef.current = false;
+    setCheckingPoAvailability(false);
+    setFormPoDate(new Date().toISOString().split('T')[0]);
+    setFormDeliveryLocation('');
+    setFormPaymentTerms('');
+    setFormNotes('');
+    setExtractedCustomerExtras({ contactPerson: '', gstin: '' });
+    setShowAddCustomer(false);
+    setShowCompanyDropdown(false);
+    setIsParsingDoc(false);
+    setPoFileName('');
+    setFormUploadedBase64(null);
+    setFormLineItems([
+      {
+        sku_text: '',
+        dimensions: '',
+        hsn_code: '',
+        quantity: 0,
+        unit: 'MT',
+        rate: 0,
+        amount: 0,
+      },
+    ]);
+  };
+
+  const handleCancelCreateOrder = () => {
+    const token = poReservationToken;
+    const poNumber = formGeneratedPoNumber || formPoNumber;
+    resetCreateOrderForm();
+    setShowModal(false);
     releaseOrderPoReservation(token, poNumber);
   };
 
@@ -1016,7 +1064,7 @@ export default function OrdersPage() {
           gstin: String(extraction.customer_gst || extraction.gstin || extraction.gst || '').trim(),
         });
         if (extraction.payment_terms || extraction.paymentTerms) {
-          setFormPaymentTerms(String(extraction.payment_terms || extraction.paymentTerms).trim());
+          setFormPaymentTerms(orderPaymentTerm(String(extraction.payment_terms || extraction.paymentTerms)));
         }
 
         const extractedCustName = String(rawCust || formCustomerName || '').trim();
@@ -1194,7 +1242,7 @@ export default function OrdersPage() {
       return;
     }
 
-    if (!formPaymentTerms.trim()) {
+    if (!ORDER_PAYMENT_TERMS.includes(formPaymentTerms)) {
       const el = document.getElementById('form-payment-terms') as HTMLInputElement;
       if (el) {
         el.focus();
@@ -1284,32 +1332,7 @@ export default function OrdersPage() {
 
       toast.success('Order Confirmed & Won! Sales Achievement & Payment tracking updated.');
       setShowModal(false);
-
-      setFormCustomerName('');
-      setFormCustomerPhone('');
-      setFormPoNumber('');
-      setFormGeneratedPoNumber('');
-      setFormReferencePoNumber('');
-      setPoReservationToken('');
-      setPoConflict(null);
-      poInputDirtyRef.current = false;
-      setFormPoDate(new Date().toISOString().split('T')[0]);
-      setFormDeliveryLocation('');
-      setFormPaymentTerms('');
-      setFormNotes('');
-      setFormLineItems([
-        {
-          sku_text: '',
-          dimensions: '',
-          hsn_code: '',
-          quantity: 0,
-          unit: 'MT',
-          rate: 0,
-          amount: 0,
-        },
-      ]);
-      setPoFileName('');
-      setFormUploadedBase64(null);
+      resetCreateOrderForm();
 
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
@@ -2662,15 +2685,18 @@ export default function OrdersPage() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Payment Terms <span className="text-red-500 font-bold">*</span>
                   </label>
-                  <input
+                  <Select
                     id="form-payment-terms"
-                    type="text"
                     required
-                    placeholder="e.g. 30 Days Credit, 100% Advance"
-                    value={formPaymentTerms}
+                    value={ORDER_PAYMENT_TERMS.includes(formPaymentTerms) ? formPaymentTerms : ''}
                     onChange={e => setFormPaymentTerms(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                  >
+                    <option value="">Select payment terms</option>
+                    {ORDER_PAYMENT_TERMS.map((term) => (
+                      <option key={term} value={term}>{term}</option>
+                    ))}
+                  </Select>
                 </div>
               </div>
 

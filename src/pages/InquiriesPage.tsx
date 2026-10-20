@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
+  FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2, Mail,
   Calendar, Save, Check, UploadCloud, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, UserCheck, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, ArrowLeft, AlertCircle, AlertTriangle
@@ -109,9 +109,32 @@ export interface LineItemDetail {
   final_amount?: number;
 }
 
+const INQUIRY_EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+export function inquiryEmailFrom(...values: unknown[]): string {
+  for (const value of values) {
+    const match = String(value ?? '').match(INQUIRY_EMAIL_RE);
+    if (match) return match[0].toLowerCase();
+  }
+  return '';
+}
+
+function isInquiryEmail(value: string): boolean {
+  return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value.trim());
+}
+
+function quotationCustomerEmail(details?: { customerEmail?: string } | null, inq?: any): string {
+  const extracted = inquiryEmailFrom(details?.customerEmail, inq?.customer_email);
+  if (extracted) return extracted;
+  const sender = String(inq?.sender_email || '').toLowerCase();
+  if (!sender || sender === 'quotes@enlightmetals.com') return '';
+  return inquiryEmailFrom(sender);
+}
+
 export interface ExtractedDetails {
   companyName: string;
   customerPhone: string;
+  customerEmail: string;
   salespersonName?: string;
   productType: string;
   thickness: string;
@@ -552,6 +575,14 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   const companyName = candidateName || '';
 
+  const customerEmail = inquiryEmailFrom(
+    aiJson.customer_email,
+    aiJson.customerEmail,
+    aiJson.customer?.email,
+    inq?.customer_email,
+    textRaw,
+  );
+
   // 2. Customer Phone Number (Directly take from database inq.customer_phone, aiJson, or customer directory)
   const rawCustPhone =
     inq?.customer_phone ||
@@ -937,6 +968,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   return {
     companyName,
     customerPhone,
+    customerEmail,
     salespersonName,
     productType,
     thickness,
@@ -976,7 +1008,7 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
   return (
     <div
       onClick={onClick}
-      className={`rounded-lg border p-3 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer ${
+      className={`rounded-lg border p-3 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer overflow-hidden ${
         isWon
           ? 'bg-emerald-50/40 border-emerald-200'
           : isLost
@@ -984,12 +1016,15 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
           : 'bg-white border-gray-200'
       }`}
     >
-      <div className="flex items-start justify-between mb-2 gap-1">
-        <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
+      <div className="flex items-start justify-between mb-2 gap-1.5 min-w-0">
+        <h4
+          className="text-xs font-semibold text-gray-800 leading-snug line-clamp-2 break-words min-w-0 flex-1"
+          title={deal.customer_name || 'Unknown Customer'}
+        >
           {deal.customer_name || 'Unknown Customer'}
         </h4>
         <div className="flex items-center gap-1 shrink-0">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+          <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium border leading-none shrink-0 ${
             isWon
               ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
               : isLost
@@ -1007,7 +1042,7 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
               e.stopPropagation();
               onDelete(deal);
             }}
-            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors shrink-0"
           >
             <Trash2 size={13} />
           </button>
@@ -1026,18 +1061,21 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
         </div>
       )}
 
-      {deal.deal_items && deal.deal_items.length > 0 && (
-        <div className="mb-2">
-          {deal.deal_items.slice(0, 2).map((item: any, i: number) => (
-            <p key={i} className="text-xs text-gray-600">
-              • {item.sku_text || item.sku || item.product_name || 'Item'} - {item.quantity} {item.unit || 'MT'}
-            </p>
-          ))}
-          {deal.deal_items.length > 2 && (
-            <p className="text-xs text-gray-400">+{deal.deal_items.length - 2} more</p>
-          )}
-        </div>
-      )}
+      {deal.deal_items && deal.deal_items.length > 0 && (() => {
+        const itemCount = deal.deal_items.length;
+        const totalMt = calculateTotalTonnageMt(deal.deal_items).totalMt;
+        const tonnageFormatted = totalMt > 0
+          ? `(${totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
+          : '';
+        return (
+          <p className="mb-2 text-xs text-gray-600 font-medium">
+            {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+            {tonnageFormatted && (
+              <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
+            )}
+          </p>
+        );
+      })()}
 
       {(() => {
         let computedTotal = Number(deal.total_amount) || 0;
@@ -1539,6 +1577,7 @@ export default function InquiriesPage() {
 
   // Form state for Manual Log & File Upload
   const [formCustomerName, setFormCustomerName] = useState('');
+  const [formCustomerEmail, setFormCustomerEmail] = useState('');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [addProductModalRowIdx, setAddProductModalRowIdx] = useState<number | null>(null);
   const [addProductModalSource, setAddProductModalSource] = useState<'create' | 'edit'>('create');
@@ -1577,6 +1616,7 @@ export default function InquiriesPage() {
   const handleCancelCreateInquiry = () => {
     setShowModal(false);
     setFormCustomerName('');
+    setFormCustomerEmail('');
     setShowAddCustomer(false);
     setAddProductModalRowIdx(null);
     setShowProductListModal(false);
@@ -2343,6 +2383,7 @@ export default function InquiriesPage() {
                 ...prev,
                 companyName: parsed.companyName || prev.companyName || '',
                 customerPhone: parsed.customerPhone || prev.customerPhone || '',
+                customerEmail: parsed.customerEmail || prev.customerEmail || '',
                 salespersonName: resolvedSp,
                 totalAmount: frozenTotal,
                 lineItems: frozenLineItems,
@@ -2440,6 +2481,7 @@ export default function InquiriesPage() {
       setEditDetails({
         companyName: parsed.companyName || '',
         customerPhone: parsed.customerPhone || '',
+        customerEmail: parsed.customerEmail || '',
         salespersonName: resolvedSp,
         productType: frozenLineItems[0]?.sku_text || ai.productType || 'Hot Rolled',
         thickness: ai.thickness || '',
@@ -2551,6 +2593,8 @@ export default function InquiriesPage() {
         customer_name: editDetails.companyName,
         customerPhone: editDetails.customerPhone,
         customer_phone: editDetails.customerPhone,
+        customerEmail: inquiryEmailFrom(editDetails.customerEmail),
+        customer_email: inquiryEmailFrom(editDetails.customerEmail),
         deliveryLocation: editDetails.deliveryLocation,
         delivery_location: editDetails.deliveryLocation,
         place_of_supply: editPlaceOfSupply.label,
@@ -2625,6 +2669,10 @@ export default function InquiriesPage() {
     // 1. Company Name validation
     if (!editDetails.companyName || !editDetails.companyName.trim()) {
       errors['companyName'] = 'Company Name is required.';
+    }
+    const editedEmail = String(editDetails.customerEmail || '').trim();
+    if (editedEmail && !isInquiryEmail(editedEmail)) {
+      errors['customerEmail'] = 'Enter a valid email address.';
     }
 
     // 2. Line Items validation (Quantity > 0, Description required, HSN/SAC required)
@@ -2763,7 +2811,14 @@ export default function InquiriesPage() {
             ? String(rawName).trim()
             : '';
           setFormCustomerName(cleanCustomer);
-          let filledFromDocument = Boolean(cleanCustomer);
+          const extractedEmail = inquiryEmailFrom(
+            extracted.customer_email,
+            extracted.customerEmail,
+            extracted.customer?.email,
+            extracted.email,
+          );
+          setFormCustomerEmail(extractedEmail);
+          let filledFromDocument = Boolean(cleanCustomer || extractedEmail);
 
           // Phone: fill if detected (10 digits), keep blank if not
           const rawPhone = extracted.customer_phone || extracted.contact_phone || extracted.customer?.phone || extracted.phone || '';
@@ -2942,6 +2997,14 @@ export default function InquiriesPage() {
       return;
     }
 
+    const typedEmail = formCustomerEmail.trim();
+    if (typedEmail && !isInquiryEmail(typedEmail)) {
+      toast.error('Enter a valid email address');
+      document.getElementById('form-customer-email')?.focus();
+      return;
+    }
+    const finalCustomerEmail = inquiryEmailFrom(typedEmail);
+
     if (!isCustomerInAssignedList(customerName, rawCustomers)) {
       toast.error('Cannot save inquiry: Customer is not in your assigned customer list.');
       return;
@@ -3065,6 +3128,7 @@ export default function InquiriesPage() {
         customer: {
           name: customerName,
           phone: finalCustomerPhone,
+          email: finalCustomerEmail || null,
           gst: formCustMeta?.gstin || extractedJson?.customer_gst || null,
           address: formDeliveryLocation.trim() || null,
           state: formPlaceOfSupply.label,
@@ -3073,6 +3137,8 @@ export default function InquiriesPage() {
         customer_name: customerName,
         customerPhone: finalCustomerPhone,
         customer_phone: finalCustomerPhone,
+        customerEmail: finalCustomerEmail,
+        customer_email: finalCustomerEmail,
         salespersonName: activeSalespersonName,
         productType: lineItemsPayload[0]?.sku_text || 'Hot Rolled',
         quantityTons: totalTonnage.totalMt || lineItemsPayload[0]?.quantity || 0,
@@ -3678,9 +3744,9 @@ export default function InquiriesPage() {
       {viewMode === 'pipeline' ? (
         /* Kanban Board View */
         <div className="flex-1 min-h-0 overflow-auto pb-2 snap-x snap-mandatory">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 xl:min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-full xl:min-w-[1380px]">
             {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
-              <div key={key} className={`rounded-xl border-2 ${color} p-3 flex flex-col w-[85vw] sm:w-auto sm:min-w-0 snap-start`}>
+              <div key={key} className={`rounded-xl border-2 ${color} p-3 flex flex-col w-[85vw] sm:w-auto sm:min-w-0 xl:min-w-[210px] snap-start`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
                   <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
@@ -3963,7 +4029,7 @@ export default function InquiriesPage() {
                                   setSubMenuInqId(null);
                                   setShareInquiry(inq);
                                   setShareDetails(details);
-                                  setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || '');
+                                  setQuotationEmail(quotationCustomerEmail(details, inq));
                                   setQuotationCcDraft('');
                                   setQuotationCcError('');
                                   setShowQuotationModal(true);
@@ -4143,6 +4209,35 @@ export default function InquiriesPage() {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email ID
+                    </label>
+                    <div className="relative flex items-center">
+                      <Mail className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
+                      <input
+                        type="email"
+                        placeholder="e.g. customer@example.com"
+                        value={editDetails.customerEmail || ''}
+                        onChange={(e) => {
+                          setEditDetails({ ...editDetails, customerEmail: e.target.value });
+                          setSaveSuccess(false);
+                          if (fieldErrors['customerEmail']) {
+                            setFieldErrors(prev => { const n = { ...prev }; delete n['customerEmail']; return n; });
+                          }
+                        }}
+                        className={`w-full pl-9 pr-3 py-2 bg-white rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                          fieldErrors['customerEmail']
+                            ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                            : 'border border-slate-300 focus:ring-blue-500'
+                        }`}
+                      />
+                    </div>
+                    {fieldErrors['customerEmail'] && (
+                      <p className="mt-1 text-[11px] font-semibold text-red-600">{fieldErrors['customerEmail']}</p>
+                    )}
                   </div>
 
                   <div>
@@ -4961,7 +5056,7 @@ export default function InquiriesPage() {
                       onClick={() => {
                         setShareInquiry(selectedInquiry);
                         setShareDetails(editDetails);
-                        setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
+                        setQuotationEmail(quotationCustomerEmail(editDetails, selectedInquiry));
                         setQuotationCcDraft('');
                         setQuotationCcError('');
                         setShowQuotationModal(true);
@@ -5159,8 +5254,8 @@ export default function InquiriesPage() {
 
       {/* Send Official Quotation Email Modal (Resend API Integration) */}
       {showQuotationModal && shareDetails && shareInquiry && (
-        <div className="quotation-share-overlay mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-start justify-center overflow-hidden px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4 animate-in fade-in duration-150">
-          <div className="quotation-share-sheet mobile-sheet bg-white rounded-2xl max-w-lg w-full max-h-[calc(100dvh-3rem)] mt-2 flex flex-col overflow-hidden shadow-2xl border border-slate-200">
+        <div className="quotation-share-overlay mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-start justify-center overflow-hidden px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-6 animate-in fade-in duration-150">
+          <div className="quotation-share-sheet mobile-sheet bg-white rounded-2xl max-w-lg w-full max-h-[calc(100svh-5.5rem)] mt-2 mb-3 flex flex-col overflow-hidden shadow-2xl border border-slate-200">
             <div className="sheet-header shrink-0 flex justify-between items-center px-6 pt-6 pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Send className="text-blue-600" size={22} />
@@ -5562,6 +5657,7 @@ export default function InquiriesPage() {
             </div>
 
             <form onSubmit={handleCreateInquiry} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Company Name <span className="text-red-500 font-bold">*</span>
@@ -5641,6 +5737,23 @@ export default function InquiriesPage() {
                     </div>
                   </div>
                 )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Email ID
+                </label>
+                <div className="relative flex items-center">
+                  <Mail className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
+                  <input
+                    id="form-customer-email"
+                    type="email"
+                    placeholder="e.g. customer@example.com"
+                    value={formCustomerEmail}
+                    onChange={(e) => setFormCustomerEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                  />
+                </div>
+              </div>
               </div>
 
               {(() => {
