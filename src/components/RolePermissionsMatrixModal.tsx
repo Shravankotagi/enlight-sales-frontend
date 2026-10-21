@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Save,
   Check,
+  AlertCircle,
   Search,
   Trash2,
   Phone,
@@ -64,7 +65,7 @@ export const RolePermissionsMatrixModal: React.FC<
   >({});
   const [dataScope, setDataScope] = useState<'own' | 'team' | 'all'>('own');
   const [localImportCount, setLocalImportCount] = useState(0);
-  const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [feedback, setFeedback] = useState<{ msg: string; isError?: boolean } | null>(null);
 
   // Users Tab State
   const [userList, setUserList] = useState<EmployeeItem[]>(propEmployees || []);
@@ -153,21 +154,21 @@ export const RolePermissionsMatrixModal: React.FC<
         setDataScope(current.data_scope || (current.id === 'admin' ? 'all' : current.id === 'sales_manager' ? 'team' : 'own'));
       }
     }
-    setFeedbackMsg('');
+    setFeedback(null);
   }, [selectedRoleId, isCreatingRole, cloneFromRoleId, roles]);
 
   if (!isOpen) return null;
 
-  const showToast = (msg: string) => {
-    setFeedbackMsg(msg);
-    setTimeout(() => setFeedbackMsg(''), 2500);
+  const showToast = (msg: string, isError: boolean = false) => {
+    setFeedback({ msg, isError });
+    setTimeout(() => setFeedback(null), 3000);
   };
 
   // Roles Tab Actions
   const handleSaveCurrentRolePermissions = async () => {
     if (isCreatingRole) {
       if (!newRoleName.trim()) {
-        showToast('Please enter a role name');
+        showToast('Please enter a role name', true);
         return;
       }
       const nameTaken = roles.some(
@@ -175,7 +176,7 @@ export const RolePermissionsMatrixModal: React.FC<
           role.name.trim().toLowerCase() === newRoleName.trim().toLowerCase(),
       );
       if (nameTaken) {
-        showToast(`A role named "${newRoleName.trim()}" already exists.`);
+        showToast(`A role named "${newRoleName.trim()}" already exists.`, true);
         return;
       }
       try {
@@ -187,7 +188,7 @@ export const RolePermissionsMatrixModal: React.FC<
         });
         const created = res.data;
         if (!created?.id || !created?.name) {
-          showToast('Could not create role');
+          showToast('Could not create role', true);
           return;
         }
         const next = [
@@ -213,6 +214,7 @@ export const RolePermissionsMatrixModal: React.FC<
           err?.response?.data?.error ||
             err?.response?.data?.message ||
             'Could not create role',
+          true,
         );
       }
     } else {
@@ -230,7 +232,7 @@ export const RolePermissionsMatrixModal: React.FC<
         setRoles(next);
         showToast('Permissions saved successfully!');
       } catch (err: any) {
-        showToast(err?.response?.data?.message || 'Could not save permissions');
+        showToast(err?.response?.data?.message || 'Could not save permissions', true);
       }
     }
   };
@@ -247,7 +249,7 @@ export const RolePermissionsMatrixModal: React.FC<
       setRoles(next);
       showToast('Role permissions reset to default template.');
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'Could not reset role');
+      showToast(err?.response?.data?.message || 'Could not reset role', true);
     }
   };
 
@@ -256,7 +258,7 @@ export const RolePermissionsMatrixModal: React.FC<
     try {
       const count = await rolesApi.assignees(id);
       if ((count.data?.count || 0) > 0) {
-        showToast(`This role is still assigned to ${count.data.count} people.`);
+        showToast(`This role is still assigned to ${count.data.count} people.`, true);
         return;
       }
       await rolesApi.remove(id);
@@ -266,7 +268,7 @@ export const RolePermissionsMatrixModal: React.FC<
       setSelectedRoleId(remaining[0]?.id || 'salesperson');
       showToast('Role deleted.');
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'Could not delete role');
+      showToast(err?.response?.data?.message || 'Could not delete role', true);
     }
   };
 
@@ -512,10 +514,16 @@ export const RolePermissionsMatrixModal: React.FC<
             </button>
           </div>
 
-          {feedbackMsg && (
-            <div className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg flex items-center gap-1.5 animate-in fade-in">
-              <Check size={13} />
-              <span>{feedbackMsg}</span>
+          {feedback && (
+            <div
+              className={`text-xs font-bold px-3 py-1 rounded-lg flex items-center gap-1.5 animate-in fade-in ${
+                feedback.isError
+                  ? 'text-rose-700 bg-rose-50 border border-rose-200'
+                  : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+              }`}
+            >
+              {feedback.isError ? <AlertCircle size={13} /> : <Check size={13} />}
+              <span>{feedback.msg}</span>
             </div>
           )}
         </div>

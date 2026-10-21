@@ -82,4 +82,33 @@ describe('AuthContext permissions', () => {
 
     expect(await screen.findByText('acl-no')).toBeTruthy();
   });
+
+  it('allows an admin to can() any permission regardless of server permissions payload', async () => {
+    sessionStorage.setItem('enlight_token', 'token');
+    sessionStorage.setItem(
+      'enlight_employee',
+      JSON.stringify({
+        id: 'admin-1',
+        employee_id: 'E1',
+        name: 'Admin',
+        phone: '9000000000',
+        role: 'admin',
+      }),
+    );
+    vi.mocked(rolesApi.me).mockResolvedValue({
+      data: {
+        permissions: {},
+        dataScope: 'all',
+        roleName: 'Admin',
+      },
+    } as any);
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText('acl-yes')).toBeTruthy();
+  });
 });

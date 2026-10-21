@@ -237,14 +237,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const dataScope: 'own' | 'team' | 'all' =
     access?.dataScope ||
     (roleId === 'admin' ? 'all' : roleId === 'sales_manager' ? 'team' : 'own');
-  const can = (key: string) => permissions?.[key] === true;
+  const isSuperOrAdmin =
+    employee?.role === 'admin' || employee?.role === 'super_admin';
+  const can = (key: string) =>
+    isSuperOrAdmin || permissions?.[key] === true;
   const guardAction = (key: string) => {
     if (can(key)) return true;
     toast.error('This feature is disabled for this role. Contact your admin.');
     return false;
   };
 
-  const isAdmin = can('staff.manage_acl') || employee?.role === 'admin' || employee?.role === 'super_admin';
+  const isAdmin = isSuperOrAdmin || can('staff.manage_acl');
   const isSalesManager =
     dataScope === 'team' ||
     employee?.role === 'sales_manager' ||
