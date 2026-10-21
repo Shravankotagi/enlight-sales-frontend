@@ -761,6 +761,7 @@ export default function OrdersPage() {
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [poFileName, setPoFileName] = useState('');
   const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
+  const uploadRequestRef = useRef(0);
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -846,16 +847,10 @@ export default function OrdersPage() {
       });
   };
 
-  const resetCreateOrderForm = () => {
+  const clearExtractedOrderFields = () => {
     setFormCustomerName('');
     setFormCustomerPhone('');
-    setFormPoNumber('');
-    setFormGeneratedPoNumber('');
     setFormReferencePoNumber('');
-    setPoReservationToken('');
-    setPoConflict(null);
-    poInputDirtyRef.current = false;
-    setCheckingPoAvailability(false);
     setFormPoDate(new Date().toISOString().split('T')[0]);
     setFormDeliveryLocation('');
     setFormPaymentTerms('');
@@ -863,7 +858,6 @@ export default function OrdersPage() {
     setExtractedCustomerExtras({ contactPerson: '', gstin: '' });
     setShowAddCustomer(false);
     setShowCompanyDropdown(false);
-    setIsParsingDoc(false);
     setPoFileName('');
     setFormUploadedBase64(null);
     setFormLineItems([
@@ -877,6 +871,23 @@ export default function OrdersPage() {
         amount: 0,
       },
     ]);
+  };
+
+  const resetCreateOrderForm = () => {
+    clearExtractedOrderFields();
+    setFormPoNumber('');
+    setFormGeneratedPoNumber('');
+    setPoReservationToken('');
+    setPoConflict(null);
+    poInputDirtyRef.current = false;
+    setCheckingPoAvailability(false);
+    setIsParsingDoc(false);
+  };
+
+  const handleRemoveUploadedOrderDocument = () => {
+    uploadRequestRef.current += 1;
+    setIsParsingDoc(false);
+    clearExtractedOrderFields();
   };
 
   const handleCancelCreateOrder = () => {
@@ -975,11 +986,14 @@ export default function OrdersPage() {
       (e.target as HTMLInputElement).value = '';
     }
 
+    const requestId = ++uploadRequestRef.current;
+    clearExtractedOrderFields();
     setPoFileName(file.name);
     setIsParsingDoc(true);
 
     const reader = new FileReader();
     reader.onload = async () => {
+      if (requestId !== uploadRequestRef.current) return;
       try {
         const base64Data = reader.result as string;
 
@@ -997,6 +1011,7 @@ export default function OrdersPage() {
           file_base64: base64Data,
           mime_type: mimeType,
         });
+        if (requestId !== uploadRequestRef.current) return;
 
         if (!res?.data?.success || !res?.data?.data) {
           throw new Error(res?.data?.error || 'Failed to extract PO details from document');
@@ -1134,13 +1149,14 @@ export default function OrdersPage() {
         }
         toast.success('PO Document parsed! All details auto-filled.');
       } catch (err: any) {
+        if (requestId !== uploadRequestRef.current) return;
         console.error('Error parsing PO document:', err);
         setFormUploadedBase64(null);
         setPoFileName('');
         setFormNotes('');
         toast.error(err?.message || 'Could not auto-extract PO details. You can enter the fields manually.');
       } finally {
-        setIsParsingDoc(false);
+        if (requestId === uploadRequestRef.current) setIsParsingDoc(false);
       }
     };
     reader.readAsDataURL(file);
@@ -1955,8 +1971,7 @@ export default function OrdersPage() {
                 <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
               </div>
 
-              <label
-                htmlFor="order-po-file-upload"
+              <div
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1969,7 +1984,7 @@ export default function OrdersPage() {
                     handleFileUpload({ target: { files } } as any);
                   }
                 }}
-                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl transition-all">
                 <input
                   id="order-po-file-upload"
                   type="file"
@@ -1986,14 +2001,29 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
                     <CheckCircle size={15} className="text-emerald-600 shrink-0" />
                     <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
-                    <span className="text-[10px] text-blue-600 underline ml-1">Change</span>
+                    <label
+                      htmlFor="order-po-file-upload"
+                      className="text-[10px] text-blue-600 underline ml-1 cursor-pointer"
+                    >
+                      Change
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRemoveUploadedOrderDocument}
+                      className="text-[10px] text-rose-600 underline ml-1 cursor-pointer"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-600 font-medium py-1">
+                  <label
+                    htmlFor="order-po-file-upload"
+                    className="text-xs text-slate-600 font-medium py-1 cursor-pointer"
+                  >
                     Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
-                  </p>
+                  </label>
                 )}
-              </label>
+              </div>
             </div>
 
             <form onSubmit={handleCreateOrder} className="space-y-4">
