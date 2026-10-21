@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import { X, Upload, Download, FileSpreadsheet, Check, AlertCircle, Loader2, Users } from 'lucide-react';
+import { X, Upload, Download, FileSpreadsheet, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { customersApi } from '../lib/api';
-import { Select } from './ui/select';
 
 interface Salesperson {
   name: string;
   phone: string;
-  employee_id: string;
+  employee_id?: string;
+  email?: string;
 }
 
 interface ImportClientsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  salespeople: Salesperson[];
+  salespeople?: Salesperson[];
   onSuccess?: () => void;
 }
 
@@ -24,16 +24,19 @@ interface ParsedClient {
   address?: string;
   customer_gst?: string;
   industry?: string;
+  assigned_salesperson_email?: string;
+  assigned_salesperson_name?: string;
+  assigned_salesperson_zoho_id?: string;
   assigned_salesperson_phone?: string;
+  assigned_salesperson?: string;
 }
 
 export default function ImportClientsModal({
   isOpen,
   onClose,
-  salespeople,
+  salespeople: _salespeople,
   onSuccess,
 }: ImportClientsModalProps) {
-  const [selectedSalesperson, setSelectedSalesperson] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
   const [parsedClients, setParsedClients] = useState<ParsedClient[]>([]);
   const [parseError, setParseError] = useState<string>('');
@@ -45,10 +48,10 @@ export default function ImportClientsModal({
 
   // Download Sample CSV Template
   const handleDownloadSample = () => {
-    const sampleCsv = `Company Name,Contact Person,Phone,Email,Address,GSTIN,Industry,Assigned Salesperson Phone
-Supreme Enterprises,Rajesh Sharma,919876543210,rajesh@supreme.com,Mumbai,27AAAAA0000A1Z5,Manufacturing,919876543210
-Apex Infra Pvt Ltd,Suresh Patel,919876543222,suresh@apex.com,Delhi,07BBBBB1111B2Z6,Construction,919876543222
-Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z7,Industrial,917896248624`;
+    const sampleCsv = `Company Name,Contact Person,Phone,Email,Address,GSTIN,Industry,Assigned Salesperson Email,Assigned Salesperson Name,Assigned Salesperson Zoho ID,Assigned Salesperson Phone
+Supreme Enterprises,Rajesh Sharma,919876543210,rajesh@supreme.com,Mumbai,27AAAAA0000A1Z5,Manufacturing,himanshu.prajapati@enlightmetals.com,Himanshu Prajapati,931435000000854001,919822000006
+Apex Infra Pvt Ltd,Suresh Patel,919876543222,suresh@apex.com,Delhi,07BBBBB1111B2Z6,Construction,vrushabh.barwade@enlightmetals.com,Vrushabh Barwade,931435000000854002,919822000002
+Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z7,Industrial,prabhakar.thakur@enlightmetals.com,Prabhakar Thakur,931435000000854003,919271515934`;
 
     const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -67,19 +70,50 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
 
     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
     
-    // Map headers to key names
-    const getHeaderIdx = (...aliases: string[]) => {
-      return headers.findIndex(h => aliases.some(alias => h.includes(alias.toLowerCase())));
-    };
+    // Robust header index finders
+    const nameIdx = headers.findIndex(h =>
+      h === 'company name' || h === 'customer name' || h === 'company' || h === 'customer' || h === 'client'
+    );
+    const contactIdx = headers.findIndex(h =>
+      h.includes('contact') || h === 'person'
+    );
+    const phoneIdx = headers.findIndex(h =>
+      (h.includes('phone') || h.includes('mobile') || h.includes('whatsapp')) &&
+      !h.includes('salesperson') && !h.includes('assigned') && !h.includes('rep')
+    );
+    const emailIdx = headers.findIndex(h =>
+      (h === 'email' || h === 'customer email' || h === 'client email') &&
+      !h.includes('salesperson') && !h.includes('corporate') && !h.includes('assigned')
+    );
+    const addressIdx = headers.findIndex(h =>
+      h.includes('address') || h.includes('city') || h.includes('location')
+    );
+    const gstIdx = headers.findIndex(h =>
+      h.includes('gstin') || h.includes('gst')
+    );
+    const industryIdx = headers.findIndex(h =>
+      h.includes('industry') || h.includes('segment')
+    );
 
-    const nameIdx = getHeaderIdx('company name', 'customer name', 'company', 'customer', 'client');
-    const contactIdx = getHeaderIdx('contact person', 'contact name', 'contact', 'person');
-    const phoneIdx = getHeaderIdx('phone', 'mobile', 'whatsapp');
-    const emailIdx = getHeaderIdx('email');
-    const addressIdx = getHeaderIdx('address', 'city', 'location');
-    const gstIdx = getHeaderIdx('gstin', 'gst');
-    const industryIdx = getHeaderIdx('industry', 'segment');
-    const salespersonIdx = getHeaderIdx('assigned salesperson phone', 'salesperson phone', 'salesperson');
+    // Salesperson mapping columns (Email -> Name -> Zoho ID -> Phone fallback)
+    const spEmailIdx = headers.findIndex(h =>
+      (h.includes('salesperson') || h.includes('corporate') || h.includes('assigned') || h.includes('rep')) &&
+      h.includes('email')
+    );
+    const spNameIdx = headers.findIndex(h =>
+      (h.includes('salesperson') || h.includes('assigned') || h.includes('rep')) &&
+      h.includes('name') && !h.includes('company') && !h.includes('customer')
+    );
+    const spZohoIdx = headers.findIndex(h =>
+      h.includes('zoho')
+    );
+    const spPhoneIdx = headers.findIndex(h =>
+      (h.includes('salesperson') || h.includes('assigned') || h.includes('rep')) &&
+      (h.includes('phone') || h.includes('mobile'))
+    );
+    const spGenericIdx = headers.findIndex(h =>
+      h === 'assigned salesperson' || h === 'salesperson' || h === 'assigned to' || h === 'rep'
+    );
 
     if (nameIdx === -1) {
       throw new Error('CSV missing required header: "Company Name" or "Customer Name"');
@@ -100,7 +134,11 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
         address: addressIdx !== -1 ? values[addressIdx] : undefined,
         customer_gst: gstIdx !== -1 ? values[gstIdx] : undefined,
         industry: industryIdx !== -1 ? values[industryIdx] : undefined,
-        assigned_salesperson_phone: salespersonIdx !== -1 ? values[salespersonIdx] : undefined,
+        assigned_salesperson_email: spEmailIdx !== -1 ? values[spEmailIdx] : undefined,
+        assigned_salesperson_name: spNameIdx !== -1 ? values[spNameIdx] : undefined,
+        assigned_salesperson_zoho_id: spZohoIdx !== -1 ? values[spZohoIdx] : undefined,
+        assigned_salesperson_phone: spPhoneIdx !== -1 ? values[spPhoneIdx] : undefined,
+        assigned_salesperson: spGenericIdx !== -1 ? values[spGenericIdx] : undefined,
       });
     }
 
@@ -144,7 +182,6 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
 
     try {
       const res = await customersApi.importClients({
-        default_salesperson_phone: selectedSalesperson || undefined,
         clients: parsedClients,
       });
 
@@ -179,7 +216,7 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">Import Existing Clients (CSV / XLSX)</h3>
-              <p className="text-xs text-slate-400">Bulk upload clients and assign them to salespersons</p>
+              <p className="text-xs text-slate-400">Bulk upload clients and assign them to salespersons via CSV</p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
@@ -190,45 +227,25 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
         {/* Content Body */}
         <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
 
-          {/* Salesperson Assignment & Download Template Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Download Template Banner */}
+          <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                <Users size={14} className="text-blue-400" />
-                Assign All Clients To Salesperson
-              </label>
-              <Select
-                value={selectedSalesperson}
-                onChange={e => setSelectedSalesperson(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-xs hover:border-blue-400"
-                placeholder='Use CSV "Assigned Salesperson" Column / Unassigned'
-                menuClassName="w-full text-slate-800"
-              >
-                <option value=''>Use CSV "Assigned Salesperson" Column / Unassigned</option>
-                {salespeople.map(sp => (
-                  <option key={sp.phone} value={sp.phone}>
-                    {sp.name} ({sp.employee_id}) - +{sp.phone}
-                  </option>
-                ))}
-              </Select>
-              <p className="text-[11px] text-slate-400 mt-1">
-                If selected, overrides any unassigned rows in the spreadsheet.
+              <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                <FileSpreadsheet size={16} className="text-blue-400" />
+                CSV Salesperson Assignment Template
+              </h4>
+              <p className="text-xs text-slate-400 mt-1">
+                Assign salespersons automatically via CSV columns using <strong className="text-slate-300">Corporate Email &rarr; Name &rarr; Zoho ID &rarr; Phone Number</strong>.
               </p>
             </div>
-
-            <div className="flex flex-col justify-end">
-              <button
-                type="button"
-                onClick={handleDownloadSample}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 rounded-lg text-xs font-medium transition-colors"
-              >
-                <Download size={14} className="text-green-400" />
-                Download Sample Template (CSV)
-              </button>
-              <p className="text-[11px] text-slate-400 mt-1 text-center">
-                Pre-formatted headers for easy editing
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={handleDownloadSample}
+              className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-500 text-slate-200 rounded-lg text-xs font-medium transition-colors"
+            >
+              <Download size={14} className="text-green-400" />
+              Download Sample CSV
+            </button>
           </div>
 
           {/* File Upload Box */}
@@ -284,7 +301,7 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
                 </span>
                 <span className="text-[11px] text-green-400 font-medium">Ready to import</span>
               </div>
-              <div className="border border-slate-700 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
+              <div className="border border-slate-700 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
                 <table className="w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-700 text-slate-200 uppercase text-[10px]">
                     <tr>
@@ -292,19 +309,35 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
                       <th className="p-2">Company Name</th>
                       <th className="p-2">Contact Person</th>
                       <th className="p-2">Phone</th>
-                      <th className="p-2">City/Address</th>
+                      <th className="p-2">Assigned Salesperson (CSV)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700 bg-slate-800">
-                    {parsedClients.slice(0, 5).map((client, idx) => (
-                      <tr key={idx} className="hover:bg-slate-700/50">
-                        <td className="p-2 font-mono text-slate-400">{idx + 1}</td>
-                        <td className="p-2 font-semibold text-white">{client.customer_name}</td>
-                        <td className="p-2">{client.contact_person || '-'}</td>
-                        <td className="p-2 font-mono">{client.customer_phone || '-'}</td>
-                        <td className="p-2">{client.address || '-'}</td>
-                      </tr>
-                    ))}
+                    {parsedClients.slice(0, 5).map((client, idx) => {
+                      const spDetails = [
+                        client.assigned_salesperson_name,
+                        client.assigned_salesperson_email,
+                        client.assigned_salesperson_phone,
+                        client.assigned_salesperson_zoho_id,
+                        client.assigned_salesperson,
+                      ].filter(Boolean);
+
+                      return (
+                        <tr key={idx} className="hover:bg-slate-700/50">
+                          <td className="p-2 font-mono text-slate-400">{idx + 1}</td>
+                          <td className="p-2 font-semibold text-white">{client.customer_name}</td>
+                          <td className="p-2">{client.contact_person || '-'}</td>
+                          <td className="p-2 font-mono">{client.customer_phone || '-'}</td>
+                          <td className="p-2 text-blue-400 font-medium">
+                            {spDetails.length > 0 ? (
+                              spDetails.join(' | ')
+                            ) : (
+                              <span className="text-slate-500 italic">None specified</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
