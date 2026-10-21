@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
-import { rolesApi } from '../lib/api';
+import { rolesApi, postAuthLogout } from '../lib/api';
 import { DEFAULT_ROLE_TEMPLATES } from '../utils/aclConstants';
 
 export interface Employee {
@@ -22,7 +22,7 @@ interface AuthContextType {
   employee: Employee | null;
   viewingAs: Employee | null;
   login: (token: string, employee: Employee) => void;
-  logout: () => void;
+  logout: (reason?: 'manual' | 'session_expired') => void;
   setViewingAs: (emp: Employee) => void;
   clearViewingAs: () => void;
   isAdmin: boolean;
@@ -37,10 +37,11 @@ interface AuthContextType {
   activeMode?: string;
   can: (key: string) => boolean;
   guardAction: (key: string) => boolean;
-  roleName: string;
+  roleName?: string;
   dataScope: 'own' | 'team' | 'all';
   permissions: Record<string, boolean>;
-  roleName?: string;
+  prototypeRole: 'admin' | 'salesperson' | 'procurement' | null;
+  setPrototypeRole: (role: 'admin' | 'salesperson' | 'procurement' | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -64,6 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   } | null>(() => {
     const saved = sessionStorage.getItem('enlight_access');
     return saved ? JSON.parse(saved) : null;
+  });
+  const [prototypeRole, setPrototypeRoleState] = useState<'admin' | 'salesperson' | 'procurement' | null>(() => {
+    const saved = sessionStorage.getItem('enlight_prototype_role');
+    return saved === 'admin' || saved === 'salesperson' || saved === 'procurement' ? saved : null;
   });
 
   const refreshAccess = useCallback(async () => {
@@ -140,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handlePopState = () => {
-      if (window.location.pathname === '/admin' || window.location.pathname === '/control-panel') {
+      if (window.location.pathname === '/admin') {
         sessionStorage.removeItem('enlight_viewing_as');
         sessionStorage.removeItem('enlight_active_chat_session_id');
         setViewingAsState(null);
@@ -156,23 +161,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem('enlight_active_chat_session_id');
     sessionStorage.removeItem('enlight_viewing_as');
     sessionStorage.removeItem('enlight_access');
+    sessionStorage.setItem('enlight_last_activity', String(Date.now()));
     setToken(newToken);
     setEmployee(newEmployee);
     setAccess(null);
     setViewingAsState(null);
   };
 
-  const logout = () => {
+  const logout = useCallback((reason: 'manual' | 'session_expired' = 'manual') => {
+    postAuthLogout(reason);
     sessionStorage.removeItem('enlight_token');
     sessionStorage.removeItem('enlight_employee');
     sessionStorage.removeItem('enlight_viewing_as');
     sessionStorage.removeItem('enlight_access');
     sessionStorage.removeItem('enlight_active_chat_session_id');
+    sessionStorage.removeItem('enlight_last_activity');
     setToken(null);
     setEmployee(null);
     setAccess(null);
     setViewingAsState(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    const idleMs = 30 * 60 * 1000;
+    const key = 'enlight_last_activity';
+    if (!sessionStorage.getItem(key)) sessionStorage.setItem(key, String(Date.now()));
+    let lastWrite = 0;
+    const mark = () => {
+      const now = Date.now();
+      if (now - lastWrite < 15000) return;
+      lastWrite = now;
+      sessionStorage.setItem(key, String(now));
+    };
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const;
+    events.forEach((event) => window.addEventListener(event, mark, { passive: true }));
+    const timer = window.setInterval(() => {
+      const last = Number(sessionStorage.getItem(key) || Date.now());
+      if (Date.now() - last >= idleMs) {
+        logout('session_expired');
+        window.location.href = '/login';
+      }
+    }, 15000);
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, mark));
+      window.clearInterval(timer);
+    };
+  }, [token, logout]);
 
   const setViewingAs = (emp: Employee) => {
     sessionStorage.setItem('enlight_viewing_as', JSON.stringify(emp));
@@ -184,6 +219,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem('enlight_viewing_as');
     sessionStorage.removeItem('enlight_active_chat_session_id');
     setViewingAsState(null);
+  };
+
+  const setPrototypeRole = (role: 'admin' | 'salesperson' | 'procurement' | null) => {
+    if (role) sessionStorage.setItem('enlight_prototype_role', role);
+    else sessionStorage.removeItem('enlight_prototype_role');
+    setPrototypeRoleState(role);
   };
 
   const roleId =
@@ -203,7 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  const isAdmin = can('staff.manage_acl') || employee?.role === 'admin';
+  const isAdmin = can('staff.manage_acl') || employee?.role === 'admin' || employee?.role === 'super_admin';
   const isSalesManager =
     dataScope === 'team' ||
     employee?.role === 'sales_manager' ||
@@ -263,6 +304,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         dataScope,
         permissions,
         roleName: access?.roleName || employee?.role,
+        prototypeRole,
+        setPrototypeRole,
       }}
     >
       {children}

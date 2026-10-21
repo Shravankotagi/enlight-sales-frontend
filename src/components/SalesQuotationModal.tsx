@@ -108,7 +108,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-in fade-in duration-200">
+    <div className="mobile-sheet-overlay fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-in fade-in duration-200">
       
       {/* Print CSS to hide everything except the printable quotation area */}
       <style>{`
@@ -137,7 +137,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
         }
       `}</style>
 
-      <div className="bg-white rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl border border-slate-200 my-8">
+      <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl border border-slate-200 my-8">
         
         {/* Modal Top Header Bar */}
         <div className="bg-slate-900 px-6 py-4 flex items-center justify-between no-print">
@@ -277,7 +277,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
             </div>
 
             {/* Bottom Right: Financial Summary Block matching Reference Image */}
-            <div className="w-full sm:w-72 space-y-2 text-xs">
+            <div className="w-full lg:w-72 space-y-2 text-xs">
               <div className="flex justify-between items-center py-1 text-slate-700">
                 <span className="font-medium">Sub Total</span>
                 <span className="font-mono font-medium">{breakdown.formattedSubtotal}</span>

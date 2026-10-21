@@ -41,6 +41,11 @@ import {
   INDIAN_GST_STATES,
   resolveCustomerState,
 } from '../utils/pricingEngine';
+import { Select } from '../components/ui/select';
+import {
+  evaluateCustomerGstin,
+  GSTIN_LOCATION_ERROR,
+} from '../utils/customerGstin';
 
 function safeStr(val: any): string {
   if (val === null || val === undefined) return '';
@@ -306,6 +311,13 @@ function CustomerProfilePageContent() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
+  const [gstinErrorRevealed, setGstinErrorRevealed] = useState(false);
+  const gstinEvaluation = evaluateCustomerGstin(editForm.customer_gst);
+  const gstinError =
+    gstinEvaluation.status === 'invalid' &&
+    (gstinErrorRevealed || gstinEvaluation.normalized.length >= 15)
+      ? GSTIN_LOCATION_ERROR
+      : null;
 
   // Fetch employees for rep mapping
   const { data: rawEmployees = [] } = useQuery<any[]>({
@@ -446,19 +458,22 @@ function CustomerProfilePageContent() {
   const handleOpenEdit = () => {
     if (!guardAction('customers.edit')) return;
     if (!customer) return;
+    const gstinResult = evaluateCustomerGstin(customer.customer_gst);
+    const address = customer.customer_address || customer.address || '';
     const derivedState =
       customer.customer_state ||
       resolveCustomerState({
-        gstin: customer.customer_gst,
-        address: customer.customer_address || customer.address,
+        gstin: gstinResult.status === 'valid' ? gstinResult.normalized : undefined,
+        address,
       })?.label ||
       '';
+    setGstinErrorRevealed(gstinResult.status === 'invalid');
     setEditForm({
       customer_name: customer.customer_name || '',
       contact_person: customer.contact_person || '',
       customer_phone: customer.customer_phone || '',
-      customer_gst: customer.customer_gst || '',
-      customer_address: customer.customer_address || customer.address || '',
+      customer_gst: gstinResult.normalized,
+      customer_address: address,
       customer_state: derivedState,
       assigned_salesperson_phone: customer.assigned_salesperson_phone || '',
       avg_order_frequency_days: customer.avg_order_frequency_days || 30,
@@ -472,6 +487,11 @@ function CustomerProfilePageContent() {
     if (!guardAction('customers.edit')) return;
     if (!editForm.customer_name || !editForm.customer_name.trim()) {
       toast.error('Customer name is required');
+      return;
+    }
+    if (evaluateCustomerGstin(editForm.customer_gst).status === 'invalid') {
+      setGstinErrorRevealed(true);
+      toast.error(GSTIN_LOCATION_ERROR);
       return;
     }
     updateMutation.mutate(editForm);
@@ -671,7 +691,7 @@ function CustomerProfilePageContent() {
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
       {/* Top Header & Navigation */}
       <div className="flex flex-col gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             onClick={() => navigate(isFromDashboard ? '/home' : '/customers')}
             className="h-9 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white hover:bg-slate-50 px-3.5 rounded-xl border border-slate-200 transition-colors cursor-pointer shadow-2xs">
@@ -923,7 +943,7 @@ function CustomerProfilePageContent() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                         <th className="py-2.5 px-3">PO / Deal</th>
@@ -1170,7 +1190,7 @@ function CustomerProfilePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                     <th className="py-3 px-3">#</th>
@@ -1252,7 +1272,7 @@ function CustomerProfilePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                     <th className="py-3 px-3">#</th>
@@ -1358,7 +1378,7 @@ function CustomerProfilePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                     <th className="py-3 px-3">#</th>
@@ -1434,7 +1454,7 @@ function CustomerProfilePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
                     <th className="py-3 px-3">#</th>
@@ -1521,9 +1541,9 @@ function CustomerProfilePageContent() {
 
       {/* Edit Customer Profile Modal */}
       {isEditing && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+            <div className="sheet-header flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Edit2 size={16} className="text-blue-600" />
                 Edit Profile — {customer.customer_name}
@@ -1553,7 +1573,7 @@ function CustomerProfilePageContent() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Contact Person
@@ -1576,7 +1596,8 @@ function CustomerProfilePageContent() {
                     Contact Phone
                   </label>
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="tel"
                     value={editForm.customer_phone}
                     onChange={e =>
                       setEditForm({
@@ -1589,32 +1610,60 @@ function CustomerProfilePageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">
+                  <label
+                    htmlFor="customer-gstin"
+                    className="block text-slate-600 font-semibold mb-1"
+                  >
                     GSTIN Number
                   </label>
                   <input
+                    id="customer-gstin"
                     type="text"
                     value={editForm.customer_gst}
+                    aria-invalid={gstinError ? true : undefined}
+                    aria-describedby={gstinError ? 'customer-gstin-error' : undefined}
+                    onBlur={e => {
+                      if (evaluateCustomerGstin(e.target.value).status === 'invalid') {
+                        setGstinErrorRevealed(true);
+                      }
+                    }}
                     onChange={e => {
-                      const nextGst = e.target.value;
-                      const gstState = resolveCustomerState({ gstin: nextGst });
+                      const result = evaluateCustomerGstin(e.target.value);
+                      setGstinErrorRevealed(
+                        result.status === 'invalid' &&
+                          (result.normalized.length >= 15 || gstinErrorRevealed),
+                      );
                       setEditForm({
                         ...editForm,
-                        customer_gst: nextGst,
-                        customer_state: gstState?.label || editForm.customer_state,
+                        customer_gst: result.normalized,
+                        customer_state:
+                          result.status === 'valid'
+                            ? result.state.label
+                            : editForm.customer_state,
                       });
                     }}
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono transition-all shadow-2xs"
+                    className={`w-full px-3.5 py-2.5 border ${
+                      gstinError ? 'border-rose-400' : 'border-slate-300'
+                    } rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono transition-all shadow-2xs`}
                   />
+                  {gstinError && (
+                    <p
+                      id="customer-gstin-error"
+                      role="alert"
+                      className="mt-1 text-xs font-medium text-rose-600"
+                    >
+                      {gstinError}
+                    </p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     State (Place of Supply)
                   </label>
-                  <select
+                  <Select
                     value={editForm.customer_state || ''}
                     onChange={e =>
                       setEditForm({
@@ -1622,18 +1671,20 @@ function CustomerProfilePageContent() {
                         customer_state: e.target.value,
                       })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                    placeholder="Auto-detect from GSTIN / Address"
+                  >
                     <option value="">Auto-detect from GSTIN / Address</option>
                     {INDIAN_GST_STATES.map(st => (
                       <option key={st.code} value={st.label}>
                         {st.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Registered Address
@@ -1643,9 +1694,13 @@ function CustomerProfilePageContent() {
                     value={editForm.customer_address}
                     onChange={e => {
                       const nextAddr = e.target.value;
+                      const gstinResult = evaluateCustomerGstin(editForm.customer_gst);
                       const derivedState = !editForm.customer_state
                         ? resolveCustomerState({
-                            gstin: editForm.customer_gst,
+                            gstin:
+                              gstinResult.status === 'valid'
+                                ? gstinResult.normalized
+                                : undefined,
                             address: nextAddr,
                           })?.label || ''
                         : editForm.customer_state;
@@ -1677,12 +1732,12 @@ function CustomerProfilePageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Assigned Salesperson
                   </label>
-                  <select
+                  <Select
                     value={editForm.assigned_salesperson_phone}
                     onChange={e =>
                       setEditForm({
@@ -1690,34 +1745,37 @@ function CustomerProfilePageContent() {
                         assigned_salesperson_phone: e.target.value,
                       })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                    placeholder="Unassigned"
+                  >
                     <option value="">Unassigned</option>
                     {safeEmployees.map(emp => (
                       <option key={emp.id} value={emp.phone}>
                         {emp.name} ({emp.phone})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
 
                 <div>
                   <label className="block text-slate-600 font-semibold mb-1">
                     Customer Segment
                   </label>
-                  <select
+                  <Select
                     value={editForm.segment}
                     onChange={e =>
                       setEditForm({ ...editForm, segment: e.target.value })
                     }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs bg-white">
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                  >
                     <option value="key_account">Key Account</option>
                     <option value="growth">Growth</option>
                     <option value="new">New</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0">
+              <div className="sheet-actions pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}

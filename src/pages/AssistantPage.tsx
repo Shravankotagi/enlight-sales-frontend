@@ -19,12 +19,12 @@ import {
   BarChart2,
   Users,
   Search,
-  Paperclip,
   FileText,
   MapPin,
   X,
   Loader2,
 } from 'lucide-react';
+import AssistantAttachMenu from '../components/AssistantAttachMenu';
 import KnowledgeBaseModal from '../components/KnowledgeBaseModal';
 import MarkdownMessage from '../components/MarkdownMessage';
 import InteractiveButtons, { type InteractiveButton } from '../components/chat/InteractiveButtons';
@@ -96,6 +96,14 @@ const TECHNICAL_PAYLOAD_DISPLAY_MAP: Record<string, string> = {
   btn_resume_yes: 'Yes, Continue',
   btn_resume_no: 'No, Go to Menu',
   btn_att_no: 'No',
+
+  proc_1: 'Pending prices',
+  proc_2: 'Current inquiries',
+  proc_3: 'Log a Base Price',
+  proc_4: 'My team',
+
+  menu_price: 'Add Price to Inquiry',
+  btn_price_save: 'Save',
 };
 
 export function formatUserDisplayMessage(content?: string): string {
@@ -106,6 +114,8 @@ export function formatUserDisplayMessage(content?: string): string {
   if (TECHNICAL_PAYLOAD_DISPLAY_MAP[lower]) {
     return TECHNICAL_PAYLOAD_DISPLAY_MAP[lower];
   }
+
+  if (lower.startsWith('btn_price_current')) return 'Price the current inquiry';
 
   // Dynamic fallback for any pattern like menu_X or btn_repeat_X
   if (/^menu_([1-9]|10)$/i.test(lower)) {
@@ -187,6 +197,8 @@ export default function AssistantPage() {
   const role = (activeEmployee?.role || 'salesperson').toLowerCase();
   const isManagerOrAdmin =
     role === 'manager' || role === 'sales_manager' || role === 'admin';
+  const isProcurement =
+    role === 'procurement_person' || role === 'procurement_manager';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -360,9 +372,10 @@ export default function AssistantPage() {
     if ((!textToSend && !selectedPhoto) || loading) return;
 
     const isPdfAttachment = selectedPhoto?.file.type === 'application/pdf';
-    let userDisplayText = displayTitle ||
-      formatUserDisplayMessage(textToSend) ||
-      (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : '');
+    const mappedSend = formatUserDisplayMessage(textToSend);
+    let userDisplayText = mappedSend !== textToSend
+      ? mappedSend
+      : (displayTitle || mappedSend || (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : ''));
 
     // Parity with WhatsApp list selection: if user typed a menu number (1–10) while looking at the Catalog Menu
     if (!promptTextOverride && textToSend) {
@@ -373,7 +386,7 @@ export default function AssistantPage() {
         lastAssistantMsg.interactiveList.sections.length > 0;
 
       if (isAwaitingCatalogMenu) {
-        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?([1-9]|10)\.?$/i);
+        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?(11|10|[1-9])\.?$/i);
         if (numMatch) {
           const selectedNum = numMatch[1];
           for (const sec of lastAssistantMsg.interactiveList?.sections || []) {
@@ -382,7 +395,8 @@ export default function AssistantPage() {
             );
             if (foundRow) {
               textToSend = foundRow.id || `menu_${selectedNum}`;
-              userDisplayText = foundRow.title;
+              userDisplayText = formatUserDisplayMessage(textToSend);
+              if (userDisplayText === textToSend) userDisplayText = foundRow.title;
               break;
             }
           }
@@ -512,7 +526,16 @@ export default function AssistantPage() {
   };
 
   // Quick prompt suggestions based on role
-  const quickPrompts = isManagerOrAdmin
+  const quickPrompts = isProcurement
+    ? [
+        { label: 'Pending prices', text: 'pending prices', icon: TrendingUp },
+        { label: 'Current inquiries', text: 'current inquiries', icon: Search },
+        { label: 'Log a base price', text: 'log a base price', icon: FileText },
+        ...(role === 'procurement_manager'
+          ? [{ label: 'My team', text: 'my team', icon: Users }]
+          : []),
+      ]
+    : isManagerOrAdmin
     ? [
         { label: 'Team Pipeline Summary', text: 'Show me the team pipeline summary and grand value across sales reps.', icon: TrendingUp },
         { label: 'Customer Churn Radar', text: 'Which customer accounts have high or medium churn risk right now?', icon: Users },
@@ -567,16 +590,28 @@ export default function AssistantPage() {
         } else if (raw.includes('To start an activity, please select')) {
           prefix = 'To start an activity, please select the relevant option from the menu below:\n\n';
         }
-        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–10) or type what you'd like to do.`;
+        const rowCount = (msg.interactiveList?.sections || []).reduce(
+          (sum, section) => sum + (section.rows?.length || 0),
+          0,
+        );
+        const range = rowCount > 1 ? rowCount : 10;
+        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–${range}) or type what you'd like to do.`;
+      }
+      if (raw.includes('Procurement assistant') && raw.includes('Pending prices')) {
+        const prefix = raw.includes('procurement manager')
+          ? raw.split('Procurement assistant')[0].trim()
+          : '';
+        const intro = 'Procurement assistant. Choose an action.';
+        return prefix ? `${prefix}\n\n${intro}` : intro;
       }
     }
     return raw;
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+    <div className="flex flex-col min-h-[70dvh] lg:h-[calc(100dvh-3.5rem)] bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
       {/* Top Header Bar with Scope Indicator */}
-      <div className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-gray-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-50 text-blue-600 border border-blue-200/60 rounded-xl shadow-2xs">
             <Sparkles size={22} />
@@ -591,13 +626,22 @@ export default function AssistantPage() {
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              Conversational Sales OS & Knowledge Base RAG Assistant
+              {isProcurement
+                ? 'Pending prices, current inquiries, and base prices'
+                : 'Conversational Sales OS & Knowledge Base RAG Assistant'}
             </p>
           </div>
         </div>
 
         {/* Header Right: Knowledge Base Action + Scope Badge */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsSidebarCollapsed(false)}
+            className="lg:hidden px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
+          >
+            Chats
+          </button>
           {isManagerOrAdmin && (
             <button
               onClick={() => setKbModalOpen(true)}
@@ -629,8 +673,10 @@ export default function AssistantPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar / Session History */}
         <div
-          className={`bg-gray-50/70 border-r border-gray-200 flex flex-col shrink-0 transition-[width,padding] duration-200 ${
-            isSidebarCollapsed ? 'w-16 p-2' : 'w-72 p-4'
+          className={`bg-gray-50/70 border-r border-gray-200 flex-col shrink-0 transition-[width,padding] duration-200 ${
+            isSidebarCollapsed
+              ? 'hidden lg:flex w-16 p-2'
+              : 'absolute inset-y-0 left-0 z-20 flex w-72 p-4 shadow-xl lg:static lg:z-auto lg:shadow-none'
           }`}
         >
           <div className={`flex gap-2 ${isSidebarCollapsed ? 'flex-col' : 'items-center'}`}>
@@ -733,12 +779,14 @@ export default function AssistantPage() {
                     Welcome to Enlight Sales OS Assistant
                   </h2>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.
+                    {isProcurement
+                      ? 'List pending or current inquiries, or log a base price in rupees per MT.'
+                      : 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'}
                   </p>
                 </div>
 
                 {/* Quick Prompts */}
-                <div className="grid grid-cols-2 gap-3 w-full text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
                   {quickPrompts.map((qp, idx) => {
                     const IconComp = qp.icon;
                     return (
@@ -896,7 +944,7 @@ export default function AssistantPage() {
           )}
 
           {/* Chat Input Bar */}
-          <div className="p-4 bg-white border-t border-gray-200">
+          <div className="sticky bottom-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white border-t border-gray-200">
             {/* Selected Photo & GPS Tag Preview Chip */}
             {selectedPhoto && (
               <div className="flex items-center gap-3 p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl mb-3 text-xs">
@@ -956,15 +1004,41 @@ export default function AssistantPage() {
               }}
               className="flex items-center gap-2 bg-gray-50 border border-gray-300 focus-within:border-blue-500 focus-within:bg-white px-3 py-2 rounded-xl transition-all shadow-2xs"
             >
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
+              <AssistantAttachMenu
                 disabled={loading}
-                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-200/60 rounded-lg transition-all shrink-0"
-                title="Attach image or PDF"
-              >
-                <Paperclip size={18} />
-              </button>
+                onUpload={() => fileInputRef.current?.click()}
+                readGps={() =>
+                  new Promise((resolve) => {
+                    if (!navigator.geolocation) {
+                      resolve(null);
+                      return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                      (position) =>
+                        resolve({
+                          latitude: position.coords.latitude,
+                          longitude: position.coords.longitude,
+                          accuracy: position.coords.accuracy,
+                        }),
+                      () => resolve(null),
+                      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+                    );
+                  })
+                }
+                onCapture={(photoUrl, coords) => {
+                  setSelectedPhoto({
+                    file: new File([photoUrl], 'visit-photo.jpg', { type: 'image/jpeg' }),
+                    previewUrl: photoUrl,
+                    base64: photoUrl,
+                  });
+                  setGpsLocation(coords);
+                  setGpsStatus('acquired');
+                  setGpsStatusText(
+                    `GPS Tagged: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)} (±${Math.round(coords.accuracy)}m)`,
+                  );
+                  focusInput();
+                }}
+              />
               <input
                 ref={fileInputRef}
                 type="file"
@@ -977,7 +1051,7 @@ export default function AssistantPage() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder={selectedPhoto ? "Add notes for this attachment..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
+                placeholder={selectedPhoto ? "Add notes for this attachment..." : isProcurement ? "Reply with a procurement number or a menu choice..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
                 className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />

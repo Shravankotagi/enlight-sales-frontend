@@ -246,7 +246,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
   return (
     <div
       id="printable-inquiry-modal"
-      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-[9999] animate-in fade-in duration-200"
+      className="mobile-sheet-overlay fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-[9999] animate-in fade-in duration-200"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Print CSS to ensure exact sheet printing */}
@@ -330,7 +330,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
         }
       `}</style>
 
-      <div className="quotation-print-sheet bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
+      <div className="mobile-sheet quotation-print-sheet bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto">
         
         {/* Top Actions Bar (Hidden on print) */}
         <div className="bg-slate-900 px-6 py-3.5 flex items-center justify-between no-print shrink-0 border-b border-slate-800 z-10">
@@ -480,9 +480,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                     <th className="px-3 py-2.5 text-center w-[5%] font-bold">#</th>
                     <th className="px-4 py-2.5 w-[39%] font-bold">Item &amp; Description</th>
                     <th className="px-3 py-2.5 text-center w-[15%] font-bold">HSN/SAC</th>
-                    <th className="px-4 py-2.5 text-right w-[13%] font-bold">Qty</th>
+                    <th className="px-4 py-2.5 text-center w-[13%] font-bold">Qty</th>
                     <th className="px-4 py-2.5 text-right w-[13%] font-bold">Rate</th>
-                    <th className="px-4 py-2.5 text-right w-[15%] font-bold">Amount</th>
+                    <th className="px-4 py-2.5 pr-6 text-right w-[15%] font-bold">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-900 bg-white">
@@ -505,13 +505,13 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                           )}
                         </td>
                         <td className="px-3 py-3 text-center font-normal text-slate-700 text-[12px]">{hsn}</td>
-                        <td className="px-4 py-3 text-right font-normal text-slate-900 text-[12px] whitespace-nowrap">
+                        <td className="px-4 py-3 text-center font-normal text-slate-900 text-[12px] whitespace-nowrap">
                           {formatLineItemWeightMt(item).text}
                         </td>
                         <td className="px-4 py-3 text-right font-normal text-slate-800 text-[12px]">
                           {rate > 0 ? formatIndianCurrency(rate, true) : '0.00'}
                         </td>
-                        <td className="px-4 py-3 text-right font-normal text-slate-900 text-[12px]">
+                        <td className="px-4 py-3 pr-6 text-right font-normal text-slate-900 text-[12px]">
                           {amt > 0 ? formatIndianCurrency(amt, true) : '0.00'}
                         </td>
                       </tr>
@@ -537,7 +537,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               </div>
 
               {/* Bottom Right: Financial Breakdown Calculation */}
-              <div className="w-full sm:w-72 space-y-2 text-[12px] text-slate-700">
+              <div className="w-full lg:w-72 space-y-2 text-[12px] text-slate-700">
                 <div className="flex justify-between items-center py-0.5">
                   <span className="font-normal text-slate-700">Sub Total</span>
                   <span className="font-normal text-slate-900 text-right">{breakdown.formattedSubtotal}</span>

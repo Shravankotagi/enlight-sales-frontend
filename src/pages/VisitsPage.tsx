@@ -19,7 +19,6 @@ import {
   Calendar,
   MoreVertical,
   Eye,
-  ChevronDown,
   Save,
   ArrowLeft,
   AlertCircle,
@@ -36,6 +35,17 @@ import {
   Compass,
 } from 'lucide-react';
 import { visitsApi, employeesApi, customersApi } from '../lib/api';
+import VisitLocationField from '../components/VisitLocationField';
+import VisitBrandField from '../components/VisitBrandField';
+import VisitCameraCapture from '../components/VisitCameraCapture';
+import {
+  VISIT_BRANDS,
+  VISIT_PAYMENT_TERMS,
+  validateNewVisitForm,
+  visitCityLabel,
+  visitDocumentError,
+  type NewVisitFormInput,
+} from '../utils/visitForm';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -46,6 +56,7 @@ import {
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 import PaginationControl from '../components/PaginationControl';
 import { getVisitsSalespersonFilterValue } from '../utils/visitFilters';
+import { Select } from '../components/ui/select';
 
 import { type CustomerVisit, type VisitAttachment, getFollowUpStatusInfo } from '../utils/visitUtils';
 export type { CustomerVisit, VisitAttachment };
@@ -317,7 +328,7 @@ export default function VisitsPage() {
       setFormContactPhone(clean);
       if (formErrors.contactPhone) setFormErrors(prev => ({ ...prev, contactPhone: false }));
     }
-    if (cust.location && !formLocation) {
+    if (cust.location && !formLocation && locationSource !== 'gps') {
       setFormLocation(cust.location);
       if (formErrors.location) setFormErrors(prev => ({ ...prev, location: false }));
     }
@@ -325,8 +336,20 @@ export default function VisitsPage() {
     if (cust.designation && !formDesignation) setFormDesignation(cust.designation);
     if (cust.customer_type && !formCustomerType) setFormCustomerType(cust.customer_type);
     if (cust.delivery_location && !formDeliveryLocation) setFormDeliveryLocation(cust.delivery_location);
-    if (cust.preferred_make && !formPreferredMake) setFormPreferredMake(cust.preferred_make);
-    if (cust.payment_terms && !formPaymentTerms) setFormPaymentTerms(cust.payment_terms);
+    if (cust.preferred_make && formBrands.length === 0) {
+      const brands = String(cust.preferred_make)
+        .split(',')
+        .map(brand => brand.trim())
+        .filter(brand => VISIT_BRANDS.includes(brand as (typeof VISIT_BRANDS)[number]));
+      if (brands.length > 0) setFormBrands(brands);
+    }
+    if (
+      cust.payment_terms &&
+      !formPaymentTerms &&
+      VISIT_PAYMENT_TERMS.includes(cust.payment_terms as (typeof VISIT_PAYMENT_TERMS)[number])
+    ) {
+      setFormPaymentTerms(cust.payment_terms);
+    }
     if (cust.monthly_consumption && !formMonthlyConsumption) setFormMonthlyConsumption(cust.monthly_consumption);
   };
 
@@ -449,13 +472,27 @@ export default function VisitsPage() {
   const [formCurrentRequirement, setFormCurrentRequirement] = useState('');
   const [formNextPurchaseExpected, setFormNextPurchaseExpected] = useState('');
   const [formDeliveryLocation, setFormDeliveryLocation] = useState('');
-  const [formPreferredMake, setFormPreferredMake] = useState('');
   const [formPaymentTerms, setFormPaymentTerms] = useState('');
   const [formGpsPhotoUrl, setFormGpsPhotoUrl] = useState<string | null>(null);
   const [formGpsLat, setFormGpsLat] = useState<number | null>(null);
   const [formGpsLng, setFormGpsLng] = useState<number | null>(null);
   const [formGpsAccuracy, setFormGpsAccuracy] = useState<number | null>(null);
   const [formAttachments, setFormAttachments] = useState<VisitAttachment[]>([]);
+  const [formBrands, setFormBrands] = useState<string[]>([]);
+  const [formBrandOther, setFormBrandOther] = useState('');
+  const [locationSource, setLocationSource] = useState<'' | 'gps' | 'manual'>('');
+  const [visitLat, setVisitLat] = useState<number | null>(null);
+  const [visitLng, setVisitLng] = useState<number | null>(null);
+  const [visitAccuracy, setVisitAccuracy] = useState<number | null>(null);
+  const [locationNotice, setLocationNotice] = useState('');
+  const [locationLocked, setLocationLocked] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState('');
+  const [otpNotice, setOtpNotice] = useState('');
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [capturingGps, setCapturingGps] = useState(false);
 
   // Preset Days Helper
@@ -472,27 +509,120 @@ export default function VisitsPage() {
 
   // GPS Coordinates & File Upload Helpers
   const captureGpsCoordinates = (): Promise<{ latitude: number; longitude: number; accuracy: number } | null> => {
+    const targetMeters = 20;
+    const watchMs = 15000;
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
         resolve(null);
         return;
       }
-      navigator.geolocation.getCurrentPosition(
+      let settled = false;
+      let watchId = 0;
+      let best: { latitude: number; longitude: number; accuracy: number } | null = null;
+      const finish = (reading: { latitude: number; longitude: number; accuracy: number } | null) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        resolve(reading);
+      };
+      const timer = window.setTimeout(() => finish(best), watchMs);
+      watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          resolve({
+          const reading = {
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
             accuracy: Math.round(pos.coords.accuracy),
-          });
+          };
+          if (!best || reading.accuracy < best.accuracy) best = reading;
+          if (reading.accuracy <= targetMeters) finish(best);
         },
         (err) => {
           console.warn('Geolocation capture failed or denied:', err);
-          resolve(null);
+          finish(best);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: watchMs },
       );
     });
   };
+
+  const refreshVisitLocation = async () => {
+    setLocating(true);
+    setLocationNotice('');
+    try {
+      const coords = await captureGpsCoordinates();
+      if (!coords) {
+        setLocationSource('manual');
+        setLocationLocked(false);
+        setVisitLat(null);
+        setVisitLng(null);
+        setVisitAccuracy(null);
+        setLocationNotice('Location permission was denied or GPS is unavailable. Enter the city, or retry.');
+        return;
+      }
+      let city = '';
+      try {
+        const res = await visitsApi.reverseGeocode(coords.latitude, coords.longitude);
+        const body = res?.data?.data || res?.data;
+        city = visitCityLabel(body?.address) || visitCityLabel(body?.city);
+      } catch {
+        city = '';
+      }
+      setVisitLat(coords.latitude);
+      setVisitLng(coords.longitude);
+      setVisitAccuracy(coords.accuracy);
+      setLocationSource('gps');
+      setLocationLocked(Boolean(city));
+      setFormLocation(city);
+      if (coords.accuracy > 50) {
+        setLocationNotice(
+          `The device could only locate within ${coords.accuracy} meters. Retry outdoors.${city ? '' : ' Or type the location.'}`,
+        );
+      } else if (!city) {
+        setLocationNotice('Type the city.');
+      }
+      setFormErrors(prev => ({ ...prev, location: false }));
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timer = window.setTimeout(() => setResendSeconds(seconds => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendSeconds]);
+
+  const newVisitInput = (): NewVisitFormInput => ({
+    customerName: formCustomerName,
+    personMet: formPersonMet,
+    designation: formDesignation,
+    contactPhone: formContactPhone,
+    email: formEmail,
+    location: formLocation,
+    locationSource,
+    customerType: formCustomerType,
+    visitDate: formVisitDate,
+    visitTime: formVisitTime,
+    visitType: formVisitType,
+    outcome: formOutcome,
+    probability: formCustomerProbability,
+    productDetails: formProductDetails,
+    monthlyConsumption: formMonthlyConsumption,
+    brands: formBrands,
+    brandOther: formBrandOther,
+    paymentTerms: formPaymentTerms,
+    deliveryLocation: formDeliveryLocation,
+    nextPurchase: formNextPurchaseExpected,
+    currentRequirement: formCurrentRequirement,
+    followup: formFollowup,
+    followupDate: formFollowupDate,
+    remarks: formRemarks,
+    photoUrl: formGpsPhotoUrl,
+    photoLatitude: formGpsLat,
+    photoLongitude: formGpsLng,
+    otpVerified,
+  });
 
   const handlePhotoFileChange = async (file: File | null, isEdit = false) => {
     if (!file) return;
@@ -516,6 +646,7 @@ export default function VisitsPage() {
             setFormGpsLng(coords.longitude);
             setFormGpsAccuracy(coords.accuracy);
           }
+          setFormErrors((prev) => ({ ...prev, attachments: false }));
         }
       };
       reader.readAsDataURL(file);
@@ -539,6 +670,7 @@ export default function VisitsPage() {
           setEditAttachments((prev) => [...prev, item]);
         } else {
           setFormAttachments((prev) => [...prev, item]);
+          setFormErrors((prev) => ({ ...prev, attachments: false }));
         }
       };
       reader.readAsDataURL(file);
@@ -571,8 +703,19 @@ export default function VisitsPage() {
     setFormCurrentRequirement('');
     setFormNextPurchaseExpected('');
     setFormDeliveryLocation('');
-    setFormPreferredMake('');
     setFormPaymentTerms('');
+    setFormBrands([]);
+    setFormBrandOther('');
+    setLocationSource('');
+    setLocationLocked(false);
+    setVisitLat(null);
+    setVisitLng(null);
+    setLocationNotice('');
+    setOtpCode('');
+    setOtpVerified(false);
+    setVerificationToken('');
+    setOtpNotice('');
+    setResendSeconds(0);
     setFormGpsPhotoUrl(null);
     setFormGpsLat(null);
     setFormGpsLng(null);
@@ -580,6 +723,7 @@ export default function VisitsPage() {
     setFormAttachments([]);
 
     setShowModal(true);
+    void refreshVisitLocation();
   };
 
   // Edit Form state
@@ -668,27 +812,63 @@ export default function VisitsPage() {
     };
   }, [dateRange, effectivePhone, activeRole, activeMode]);
 
+  const sendVisitCode = async () => {
+    const errors = validateNewVisitForm(newVisitInput(), { requireOtp: false });
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setOtpNotice('Complete the form before sending the code.');
+      return;
+    }
+    try {
+      setOtpSending(true);
+      setOtpNotice('');
+      const res = await visitsApi.requestVisitOtp(formContactPhone);
+      const body = res?.data?.data || res?.data;
+      setResendSeconds(Number(body?.resend_after_seconds) || 60);
+      setOtpNotice(body?.message || 'Code sent to the customer WhatsApp number.');
+      setOtpVerified(false);
+      setVerificationToken('');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || 'The visit code could not be sent.';
+      setOtpNotice(Array.isArray(message) ? message.join(' ') : String(message));
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const confirmVisitCode = async () => {
+    if (!otpCode.trim()) {
+      setOtpNotice('Enter the code from WhatsApp.');
+      return;
+    }
+    try {
+      setOtpSending(true);
+      const res = await visitsApi.verifyVisitOtp(formContactPhone, otpCode.trim());
+      const body = res?.data?.data || res?.data;
+      if (!body?.verification_token) {
+        setOtpNotice('That code is incorrect.');
+        setOtpVerified(false);
+        return;
+      }
+      setVerificationToken(body.verification_token);
+      setOtpVerified(true);
+      setOtpNotice('Phone verified.');
+      setFormErrors(prev => ({ ...prev, otp: false }));
+    } catch (err: any) {
+      const message = err?.response?.data?.message || 'That code is incorrect.';
+      setOtpVerified(false);
+      setVerificationToken('');
+      setOtpNotice(Array.isArray(message) ? message.join(' ') : String(message));
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guardAction('visits.log')) return;
 
-    // Required Field Validation & Highlighting
-    const errors: Record<string, string | boolean> = {};
-    if (!formCustomerName.trim()) errors.customerName = true;
-    if (!formPersonMet.trim()) errors.personMet = true;
-
-    const cleanContactPhone = formContactPhone.replace(/\D/g, '');
-    if (!cleanContactPhone) {
-      errors.contactPhone = 'Please enter contact phone.';
-    } else if (cleanContactPhone.length !== 10) {
-      errors.contactPhone = 'Please enter a valid 10-digit mobile number.';
-    }
-
-    if (!formLocation.trim()) errors.location = true;
-    if (!formVisitDate) errors.visitDate = true;
-    if (!formOutcome) errors.outcome = true;
-    if (!formRemarks.trim()) errors.remarks = true;
-
+    const errors = validateNewVisitForm(newVisitInput());
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -699,34 +879,40 @@ export default function VisitsPage() {
       const [vYear, vMonth, vDay] = formVisitDate.split('-').map(Number);
       const [vHour, vMinute] = (formVisitTime || formatLocalTime()).split(':').map(Number);
       const visitedAtDate = new Date(vYear, vMonth - 1, vDay, vHour, vMinute, 0);
+      const cleanContactPhone = formContactPhone.replace(/\D/g, '');
 
       await visitsApi.create({
         customer_name: formCustomerName.trim(),
         person_met: formPersonMet.trim(),
         contact_phone: cleanContactPhone,
         location: formLocation.trim(),
+        location_source: locationSource,
+        visit_latitude: visitLat,
+        visit_longitude: visitLng,
         outcome: formOutcome,
         remarks: formRemarks.trim(),
-        follow_up_action: formFollowup.trim() || undefined,
-        follow_up_date: formFollowup.trim() ? (formFollowupDate || undefined) : undefined,
+        follow_up_action: formFollowup.trim(),
+        follow_up_date: formFollowupDate,
         visited_at: visitedAtDate.toISOString(),
-        email: formEmail.trim() || undefined,
-        designation: formDesignation.trim() || undefined,
-        customer_type: formCustomerType || undefined,
-        visit_type: formVisitType || undefined,
-        customer_probability: formCustomerProbability || undefined,
-        product_details: formProductDetails.trim() || undefined,
-        monthly_consumption: formMonthlyConsumption.trim() || undefined,
-        current_requirement: formCurrentRequirement.trim() || undefined,
-        next_purchase_expected: formNextPurchaseExpected.trim() || undefined,
-        delivery_location: formDeliveryLocation.trim() || undefined,
-        preferred_make: formPreferredMake.trim() || undefined,
-        payment_terms: formPaymentTerms.trim() || undefined,
-        gps_photo_url: formGpsPhotoUrl || undefined,
-        gps_latitude: formGpsLat ?? undefined,
-        gps_longitude: formGpsLng ?? undefined,
-        gps_accuracy: formGpsAccuracy ?? undefined,
-        attachments: formAttachments.length > 0 ? formAttachments : undefined,
+        email: formEmail.trim(),
+        designation: formDesignation.trim(),
+        customer_type: formCustomerType,
+        visit_type: formVisitType,
+        customer_probability: formCustomerProbability,
+        product_details: formProductDetails.trim(),
+        monthly_consumption: formMonthlyConsumption.trim(),
+        current_requirement: formCurrentRequirement.trim(),
+        next_purchase_expected: formNextPurchaseExpected,
+        delivery_location: formDeliveryLocation.trim(),
+        preferred_make: formBrands,
+        preferred_make_other: formBrandOther.trim(),
+        payment_terms: formPaymentTerms,
+        gps_photo_url: formGpsPhotoUrl,
+        gps_latitude: formGpsLat,
+        gps_longitude: formGpsLng,
+        gps_accuracy: formGpsAccuracy,
+        attachments: formAttachments,
+        verification_token: verificationToken,
       });
 
       queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
@@ -760,7 +946,6 @@ export default function VisitsPage() {
         setFormCurrentRequirement('');
         setFormNextPurchaseExpected('');
         setFormDeliveryLocation('');
-        setFormPreferredMake('');
         setFormPaymentTerms('');
         setFormGpsPhotoUrl(null);
         setFormGpsLat(null);
@@ -1174,7 +1359,7 @@ export default function VisitsPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Stats, Filters) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
@@ -1319,122 +1504,116 @@ export default function VisitsPage() {
 
           {/* 2. Salesperson Filter Dropdown (Admin & Sales Manager only) */}
           {canViewSalesperson && (
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Users size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={filterSalesperson}
-                onChange={e => setFilterSalesperson(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>
-                  All Salespersons ({salespeopleList.length})
+            <Select
+              value={filterSalesperson}
+              onChange={e => setFilterSalesperson(e.target.value)}
+              prefixIcon={<Users size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All Salespersons ({salespeopleList.length})</option>
+              {salespeopleList.map((sp: any) => (
+                <option key={sp.phone || sp.name} value={sp.name}>
+                  {sp.name}
                 </option>
-                {salespeopleList.map((sp: any) => (
-                  <option
-                    key={sp.phone || sp.name}
-                    value={sp.name}
-                    className="font-normal text-slate-700"
-                    style={{ fontWeight: 'normal' }}>
-                    {sp.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+              ))}
+            </Select>
           )}
 
           {/* 3. Date Preset Dropdown with 'Last 30 Days' default */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={e => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-              <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-              <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-              <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-              <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-              <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={dayPreset}
+            onChange={e => handleDayPresetChange(e.target.value)}
+            prefixIcon={<Calendar size={14} className="text-blue-600" />}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* 4. Outcome Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterOutcome}
-              onChange={e => setFilterOutcome(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Outcomes ({baseScopedVisits.length})</option>
-              <option value="positive" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Positive ({positiveVisits})</option>
-              <option value="neutral" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Neutral ({neutralVisits})</option>
-              <option value="negative" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Negative ({negativeVisits})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterOutcome}
+            onChange={e => setFilterOutcome(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Outcomes ({baseScopedVisits.length})</option>
+            <option value="positive">Positive ({positiveVisits})</option>
+            <option value="neutral">Neutral ({neutralVisits})</option>
+            <option value="negative">Negative ({negativeVisits})</option>
+          </Select>
 
           {/* 5. Follow-up Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterFollowup}
-              onChange={e => setFilterFollowup(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Follow-ups ({baseScopedVisits.length})</option>
-              <option value="due" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due / Overdue ({dueFollowupsCount})</option>
-              <option value="overdue" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Overdue ({overdueFollowupsCount})</option>
-              <option value="due_today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Due Today ({dueTodayFollowupsCount})</option>
-              <option value="pending" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Pending ({pendingFollowupsCount})</option>
-              <option value="completed" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Completed ({completedFollowupsCount})</option>
-              <option value="none" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>No Follow-up</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterFollowup}
+            onChange={e => setFilterFollowup(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-52"
+          >
+            <option value="all">All Follow-ups ({baseScopedVisits.length})</option>
+            <option value="due">Due / Overdue ({dueFollowupsCount})</option>
+            <option value="overdue">Overdue ({overdueFollowupsCount})</option>
+            <option value="due_today">Due Today ({dueTodayFollowupsCount})</option>
+            <option value="pending">All Pending ({pendingFollowupsCount})</option>
+            <option value="completed">Completed ({completedFollowupsCount})</option>
+            <option value="none">No Follow-up</option>
+          </Select>
 
           {/* 6. Customer Type Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterCustomerType}
-              onChange={e => setFilterCustomerType(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Customer Types</option>
-              <option value="OEM" className="font-normal text-slate-700">OEM</option>
-              <option value="Fabricator" className="font-normal text-slate-700">Fabricator</option>
-              <option value="EPC" className="font-normal text-slate-700">EPC</option>
-              <option value="Manufacturer" className="font-normal text-slate-700">Manufacturer</option>
-              <option value="Trader" className="font-normal text-slate-700">Trader</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterCustomerType}
+            onChange={e => setFilterCustomerType(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Customer Types</option>
+            <option value="OEM">OEM</option>
+            <option value="Fabricator">Fabricator</option>
+            <option value="EPC">EPC</option>
+            <option value="Manufacturer">Manufacturer</option>
+            <option value="Trader">Trader</option>
+          </Select>
 
           {/* 7. Customer Probability Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterProbability}
-              onChange={e => setFilterProbability(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Probabilities</option>
-              <option value="Hot" className="font-normal text-slate-700">Hot</option>
-              <option value="Warm" className="font-normal text-slate-700">Warm</option>
-              <option value="Cold" className="font-normal text-slate-700">Cold</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterProbability}
+            onChange={e => setFilterProbability(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Probabilities</option>
+            <option value="Hot">Hot</option>
+            <option value="Warm">Warm</option>
+            <option value="Cold">Cold</option>
+          </Select>
 
           {/* 8. Visit Type Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterVisitType}
-              onChange={e => setFilterVisitType(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-              <option value="all" className="font-normal text-slate-700">All Visit Types</option>
-              <option value="First Visit" className="font-normal text-slate-700">First Visit</option>
-              <option value="Follow-up 1" className="font-normal text-slate-700">Follow-up 1</option>
-              <option value="Follow-up 2" className="font-normal text-slate-700">Follow-up 2</option>
-              <option value="Follow-up 3" className="font-normal text-slate-700">Follow-up 3</option>
-              <option value="Regular Visit" className="font-normal text-slate-700">Regular Visit</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterVisitType}
+            onChange={e => setFilterVisitType(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="all">All Visit Types</option>
+            <option value="First Visit">First Visit</option>
+            <option value="Follow-up 1">Follow-up 1</option>
+            <option value="Follow-up 2">Follow-up 2</option>
+            <option value="Follow-up 3">Follow-up 3</option>
+            <option value="Regular Visit">Regular Visit</option>
+          </Select>
 
           {/* 9. Clear Filter Button */}
           {(searchTerm || filterOutcome !== 'all' || filterFollowup !== 'all' || filterSalesperson !== 'all' || filterCustomerType !== 'all' || filterProbability !== 'all' || filterVisitType !== 'all' || dayPreset !== 'all') && (
@@ -1449,7 +1628,7 @@ export default function VisitsPage() {
 
         {/* Custom Range Inputs */}
         {showCustomDate && (
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+          <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
             <span className="text-slate-500 font-semibold">From:</span>
             <input
               type="date"
@@ -1474,7 +1653,7 @@ export default function VisitsPage() {
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="w-full text-left text-sm text-slate-700">
+          <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-3 py-3.5 text-center w-12">#</th>
@@ -1506,7 +1685,7 @@ export default function VisitsPage() {
                       key={v.id || idx}
                       className="hover:bg-slate-50/70 transition-colors group">
                       {/* 0. Serial Number */}
-                      <td className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                      <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
                       </td>
 
@@ -1586,6 +1765,19 @@ export default function VisitsPage() {
                           <MapIcon size={12} className="text-slate-400 shrink-0" />
                           {formatCityLocality(v.location, v.customer_address)}
                         </div>
+                        {v.location_source && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            {v.location_source === 'manual' ? 'Typed location' : 'GPS location'}
+                          </div>
+                        )}
+                        {typeof v.phone_verified === 'boolean' && (
+                          <div className={`text-[10px] font-bold mt-0.5 ${v.phone_verified ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {v.phone_verified ? 'Phone verified' : 'Phone not verified'}
+                          </div>
+                        )}
+                        {Array.isArray(v.attachments) && v.attachments.length > 0 && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">{v.attachments.length} document{v.attachments.length === 1 ? '' : 's'}</div>
+                        )}
                       </td>
 
                       {/* 4. Outcome */}
@@ -1614,7 +1806,7 @@ export default function VisitsPage() {
                           }
                           const isCompleted = fu.status === 'completed';
                           return (
-                            <div className="space-y-1.5 min-w-[200px] max-w-[280px]">
+                            <div className="space-y-1.5 lg:min-w-[200px] lg:max-w-[280px]">
                               <div className="flex items-start gap-2">
                                 <button
                                   type="button"
@@ -1652,7 +1844,7 @@ export default function VisitsPage() {
                       </td>
 
                       {/* 6. Actions */}
-                      <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
+                      <td data-label="Actions" className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative">
                         <div className="relative inline-block text-left">
                           <button
                             type="button"
@@ -1728,8 +1920,8 @@ export default function VisitsPage() {
 
       {/* Log Visit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <MapPin className="text-blue-600" size={18} />
@@ -1782,7 +1974,7 @@ export default function VisitsPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Person Met <span className="text-rose-500">*</span>
@@ -1805,18 +1997,28 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Designation</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Designation <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. Purchase Head"
                           value={formDesignation}
-                          onChange={e => setFormDesignation(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                          onChange={e => {
+                            setFormDesignation(e.target.value);
+                            if (formErrors.designation) setFormErrors(prev => ({ ...prev, designation: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                            formErrors.designation ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
+                        {formErrors.designation && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.designation)}</p>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Contact Phone <span className="text-rose-500">*</span>
@@ -1829,6 +2031,10 @@ export default function VisitsPage() {
                           onChange={e => {
                             const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                             setFormContactPhone(val);
+                            setOtpVerified(false);
+                            setVerificationToken('');
+                            setOtpCode('');
+                            setOtpNotice('');
                             if (formErrors.contactPhone) setFormErrors(prev => ({ ...prev, contactPhone: false }));
                           }}
                           className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
@@ -1843,45 +2049,60 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Email ID</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Email ID <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="email"
                           placeholder="e.g. suresh@company.com"
                           value={formEmail}
-                          onChange={e => setFormEmail(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                          onChange={e => {
+                            setFormEmail(e.target.value);
+                            if (formErrors.email) setFormErrors(prev => ({ ...prev, email: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
+                            formErrors.email ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
+                          }`}
                         />
+                        {formErrors.email && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.email)}</p>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          City / Location <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Chakan, Pune"
-                          value={formLocation}
-                          onChange={e => {
-                            setFormLocation(e.target.value);
-                            if (formErrors.location) setFormErrors(prev => ({ ...prev, location: false }));
-                          }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all ${
-                            formErrors.location ? 'border-rose-500 bg-rose-50/30 focus:ring-2 focus:ring-rose-500' : 'border-slate-300 focus:ring-2 focus:ring-blue-500'
-                          }`}
-                        />
-                        {formErrors.location && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter location.</p>
-                        )}
+                      <VisitLocationField
+                        value={formLocation}
+                        source={locationSource}
+                        cityLocked={locationLocked}
+                        latitude={visitLat}
+                        longitude={visitLng}
+                        accuracy={visitAccuracy}
+                        notice={locationNotice}
+                        locating={locating}
+                        error={formErrors.location}
+                        onRetry={() => { void refreshVisitLocation(); }}
+                        onManualChange={value => {
+                          setFormLocation(value);
+                          if (formErrors.location) setFormErrors(prev => ({ ...prev, location: false }));
+                        }}
+                      />
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Customer Type <span className="text-rose-500">*</span>
+                        </label>
                         <select
                           value={formCustomerType}
-                          onChange={e => setFormCustomerType(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                          onChange={e => {
+                            setFormCustomerType(e.target.value);
+                            if (formErrors.customerType) setFormErrors(prev => ({ ...prev, customerType: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
+                            formErrors.customerType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}>
                           <option value="">Select Customer Type</option>
                           <option value="OEM">OEM</option>
                           <option value="Fabricator">Fabricator</option>
@@ -1889,6 +2110,9 @@ export default function VisitsPage() {
                           <option value="Manufacturer">Manufacturer</option>
                           <option value="Trader">Trader</option>
                         </select>
+                        {formErrors.customerType && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.customerType)}</p>
+                        )}
                       </div>
                     </div>
 
@@ -1911,55 +2135,81 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Visit Time</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Visit Time <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="time"
                           value={formVisitTime}
-                          onChange={e => setFormVisitTime(e.target.value)}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
+                          onChange={e => {
+                            setFormVisitTime(e.target.value);
+                            if (formErrors.visitTime) setFormErrors(prev => ({ ...prev, visitTime: false }));
+                          }}
+                          className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium ${
+                            formErrors.visitTime ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}
                         />
+                        {formErrors.visitTime && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitTime)}</p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Visit Type</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Visit Type <span className="text-rose-500">*</span>
+                        </label>
                         <select
                           value={formVisitType}
-                          onChange={e => setFormVisitType(e.target.value)}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                          onChange={e => {
+                            setFormVisitType(e.target.value);
+                            if (formErrors.visitType) setFormErrors(prev => ({ ...prev, visitType: false }));
+                          }}
+                          className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
+                            formErrors.visitType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}>
                           <option value="First Visit">First Visit</option>
                           <option value="Follow-up 1">Follow-up 1</option>
                           <option value="Follow-up 2">Follow-up 2</option>
                           <option value="Follow-up 3">Follow-up 3</option>
                           <option value="Regular Visit">Regular Visit</option>
                         </select>
+                        {formErrors.visitType && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitType)}</p>
+                        )}
                       </div>
 
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Outcome <span className="text-rose-500">*</span>
                         </label>
-                        <select
+                        <Select
                           value={formOutcome}
                           onChange={e => {
                             setFormOutcome(e.target.value);
                             if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
                           }}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                        >
                           <option value="positive">Positive</option>
                           <option value="neutral">Neutral</option>
                           <option value="negative">Negative</option>
-                        </select>
+                        </Select>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Customer Probability</label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Customer Probability <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {['Hot', 'Warm', 'Cold'].map(p => (
                           <button
                             key={p}
                             type="button"
-                            onClick={() => setFormCustomerProbability(prev => prev === p ? '' : p)}
+                            onClick={() => {
+                              setFormCustomerProbability(p);
+                              if (formErrors.probability) setFormErrors(prev => ({ ...prev, probability: false }));
+                            }}
                             className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                               formCustomerProbability === p
                                 ? p === 'Hot'
@@ -1973,6 +2223,9 @@ export default function VisitsPage() {
                           </button>
                         ))}
                       </div>
+                      {formErrors.probability && (
+                        <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.probability)}</p>
+                      )}
                     </div>
                   </div>
 
@@ -1984,91 +2237,165 @@ export default function VisitsPage() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Product Details</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Product Details <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. SS 304 Sheets 2mm, Pipe 4 inch"
                           value={formProductDetails}
-                          onChange={e => setFormProductDetails(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          onChange={e => {
+                            setFormProductDetails(e.target.value);
+                            if (formErrors.productDetails) setFormErrors(prev => ({ ...prev, productDetails: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                            formErrors.productDetails ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}
                         />
+                        {formErrors.productDetails && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.productDetails)}</p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Monthly Consumption</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Monthly Consumption <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. 50 MT/month"
                           value={formMonthlyConsumption}
-                          onChange={e => setFormMonthlyConsumption(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          onChange={e => {
+                            setFormMonthlyConsumption(e.target.value);
+                            if (formErrors.monthlyConsumption) setFormErrors(prev => ({ ...prev, monthlyConsumption: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                            formErrors.monthlyConsumption ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}
                         />
+                        {formErrors.monthlyConsumption && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.monthlyConsumption)}</p>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Preferred Brand / Make</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. JSW, Jindal, Tata"
-                          value={formPreferredMake}
-                          onChange={e => setFormPreferredMake(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        <VisitBrandField
+                          selected={formBrands}
+                          other={formBrandOther}
+                          error={formErrors.brands}
+                          otherError={formErrors.brandOther}
+                          onToggle={brand => {
+                            setFormBrands(current => current.includes(brand)
+                              ? current.filter(item => item !== brand)
+                              : [...current, brand]);
+                            if (formErrors.brands || formErrors.brandOther) {
+                              setFormErrors(prev => ({ ...prev, brands: false, brandOther: false }));
+                            }
+                          }}
+                          onOtherChange={value => {
+                            setFormBrandOther(value);
+                            if (formErrors.brandOther) setFormErrors(prev => ({ ...prev, brandOther: false }));
+                          }}
                         />
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Payment Terms</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 30 Days PDC, Advance"
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Payment Terms <span className="text-rose-500">*</span>
+                        </label>
+                        <select
                           value={formPaymentTerms}
-                          onChange={e => setFormPaymentTerms(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                        />
+                          onChange={e => {
+                            setFormPaymentTerms(e.target.value);
+                            if (formErrors.paymentTerms) setFormErrors(prev => ({ ...prev, paymentTerms: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
+                            formErrors.paymentTerms ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}>
+                          <option value="">Select Payment Terms</option>
+                          {VISIT_PAYMENT_TERMS.map(term => (
+                            <option key={term} value={term}>{term}</option>
+                          ))}
+                        </select>
+                        {formErrors.paymentTerms && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.paymentTerms)}</p>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Delivery Location</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Delivery Location <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. Plant 2, Bhosari MIDC"
                           value={formDeliveryLocation}
-                          onChange={e => setFormDeliveryLocation(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          onChange={e => {
+                            setFormDeliveryLocation(e.target.value);
+                            if (formErrors.deliveryLocation) setFormErrors(prev => ({ ...prev, deliveryLocation: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                            formErrors.deliveryLocation ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}
                         />
+                        {formErrors.deliveryLocation && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.deliveryLocation)}</p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Next Purchase Expected</label>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Next Purchase Expected <span className="text-rose-500">*</span>
+                        </label>
                         <input
                           type="date"
                           value={formNextPurchaseExpected}
-                          onChange={e => setFormNextPurchaseExpected(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer"
+                          onChange={e => {
+                            setFormNextPurchaseExpected(e.target.value);
+                            if (formErrors.nextPurchase) setFormErrors(prev => ({ ...prev, nextPurchase: false }));
+                          }}
+                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer ${
+                            formErrors.nextPurchase ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                          }`}
                         />
+                        {formErrors.nextPurchase && (
+                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.nextPurchase)}</p>
+                        )}
                       </div>
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Current Requirement Collected</label>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Current Requirement Collected <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         placeholder="e.g. Needs 10 MT HR Coil within 4 days"
                         value={formCurrentRequirement}
-                        onChange={e => setFormCurrentRequirement(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        onChange={e => {
+                          setFormCurrentRequirement(e.target.value);
+                          if (formErrors.currentRequirement) setFormErrors(prev => ({ ...prev, currentRequirement: false }));
+                        }}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                          formErrors.currentRequirement ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                        }`}
                       />
+                      {formErrors.currentRequirement && (
+                        <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.currentRequirement)}</p>
+                      )}
                     </div>
 
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="block font-semibold text-slate-700">Follow-up Action &amp; Due Date</label>
+                        <label className="block font-semibold text-slate-700">
+                          Follow-up Action &amp; Due Date <span className="text-rose-500">*</span>
+                        </label>
                         <div className="flex items-center gap-1.5 text-[10px]">
                           <span className="text-slate-400 font-medium">Quick Due:</span>
                           <button
@@ -2091,7 +2418,7 @@ export default function VisitsPage() {
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-1 sm:grid-cols-3 gap-2">
                         <div className="sm:col-span-2">
                           <input
                             type="text"
@@ -2100,22 +2427,37 @@ export default function VisitsPage() {
                             onChange={e => {
                               const val = e.target.value;
                               setFormFollowup(val);
+                              if (formErrors.followup) setFormErrors(prev => ({ ...prev, followup: false }));
                               if (val.trim() && !formFollowupDate) {
                                 const nextWeek = new Date();
                                 nextWeek.setDate(nextWeek.getDate() + 7);
                                 setFormFollowupDate(formatLocalDate(nextWeek));
+                                setFormErrors(prev => ({ ...prev, followupDate: false }));
                               }
                             }}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white"
+                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white ${
+                              formErrors.followup ? 'border-rose-500' : 'border-slate-300'
+                            }`}
                           />
+                          {formErrors.followup && (
+                            <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.followup)}</p>
+                          )}
                         </div>
                         <div>
                           <input
                             type="date"
                             value={formFollowupDate}
-                            onChange={e => setFormFollowupDate(e.target.value)}
-                            className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer bg-white"
+                            onChange={e => {
+                              setFormFollowupDate(e.target.value);
+                              if (formErrors.followupDate) setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
+                            className={`w-full px-2 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium cursor-pointer bg-white ${
+                              formErrors.followupDate ? 'border-rose-500' : 'border-slate-300'
+                            }`}
                           />
+                          {formErrors.followupDate && (
+                            <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.followupDate)}</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2144,36 +2486,57 @@ export default function VisitsPage() {
                     {/* Attachments Section */}
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <label className="block font-semibold text-slate-700">Attachments</label>
-                        <span className="text-[11px] text-slate-400">Optional</span>
+                        <label className="block font-semibold text-slate-700">
+                          Visit photo <span className="text-rose-500">*</span>
+                        </label>
+                        <span className="text-[11px] text-slate-400">Add Document is optional</span>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* Customer Visit Photo (GPS Tagged) */}
-                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-medium border border-blue-200 shadow-2xs transition-colors">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            onChange={e => handlePhotoFileChange(e.target.files?.[0] || null, false)}
-                          />
-                          <Camera size={13} />
-                          <span>{capturingGps ? 'Capturing GPS...' : formGpsPhotoUrl ? 'Replace Photo' : 'Visit Photo (GPS)'}</span>
-                        </label>
+                        <VisitCameraCapture
+                          readGps={captureGpsCoordinates}
+                          onCapture={(photoUrl, coords) => {
+                            setFormGpsPhotoUrl(photoUrl);
+                            setFormGpsLat(coords.latitude);
+                            setFormGpsLng(coords.longitude);
+                            setFormGpsAccuracy(coords.accuracy);
+                            if (formErrors.photo) setFormErrors(prev => ({ ...prev, photo: false }));
+                          }}
+                        />
 
-                        {/* Other Attachments */}
                         <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-medium border border-slate-200 shadow-2xs transition-colors">
                           <input
                             type="file"
                             multiple
+                            accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                             className="hidden"
-                            onChange={e => handleOtherFilesChange(e.target.files, false)}
+                            onChange={e => {
+                              const files = e.target.files;
+                              if (!files) return;
+                              const accepted: File[] = [];
+                              for (const file of Array.from(files)) {
+                                const message = visitDocumentError(file);
+                                if (message) {
+                                  toast.error(message);
+                                  continue;
+                                }
+                                accepted.push(file);
+                              }
+                              if (accepted.length > 0) {
+                                const list = new DataTransfer();
+                                accepted.forEach(file => list.items.add(file));
+                                handleOtherFilesChange(list.files, false);
+                              }
+                              e.target.value = '';
+                            }}
                           />
                           <Paperclip size={13} />
                           <span>Add Documents</span>
                         </label>
                       </div>
+                      {formErrors.photo && (
+                        <p className="text-[11px] text-rose-500 font-semibold">{String(formErrors.photo)}</p>
+                      )}
 
                       {/* GPS Photo Preview Card */}
                       {formGpsPhotoUrl && (
@@ -2227,6 +2590,52 @@ export default function VisitsPage() {
                         </div>
                       )}
                     </div>
+
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+                      <label className="block font-semibold text-slate-700">
+                        WhatsApp verification <span className="text-rose-500">*</span>
+                      </label>
+                      <p className="text-[11px] text-slate-500">
+                        After the form is complete, send a code to the customer from Enlight Metals – Customer Visits.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { void sendVisitCode(); }}
+                          disabled={otpSending || resendSeconds > 0}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                        >
+                          {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : otpVerified ? 'Resend code' : 'Send code'}
+                        </button>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          aria-label="Visit verification code"
+                          placeholder="Enter code"
+                          value={otpCode}
+                          onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          className="w-28 px-3 py-1.5 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { void confirmVisitCode(); }}
+                          disabled={otpSending || otpCode.length !== 6}
+                          className="px-3 py-1.5 bg-slate-100 text-slate-800 rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                        >
+                          Verify
+                        </button>
+                        {otpVerified && (
+                          <span className="text-[11px] font-bold text-emerald-700">Verified</span>
+                        )}
+                      </div>
+                      {otpNotice && (
+                        <p className={`text-[11px] font-semibold ${otpVerified ? 'text-emerald-700' : 'text-slate-600'}`}>{otpNotice}</p>
+                      )}
+                      {formErrors.otp && (
+                        <p className="text-[11px] text-rose-500 font-semibold">{String(formErrors.otp)}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2255,10 +2664,10 @@ export default function VisitsPage() {
       {/* Interactive Visit Details & Edit Modal */}
       {selectedVisit && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
           onClick={handleCloseVisitModal}>
           <div
-            className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto"
+            className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
@@ -2356,7 +2765,7 @@ export default function VisitsPage() {
                       <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
                         <Building2 size={13} /> Stakeholder &amp; Contact Info
                       </p>
-                      <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <div>
                           <p className="text-slate-400 font-medium">Person Met</p>
                           <p className="font-semibold text-slate-800 mt-0.5 flex items-center gap-1 text-sm">
@@ -2376,6 +2785,11 @@ export default function VisitsPage() {
                             <Phone size={12} className="text-slate-400 shrink-0" />
                             {selectedVisit.contact_phone || (selectedVisit as any).contact_no || '-'}
                           </p>
+                          {typeof selectedVisit.phone_verified === 'boolean' && (
+                            <p className={`text-[11px] font-bold mt-1 ${selectedVisit.phone_verified ? 'text-emerald-700' : 'text-amber-700'}`}>
+                              {selectedVisit.phone_verified ? 'Phone verified' : 'Phone not verified'}
+                            </p>
+                          )}
                         </div>
                         <div>
                           <p className="text-slate-400 font-medium">Email ID</p>
@@ -2389,6 +2803,14 @@ export default function VisitsPage() {
                           <p className="font-semibold text-slate-800 mt-0.5">
                             {selectedVisit.location || (selectedVisit as any).customer_address || '-'}
                           </p>
+                          {selectedVisit.location_source && (
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {selectedVisit.location_source === 'manual' ? 'Typed location' : 'GPS location'}
+                              {selectedVisit.visit_latitude != null && selectedVisit.visit_longitude != null
+                                ? ` · ${Number(selectedVisit.visit_latitude).toFixed(5)}, ${Number(selectedVisit.visit_longitude).toFixed(5)}`
+                                : ''}
+                            </p>
+                          )}
                         </div>
                         <div>
                           <p className="text-slate-400 font-medium">Delivery Location</p>
@@ -2405,7 +2827,7 @@ export default function VisitsPage() {
                       <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
                         <Briefcase size={13} /> Commercial Intelligence
                       </p>
-                      <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <div>
                           <p className="text-slate-400 font-medium">Product Details</p>
                           <p className="font-semibold text-slate-800 mt-0.5">
@@ -2421,7 +2843,7 @@ export default function VisitsPage() {
                         <div>
                           <p className="text-slate-400 font-medium">Preferred Make / Brand</p>
                           <p className="font-semibold text-slate-800 mt-0.5">
-                            {selectedVisit.preferred_make || '-'}
+                            {[selectedVisit.preferred_make, selectedVisit.preferred_make_other].filter(Boolean).join(' · ') || '-'}
                           </p>
                         </div>
                         <div>
@@ -2627,7 +3049,7 @@ export default function VisitsPage() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">
                             Person Met <span className="text-rose-500">*</span>
@@ -2656,7 +3078,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">
                             Contact Phone <span className="text-rose-500">*</span>
@@ -2694,7 +3116,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">City / Location</label>
                           <input
@@ -2707,17 +3129,19 @@ export default function VisitsPage() {
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
-                          <select
+                          <Select
                             value={editCustomerType}
                             onChange={e => setEditCustomerType(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                            placeholder="Select Customer Type"
+                          >
                             <option value="">Select Customer Type</option>
                             <option value="OEM">OEM</option>
                             <option value="Fabricator">Fabricator</option>
                             <option value="EPC">EPC</option>
                             <option value="Manufacturer">Manufacturer</option>
                             <option value="Trader">Trader</option>
-                          </select>
+                          </Select>
                         </div>
                       </div>
 
@@ -2744,34 +3168,36 @@ export default function VisitsPage() {
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Visit Type</label>
-                          <select
+                          <Select
                             value={editVisitType}
                             onChange={e => setEditVisitType(e.target.value)}
-                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                          >
                             <option value="First Visit">First Visit</option>
                             <option value="Follow-up 1">Follow-up 1</option>
                             <option value="Follow-up 2">Follow-up 2</option>
                             <option value="Follow-up 3">Follow-up 3</option>
                             <option value="Regular Visit">Regular Visit</option>
-                          </select>
+                          </Select>
                         </div>
 
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Visit Outcome</label>
-                          <select
+                          <Select
                             value={editOutcome}
                             onChange={e => setEditOutcome(e.target.value)}
-                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                            className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                          >
                             <option value="positive">Positive</option>
                             <option value="neutral">Neutral</option>
                             <option value="negative">Negative</option>
-                          </select>
+                          </Select>
                         </div>
                       </div>
 
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Customer Probability</label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           {['Hot', 'Warm', 'Cold'].map(p => (
                             <button
                               key={p}
@@ -2801,7 +3227,7 @@ export default function VisitsPage() {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Product Details</label>
                           <input
@@ -2825,7 +3251,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Preferred Brand / Make</label>
                           <input
@@ -2849,7 +3275,7 @@ export default function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Delivery Location</label>
                           <input
@@ -2936,13 +3362,14 @@ export default function VisitsPage() {
                             />
                           </div>
                           <div>
-                            <select
+                            <Select
                               value={editFollowupStatus}
                               onChange={e => setEditFollowupStatus(e.target.value as 'pending' | 'completed')}
-                              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium">
+                              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
+                            >
                               <option value="pending">Pending</option>
                               <option value="completed">Completed</option>
-                            </select>
+                            </Select>
                           </div>
                         </div>
                       </div>

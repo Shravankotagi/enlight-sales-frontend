@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Check, ChevronDown } from 'lucide-react';
+import { Calendar, Check } from 'lucide-react';
+import { Select } from './ui/select';
 import {
   formatLocalDate,
   getDaysAgo,
@@ -165,28 +166,27 @@ export default function DateFilterControl({ onChange, initialPreset = 'all', val
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Dropdown Select Menu */}
-      <div className="relative inline-flex items-center">
-        <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-        <select
-          value={preset}
-          onChange={(e) => handleSelectPreset(e.target.value as FilterPreset)}
-          className="h-9 pl-8 pr-8 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs appearance-none cursor-pointer transition-all"
-        >
-          <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-          <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-          <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-          <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-          <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-          <option value="this_week" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>This Week</option>
-          <option value="previous_week" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Previous Week</option>
-          <option value="this_month" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>This Month</option>
-          <option value="previous_month" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Previous Month</option>
-          <option value="this_year" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>This Year</option>
-          <option value="previous_year" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Previous Year</option>
-          <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-        </select>
-        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-      </div>
+      <Select
+        value={preset}
+        onChange={(e) => handleSelectPreset(e.target.value as FilterPreset)}
+        prefixIcon={<Calendar size={14} className="text-blue-600" />}
+        wrapperClassName="w-auto inline-flex"
+        className="h-9 px-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+        menuClassName="w-44"
+      >
+        <option value="all">All Time</option>
+        <option value="today">Today</option>
+        <option value="7_days">Last 7 Days</option>
+        <option value="30_days">Last 30 Days</option>
+        <option value="90_days">Last 90 Days</option>
+        <option value="this_week">This Week</option>
+        <option value="previous_week">Previous Week</option>
+        <option value="this_month">This Month</option>
+        <option value="previous_month">Previous Month</option>
+        <option value="this_year">This Year</option>
+        <option value="previous_year">Previous Year</option>
+        <option value="custom">Custom Range</option>
+      </Select>
 
       {/* Custom Date Range Pickers */}
       {showCustom && (

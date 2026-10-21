@@ -50,6 +50,7 @@ interface Employee {
   is_active: boolean;
   manager_id?: string | null;
   manager_phone?: string | null;
+  assigned_procurement_employee_id?: string | null;
   permissions?: Record<string, boolean> | null;
 }
 
@@ -63,6 +64,7 @@ interface EmployeeForm {
   manager_id?: string;
   manager_phone?: string;
   is_active?: boolean;
+  assigned_salesperson_ids?: string[];
   permissions?: Record<string, boolean>;
 }
 
@@ -110,6 +112,7 @@ export default function AdminSelectionPage() {
     employee_id: '',
     manager_id: '',
     manager_phone: '',
+    assigned_salesperson_ids: [],
     permissions: getRoleTemplate('salesperson'),
   });
   const [aclTouched, setAclTouched] = useState(false);
@@ -197,6 +200,7 @@ export default function AdminSelectionPage() {
       employee_id: cleanId,
       manager_id: '',
       manager_phone: '',
+      assigned_salesperson_ids: [],
       permissions: getRoleTemplate('salesperson'),
     });
     setAclTouched(false);
@@ -209,9 +213,11 @@ export default function AdminSelectionPage() {
     setFormError('');
     setFormSuccess('');
 
+    const managerPool =
+      emp.role === 'procurement_person' ? procurementManagers : allManagers;
     const matchedMgrId =
       emp.manager_id ||
-      allManagers.find(
+      managerPool.find(
         (m) =>
           emp.manager_phone &&
           m.phone.replace(/\D/g, '').slice(-10) ===
@@ -228,7 +234,14 @@ export default function AdminSelectionPage() {
       employee_id: emp.employee_id,
       manager_id: matchedMgrId,
       manager_phone: emp.manager_phone || '',
-      is_active: emp.is_active,
+      is_active: emp.is_active !== false,
+      assigned_salesperson_ids: employees
+        .filter(
+          (person) =>
+            person.role === 'salesperson' &&
+            person.assigned_procurement_employee_id === emp.id,
+        )
+        .map((person) => person.id),
       permissions: emp.permissions ? { ...emp.permissions } : getRoleTemplate(emp.role),
     });
     setAclTouched(false);
@@ -284,6 +297,8 @@ export default function AdminSelectionPage() {
         payload.manager_id = null;
         payload.manager_phone = null;
       }
+      payload.assigned_salesperson_ids =
+        form.role === 'procurement_person' ? form.assigned_salesperson_ids || [] : [];
 
       if (isEditMode && form.id) {
         await employeesApi.update(form.id, payload);
@@ -1029,6 +1044,11 @@ export default function AdminSelectionPage() {
                                     You
                                   </span>
                                 )}
+                                {emp.is_active === false && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 font-bold border border-rose-200">
+                                    Deactivated
+                                  </span>
+                                )}
                               </div>
                               <span className="font-mono text-slate-400 text-[11px]">
                                 {emp.employee_id}
@@ -1271,6 +1291,11 @@ export default function AdminSelectionPage() {
                                 You
                               </span>
                             )}
+                            {emp.is_active === false && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 font-bold border border-rose-200">
+                                Deactivated
+                              </span>
+                            )}
                           </div>
                           <span className="font-mono text-slate-400 text-xs">
                             {emp.employee_id}
@@ -1508,7 +1533,13 @@ export default function AdminSelectionPage() {
                       setForm((f) => ({
                         ...f,
                         role: newRole,
-                        permissions: undefined,
+                        permissions: getRoleTemplate(newRole),
+                        manager_id: newRole === f.role ? f.manager_id : '',
+                        manager_phone: newRole === f.role ? f.manager_phone : '',
+                        assigned_salesperson_ids:
+                          newRole === 'procurement_person'
+                            ? f.assigned_salesperson_ids || []
+                            : [],
                       }));
                     }}
                   />
@@ -1607,6 +1638,53 @@ export default function AdminSelectionPage() {
                   </div>
                 )}
 
+                {form.role === 'procurement_person' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Assigned Salespeople
+                    </label>
+                    <div className="max-h-40 overflow-auto rounded-xl border border-slate-200 bg-slate-50/60 p-2 space-y-1">
+                      {employees.filter((person) => person.role === 'salesperson' && person.is_active !== false).length === 0 ? (
+                        <p className="px-2 py-1.5 text-xs text-slate-400">No active salespeople</p>
+                      ) : (
+                        employees
+                          .filter((person) => person.role === 'salesperson' && person.is_active !== false)
+                          .map((person) => {
+                            const selected = (form.assigned_salesperson_ids || []).includes(person.id);
+                            return (
+                              <label
+                                key={person.id}
+                                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-800 hover:bg-white cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() =>
+                                    setForm((current) => {
+                                      const ids = current.assigned_salesperson_ids || [];
+                                      return {
+                                        ...current,
+                                        assigned_salesperson_ids: selected
+                                          ? ids.filter((id) => id !== person.id)
+                                          : [...ids, person.id],
+                                      };
+                                    })
+                                  }
+                                />
+                                <span>
+                                  {person.name} ({person.employee_id})
+                                </span>
+                              </label>
+                            );
+                          })
+                      )}
+                    </div>
+                    <p className="text-slate-400 text-[11px] mt-1">
+                      Inquiries from these salespeople land in this person&apos;s queue. Each salesperson routes to one procurement person.
+                    </p>
+                  </div>
+                )}
+
                 {/* Zoho Books-style Role & Permissions (ACL) Section */}
                 <EmployeeAclSection
                   role={form.role}
@@ -1647,13 +1725,17 @@ export default function AdminSelectionPage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-3 border-t border-slate-100">
+                <div className="sheet-actions flex gap-3 pt-3 border-t border-slate-100">
                   {isEditMode && form.id !== employee?.id && (
                     <button
                       type="button"
                       onClick={handleDeactivate}
                       disabled={formLoading}
-                      className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                      className={`px-3.5 py-2.5 border rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer ${
+                        form.is_active === false
+                          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                          : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                      }`}
                     >
                       {form.is_active === false ? 'Activate' : 'Deactivate'}
                     </button>

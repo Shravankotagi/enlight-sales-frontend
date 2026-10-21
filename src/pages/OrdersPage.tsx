@@ -52,6 +52,7 @@ import {
   resolvePlaceOfSupply,
 } from '../utils/pricingEngine';
 import { detectHsnCode } from '../utils/hsnDetector';
+import { Select } from '../components/ui/select';
 
 interface DealItem {
   id?: string;
@@ -480,6 +481,23 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
   };
 }
 
+const ORDER_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
+
+function orderPaymentTerm(raw: string): string {
+  const text = raw.trim().toLowerCase();
+  const exact = ORDER_PAYMENT_TERMS.find((term) => term.toLowerCase() === text);
+  if (exact) return exact;
+  if (/\b30\b/.test(text)) return '30 Days';
+  if (/\b45\b/.test(text)) return '45 Days';
+  if (/\b60\b/.test(text)) return '60 Days';
+  if (/\blc\b/.test(text)) return 'LC';
+  if (/\bbg\b/.test(text)) return 'BG';
+  if (/\bpdc\b/.test(text)) return 'PDC';
+  if (text.includes('immediate')) return 'Immediate';
+  if (text.includes('advance')) return 'Advance';
+  return '';
+}
+
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -743,6 +761,7 @@ export default function OrdersPage() {
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [poFileName, setPoFileName] = useState('');
   const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
+  const uploadRequestRef = useRef(0);
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -828,13 +847,54 @@ export default function OrdersPage() {
       });
   };
 
-  const handleCancelCreateOrder = () => {
-    const token = poReservationToken;
-    const poNumber = formGeneratedPoNumber || formPoNumber;
-    setShowModal(false);
+  const clearExtractedOrderFields = () => {
+    setFormCustomerName('');
+    setFormCustomerPhone('');
+    setFormReferencePoNumber('');
+    setFormPoDate(new Date().toISOString().split('T')[0]);
+    setFormDeliveryLocation('');
+    setFormPaymentTerms('');
+    setFormNotes('');
+    setExtractedCustomerExtras({ contactPerson: '', gstin: '' });
+    setShowAddCustomer(false);
+    setShowCompanyDropdown(false);
+    setPoFileName('');
+    setFormUploadedBase64(null);
+    setFormLineItems([
+      {
+        sku_text: '',
+        dimensions: '',
+        hsn_code: '',
+        quantity: 0,
+        unit: 'MT',
+        rate: 0,
+        amount: 0,
+      },
+    ]);
+  };
+
+  const resetCreateOrderForm = () => {
+    clearExtractedOrderFields();
+    setFormPoNumber('');
+    setFormGeneratedPoNumber('');
     setPoReservationToken('');
     setPoConflict(null);
     poInputDirtyRef.current = false;
+    setCheckingPoAvailability(false);
+    setIsParsingDoc(false);
+  };
+
+  const handleRemoveUploadedOrderDocument = () => {
+    uploadRequestRef.current += 1;
+    setIsParsingDoc(false);
+    clearExtractedOrderFields();
+  };
+
+  const handleCancelCreateOrder = () => {
+    const token = poReservationToken;
+    const poNumber = formGeneratedPoNumber || formPoNumber;
+    resetCreateOrderForm();
+    setShowModal(false);
     releaseOrderPoReservation(token, poNumber);
   };
 
@@ -927,11 +987,14 @@ export default function OrdersPage() {
       (e.target as HTMLInputElement).value = '';
     }
 
+    const requestId = ++uploadRequestRef.current;
+    clearExtractedOrderFields();
     setPoFileName(file.name);
     setIsParsingDoc(true);
 
     const reader = new FileReader();
     reader.onload = async () => {
+      if (requestId !== uploadRequestRef.current) return;
       try {
         const base64Data = reader.result as string;
 
@@ -949,6 +1012,7 @@ export default function OrdersPage() {
           file_base64: base64Data,
           mime_type: mimeType,
         });
+        if (requestId !== uploadRequestRef.current) return;
 
         if (!res?.data?.success || !res?.data?.data) {
           throw new Error(res?.data?.error || 'Failed to extract PO details from document');
@@ -1016,7 +1080,7 @@ export default function OrdersPage() {
           gstin: String(extraction.customer_gst || extraction.gstin || extraction.gst || '').trim(),
         });
         if (extraction.payment_terms || extraction.paymentTerms) {
-          setFormPaymentTerms(String(extraction.payment_terms || extraction.paymentTerms).trim());
+          setFormPaymentTerms(orderPaymentTerm(String(extraction.payment_terms || extraction.paymentTerms)));
         }
 
         const extractedCustName = String(rawCust || formCustomerName || '').trim();
@@ -1086,13 +1150,14 @@ export default function OrdersPage() {
         }
         toast.success('PO Document parsed! All details auto-filled.');
       } catch (err: any) {
+        if (requestId !== uploadRequestRef.current) return;
         console.error('Error parsing PO document:', err);
         setFormUploadedBase64(null);
         setPoFileName('');
         setFormNotes('');
         toast.error(err?.message || 'Could not auto-extract PO details. You can enter the fields manually.');
       } finally {
-        setIsParsingDoc(false);
+        if (requestId === uploadRequestRef.current) setIsParsingDoc(false);
       }
     };
     reader.readAsDataURL(file);
@@ -1196,7 +1261,7 @@ export default function OrdersPage() {
       return;
     }
 
-    if (!formPaymentTerms.trim()) {
+    if (!ORDER_PAYMENT_TERMS.includes(formPaymentTerms)) {
       const el = document.getElementById('form-payment-terms') as HTMLInputElement;
       if (el) {
         el.focus();
@@ -1286,32 +1351,7 @@ export default function OrdersPage() {
 
       toast.success('Order Confirmed & Won! Sales Achievement & Payment tracking updated.');
       setShowModal(false);
-
-      setFormCustomerName('');
-      setFormCustomerPhone('');
-      setFormPoNumber('');
-      setFormGeneratedPoNumber('');
-      setFormReferencePoNumber('');
-      setPoReservationToken('');
-      setPoConflict(null);
-      poInputDirtyRef.current = false;
-      setFormPoDate(new Date().toISOString().split('T')[0]);
-      setFormDeliveryLocation('');
-      setFormPaymentTerms('');
-      setFormNotes('');
-      setFormLineItems([
-        {
-          sku_text: '',
-          dimensions: '',
-          hsn_code: '',
-          quantity: 0,
-          unit: 'MT',
-          rate: 0,
-          amount: 0,
-        },
-      ]);
-      setPoFileName('');
-      setFormUploadedBase64(null);
+      resetCreateOrderForm();
 
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
@@ -1503,7 +1543,7 @@ export default function OrdersPage() {
   const paginatedOrders = filtered.slice(startIndex, endIndex);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, KPI Cards, Search & Filters) */}
       <div className="shrink-0 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1514,7 +1554,7 @@ export default function OrdersPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
             <button
               type="button"
               disabled={isSyncingZoho}
@@ -1602,36 +1642,36 @@ export default function OrdersPage() {
               )}
             </div>
 
-            {/* 2. Days Filter Dropdown (Bold closed, normal dropdown options) */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={dayPreset}
-                onChange={e => handleDayPresetChange(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-                <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-                <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-                <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-                <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-                <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            {/* 2. Days Filter Dropdown */}
+            <Select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              prefixIcon={<Calendar size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-44"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </Select>
 
-            {/* 3. Tonnage Filter Dropdown (<500, 500-1000, >1000) (Bold closed, normal dropdown options) */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value)}
-                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Orders ({safeOrders.length})</option>
-                <option value="under_500" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&lt; 500 MT ({under500Count})</option>
-                <option value="500_to_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>500 – 1000 MT ({mid500To1000Count})</option>
-                <option value="above_1000" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>&gt; 1000 MT ({above1000Count})</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            {/* 3. Tonnage Filter Dropdown */}
+            <Select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-52"
+            >
+              <option value="all">All Orders ({safeOrders.length})</option>
+              <option value="under_500">&lt; 500 MT ({under500Count})</option>
+              <option value="500_to_1000">500 – 1000 MT ({mid500To1000Count})</option>
+              <option value="above_1000">&gt; 1000 MT ({above1000Count})</option>
+            </Select>
 
             {/* 4. Clear Filter Button */}
             {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
@@ -1671,14 +1711,14 @@ export default function OrdersPage() {
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="w-full text-left text-sm text-slate-700">
+          <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3 text-center w-[4%]">#</th>
-                <th className="px-5 py-3 text-left w-[26%]">Customers</th>
+                <th className="px-5 py-3 text-left w-[22%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
                 <th className="px-4 py-3 text-center w-[14%]">Reference PO</th>
-                <th className="px-4 py-3 text-center w-[12%]">Items Summary</th>
+                <th className="px-4 py-3 text-center w-[16%] whitespace-nowrap">Items Summary</th>
                 <th className="px-4 py-3 text-center w-[14%]">Source Channel</th>
                 <th className="px-4 py-3 text-center w-[18%]">Delivery Location</th>
                 <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">ACTIONS</th>
@@ -1706,8 +1746,8 @@ export default function OrdersPage() {
                     <tr
                       key={ord.id || idx}
                       className="group hover:bg-slate-50/80 transition-colors">
-                      <td className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                      <td className="px-5 py-3.5 text-left">
+                      <td data-label="#" className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                      <td data-label="Customer" className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm">
                           <span className="truncate group-hover:text-blue-600 transition-colors inline-block">
                             {ord.customer_name || 'Customer'}
@@ -1729,7 +1769,7 @@ export default function OrdersPage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center">
+                      <td data-label="PO Number" className="px-4 py-3.5 text-center">
                         {poNumber ? (
                           <span className="inline-flex items-center justify-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold font-mono text-xs shadow-2xs">
                             {poNumber}
@@ -1740,7 +1780,7 @@ export default function OrdersPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center">
+                      <td data-label="Reference PO" className="px-4 py-3.5 text-center">
                         {referencePoNumber ? (
                           <span className="font-mono text-xs font-medium text-slate-700">
                             {referencePoNumber}
@@ -1751,19 +1791,19 @@ export default function OrdersPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                      <td data-label="Items Summary" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                         {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
                         {tonnageFormatted && (
-                          <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
+                          <span className="text-slate-600 font-semibold">{` ${tonnageFormatted}`}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
+                      <td data-label="Source Channel" className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
                         {getOrderSourceChannel(ord)}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center whitespace-nowrap" title={ord.delivery_location || '-'}>
+                      <td data-label="Delivery Location" className="px-4 py-3.5 text-xs text-slate-700 font-medium text-center" title={ord.delivery_location || '-'}>
                         {formatDeliveryLocation(ord.delivery_location)}
                       </td>
-                      <td className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative whitespace-nowrap">
+                      <td data-label="Actions" className="pl-4 pr-6 sm:pr-8 py-3.5 text-center relative">
                         <div className="relative inline-block text-left">
                           <button
                             type="button"
@@ -1831,10 +1871,10 @@ export default function OrdersPage() {
 
       {poImageViewerUrl && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={handleClosePoViewer}>
           <div
-            className="relative w-full max-h-[90vh] max-w-3xl bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col"
+            className="mobile-sheet relative w-full max-h-[90vh] max-w-3xl bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}>
             <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 mb-4 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -1910,8 +1950,8 @@ export default function OrdersPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingBag className="text-blue-600" size={20} />
@@ -1934,8 +1974,7 @@ export default function OrdersPage() {
                 <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
               </div>
 
-              <label
-                htmlFor="order-po-file-upload"
+              <div
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1948,7 +1987,7 @@ export default function OrdersPage() {
                     handleFileUpload({ target: { files } } as any);
                   }
                 }}
-                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl transition-all">
                 <input
                   id="order-po-file-upload"
                   type="file"
@@ -1965,14 +2004,29 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
                     <CheckCircle size={15} className="text-emerald-600 shrink-0" />
                     <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
-                    <span className="text-[10px] text-blue-600 underline ml-1">Change</span>
+                    <label
+                      htmlFor="order-po-file-upload"
+                      className="text-[10px] text-blue-600 underline ml-1 cursor-pointer"
+                    >
+                      Change
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRemoveUploadedOrderDocument}
+                      className="text-[10px] text-rose-600 underline ml-1 cursor-pointer"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-600 font-medium py-1">
+                  <label
+                    htmlFor="order-po-file-upload"
+                    className="text-xs text-slate-600 font-medium py-1 cursor-pointer"
+                  >
                     Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
-                  </p>
+                  </label>
                 )}
-              </label>
+              </div>
             </div>
 
             <form onSubmit={handleCreateOrder} className="space-y-4">
@@ -2119,7 +2173,7 @@ export default function OrdersPage() {
 
               {/* Structured Line Items Table matching Img 2 */}
               <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
-                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
                       <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
@@ -2158,8 +2212,8 @@ export default function OrdersPage() {
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/30">
-                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
-                        <td className="px-4 py-3.5 border-r border-slate-200">
+                        <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input
                               id={`form-item-sku-${idx}`}
@@ -2295,7 +2349,7 @@ export default function OrdersPage() {
                               placeholder="0"
                               className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                             />
-                            <select
+                            <Select
                               value={normalizeUnit(item.unit) || 'MT'}
                               onChange={(e) => {
                                 const newUnit = e.target.value;
@@ -2324,14 +2378,18 @@ export default function OrdersPage() {
                                 };
                                 setFormLineItems(updated);
                               }}
-                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              wrapperClassName="w-[58px] shrink-0"
+                              className="w-full px-1 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 hover:border-blue-400"
+                              menuClassName="w-24"
+                              chevronClassName="h-3 w-3 shrink-0 opacity-60"
+                            >
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
                               <option value="KG">KG</option>
                               {['Pcs', 'Sheets', 'Plates', 'Coils'].includes(normalizeUnit(item.unit) || '') && (
                                 <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
                               )}
-                            </select>
+                            </Select>
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
                               const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
@@ -2660,19 +2718,22 @@ export default function OrdersPage() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Payment Terms <span className="text-red-500 font-bold">*</span>
                   </label>
-                  <input
+                  <Select
                     id="form-payment-terms"
-                    type="text"
                     required
-                    placeholder="e.g. 30 Days Credit, 100% Advance"
-                    value={formPaymentTerms}
+                    value={ORDER_PAYMENT_TERMS.includes(formPaymentTerms) ? formPaymentTerms : ''}
                     onChange={e => setFormPaymentTerms(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                  >
+                    <option value="">Select payment terms</option>
+                    {ORDER_PAYMENT_TERMS.map((term) => (
+                      <option key={term} value={term}>{term}</option>
+                    ))}
+                  </Select>
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="sheet-actions pt-2 flex flex-wrap justify-end gap-2">
                 
                 <button
                   type="submit"

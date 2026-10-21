@@ -37,7 +37,7 @@ const API = axios.create({
   timeout: 30000,
 });
 
-function unwrapApiResponse<T>(response: { data?: any }): { data: T } {
+function unwrapApiResponse<T = any>(response: { data?: any }): { data: T } {
   const envelope = response?.data;
   return {
     data:
@@ -87,12 +87,21 @@ API.interceptors.response.use(
     );
     const isAuthMe = /\/auth\/me(?:$|[/?])/.test(requestUrl);
 
-    if (error.response?.status === 401 && !isOtpAuthRequest && !isAuthMe) {
+    const isLogoutRequest = /\/auth\/logout(?:$|[/?])/.test(requestUrl);
+    const body = error.response?.data;
+    const message = String(body?.error || body?.message || '');
+    const deactivated = /deactivat/i.test(message);
+    if (error.response?.status === 401 && !isOtpAuthRequest && !isLogoutRequest && !isAuthMe) {
+      postAuthLogout('session_expired');
       sessionStorage.removeItem('enlight_token');
       sessionStorage.removeItem('enlight_employee');
       sessionStorage.removeItem('enlight_viewing_as');
       sessionStorage.removeItem('enlight_access');
-      window.location.href = '/login';
+      sessionStorage.removeItem('enlight_active_chat_session_id');
+      sessionStorage.removeItem('enlight_last_activity');
+      window.location.href = deactivated
+        ? '/login?reason=deactivated'
+        : '/login';
     }
     if (error.response?.status === 403) {
       window.dispatchEvent(new CustomEvent('enlight_permissions_stale'));
@@ -187,6 +196,9 @@ export const complaintsApi = {
 export const visitsApi = {
   getAll: (params?: any) => API.get('/kra/visits', { params }),
   create: (data: any) => API.post('/kra/visits', data),
+  requestVisitOtp: (phone: string) => API.post('/kra/visits/otp/request', { phone }),
+  verifyVisitOtp: (phone: string, otp: string) => API.post('/kra/visits/otp/verify', { phone, otp }),
+  reverseGeocode: (lat: number, lng: number) => API.get('/kra/visits/reverse-geocode', { params: { lat, lng } }),
   update: (id: string, data: any) => API.patch(`/kra/visits/${id}`, data),
   updateFollowUpStatus: (id: string, follow_up_status: 'pending' | 'completed') =>
     API.patch(`/kra/visits/${id}`, { follow_up_status }),
@@ -225,6 +237,13 @@ export const inquiriesApi = {
   delete: (id: string) => API.delete(`/inquiries/${id}`),
   assignProcurement: (id: string, procurement_employee_id: string | null) =>
     API.patch(`/inquiries/${id}/procurement-assignee`, { procurement_employee_id }),
+  getLinePricing: (id: string) => API.get(`/inquiries/${id}/line-pricing`),
+  saveProcurementPricing: (id: string, payload: any) =>
+    API.patch(`/inquiries/${id}/procurement-pricing`, payload),
+  saveSalesPricing: (id: string, payload: any) =>
+    API.patch(`/inquiries/${id}/sales-pricing`, payload),
+  previewDecline: (id: string) => API.post(`/inquiries/${id}/decline-preview`),
+  sendDecline: (id: string) => API.post(`/inquiries/${id}/decline-email`),
 };
 
 export const productsApi = {
@@ -312,11 +331,26 @@ export const activityLogsApi = {
     to?: string;
     module?: string;
     search?: string;
+    action_type?: string;
     salesperson_phone?: string;
     mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
 };
+
+export function postAuthLogout(reason: 'manual' | 'session_expired') {
+  const token = sessionStorage.getItem('enlight_token');
+  if (!token) return;
+  fetch(`${BACKEND_URL}/auth/logout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
 
 export const authApi = {
   requestOtp: (phone: string) =>

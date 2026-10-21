@@ -22,9 +22,9 @@ Faster local loops: backend `npm test` / `npm run test:regression`, bot `npm run
 - Frontend pages mock `lib/api` with `vi.mock` and a stable mock module (see `src/test/adminDashboardMocks.ts`) and render through `renderWithProviders`.
 
 ## Coverage today
-- Backend: employee phone helpers and salesperson scope (`getAccessibleSalespersonPhones`), procurement scope (`getAccessibleProcurementIds`), manager hierarchy validation (`assertManagerFitsRole`), `JwtAuthGuard` perimeter allowlist for procurement roles, commercial mutation blocks (status, deals, quotations), inquiry procurement assignment (`PATCH /inquiries/:id/procurement-assignee`), `RolesGuard`/`RoleGuard`, report date ranges and `allowedPhones` scope, leaderboard identity, pricing parity, plus the existing deals/inquiries/KRA/reports/app specs.
+- Backend: employee phone helpers and salesperson scope (`getAccessibleSalespersonPhones`), procurement scope (`getAccessibleProcurementIds`), procurement pricing workflow (anonymity, partial availability, sales override, GST, decline), manager hierarchy validation (`assertManagerFitsRole`), `JwtAuthGuard` perimeter allowlist for procurement roles, commercial mutation blocks (status, deals, quotations), inquiry procurement assignment (`PATCH /inquiries/:id/procurement-assignee`), `RolesGuard`/`RoleGuard`, report date ranges and `allowedPhones` scope, leaderboard identity, pricing parity, plus the existing deals/inquiries/KRA/reports/app specs.
 - Bot: phone and role resolution (`src/utils/roles.js`), fail-closed phone scope in `src/supabase.js`, WhatsApp webhook early exit and informational notification for procurement roles, WebChat 403 authorization guard, retrieval tools phone scoping, JSON utils, pricing engine, HSN detector, pricing parity, catalog-flow helpers, new-customer catalog flow state machine, PO resolver, network guard.
-- Frontend: Zoho Books permissions matrix (`RolePermissionsMatrixModal`, `ZohoPermissionsTable`, `aclConstants.ts`), Control Panel role filter tabs and manager hierarchy validation (`AdminSelectionPage`), procurement inquiries view and base price entry (`InquiriesPage`), action button visibility guards, date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, and recent order fields/navigation.
+- Frontend: Zoho Books permissions matrix (`RolePermissionsMatrixModal`, `ZohoPermissionsTable`, `aclConstants.ts`), Control Panel role filter tabs and manager hierarchy validation (`AdminSelectionPage`), procurement inquiries view and base price entry (`InquiriesPage`), action button visibility guards, date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, recent order fields/navigation, the new customer visit form, customer-profile GSTIN validation, removing an uploaded order or inquiry document and clearing its extracted fields, and `Layout.sidebar` (sidebar 200ms ease-out timing, `will-change-[width,transform]`, reduced motion safety, `localStorage` persistence, and hover enlargement/collapse).
 
 ## Regression tests: one per fixed bug
 Every bug fix adds a test that fails before the fix and passes after it.
@@ -36,11 +36,26 @@ Every bug fix adds a test that fails before the fix and passes after it.
 Current regression tests:
 | Repo | File | Guards |
 |---|---|---|
+| Bot | `issue-procurement-chatbot.test.js` | Procurement scope, exact awaiting-price match, text-only base-price list, inquiry details, cancel then menu, customer-field hiding, salesperson price buttons, price confirmation before save, a dashboard yes that saves, a saved price that becomes Price Quote, and a salesperson log that does not save a sell rate |
 | Bot | `duplicate-customer-discard-draft.test.js` | Duplicate-customer warning shows only **Discard Draft**; blocked state ignores other text; discard finalizes the draft |
 | Backend | `leaderboard-salesperson-identity.test.ts` | Mixed phone formats resolve to one named row; never "Unknown" |
 | Frontend | `admin-leaderboard-identity-and-orders.test.tsx` | Leaderboard shows names/IDs/phones, counts orders (not deals), excludes admins |
 | Frontend | `admin-overview-date-filters.test.tsx` | No standalone Month filter; every preset sends `{from, to}` to all Overview queries |
 | Frontend | `admin-overview-recent-orders.test.tsx` | Review Queue is absent; recent filtered orders show order details and navigate to Orders |
+| Backend | `issue-238-customer-visit-form.test.ts` | New visits require a verified phone, GPS photo, and listed brand and payment terms; Meta 131047 returns the 24-hour message, and other codes return the code in the 400 |
+| Frontend | `issue-238-customer-visit-form.test.tsx` | Missing visit fields, locked GPS address, typed city when the address is missing, brand dropdown, camera overlay, and the assistant attach menu |
+| Bot | `issue-238-visit-required-fields.test.js` | A new bot visit is not inserted until the new fields, GPS photo, and correct code are present |
+| Frontend | `invalid-gstin-customer-edit.test.tsx` | Profile edit modal does not set state from a partial or invalid GSTIN, shows an error, blocks save, and still fills state from a valid GSTIN |
+| Frontend | `remove-uploaded-document.test.tsx` | Remove on Record New Order and Log New Inquiry clears the file and extracted fields; the order system PO stays reserved; a replacement document does not keep the previous extraction |
+| Frontend | `ProcurementPage.test.tsx`, `Layout.procurement.test.tsx`, `procurementPricing.test.ts`, `procurement-workflow.test.ts` | Procurement anonymity, base-price status, pricing formula, role-restricted navigation, and saved sales rates |
+| Frontend | `issue-procurement-routing-details.test.tsx` | Sales and procurement both show the stored product quantity and the `PR-` id; procurement does not show the customer name |
+| Frontend | `issue-historical-pricing-status.test.tsx` | An inquiry with no pricing status keeps its deal status; only an explicit `awaiting_price` shows Awaiting Price |
+| Frontend | `issue-procurement-search.test.tsx` | A procurement person can filter inquiries by procurement id and product |
+| Frontend | `issue-procurement-price-columns.test.tsx` | A wrapped pricing save keeps the base price; procurement edits only that column; a salesperson save collapses the price columns into Rate; a saved row shows 18% GST without a stored tax amount |
+| Frontend | `issue-send-quotation-button.test.tsx` | A priced inquiry drawer has one quotation button, and the email modal scrolls inside the screen |
+| Frontend | `issue-procurement-kanban-click.test.tsx` | A procurement person opens Kanban View on the first click |
+| Backend | `inquiry-pricing.workflow.spec.ts`, `inquiries.procurement-scope.spec.ts` | Procurement scope, customer-field stripping, partial and unavailable pricing, sales override, decline eligibility |
+| Backend | `issue-procurement-routing-details.spec.ts` | Mapped salesperson inquiries get that procurement person and a unique `PR-` number; product lines survive procurement detail |
 
 ## Cross-repo parity fixture
 `pricing-parity.json` is copied identically to `em-os-bot/test/fixtures/`, `em-os-backend/src/test-utils/fixtures/`, and `em-os-frontend/src/test/fixtures/`. Each repo's parity test runs its own pricing/HSN code against it. Change all three copies together in the same set of PRs.
@@ -53,6 +68,7 @@ Known divergences are listed under `knownDivergences` and run as `todo` tests un
 When one is resolved, move its case into the main fixture sections and delete the `todo`.
 
 ## Manual / integration scripts (not in CI)
+- [procurement-manual-test-suite.md](procurement-manual-test-suite.md) is the manual pass for procurement person, procurement manager, and salesperson. It is not part of CI.
 - Backend `src/scripts/` covers RBAC/RLS, chatbot, assistant operational parity, customer analytics, visits, complaints, products/HSN, KRA/tonnage, and PDF/voice work. E2E config is under `em-os-backend/test/`.
 - Bot `scripts/test-*.js` cover catalog, inquiries, order atomicity/parity, visits, complaints, query/retrieval, updates, and live flows.
 - Root `docs/` and `em-os-backend/docs/` contain module-specific manual/testing suites.

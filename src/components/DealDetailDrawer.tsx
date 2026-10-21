@@ -285,7 +285,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
       />
 
       {/* Drawer */}
-      <div className="fixed right-0 top-0 h-full w-[480px] bg-white z-50 shadow-2xl flex flex-col overflow-hidden animate-slide-in-right">
+      <div className="fixed right-0 top-0 h-full w-full sm:w-[480px] bg-white z-50 shadow-2xl flex flex-col overflow-hidden animate-slide-in-right">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b bg-gray-50">
           <div className="flex-1 min-w-0">
@@ -697,7 +697,7 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
 
       {/* Won Modal - Confirm editable system PO */}
       {showWonModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl p-6 w-96 max-w-sm shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-base font-bold text-slate-900 mb-1">Mark as Won</h3>
             <p className="text-xs text-slate-500 mb-4">Confirm the generated system PO before creating this order</p>
@@ -796,8 +796,8 @@ export default function DealDetailDrawer({ dealId, onClose }: DealDetailDrawerPr
 
       {/* Permanent Delete Deal Confirmation Modal */}
       {showDeleteConfirm && deal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[70] p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[70] p-4 animate-fade-in">
+          <div className="mobile-sheet bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100">
             <div className="flex items-center gap-3 text-red-600 mb-3">
               <div className="p-2.5 bg-red-100 rounded-xl">
                 <Trash2 size={22} />
