@@ -31,6 +31,21 @@ export function getPaginationRange(currentPage: number, totalPages: number): (nu
   return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
 }
 
+export function pageOf<T>(items: T[], page: number, size = 15) {
+  const total = items.length;
+  const totalPages = total === 0 ? 0 : Math.ceil(total / size);
+  const current = Math.min(Math.max(1, page), Math.max(1, totalPages));
+  const start = (current - 1) * size;
+  return {
+    rows: items.slice(start, start + size),
+    current,
+    totalPages,
+    startIndex: total === 0 ? 0 : start + 1,
+    endIndex: Math.min(start + size, total),
+    total,
+  };
+}
+
 export default function PaginationControl({
   currentPage,
   totalPages,
