@@ -226,7 +226,7 @@ export default function AdminSelectionPage() {
       employee_id: emp.employee_id,
       manager_id: matchedMgrId,
       manager_phone: emp.manager_phone || '',
-      is_active: emp.is_active,
+      is_active: emp.is_active !== false,
       permissions: emp.permissions ? { ...emp.permissions } : getRoleTemplate(emp.role),
     });
     setShowModal(true);
@@ -1026,6 +1026,11 @@ export default function AdminSelectionPage() {
                                     You
                                   </span>
                                 )}
+                                {emp.is_active === false && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 font-bold border border-rose-200">
+                                    Deactivated
+                                  </span>
+                                )}
                               </div>
                               <span className="font-mono text-slate-400 text-[11px]">
                                 {emp.employee_id}
@@ -1265,6 +1270,11 @@ export default function AdminSelectionPage() {
                             {emp.id === employee?.id && (
                               <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-blue-100 text-blue-800 font-bold border border-blue-200">
                                 You
+                              </span>
+                            )}
+                            {emp.is_active === false && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 font-bold border border-rose-200">
+                                Deactivated
                               </span>
                             )}
                           </div>
@@ -1640,13 +1650,17 @@ export default function AdminSelectionPage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-3 border-t border-slate-100">
+                <div className="sheet-actions flex gap-3 pt-3 border-t border-slate-100">
                   {isEditMode && form.id !== employee?.id && (
                     <button
                       type="button"
                       onClick={handleDeactivate}
                       disabled={formLoading}
-                      className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                      className={`px-3.5 py-2.5 border rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer ${
+                        form.is_active === false
+                          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                          : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                      }`}
                     >
                       {form.is_active === false ? 'Activate' : 'Deactivate'}
                     </button>

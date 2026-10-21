@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Calendar,
   X,
-  ChevronDown,
   Award,
   TrendingUp,
   Sparkles,
@@ -22,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
 import SyncBiginButton from '../components/SyncBiginButton';
+import { Select } from '../components/ui/select';
 
 function HealthBadge({ risk }: { risk: string }) {
   const r = (risk || '').toLowerCase();
@@ -337,7 +337,7 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Metric Cards, Search & Filters) */}
       <div className="shrink-0 space-y-4">
         {/* 1. Header */}
@@ -370,7 +370,7 @@ export default function CustomersPage() {
         </div>
 
         {/* 2. Top 4 Metric Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-500 font-medium">Total Customers</p>
@@ -437,55 +437,55 @@ export default function CustomersPage() {
             </div>
 
             {/* Date Preset Dropdown with 'All Time' default */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-              <select
-                value={dayPreset}
-                onChange={e => handleDayPresetChange(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Time</option>
-                <option value="today" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Today</option>
-                <option value="7_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 7 Days</option>
-                <option value="30_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 30 Days</option>
-                <option value="90_days" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Last 90 Days</option>
-                <option value="custom" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Custom Range</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            <Select
+              value={dayPreset}
+              onChange={e => handleDayPresetChange(e.target.value)}
+              prefixIcon={<Calendar size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-44"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </Select>
 
             {/* Health Filter Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={filterHealth}
-                onChange={e => {
-                  setFilterHealth(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Health Statuses ({totalCustomers})</option>
-                <option value="active" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Active ({activeCount})</option>
-                <option value="at_risk" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>At Risk ({atRiskCount})</option>
-                <option value="churning" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Churning ({churningCount})</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            <Select
+              value={filterHealth}
+              onChange={e => {
+                setFilterHealth(e.target.value);
+                setCurrentPage(1);
+              }}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All Health Statuses ({totalCustomers})</option>
+              <option value="active">Active ({activeCount})</option>
+              <option value="at_risk">At Risk ({atRiskCount})</option>
+              <option value="churning">Churning ({churningCount})</option>
+            </Select>
 
             {/* Segment Filter Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={filterSegment}
-                onChange={e => {
-                  setFilterSegment(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all">
-                <option value="all" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>All Segments ({totalCustomers})</option>
-                <option value="key_account" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Key Accounts ({keyAccountsCount})</option>
-                <option value="growth" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>Growth Accounts ({growthAccountsCount})</option>
-                <option value="new" className="font-normal text-slate-700" style={{ fontWeight: 'normal' }}>New Customers ({newAccountsCount})</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-            </div>
+            <Select
+              value={filterSegment}
+              onChange={e => {
+                setFilterSegment(e.target.value);
+                setCurrentPage(1);
+              }}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All Segments ({totalCustomers})</option>
+              <option value="key_account">Key Accounts ({keyAccountsCount})</option>
+              <option value="growth">Growth Accounts ({growthAccountsCount})</option>
+              <option value="new">New Customers ({newAccountsCount})</option>
+            </Select>
 
             {/* Clear Filter Button */}
             {(searchTerm || filterHealth !== 'all' || filterSegment !== 'all' || dayPreset !== 'all') && (
@@ -500,7 +500,7 @@ export default function CustomersPage() {
 
           {/* Custom Range Inputs */}
           {showCustomDate && (
-            <div className="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
+            <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-xs animate-in fade-in duration-150">
               <span className="text-slate-500 font-semibold">From:</span>
               <input
                 type="date"
@@ -524,12 +524,12 @@ export default function CustomersPage() {
 
       {/* 4. Customer Listing Data Table */}
       <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
-        <div className={`flex-1 min-h-0 overflow-auto ${!isLoading && filteredCustomers.length === 0 ? 'flex flex-col' : ''}`}>
+        <div className={`flex-1 min-h-0 overflow-x-auto ${!isLoading && filteredCustomers.length === 0 ? 'flex flex-col' : ''}`}>
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
                 <th className="px-4 py-3.5 text-center w-12">#</th>
-                <th className="px-5 py-3.5 min-w-[220px]">Customer</th>
+                <th className="px-5 py-3.5 min-w-[220px] sticky left-0 bg-slate-50 z-10">Customer</th>
                 <th className="px-4 py-3.5 min-w-[140px]">Segment</th>
                 <th className="px-4 py-3.5 min-w-[170px]">Order Activity</th>
                 <th className="px-4 py-3.5 min-w-[140px]">Health</th>
@@ -576,7 +576,7 @@ export default function CustomersPage() {
                       </td>
 
                       {/* 1. Customer Column */}
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 sticky left-0 bg-white z-10">
                         <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
                           {c.customer_name || 'Customer'}
                         </div>

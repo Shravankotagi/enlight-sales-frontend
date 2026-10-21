@@ -86,11 +86,20 @@ API.interceptors.response.use(
       requestUrl,
     );
 
-    if (error.response?.status === 401 && !isOtpAuthRequest) {
+    const isLogoutRequest = /\/auth\/logout(?:$|[/?])/.test(requestUrl);
+    const body = error.response?.data;
+    const message = String(body?.error || body?.message || '');
+    const deactivated = /deactivat/i.test(message);
+    if (error.response?.status === 401 && !isOtpAuthRequest && !isLogoutRequest) {
+      postAuthLogout('session_expired');
       sessionStorage.removeItem('enlight_token');
       sessionStorage.removeItem('enlight_employee');
       sessionStorage.removeItem('enlight_viewing_as');
-      window.location.href = '/login';
+      sessionStorage.removeItem('enlight_active_chat_session_id');
+      sessionStorage.removeItem('enlight_last_activity');
+      window.location.href = deactivated
+        ? '/login?reason=deactivated'
+        : '/login';
     }
     return Promise.reject(error);
   }
@@ -182,6 +191,9 @@ export const complaintsApi = {
 export const visitsApi = {
   getAll: (params?: any) => API.get('/kra/visits', { params }),
   create: (data: any) => API.post('/kra/visits', data),
+  requestVisitOtp: (phone: string) => API.post('/kra/visits/otp/request', { phone }),
+  verifyVisitOtp: (phone: string, otp: string) => API.post('/kra/visits/otp/verify', { phone, otp }),
+  reverseGeocode: (lat: number, lng: number) => API.get('/kra/visits/reverse-geocode', { params: { lat, lng } }),
   update: (id: string, data: any) => API.patch(`/kra/visits/${id}`, data),
   updateFollowUpStatus: (id: string, follow_up_status: 'pending' | 'completed') =>
     API.patch(`/kra/visits/${id}`, { follow_up_status }),
@@ -284,11 +296,26 @@ export const activityLogsApi = {
     to?: string;
     module?: string;
     search?: string;
+    action_type?: string;
     salesperson_phone?: string;
     mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
 };
+
+export function postAuthLogout(reason: 'manual' | 'session_expired') {
+  const token = sessionStorage.getItem('enlight_token');
+  if (!token) return;
+  fetch(`${BACKEND_URL}/auth/logout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
 
 export const authApi = {
   requestOtp: (phone: string) =>

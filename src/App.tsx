@@ -1,28 +1,30 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
-import LoginPage from './pages/LoginPage';
-import AdminSelectionPage from './pages/AdminSelectionPage';
-import HomePage from './pages/HomePage';
-import CustomersPage from './pages/CustomersPage';
-import CustomerProfilePage from './pages/CustomerProfilePage';
-import KRADashboard from './pages/KRADashboard';
-import InquiriesPage from './pages/InquiriesPage';
-import LogsPage from './pages/LogsPage';
-import ReportsPage from './pages/ReportsPage';
-import IntelligencePage from './pages/IntelligencePage';
-import ComplaintsPage from './pages/ComplaintsPage';
-import VisitsPage from './pages/VisitsPage';
-import OrdersPage from './pages/OrdersPage';
-import NotFoundPage from './pages/NotFoundPage';
-import AdminDashboard from './pages/AdminDashboard';
-import AssistantPage from './pages/AssistantPage';
+
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const AdminSelectionPage = lazy(() => import('./pages/AdminSelectionPage'));
+const HomePage = lazy(() => import('./pages/HomePage'));
+const CustomersPage = lazy(() => import('./pages/CustomersPage'));
+const CustomerProfilePage = lazy(() => import('./pages/CustomerProfilePage'));
+const KRADashboard = lazy(() => import('./pages/KRADashboard'));
+const InquiriesPage = lazy(() => import('./pages/InquiriesPage'));
+const LogsPage = lazy(() => import('./pages/LogsPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
+const ComplaintsPage = lazy(() => import('./pages/ComplaintsPage'));
+const VisitsPage = lazy(() => import('./pages/VisitsPage'));
+const OrdersPage = lazy(() => import('./pages/OrdersPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AssistantPage = lazy(() => import('./pages/AssistantPage'));
+const SidebarDemo = lazy(() => import('./components/SidebarDemo'));
 import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
-  const { isAuthenticated, employee, clearViewingAs, isProcurement } = useAuth();
+  const { isAuthenticated, employee, clearViewingAs, isProcurement, isSalesManager } = useAuth();
   const location = useLocation();
   const isAdmin = employee?.role === 'admin';
 
@@ -39,6 +41,7 @@ function AppRoutes() {
   }, [location.pathname, clearViewingAs]);
 
   return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route
@@ -56,6 +59,7 @@ function AppRoutes() {
         }
       />
       <Route path="/404" element={<NotFoundPage />} />
+      <Route path="/sidebar-demo" element={<SidebarDemo />} />
 
       {/* Authenticated Layout Hierarchy */}
       <Route
@@ -89,12 +93,13 @@ function AppRoutes() {
         />
         <Route
           path="/control-panel"
-          element={isAdmin ? <AdminSelectionPage /> : <Navigate to="/home" replace />}
+          element={(isAdmin || isSalesManager) ? <AdminSelectionPage /> : <Navigate to="/home" replace />}
         />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </Suspense>
   );
 }
 

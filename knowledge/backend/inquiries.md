@@ -26,7 +26,11 @@ To preserve commercial integrity, procurement roles are strictly restricted:
 - **Deletion Rules**: `procurement_person` cannot delete inquiries. `procurement_manager` may only delete inquiries assigned to their team (cannot delete from the unassigned pool).
 
 ### Quotation email CC contract
-`POST /inquiries/quotation-preview/:id` returns the resolved default `cc` list for the Share Quotation modal. The frontend may edit that list as normalized email chips and sends the final list as `cc: string[]` to `POST /inquiries/send-quotation/:id`. The backend validates and deduplicates submitted addresses, excludes the primary `customer_email`, and passes the resulting list to the email provider. If `cc` is omitted, the backend retains the existing default recipients.
+Quotation emails use the subject `Enlight Metals- Quotation for {customer name}`. The body greets the customer in capital letters, and the sent message is HTML with the company logo at the top and bottom. The quotation PDF attachment is unchanged. If the Share Quotation subject does not already start with `Enlight Metals- `, the backend adds that prefix before sending. Purchase-order emails keep their own template.
+
+`POST /inquiries/quotation-preview/:id` returns the resolved default `cc` list for the Share Quotation modal. The frontend may add extra CC chips, but `dj@enlightmetals.com` and `vedant@enlightmetals.com` are fixed: they cannot be removed, and the backend adds them to every quotation send even if the request omits them. The customer `To` address is still excluded from CC. If `cc` is omitted, the backend also keeps the sender on the default list.
+
+The customer email is optional on an inquiry. Document parsing and text parsing store it as `ai_extraction_json.customer_email`. Share Quotation prefills that address in an editable field. The WhatsApp bot and the AI assistant collect the same optional Email ID when logging or updating an inquiry.
 
 ## Dependencies
 Uses product/HSN/pricing rules, PDF generation and image/text parsing. Quotation PDFs from the dashboard and the bot print each line's Qty as metric tons (`39,897.63 KG` prints as `39.898 MT`), never the commercial unit. It feeds deals/order conversion and bot sales/OCR handling. Preserve server-side field authority and scoped queries when adding editable fields.

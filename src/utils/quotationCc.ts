@@ -4,6 +4,19 @@ export const isValidQuotationEmail = (email: string): boolean =>
 export const normalizeQuotationEmail = (email: string): string =>
   email.trim().toLowerCase();
 
+export const FIXED_QUOTATION_CC = [
+  'dj@enlightmetals.com',
+  'vedant@enlightmetals.com',
+];
+
+export const isFixedQuotationCc = (email: string): boolean =>
+  FIXED_QUOTATION_CC.includes(normalizeQuotationEmail(email));
+
+export function withFixedQuotationCc(emails: string[]): string[] {
+  const extras = emails.filter((email) => !isFixedQuotationCc(email));
+  return [...FIXED_QUOTATION_CC, ...extras];
+}
+
 export function addQuotationCcEmail(
   current: string[],
   draft: string,

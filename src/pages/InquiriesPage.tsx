@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2,
+  FileText, Plus, Minus, Search, CheckCircle, RefreshCw, X, Building2, Mail,
   Calendar, Save, Check, UploadCloud, Send, ShoppingBag, Eye,
   ImageIcon, ExternalLink, ChevronDown, ChevronRight, User, UserCheck, MoreVertical, Loader2,
   LayoutDashboard, IndianRupee, Trash2, ArrowLeft, AlertCircle, AlertTriangle
@@ -46,9 +46,12 @@ import SalespersonContextBanner from '../components/SalespersonContextBanner';
 import { buildInquiryScopeParams } from '../utils/inquiryScope';
 import {
   addQuotationCcEmail,
+  isFixedQuotationCc,
   isValidQuotationEmail,
   normalizeQuotationEmail,
+  withFixedQuotationCc,
 } from '../utils/quotationCc';
+import { Select } from '../components/ui/select';
 
 export interface InquiryItem {
   id: string;
@@ -108,9 +111,32 @@ export interface LineItemDetail {
   final_amount?: number;
 }
 
+const INQUIRY_EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+export function inquiryEmailFrom(...values: unknown[]): string {
+  for (const value of values) {
+    const match = String(value ?? '').match(INQUIRY_EMAIL_RE);
+    if (match) return match[0].toLowerCase();
+  }
+  return '';
+}
+
+function isInquiryEmail(value: string): boolean {
+  return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value.trim());
+}
+
+function quotationCustomerEmail(details?: { customerEmail?: string } | null, inq?: any): string {
+  const extracted = inquiryEmailFrom(details?.customerEmail, inq?.customer_email);
+  if (extracted) return extracted;
+  const sender = String(inq?.sender_email || '').toLowerCase();
+  if (!sender || sender === 'quotes@enlightmetals.com') return '';
+  return inquiryEmailFrom(sender);
+}
+
 export interface ExtractedDetails {
   companyName: string;
   customerPhone: string;
+  customerEmail: string;
   salespersonName?: string;
   productType: string;
   thickness: string;
@@ -551,6 +577,14 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   const companyName = candidateName || '';
 
+  const customerEmail = inquiryEmailFrom(
+    aiJson.customer_email,
+    aiJson.customerEmail,
+    aiJson.customer?.email,
+    inq?.customer_email,
+    textRaw,
+  );
+
   // 2. Customer Phone Number (Directly take from database inq.customer_phone, aiJson, or customer directory)
   const rawCustPhone =
     inq?.customer_phone ||
@@ -936,6 +970,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   return {
     companyName,
     customerPhone,
+    customerEmail,
     salespersonName,
     productType,
     thickness,
@@ -975,7 +1010,7 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
   return (
     <div
       onClick={onClick}
-      className={`rounded-lg border p-3 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer ${
+      className={`rounded-lg border p-3 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer overflow-hidden ${
         isWon
           ? 'bg-emerald-50/40 border-emerald-200'
           : isLost
@@ -983,12 +1018,15 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
           : 'bg-white border-gray-200'
       }`}
     >
-      <div className="flex items-start justify-between mb-2 gap-1">
-        <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
+      <div className="flex items-start justify-between mb-2 gap-1.5 min-w-0">
+        <h4
+          className="text-xs font-semibold text-gray-800 leading-snug line-clamp-2 break-words min-w-0 flex-1"
+          title={deal.customer_name || 'Unknown Customer'}
+        >
           {deal.customer_name || 'Unknown Customer'}
         </h4>
         <div className="flex items-center gap-1 shrink-0">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+          <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium border leading-none shrink-0 ${
             isWon
               ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
               : isLost
@@ -1006,7 +1044,7 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
               e.stopPropagation();
               onDelete(deal);
             }}
-            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors shrink-0"
           >
             <Trash2 size={13} />
           </button>
@@ -1025,18 +1063,21 @@ function DealCard({ deal, onStageChange, onDelete, onClick }: {
         </div>
       )}
 
-      {deal.deal_items && deal.deal_items.length > 0 && (
-        <div className="mb-2">
-          {deal.deal_items.slice(0, 2).map((item: any, i: number) => (
-            <p key={i} className="text-xs text-gray-600">
-              • {item.sku_text || item.sku || item.product_name || 'Item'} - {item.quantity} {item.unit || 'MT'}
-            </p>
-          ))}
-          {deal.deal_items.length > 2 && (
-            <p className="text-xs text-gray-400">+{deal.deal_items.length - 2} more</p>
-          )}
-        </div>
-      )}
+      {deal.deal_items && deal.deal_items.length > 0 && (() => {
+        const itemCount = deal.deal_items.length;
+        const totalMt = calculateTotalTonnageMt(deal.deal_items).totalMt;
+        const tonnageFormatted = totalMt > 0
+          ? `(${totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
+          : '';
+        return (
+          <p className="mb-2 text-xs text-gray-600 font-medium">
+            {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+            {tonnageFormatted && (
+              <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
+            )}
+          </p>
+        );
+      })()}
 
       {(() => {
         let computedTotal = Number(deal.total_amount) || 0;
@@ -1183,6 +1224,11 @@ export function resolveInquiryDealStageKey(inq: InquiryItem, companyName?: strin
 const createDashboardWonReservationToken = () =>
   `dashboard-won:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
 
+const INQUIRY_PREFERRED_MAKES = ['TATA', 'JSW', 'AM/NS India', 'SAIL', 'NMDC', 'Apollo', 'Others'];
+const INQUIRY_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
+const EMPTY_INQUIRIES: InquiryItem[] = [];
+const EMPTY_CUSTOMER_NAMES: string[] = [];
+
 export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1290,9 +1336,11 @@ export default function InquiriesPage() {
       setQuotationSubject(preview?.subject || '');
       setQuotationBody(preview?.body || '');
       setQuotationCc(
-        Array.isArray(preview?.cc)
-          ? preview.cc.map((email: string) => normalizeQuotationEmail(email)).filter(isValidQuotationEmail)
-          : [],
+        withFixedQuotationCc(
+          Array.isArray(preview?.cc)
+            ? preview.cc.map((email: string) => normalizeQuotationEmail(email)).filter(isValidQuotationEmail)
+            : [],
+        ),
       );
       setQuotationCcDraft('');
       setQuotationCcError('');
@@ -1536,6 +1584,7 @@ export default function InquiriesPage() {
 
   // Form state for Manual Log & File Upload
   const [formCustomerName, setFormCustomerName] = useState('');
+  const [formCustomerEmail, setFormCustomerEmail] = useState('');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [addProductModalRowIdx, setAddProductModalRowIdx] = useState<number | null>(null);
   const [addProductModalSource, setAddProductModalSource] = useState<'create' | 'edit'>('create');
@@ -1551,6 +1600,7 @@ export default function InquiriesPage() {
   const [poFileBase64, setPoFileBase64] = useState<string | null>(null);
   const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
+  const uploadRequestRef = useRef(0);
   const formExtractedJsonRef = useRef<any>(null);
   const [formExtractedJson, setFormExtractedJson] = useState<any>(null);
   const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
@@ -1571,12 +1621,10 @@ export default function InquiriesPage() {
     },
   ]);
 
-  const handleCancelCreateInquiry = () => {
-    setShowModal(false);
+  const clearExtractedInquiryFields = () => {
     setFormCustomerName('');
+    setFormCustomerEmail('');
     setShowAddCustomer(false);
-    setAddProductModalRowIdx(null);
-    setShowProductListModal(false);
     setShowCompanyDropdown(false);
     setFormPhone('');
     setFormPreferredMake('');
@@ -1607,12 +1655,25 @@ export default function InquiriesPage() {
     ]);
   };
 
+  const handleRemoveUploadedInquiryDocument = () => {
+    uploadRequestRef.current += 1;
+    setIsExtractingPo(false);
+    clearExtractedInquiryFields();
+  };
+
+  const handleCancelCreateInquiry = () => {
+    setShowModal(false);
+    setAddProductModalRowIdx(null);
+    setShowProductListModal(false);
+    clearExtractedInquiryFields();
+  };
+
   const isPdf = (url: string) => {
     if (!url) return false;
     return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
   };
 
-  const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
+  const { data: rawInquiries = EMPTY_INQUIRIES, isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
     queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
     queryFn: async () => {
       const params = buildInquiryScopeParams(effectivePhone, activeMode);
@@ -1630,7 +1691,7 @@ export default function InquiriesPage() {
     Record<string, { gstin?: string; address?: string; state?: string }>
   >({});
 
-  const { data: rawCustomers = [] } = useQuery<string[]>({
+  const { data: rawCustomers = EMPTY_CUSTOMER_NAMES } = useQuery<string[]>({
     queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
       const params = buildInquiryScopeParams(effectivePhone, activeMode);
@@ -2342,6 +2403,7 @@ export default function InquiriesPage() {
                 ...prev,
                 companyName: parsed.companyName || prev.companyName || '',
                 customerPhone: parsed.customerPhone || prev.customerPhone || '',
+                customerEmail: parsed.customerEmail || prev.customerEmail || '',
                 salespersonName: resolvedSp,
                 totalAmount: frozenTotal,
                 lineItems: frozenLineItems,
@@ -2439,6 +2501,7 @@ export default function InquiriesPage() {
       setEditDetails({
         companyName: parsed.companyName || '',
         customerPhone: parsed.customerPhone || '',
+        customerEmail: parsed.customerEmail || '',
         salespersonName: resolvedSp,
         productType: frozenLineItems[0]?.sku_text || ai.productType || 'Hot Rolled',
         thickness: ai.thickness || '',
@@ -2550,6 +2613,8 @@ export default function InquiriesPage() {
         customer_name: editDetails.companyName,
         customerPhone: editDetails.customerPhone,
         customer_phone: editDetails.customerPhone,
+        customerEmail: inquiryEmailFrom(editDetails.customerEmail),
+        customer_email: inquiryEmailFrom(editDetails.customerEmail),
         deliveryLocation: editDetails.deliveryLocation,
         delivery_location: editDetails.deliveryLocation,
         place_of_supply: editPlaceOfSupply.label,
@@ -2637,6 +2702,10 @@ export default function InquiriesPage() {
     if (!editDetails.companyName || !editDetails.companyName.trim()) {
       errors['companyName'] = 'Company Name is required.';
     }
+    const editedEmail = String(editDetails.customerEmail || '').trim();
+    if (editedEmail && !isInquiryEmail(editedEmail)) {
+      errors['customerEmail'] = 'Enter a valid email address.';
+    }
 
     // 2. Line Items validation (Quantity > 0, Description required, HSN/SAC required)
     const rawItems = editDetails.lineItems && editDetails.lineItems.length > 0
@@ -2716,21 +2785,28 @@ export default function InquiriesPage() {
     await executeSaveDrawerDetails(currentItems);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | File[] } },
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if ('value' in e.target) {
+      (e.target as HTMLInputElement).value = '';
+    }
+
+    const requestId = ++uploadRequestRef.current;
+    clearExtractedInquiryFields();
     setPoFileName(file.name);
     setIsExtractingPo(true);
-    formExtractedJsonRef.current = null;
-    setFormExtractedJson(null);
 
     try {
       const reader = new FileReader();
       reader.onload = async (evt) => {
+        if (requestId !== uploadRequestRef.current) return;
         const base64String = evt.target?.result as string;
         if (!base64String) {
-          setIsExtractingPo(false);
+          if (requestId === uploadRequestRef.current) setIsExtractingPo(false);
           return;
         }
 
@@ -2746,6 +2822,7 @@ export default function InquiriesPage() {
             file_base64: cleanBase64,
             mime_type: file.type || 'image/jpeg',
           });
+          if (requestId !== uploadRequestRef.current) return;
           const body = res.data;
           const candidate = body?.data?.customer_name || body?.data?.line_items || body?.data?.customer
             ? body.data
@@ -2760,9 +2837,12 @@ export default function InquiriesPage() {
             extractError = body?.data?.error || body?.error || body?.message || '';
           }
         } catch (apiErr: any) {
+          if (requestId !== uploadRequestRef.current) return;
           console.warn('Backend parse-document failed:', apiErr);
           extractError = apiErr?.response?.data?.message || apiErr?.message || '';
         }
+
+        if (requestId !== uploadRequestRef.current) return;
 
         if (extracted) {
           formExtractedJsonRef.current = extracted;
@@ -2774,7 +2854,14 @@ export default function InquiriesPage() {
             ? String(rawName).trim()
             : '';
           setFormCustomerName(cleanCustomer);
-          let filledFromDocument = Boolean(cleanCustomer);
+          const extractedEmail = inquiryEmailFrom(
+            extracted.customer_email,
+            extracted.customerEmail,
+            extracted.customer?.email,
+            extracted.email,
+          );
+          setFormCustomerEmail(extractedEmail);
+          let filledFromDocument = Boolean(cleanCustomer || extractedEmail);
 
           // Phone: fill if detected (10 digits), keep blank if not
           const rawPhone = extracted.customer_phone || extracted.contact_phone || extracted.customer?.phone || extracted.phone || '';
@@ -2911,13 +2998,13 @@ export default function InquiriesPage() {
           toast.error(extractError || 'Could not auto-extract inquiry details. You can enter the fields manually.');
         }
 
-        setIsExtractingPo(false);
+        if (requestId === uploadRequestRef.current) setIsExtractingPo(false);
       };
 
       reader.readAsDataURL(file);
     } catch (err) {
       console.error('FileReader error:', err);
-      setIsExtractingPo(false);
+      if (requestId === uploadRequestRef.current) setIsExtractingPo(false);
     }
   };
 
@@ -2952,6 +3039,14 @@ export default function InquiriesPage() {
       }
       return;
     }
+
+    const typedEmail = formCustomerEmail.trim();
+    if (typedEmail && !isInquiryEmail(typedEmail)) {
+      toast.error('Enter a valid email address');
+      document.getElementById('form-customer-email')?.focus();
+      return;
+    }
+    const finalCustomerEmail = inquiryEmailFrom(typedEmail);
 
     if (!isCustomerInAssignedList(customerName, rawCustomers)) {
       toast.error('Cannot save inquiry: Customer is not in your assigned customer list.');
@@ -3076,6 +3171,7 @@ export default function InquiriesPage() {
         customer: {
           name: customerName,
           phone: finalCustomerPhone,
+          email: finalCustomerEmail || null,
           gst: formCustMeta?.gstin || extractedJson?.customer_gst || null,
           address: formDeliveryLocation.trim() || null,
           state: formPlaceOfSupply.label,
@@ -3084,6 +3180,8 @@ export default function InquiriesPage() {
         customer_name: customerName,
         customerPhone: finalCustomerPhone,
         customer_phone: finalCustomerPhone,
+        customerEmail: finalCustomerEmail,
+        customer_email: finalCustomerEmail,
         salespersonName: activeSalespersonName,
         productType: lineItemsPayload[0]?.sku_text || 'Hot Rolled',
         quantityTons: totalTonnage.totalMt || lineItemsPayload[0]?.quantity || 0,
@@ -3497,7 +3595,7 @@ export default function InquiriesPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, KPI Summary Cards, Filters, Search) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
@@ -3518,7 +3616,7 @@ export default function InquiriesPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
             {!isProcurement && (
             <button
               type="button"
@@ -3601,40 +3699,38 @@ export default function InquiriesPage() {
           </div>
 
           {/* 2. Days Filter Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={dayPreset}
-              onChange={(e) => handleDayPresetChange(e.target.value)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-            >
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="7_days">Last 7 Days</option>
-              <option value="30_days">Last 30 Days</option>
-              <option value="90_days">Last 90 Days</option>
-              <option value="custom">Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={dayPreset}
+            onChange={(e) => handleDayPresetChange(e.target.value)}
+            prefixIcon={<Calendar size={14} className="text-blue-600" />}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* 3. Status Dropdown */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-            >
-              <option value="all">All ({stageCounts.all})</option>
-              <option value="new_inquiry">New Inquiry ({stageCounts.new_inquiry})</option>
-              <option value="quoted">Price Quote ({stageCounts.quoted})</option>
-              <option value="negotiation">Negotiation ({stageCounts.negotiation})</option>
-              <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
-              <option value="won">Won ({stageCounts.won})</option>
-              <option value="lost">Lost ({stageCounts.lost})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-52"
+          >
+            <option value="all">All ({stageCounts.all})</option>
+            <option value="new_inquiry">New Inquiry ({stageCounts.new_inquiry})</option>
+            <option value="quoted">Price Quote ({stageCounts.quoted})</option>
+            <option value="negotiation">Negotiation ({stageCounts.negotiation})</option>
+            <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
+            <option value="won">Won ({stageCounts.won})</option>
+            <option value="lost">Lost ({stageCounts.lost})</option>
+          </Select>
 
           {/* 4. Clear Filter Button */}
           {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
@@ -3701,10 +3797,10 @@ export default function InquiriesPage() {
 
       {viewMode === 'pipeline' ? (
         /* Kanban Board View */
-        <div className="flex-1 min-h-0 overflow-auto pb-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-[1250px] xl:min-w-0">
+        <div className="flex-1 min-h-0 overflow-auto pb-2 snap-x snap-mandatory">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-full xl:min-w-[1380px]">
             {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
-              <div key={key} className={`rounded-xl border-2 ${color} p-3 flex flex-col min-w-[190px]`}>
+              <div key={key} className={`rounded-xl border-2 ${color} p-3 flex flex-col w-[85vw] sm:w-auto sm:min-w-0 xl:min-w-[210px] snap-start`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-700 text-sm">{label}</h3>
                   <span className="bg-white text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full border">
@@ -3733,7 +3829,7 @@ export default function InquiriesPage() {
         /* Standard Inquiries Table View */
         <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
           <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-            <table className="w-full table-fixed text-left border-collapse text-xs">
+            <table className="stack-table w-full table-fixed text-left border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider shadow-2xs">
                 <tr>
                   <th className="px-3 py-3.5 text-center w-[4%]">#</th>
@@ -3828,8 +3924,8 @@ export default function InquiriesPage() {
                     key={inq.id || idx}
                     onClick={() => handleOpenDrawer(inq)}
                     className="group hover:bg-slate-50/75 transition-colors cursor-pointer">
-                    <td className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
-                    <td className="px-5 py-3.5 text-left">
+                    <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                    <td data-label="Customer" className="px-5 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
                         <span className="group-hover:text-blue-600 transition-colors inline-block">
                           {details.companyName || <span className="text-slate-300 font-normal italic">-</span>}
@@ -3852,19 +3948,19 @@ export default function InquiriesPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                    <td data-label="Inquiry ID" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                       {dealIdDisplay}
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                    <td data-label="Items Summary" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium">
                       {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
                       {tonnageFormatted && (
                         <span className="text-slate-600 font-semibold ml-1.5">{tonnageFormatted}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
+                    <td data-label="Source Channel" className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
                       {formatSourceChannel(inq.source_channel)}
                     </td>
-                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                    <td data-label="Inquiry Status" className="px-4 py-3.5 text-center">
                       {dealStageInfo ? (
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full border ${dealStageInfo.className}`}>
                           {dealStageInfo.label}
@@ -3873,7 +3969,7 @@ export default function InquiriesPage() {
                         <span className="text-slate-400 font-normal italic">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                    <td data-label="Actions" className="px-4 py-3.5 text-center">
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -3994,7 +4090,7 @@ export default function InquiriesPage() {
                                   setSubMenuInqId(null);
                                   setShareInquiry(inq);
                                   setShareDetails(details);
-                                  setQuotationEmail((inq as any).customer_email || (inq as any).sender_email || (details as any).customerEmail || '');
+                                  setQuotationEmail(quotationCustomerEmail(details, inq));
                                   setQuotationCcDraft('');
                                   setQuotationCcError('');
                                   setShowQuotationModal(true);
@@ -4039,13 +4135,13 @@ export default function InquiriesPage() {
       {/* AI INTERPRETATION & QA AUDIT POPUP MODAL */}
       {showEditDrawer && selectedInquiry && editDetails && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overscroll-contain animate-in fade-in duration-150"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overscroll-contain animate-in fade-in duration-150"
           onClick={handleCloseDrawer}>
           <div
-            className="bg-white rounded-2xl max-w-7xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
+            className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={e => e.stopPropagation()}>
             {/* Drawer Header (Fixed Top) */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
+            <div className="sheet-header flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-200">
                   <FileText size={22} />
@@ -4209,6 +4305,35 @@ export default function InquiriesPage() {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email ID
+                    </label>
+                    <div className="relative flex items-center">
+                      <Mail className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
+                      <input
+                        type="email"
+                        placeholder="e.g. customer@example.com"
+                        value={editDetails.customerEmail || ''}
+                        onChange={(e) => {
+                          setEditDetails({ ...editDetails, customerEmail: e.target.value });
+                          setSaveSuccess(false);
+                          if (fieldErrors['customerEmail']) {
+                            setFieldErrors(prev => { const n = { ...prev }; delete n['customerEmail']; return n; });
+                          }
+                        }}
+                        className={`w-full pl-9 pr-3 py-2 bg-white rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 placeholder:text-slate-400 placeholder:font-normal transition-all ${
+                          fieldErrors['customerEmail']
+                            ? 'border-2 border-red-500 ring-2 ring-red-500/20 bg-red-50/20 field-error-border'
+                            : 'border border-slate-300 focus:ring-blue-500'
+                        }`}
+                      />
+                    </div>
+                    {fieldErrors['customerEmail'] && (
+                      <p className="mt-1 text-[11px] font-semibold text-red-600">{fieldErrors['customerEmail']}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
                       Salesperson
                     </label>
                     <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs">
@@ -4291,7 +4416,7 @@ export default function InquiriesPage() {
 
                 {/* Structured Inquiry Table Layout */}
                 <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
-                  <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                  <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
                         <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
@@ -4333,8 +4458,8 @@ export default function InquiriesPage() {
                         : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: editDetails.productType ? (detectHsnCode(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || findCustomProductMatch(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), rawDbProducts)?.hsn_code || '') : '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
-                          <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
-                          <td className="px-4 py-3.5 border-r border-slate-200">
+                          <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                          <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                             <div className="space-y-1">
                               <input
                                 type="text"
@@ -4451,7 +4576,7 @@ export default function InquiriesPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                          <td data-label="HSN/SAC" className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                             <input
                               id={`edit-item-hsn-${idx}`}
                               type="text"
@@ -4477,7 +4602,7 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`hsn_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-2.5 py-3.5 border-r border-slate-200">
+                          <td data-label="Qty" className="px-2.5 py-3.5 border-r border-slate-200">
                             <div className="flex items-center gap-1.5 w-full min-w-[170px]">
                               <input
                                 type="number"
@@ -4520,7 +4645,7 @@ export default function InquiriesPage() {
                                     : 'border border-slate-300 focus:ring-blue-500'
                                 }`}
                               />
-                              <select
+                              <Select
                                 value={normalizeUnit(item.unit) || 'KG'}
                                 onChange={(e) => {
                                   const newUnit = e.target.value;
@@ -4550,14 +4675,18 @@ export default function InquiriesPage() {
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
                                 }}
-                                className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                                wrapperClassName="w-[58px] shrink-0"
+                                className="w-full px-1 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 hover:border-blue-400"
+                                menuClassName="w-24"
+                                chevronClassName="h-3 w-3 shrink-0 opacity-60"
+                              >
                                 <option value="KG">KG</option>
                                 <option value="MT">MT</option>
                                 <option value="Nos">Nos</option>
                                 {['Pcs', 'Sheets', 'Plates', 'Coils'].includes(normalizeUnit(item.unit) || '') && (
                                   <option value={normalizeUnit(item.unit)}>{normalizeUnit(item.unit)}</option>
                                 )}
-                              </select>
+                              </Select>
                               {(() => {
                                 const itemWeight = formatLineItemWeightMt(item);
                                 const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
@@ -4627,7 +4756,7 @@ export default function InquiriesPage() {
                               <span className="text-[10px] text-red-600 font-bold block text-center mt-0.5">{fieldErrors[`qty_${idx}`]}</span>
                             )}
                           </td>
-                          <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
+                          <td data-label="Rate" className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono lg:min-w-[95px]">
                             <input
                               type="number"
                               min="0"
@@ -4675,7 +4804,7 @@ export default function InquiriesPage() {
                             )}
                           </td>
                           {isEditInterState ? (
-                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                            <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[110px]">
                               {(() => {
                                 const baseAmt = Number(item.amount) || 0;
                                 const igst =
@@ -4695,7 +4824,7 @@ export default function InquiriesPage() {
                             </td>
                           ) : (
                             <>
-                              <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[75px]">
                                 {(() => {
                                   const baseAmt = Number(item.amount) || 0;
                                   const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
@@ -4710,7 +4839,7 @@ export default function InquiriesPage() {
                                   );
                                 })()}
                               </td>
-                              <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                              <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[75px]">
                                 {(() => {
                                   const baseAmt = Number(item.amount) || 0;
                                   const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
@@ -4727,7 +4856,7 @@ export default function InquiriesPage() {
                               </td>
                             </>
                           )}
-                          <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
+                          <td data-label="Amount" className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 lg:min-w-[100px]">
                             {(() => {
                               const baseAmt = Number(item.amount) || 0;
                               const cgst = isEditInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
@@ -4772,7 +4901,7 @@ export default function InquiriesPage() {
                               );
                             })()}
                           </td>
-                          <td className="px-2 py-3.5 text-center">
+                          <td data-label="" className="px-2 py-3.5 text-center">
                             <div className="flex items-center justify-center gap-1">
                               {(editDetails.lineItems || []).length > 1 && (
                                 <button
@@ -4950,7 +5079,7 @@ export default function InquiriesPage() {
             </div>
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
-            <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+            <div className="sheet-actions px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex flex-wrap items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
               <button
                 type="button"
                 onClick={() => {
@@ -5019,7 +5148,7 @@ export default function InquiriesPage() {
                       onClick={() => {
                         setShareInquiry(selectedInquiry);
                         setShareDetails(editDetails);
-                        setQuotationEmail((selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || (editDetails as any).customerEmail || '');
+                        setQuotationEmail(quotationCustomerEmail(editDetails, selectedInquiry));
                         setQuotationCcDraft('');
                         setQuotationCcError('');
                         setShowQuotationModal(true);
@@ -5040,7 +5169,7 @@ export default function InquiriesPage() {
                       )}
                     </button>
                     {lastSharedLabel && (
-                      <span className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden group-hover:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg">
+                      <span className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden lg:group-hover:block max-lg:static max-lg:block max-lg:mt-1 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg">
                         {lastSharedLabel}
                       </span>
                     )}
@@ -5217,9 +5346,9 @@ export default function InquiriesPage() {
 
       {/* Send Official Quotation Email Modal (Resend API Integration) */}
       {showQuotationModal && shareDetails && shareInquiry && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div className="quotation-share-overlay mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-start justify-center overflow-hidden px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-6 animate-in fade-in duration-150">
+          <div className="quotation-share-sheet mobile-sheet bg-white rounded-2xl max-w-lg w-full max-h-[calc(100svh-5.5rem)] mt-2 mb-3 flex flex-col overflow-hidden shadow-2xl border border-slate-200">
+            <div className="sheet-header shrink-0 flex justify-between items-center px-6 pt-6 pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Send className="text-blue-600" size={22} />
                 Share Quotation
@@ -5239,6 +5368,7 @@ export default function InquiriesPage() {
               </button>
             </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {/* Small Relevant Info Message */}
             <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
               <FileText size={18} className="text-blue-600 shrink-0 mt-0.5" />
@@ -5310,11 +5440,6 @@ export default function InquiriesPage() {
                 />
               </div>
 
-              {quotationPreviewLoading && (
-                <div className="text-xs text-slate-500 flex items-center gap-2">
-                  <RefreshCw size={13} className="animate-spin" /> Preparing email preview…
-                </div>
-              )}
               {quotationPreviewError && (
                 <div className="p-3 rounded-xl text-xs font-bold border bg-rose-50 text-rose-900 border-rose-200">
                   {quotationPreviewError}
@@ -5345,6 +5470,7 @@ export default function InquiriesPage() {
                       className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700"
                     >
                       {email}
+                      {!isFixedQuotationCc(email) && (
                       <button
                         type="button"
                         aria-label={`Remove ${email}`}
@@ -5356,6 +5482,7 @@ export default function InquiriesPage() {
                       >
                         <X size={13} />
                       </button>
+                      )}
                     </span>
                   ))}
                   <input
@@ -5373,9 +5500,12 @@ export default function InquiriesPage() {
                       } else if (
                         event.key === 'Backspace' &&
                         !quotationCcDraft &&
-                        quotationCc.length > 0
+                        quotationCc.some((email) => !isFixedQuotationCc(email))
                       ) {
-                        setQuotationCc((current) => current.slice(0, -1));
+                        setQuotationCc((current) => {
+                          const lastExtra = [...current].reverse().find((email) => !isFixedQuotationCc(email));
+                          return lastExtra ? current.filter((email) => email !== lastExtra) : current;
+                        });
                       }
                     }}
                     placeholder={quotationCc.length === 0 ? 'Add CC recipients' : 'Add another email'}
@@ -5427,21 +5557,10 @@ export default function InquiriesPage() {
                 </div>
               )}
             </div>
+            </div>
 
-            <div className="pt-2 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowQuotationModal(false);
-                  setShareInquiry(null);
-                  setShareDetails(null);
-                  setResendNotice('');
-                  setQuotationCcDraft('');
-                  setQuotationCcError('');
-                }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer">
-                Cancel
-              </button>
+            <div className="sheet-actions shrink-0 px-6 py-4 flex flex-wrap justify-end gap-2 border-t border-slate-100">
+              
 
               <button
                 type="button"
@@ -5474,7 +5593,7 @@ export default function InquiriesPage() {
                     toast.error(ccResult.error);
                     return;
                   }
-                  const finalCc = ccResult.emails;
+                  const finalCc = withFixedQuotationCc(ccResult.emails);
                   setQuotationCc(finalCc);
                   setQuotationCcDraft('');
                   try {
@@ -5563,9 +5682,9 @@ export default function InquiriesPage() {
 
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+            <div className="sheet-header flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={20} />
                 Log New Inquiry
@@ -5588,8 +5707,7 @@ export default function InquiriesPage() {
                 <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
               </div>
 
-              <label
-                htmlFor="inquiry-doc-file-upload"
+              <div
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -5602,7 +5720,7 @@ export default function InquiriesPage() {
                     handleFileUpload({ target: { files } } as any);
                   }
                 }}
-                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl transition-all">
                 <input
                   id="inquiry-doc-file-upload"
                   type="file"
@@ -5619,17 +5737,33 @@ export default function InquiriesPage() {
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
                     <CheckCircle size={15} className="text-emerald-600 shrink-0" />
                     <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
-                    <span className="text-[10px] text-blue-600 underline ml-1">Change</span>
+                    <label
+                      htmlFor="inquiry-doc-file-upload"
+                      className="text-[10px] text-blue-600 underline ml-1 cursor-pointer"
+                    >
+                      Change
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRemoveUploadedInquiryDocument}
+                      className="text-[10px] text-rose-600 underline ml-1 cursor-pointer"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-600 font-medium py-1">
+                  <label
+                    htmlFor="inquiry-doc-file-upload"
+                    className="text-xs text-slate-600 font-medium py-1 cursor-pointer"
+                  >
                     Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
-                  </p>
+                  </label>
                 )}
-              </label>
+              </div>
             </div>
 
             <form onSubmit={handleCreateInquiry} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Company Name <span className="text-red-500 font-bold">*</span>
@@ -5710,6 +5844,23 @@ export default function InquiriesPage() {
                   </div>
                 )}
               </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Email ID
+                </label>
+                <div className="relative flex items-center">
+                  <Mail className="absolute left-3 text-slate-400 pointer-events-none" size={15} />
+                  <input
+                    id="form-customer-email"
+                    type="email"
+                    placeholder="e.g. customer@example.com"
+                    value={formCustomerEmail}
+                    onChange={(e) => setFormCustomerEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                  />
+                </div>
+              </div>
+              </div>
 
               {(() => {
                 const seenLower = new Set<string>();
@@ -5773,7 +5924,7 @@ export default function InquiriesPage() {
 
               {/* Structured Line Items Table matching Image 3 / Orders */}
               <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
-                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
                       <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
@@ -5812,8 +5963,8 @@ export default function InquiriesPage() {
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/30">
-                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
-                        <td className="px-4 py-3.5 border-r border-slate-200">
+                        <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input
                               id={`form-item-sku-${idx}`}
@@ -5914,7 +6065,7 @@ export default function InquiriesPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
+                        <td data-label="HSN/SAC" className="px-2 py-3.5 border-r border-slate-200 text-center font-mono">
                           <input
                             id={`form-item-hsn-${idx}`}
                             type="text"
@@ -5928,7 +6079,7 @@ export default function InquiriesPage() {
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200">
+                        <td data-label="Qty" className="px-2.5 py-3.5 border-r border-slate-200">
                           <div className="flex items-center gap-1.5 w-full min-w-[170px]">
                             <input
                               id={`form-item-qty-${idx}`}
@@ -5965,7 +6116,7 @@ export default function InquiriesPage() {
                               placeholder="0"
                               className="flex-1 min-w-[42px] px-1.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-center"
                             />
-                            <select
+                            <Select
                               value={normalizeUnit(item.unit) || 'KG'}
                               onChange={(e) => {
                                 const newUnit = e.target.value;
@@ -5993,11 +6144,15 @@ export default function InquiriesPage() {
                                 };
                                 setFormLineItems(updated);
                               }}
-                              className="w-[54px] shrink-0 px-1 py-1.5 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                              wrapperClassName="w-[58px] shrink-0"
+                              className="w-full px-1 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 hover:border-blue-400"
+                              menuClassName="w-24"
+                              chevronClassName="h-3 w-3 shrink-0 opacity-60"
+                            >
                               <option value="KG">KG</option>
                               <option value="MT">MT</option>
                               <option value="Nos">Nos</option>
-                            </select>
+                            </Select>
                             {(() => {
                               const itemWeight = formatLineItemWeightMt(item);
                               const hasFormulaWeight = itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
@@ -6062,7 +6217,7 @@ export default function InquiriesPage() {
                             })()}
                           </div>
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
+                        <td data-label="Rate" className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono lg:min-w-[95px]">
                           <input
                             id={`form-item-rate-${idx}`}
                             type="number"
@@ -6096,7 +6251,7 @@ export default function InquiriesPage() {
                           />
                         </td>
                         {isFormInterState ? (
-                          <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[110px]">
+                          <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[110px]">
                             {(() => {
                               const baseAmt = Number(item.amount) || 0;
                               const igst =
@@ -6116,7 +6271,7 @@ export default function InquiriesPage() {
                           </td>
                         ) : (
                           <>
-                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                            <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[75px]">
                               {(() => {
                                 const baseAmt = Number(item.amount) || 0;
                                 const cgst = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
@@ -6131,7 +6286,7 @@ export default function InquiriesPage() {
                                 );
                               })()}
                             </td>
-                            <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
+                            <td data-label="GST" className="px-2.5 py-3.5 border-r border-slate-200 lg:min-w-[75px]">
                               {(() => {
                                 const baseAmt = Number(item.amount) || 0;
                                 const sgst = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100;
@@ -6148,7 +6303,7 @@ export default function InquiriesPage() {
                             </td>
                           </>
                         )}
-                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
+                        <td data-label="Amount" className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 lg:min-w-[100px]">
                           {(() => {
                             const baseAmt = Number(item.amount) || 0;
                             const cgst = isFormInterState ? 0 : (item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseAmt * 0.09 * 100) / 100);
@@ -6192,7 +6347,7 @@ export default function InquiriesPage() {
                             );
                           })()}
                         </td>
-                        <td className="px-2 py-3.5 text-center">
+                        <td data-label="" className="px-2 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {formLineItems.length > 1 && (
                               <button
@@ -6310,28 +6465,42 @@ export default function InquiriesPage() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Payment Terms <span className="text-red-500 font-bold">*</span>
                   </label>
-                  <input
+                  <Select
                     id="form-payment-terms"
-                    type="text"
                     required
-                    placeholder="e.g. 30 Days Credit, 100% Advance"
                     value={formPaymentTerms}
                     onChange={e => setFormPaymentTerms(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                    placeholder="Select payment terms"
+                  >
+                    <option value="">Select payment terms</option>
+                    {INQUIRY_PAYMENT_TERMS.map((term) => (
+                      <option key={term} value={term}>{term}</option>
+                    ))}
+                    {formPaymentTerms && !INQUIRY_PAYMENT_TERMS.includes(formPaymentTerms) && (
+                      <option value={formPaymentTerms}>{formPaymentTerms}</option>
+                    )}
+                  </Select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Preferred Make</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. JSW, AM/NS, Tata, SAIL, or Any"
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Preferred Brand / Make</label>
+                  <Select
                     value={formPreferredMake}
                     onChange={e => setFormPreferredMake(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                    placeholder="Select preferred make"
+                  >
+                    <option value="">Select preferred make</option>
+                    {INQUIRY_PREFERRED_MAKES.map((make) => (
+                      <option key={make} value={make}>{make}</option>
+                    ))}
+                    {formPreferredMake && !INQUIRY_PREFERRED_MAKES.includes(formPreferredMake) && (
+                      <option value={formPreferredMake}>{formPreferredMake}</option>
+                    )}
+                  </Select>
                 </div>
 
                 <div>
@@ -6346,7 +6515,7 @@ export default function InquiriesPage() {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="sheet-actions pt-2 flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
                   onClick={handleCancelCreateInquiry}
@@ -6552,10 +6721,10 @@ export default function InquiriesPage() {
 
       {showProductListModal && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+          className="mobile-sheet-overlay fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
           onClick={() => setShowProductListModal(false)}>
           <div
-            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
+            className="mobile-sheet bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
               <h3 className="text-sm font-bold text-slate-900">Product List &amp; HSN Catalog</h3>
@@ -6567,7 +6736,7 @@ export default function InquiriesPage() {
               </button>
             </div>
             <div className="p-5 overflow-y-auto">
-              <table className="w-full border-collapse border border-slate-800 text-xs text-slate-900">
+              <table className="stack-table w-full border-collapse border border-slate-800 text-xs text-slate-900">
                 <thead>
                   <tr className="bg-slate-100 font-bold text-center">
                     <th className="border border-slate-800 px-3 py-2 w-[26%]">Product Name</th>
@@ -6649,7 +6818,7 @@ export default function InquiriesPage() {
       {/* Pipeline Mark as Lost Modal */}
       {pipelineLostModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-96 shadow-xl">
+          <div className="mobile-sheet bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
             <h3 className="text-lg font-bold text-gray-900 mb-1">Mark as Lost</h3>
             <p className="text-sm text-gray-500 mb-4">Please select a reason (required)</p>
             <div className="space-y-2 mb-4">
@@ -6741,7 +6910,7 @@ export default function InquiriesPage() {
         <div 
           onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-[360px] max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+          <div className="mobile-sheet bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-lg font-bold text-slate-900 mb-1">Mark as Lost</h3>
             <p className="text-sm text-slate-500 mb-4">Please select a reason (required)</p>
             <div className="space-y-2.5 mb-5">
@@ -6783,7 +6952,7 @@ export default function InquiriesPage() {
         <div
           onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-[420px] max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
+          <div className="mobile-sheet bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
                 <CheckCircle size={22} />

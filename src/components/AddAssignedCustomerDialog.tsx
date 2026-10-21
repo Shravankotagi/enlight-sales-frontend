@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { customersApi } from '../lib/api';
 import { INDIAN_GST_STATES, resolveCustomerState } from '../utils/pricingEngine';
+import { Select } from './ui/select';
 
 export function isCustomerInAssignedList(inputName: string, assignedList: string[]): boolean {
   if (!inputName || !inputName.trim()) return false;
@@ -143,9 +144,9 @@ export default function AddAssignedCustomerDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 p-5 space-y-3">
-        <div className="flex items-center justify-between">
+    <div className="mobile-sheet-overlay fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4">
+      <div className="mobile-sheet bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 p-5 space-y-3 overflow-y-auto">
+        <div className="sheet-header flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900">Add this customer</h3>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
             <X size={16} />
@@ -170,6 +171,8 @@ export default function AddAssignedCustomerDialog({
         <label className="block text-xs font-semibold text-slate-700">
           Mobile number <span className="text-red-500 font-bold">*</span>
           <input
+            type="tel"
+            inputMode="numeric"
             value={mobile}
             onChange={e => setMobile(e.target.value)}
             className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
@@ -183,7 +186,7 @@ export default function AddAssignedCustomerDialog({
             className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
           />
         </label>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <label className="block text-xs font-semibold text-slate-700">
             GSTIN
             <input
@@ -193,23 +196,25 @@ export default function AddAssignedCustomerDialog({
               className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
             />
           </label>
-          <label className="block text-xs font-semibold text-slate-700">
-            State (GST)
-            <select
+          <div className="block text-xs font-semibold text-slate-700">
+            <span className="block mb-1">State (GST)</span>
+            <Select
               value={customerState}
               onChange={e => {
                 setCustomerState(e.target.value);
                 setStateManuallyEdited(true);
               }}
-              className="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white hover:border-blue-400"
+              placeholder="Auto-detect"
+            >
               <option value="">Auto-detect</option>
               {INDIAN_GST_STATES.map(st => (
                 <option key={st.code} value={st.label}>
                   {st.label}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </div>
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg">

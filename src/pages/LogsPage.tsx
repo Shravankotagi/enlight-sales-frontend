@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { activityLogsApi } from '../lib/api';
+import { activityLogsApi, employeesApi } from '../lib/api';
+import { normalizeListResponse } from '../lib/queryKeys';
+import { formatIstDateTime, formatSessionDuration } from '../utils/istDateTime';
 import { useAuth } from '../context/AuthContext';
 import {
   Loader2,
@@ -12,7 +14,6 @@ import {
   AlertTriangle,
   Layers,
   User,
-  ChevronDown,
   Calendar,
   Check,
   History,
@@ -20,12 +21,22 @@ import {
 import { useState, useMemo } from 'react';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { type FilterPreset } from '../components/DateFilterControl';
+import { Select } from '../components/ui/select';
 
-type ModuleFilter = 'All' | 'Inquiries' | 'Orders' | 'Visits' | 'Complaints';
+type ModuleFilter = 'All' | 'Inquiries' | 'Orders' | 'Visits' | 'Complaints' | 'Auth' | 'Employees';
+type ActionFilter =
+  | 'all'
+  | 'login'
+  | 'logout'
+  | 'employee_activated'
+  | 'employee_deactivated'
+  | 'employee_deleted';
 
 export default function LogsPage() {
-  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const { effectivePhone, activeRole, activeMode, isAdmin } = useAuth();
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('All');
+  const [actionType, setActionType] = useState<ActionFilter>('all');
+  const [authPhone, setAuthPhone] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [datePreset, setDatePreset] = useState<FilterPreset>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -77,6 +88,8 @@ export default function LogsPage() {
     setModuleFilter('All');
     setDatePreset('all');
     setShowCustomDate(false);
+    setActionType('all');
+    setAuthPhone('');
     setCustomFrom('');
     setCustomTo('');
     setDateRange({
@@ -102,15 +115,19 @@ export default function LogsPage() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['activity-logs', effectivePhone, dateRange, moduleFilter, searchQuery, activeRole, activeMode],
+    queryKey: ['activity-logs', effectivePhone, dateRange, moduleFilter, actionType, authPhone, searchQuery, activeRole, activeMode],
     queryFn: () =>
       activityLogsApi
         .getAll({
-          salesperson_phone: effectivePhone || undefined,
+          salesperson_phone: (moduleFilter === 'Auth' && authPhone) || effectivePhone || undefined,
           mode: activeMode,
           from: fromDate,
           to: toDate,
           module: moduleFilter === 'All' ? undefined : moduleFilter,
+          action_type:
+            (moduleFilter === 'Auth' || moduleFilter === 'Employees') && actionType !== 'all'
+              ? actionType
+              : undefined,
           search: searchQuery.trim() || undefined,
           limit: 300,
         })
@@ -141,6 +158,16 @@ export default function LogsPage() {
           if (Array.isArray(raw?.data?.data)) return raw.data.data;
           return [];
         }),
+  });
+
+  const { data: authEmployees = [] } = useQuery({
+    queryKey: ['logs-auth-employees'],
+    enabled: isAdmin && moduleFilter === 'Auth',
+    queryFn: async () => {
+      const res = await employeesApi.getAll().catch(() => null);
+      return normalizeListResponse(res?.data) as { name?: string; phone?: string; role?: string }[];
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   const moduleCounts = useMemo(() => {
@@ -205,6 +232,14 @@ export default function LogsPage() {
         </span>
       );
     }
+    if (lowerMod === 'employees') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-amber-50 text-amber-800 border border-amber-200 uppercase shadow-2xs">
+          <User size={12} className="text-amber-700" />
+          User Management
+        </span>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider bg-slate-100 text-slate-700 border border-slate-200 uppercase">
         <Layers size={12} className="text-slate-500" />
@@ -227,6 +262,9 @@ export default function LogsPage() {
     if (lowerMod.includes('complaint')) {
       return 'border-rose-500 bg-rose-50 shadow-[0_0_8px_rgba(244,63,94,0.35)]';
     }
+    if (lowerMod === 'employees') {
+      return 'border-amber-500 bg-amber-50 shadow-[0_0_8px_rgba(245,158,11,0.35)]';
+    }
     return 'border-blue-500 bg-blue-50 shadow-[0_0_8px_rgba(59,130,246,0.35)]';
   };
 
@@ -246,18 +284,37 @@ export default function LogsPage() {
     }
   };
 
-  const formatDateTime = (timestampStr: string) => {
-    if (!timestampStr) return { date: '-', time: '', groupDate: '-' };
-    try {
-      const d = new Date(timestampStr);
-      return {
-        date: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-        time: d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase(),
-        groupDate: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase(),
-      };
-    } catch {
-      return { date: timestampStr, time: '', groupDate: timestampStr };
-    }
+  const formatDateTime = (timestampStr: string) => formatIstDateTime(timestampStr);
+
+  const exportAuthCsv = () => {
+    const cell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const header = ['Name', 'Employee ID', 'Activity', 'Date', 'Time', 'Session ID', 'Logout', 'Duration'];
+    const lines = (activityLogsData || []).map((log: any) => {
+      const when = formatIstDateTime(log.timestamp || log.created_at);
+      const activity = log.action_type === 'login' ? 'Login' : log.description || 'Logout';
+      const logout = log.action_type !== 'login'
+        ? ''
+        : log.logout_at
+          ? `${log.logout_status || 'Logout'} ${formatIstDateTime(log.logout_at).label}`
+          : log.logout_status || 'No logout recorded';
+      return [
+        log.salesperson_name,
+        log.change_detail?.employee_id,
+        activity,
+        when.date,
+        when.time,
+        log.entity_id,
+        logout,
+        formatSessionDuration(log.duration_minutes),
+      ].map(cell).join(',');
+    });
+    const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'login-logout-logs.csv';
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // Group logs by Date Header (e.g. 26 AUG 2026)
@@ -337,41 +394,87 @@ export default function LogsPage() {
           </div>
 
           {/* 2. Days Filter Dropdown (2nd Position with Calendar Icon) */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <Calendar size={14} className="absolute left-3 text-blue-600 pointer-events-none" />
-            <select
-              value={datePreset}
-              onChange={(e) => handleDatePresetChange(e.target.value as FilterPreset)}
-              className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-            >
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="7_days">Last 7 Days</option>
-              <option value="30_days">Last 30 Days</option>
-              <option value="90_days">Last 90 Days</option>
-              <option value="custom">Custom Range</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+          <Select
+            value={datePreset}
+            onChange={(e) => handleDatePresetChange(e.target.value as FilterPreset)}
+            prefixIcon={<Calendar size={14} className="text-blue-600" />}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-44"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7_days">Last 7 Days</option>
+            <option value="30_days">Last 30 Days</option>
+            <option value="90_days">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </Select>
 
           {/* 3. Module Dropdown Filter (3rd Position) */}
-          <div className="relative inline-flex items-center w-full sm:w-auto">
-            <select
-              value={moduleFilter}
-              onChange={(e) => setModuleFilter(e.target.value as ModuleFilter)}
-              className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
+          <Select
+            value={moduleFilter}
+            onChange={(e) => {
+              setModuleFilter(e.target.value as ModuleFilter);
+              setActionType('all');
+            }}
+            wrapperClassName="w-full sm:w-auto inline-flex"
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+            menuClassName="w-48"
+          >
+            <option value="All">All ({moduleCounts.All})</option>
+            <option value="Inquiries">Inquiries ({moduleCounts.Inquiries})</option>
+            <option value="Orders">Orders ({moduleCounts.Orders})</option>
+            <option value="Visits">Visits ({moduleCounts.Visits})</option>
+            <option value="Complaints">Complaints ({moduleCounts.Complaints})</option>
+            {isAdmin && <option value="Auth">Login / Logout</option>}
+            {isAdmin && <option value="Employees">User Management</option>}
+          </Select>
+
+          {isAdmin && (moduleFilter === 'Auth' || moduleFilter === 'Employees') && (
+            <Select
+              value={actionType}
+              onChange={(e) => setActionType(e.target.value as ActionFilter)}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-44"
             >
-              <option value="All">All ({moduleCounts.All})</option>
-              <option value="Inquiries">Inquiries ({moduleCounts.Inquiries})</option>
-              <option value="Orders">Orders ({moduleCounts.Orders})</option>
-              <option value="Visits">Visits ({moduleCounts.Visits})</option>
-              <option value="Complaints">Complaints ({moduleCounts.Complaints})</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
-          </div>
+              <option value="all">{moduleFilter === 'Auth' ? 'All activity' : 'All actions'}</option>
+              {moduleFilter === 'Auth' ? (
+                <>
+                  <option value="login">Login</option>
+                  <option value="logout">Logout</option>
+                </>
+              ) : (
+                <>
+                  <option value="employee_activated">Activated</option>
+                  <option value="employee_deactivated">Deactivated</option>
+                  <option value="employee_deleted">Deleted</option>
+                </>
+              )}
+            </Select>
+          )}
+
+          {isAdmin && moduleFilter === 'Auth' && (
+            <Select
+              value={authPhone}
+              onChange={(e) => setAuthPhone(e.target.value)}
+                wrapperClassName="w-full sm:w-auto inline-flex"
+                className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+                menuClassName="w-52"
+              >
+                <option value="">All salespersons</option>
+                {authEmployees
+                  .filter((emp) => emp.phone && emp.name)
+                  .map((emp) => (
+                    <option key={emp.phone} value={emp.phone}>
+                      {emp.name}
+                    </option>
+                  ))}
+              </Select>
+          )}
 
           {/* 4. Clear Filter Button (4th Position) */}
-          {(searchQuery || moduleFilter !== 'All' || datePreset !== 'all') && (
+          {(searchQuery || moduleFilter !== 'All' || datePreset !== 'all' || actionType !== 'all' || authPhone) && (
             <button
               type="button"
               onClick={handleClearAllFilters}
@@ -384,6 +487,15 @@ export default function LogsPage() {
 
         {/* 5. Refresh Button Right-Aligned */}
         <div className="flex items-center gap-2 ml-auto">
+          {isAdmin && moduleFilter === 'Auth' && (
+            <button
+              type="button"
+              onClick={exportAuthCsv}
+              className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs cursor-pointer"
+            >
+              Export CSV
+            </button>
+          )}
           <button
             onClick={() => refetch()}
             className="p-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-xl transition-all shadow-2xs cursor-pointer flex items-center justify-center"
@@ -430,7 +542,7 @@ export default function LogsPage() {
           <p className="text-xs text-slate-500 font-medium">Loading activity stream...</p>
         </div>
       ) : !activityLogsData || activityLogsData.length === 0 ? (
-        <div className="min-h-[calc(100vh-16rem)] bg-white border border-slate-200 rounded-2xl px-6 shadow-2xs flex flex-col items-center justify-center text-center">
+        <div className="min-h-[calc(100dvh-16rem)] bg-white border border-slate-200 rounded-2xl px-6 shadow-2xs flex flex-col items-center justify-center text-center">
           <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center mx-auto mb-3">
             <RefreshCw size={22} className="rotate-45" />
           </div>
@@ -495,6 +607,14 @@ export default function LogsPage() {
                               </span>
                             </div>
                           </div>
+                              {String(log.module || '').toLowerCase() === 'auth' && log.action_type === 'login' && (
+                                <span className="text-slate-500">
+                                  {log.logout_at
+                                    ? `${log.logout_status || 'Logout'} · ${formatIstDateTime(log.logout_at).label}`
+                                    : 'No logout recorded'}
+                                  {log.duration_minutes != null && ` · ${formatSessionDuration(log.duration_minutes)}`}
+                                </span>
+                              )}
 
                           {/* Right: Date, Time & Relative Time Badge */}
                           <div className="shrink-0 text-left sm:text-right text-xs font-mono flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">

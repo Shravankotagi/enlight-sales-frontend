@@ -25,6 +25,7 @@ interface CustomerComboboxProps {
   required?: boolean;
   disabled?: boolean;
   className?: string;
+  allowNew?: boolean;
 }
 
 export default function CustomerCombobox({
@@ -36,6 +37,7 @@ export default function CustomerCombobox({
   required = false,
   disabled = false,
   className = '',
+  allowNew = true,
 }: CustomerComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
@@ -167,9 +169,9 @@ export default function CustomerCombobox({
 
       {/* Dropdown Menu */}
       {isOpen && !disabled && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in-50 duration-100">
+        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 max-sm:max-h-[50dvh] overflow-y-auto divide-y divide-slate-100 animate-in fade-in-50 duration-100">
           {/* If typing a new name not in existing list, show "Add new" hint at top */}
-          {value.trim() && !hasExactMatch && (
+          {allowNew && value.trim() && !hasExactMatch && (
             <div
               onClick={() => {
                 setIsOpen(false);
@@ -184,8 +186,12 @@ export default function CustomerCombobox({
           {filteredCustomers.length === 0 ? (
             <div className="p-4 text-center text-xs text-slate-400 space-y-1">
               <Building2 size={24} className="mx-auto text-slate-300 mb-1" />
-              <p className="font-medium text-slate-600">No matching pre-existing customers</p>
-              <p className="text-slate-400">You can continue typing to log this as a new customer.</p>
+              <p className="font-medium text-slate-600">No matching customers</p>
+              {allowNew ? (
+                <p className="text-slate-400">You can continue typing to log this as a new customer.</p>
+              ) : (
+                <p className="text-slate-400">Select a company from the assigned customer list.</p>
+              )}
             </div>
           ) : (
             filteredCustomers.map((cust, idx) => {
@@ -197,7 +203,7 @@ export default function CustomerCombobox({
                   key={cust.id || `${cust.customer_name}-${idx}`}
                   onClick={() => handleSelect(cust)}
                   onMouseEnter={() => setHighlightedIndex(idx)}
-                  className={`px-3 py-2.5 cursor-pointer text-left transition-colors flex items-center justify-between text-xs font-medium ${
+                  className={`px-3 py-2.5 max-sm:min-h-11 cursor-pointer text-left transition-colors flex items-center justify-between text-xs font-medium ${
                     isHighlighted
                       ? 'bg-blue-50 text-blue-900 font-semibold'
                       : isSelected

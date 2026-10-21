@@ -1,3 +1,5 @@
 # Visit agent
 
 `src/agents/visitAgent.js` creates and updates customer visits, extended fields, follow-ups, and visit-related customer handling. It writes `customer_visits` and may derive `followup_tasks`/KRA effects. Dates, actor ownership, and editable/non-editable field rules are important; test create, update, follow-up completion, and exact retrieval.
+
+A new visit from this agent or from `LOG_VISIT` asks for every required detail in one message. A later message asks only for the details that are still missing. It requires the dashboard lists for customer type, visit type, outcome (Positive, Neutral, or Negative), probability, brand, and payment terms, plus a camera photo and either GPS coordinates or a typed city. When GPS coordinates are present and the city is still empty, Google Geocoding stores the building name and street when Google returns them. The customer code is stored in `visit_phone_verifications` and the visit row stores `phone_verified`, `phone_verified_at`, `location_source`, `visit_latitude`, `visit_longitude`, and `preferred_make_other`. The insert is not retried without those columns. Updates of an existing visit do not use the code.
