@@ -96,6 +96,14 @@ const TECHNICAL_PAYLOAD_DISPLAY_MAP: Record<string, string> = {
   btn_resume_yes: 'Yes, Continue',
   btn_resume_no: 'No, Go to Menu',
   btn_att_no: 'No',
+
+  proc_1: 'Pending prices',
+  proc_2: 'Current inquiries',
+  proc_3: 'Log a Base Price',
+  proc_4: 'My team',
+
+  menu_price: 'Add Price to Inquiry',
+  btn_price_save: 'Save',
 };
 
 export function formatUserDisplayMessage(content?: string): string {
@@ -106,6 +114,8 @@ export function formatUserDisplayMessage(content?: string): string {
   if (TECHNICAL_PAYLOAD_DISPLAY_MAP[lower]) {
     return TECHNICAL_PAYLOAD_DISPLAY_MAP[lower];
   }
+
+  if (lower.startsWith('btn_price_current')) return 'Price the current inquiry';
 
   // Dynamic fallback for any pattern like menu_X or btn_repeat_X
   if (/^menu_([1-9]|10)$/i.test(lower)) {
@@ -187,6 +197,8 @@ export default function AssistantPage() {
   const role = (activeEmployee?.role || 'salesperson').toLowerCase();
   const isManagerOrAdmin =
     role === 'manager' || role === 'sales_manager' || role === 'admin';
+  const isProcurement =
+    role === 'procurement_person' || role === 'procurement_manager';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -360,9 +372,10 @@ export default function AssistantPage() {
     if ((!textToSend && !selectedPhoto) || loading) return;
 
     const isPdfAttachment = selectedPhoto?.file.type === 'application/pdf';
-    let userDisplayText = displayTitle ||
-      formatUserDisplayMessage(textToSend) ||
-      (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : '');
+    const mappedSend = formatUserDisplayMessage(textToSend);
+    let userDisplayText = mappedSend !== textToSend
+      ? mappedSend
+      : (displayTitle || mappedSend || (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : ''));
 
     // Parity with WhatsApp list selection: if user typed a menu number (1–10) while looking at the Catalog Menu
     if (!promptTextOverride && textToSend) {
@@ -373,7 +386,7 @@ export default function AssistantPage() {
         lastAssistantMsg.interactiveList.sections.length > 0;
 
       if (isAwaitingCatalogMenu) {
-        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?([1-9]|10)\.?$/i);
+        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?(11|10|[1-9])\.?$/i);
         if (numMatch) {
           const selectedNum = numMatch[1];
           for (const sec of lastAssistantMsg.interactiveList?.sections || []) {
@@ -382,7 +395,8 @@ export default function AssistantPage() {
             );
             if (foundRow) {
               textToSend = foundRow.id || `menu_${selectedNum}`;
-              userDisplayText = foundRow.title;
+              userDisplayText = formatUserDisplayMessage(textToSend);
+              if (userDisplayText === textToSend) userDisplayText = foundRow.title;
               break;
             }
           }
@@ -512,7 +526,16 @@ export default function AssistantPage() {
   };
 
   // Quick prompt suggestions based on role
-  const quickPrompts = isManagerOrAdmin
+  const quickPrompts = isProcurement
+    ? [
+        { label: 'Pending prices', text: 'pending prices', icon: TrendingUp },
+        { label: 'Current inquiries', text: 'current inquiries', icon: Search },
+        { label: 'Log a base price', text: 'log a base price', icon: FileText },
+        ...(role === 'procurement_manager'
+          ? [{ label: 'My team', text: 'my team', icon: Users }]
+          : []),
+      ]
+    : isManagerOrAdmin
     ? [
         { label: 'Team Pipeline Summary', text: 'Show me the team pipeline summary and grand value across sales reps.', icon: TrendingUp },
         { label: 'Customer Churn Radar', text: 'Which customer accounts have high or medium churn risk right now?', icon: Users },
@@ -567,7 +590,19 @@ export default function AssistantPage() {
         } else if (raw.includes('To start an activity, please select')) {
           prefix = 'To start an activity, please select the relevant option from the menu below:\n\n';
         }
-        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–10) or type what you'd like to do.`;
+        const rowCount = (msg.interactiveList?.sections || []).reduce(
+          (sum, section) => sum + (section.rows?.length || 0),
+          0,
+        );
+        const range = rowCount > 1 ? rowCount : 10;
+        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–${range}) or type what you'd like to do.`;
+      }
+      if (raw.includes('Procurement assistant') && raw.includes('Pending prices')) {
+        const prefix = raw.includes('procurement manager')
+          ? raw.split('Procurement assistant')[0].trim()
+          : '';
+        const intro = 'Procurement assistant. Choose an action.';
+        return prefix ? `${prefix}\n\n${intro}` : intro;
       }
     }
     return raw;
@@ -591,7 +626,9 @@ export default function AssistantPage() {
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              Conversational Sales OS & Knowledge Base RAG Assistant
+              {isProcurement
+                ? 'Pending prices, current inquiries, and base prices'
+                : 'Conversational Sales OS & Knowledge Base RAG Assistant'}
             </p>
           </div>
         </div>
@@ -742,7 +779,9 @@ export default function AssistantPage() {
                     Welcome to Enlight Sales OS Assistant
                   </h2>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.
+                    {isProcurement
+                      ? 'List pending or current inquiries, or log a base price in rupees per MT.'
+                      : 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'}
                   </p>
                 </div>
 
@@ -1012,7 +1051,7 @@ export default function AssistantPage() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder={selectedPhoto ? "Add notes for this attachment..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
+                placeholder={selectedPhoto ? "Add notes for this attachment..." : isProcurement ? "Reply with a procurement number or a menu choice..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
                 className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />

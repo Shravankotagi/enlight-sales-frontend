@@ -236,7 +236,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     { path: '/logs', label: 'Logs', icon: History },
   ];
   const visibleNavItems = isProcurement
-    ? navItems.filter((item) => item.path === '/inquiries')
+    ? navItems.filter((item) => item.path === '/inquiries' || item.path === '/assistant')
     : navItems;
 
   // Hover enlargement only active when sidebar is OPEN and user hovers over it

@@ -6,8 +6,8 @@ Supabase is the operational store. Calls to `supabase.from()` are the live autho
 
 | Family | Main tables | Used for |
 |---|---|---|
-| Commercial | `inquiries` (`procurement_employee_id`, `procurement_assigned_at`), `inquiry_items`, `deals`, `deal_items`, `rate_sheets`, `rate_sheet_items`, `floor_margins`, `products` | quotation, negotiation, system PO, won orders, pricing, procurement base price management |
-| CRM | `recurring_customers`, `employees` (`permissions`), `customer_visits`, `followup_tasks`, `crm_sync_log`, `visit_phone_verifications` | customer ownership, employee roles and UI ACL permissions (`permissions` JSONB), field visits, team scope, Bigin sync, visit phone codes |
+| Commercial | `inquiries` (`procurement_employee_id`, `procurement_assigned_at`, `procurement_number`, `pricing_status`, `procurement_note`), `inquiry_line_pricing`, `inquiry_items`, `deals`, `deal_items`, `rate_sheets`, `rate_sheet_items`, `floor_margins`, `products` | quotation, negotiation, system PO, won orders, pricing, procurement base price management |
+| CRM | `recurring_customers`, `employees` (`permissions`, `assigned_procurement_employee_id`), `customer_visits`, `followup_tasks`, `crm_sync_log`, `visit_phone_verifications` | customer ownership, employee roles and UI ACL permissions (`permissions` JSONB), field visits, team scope, salesperson-to-procurement routing, Bigin sync, visit phone codes |
 | Operations | `complaints`, `complaint_attachments`, `payment_tracking`, `activity_logs`, `audit_log` | post-sales work and auditable activity |
 | Assistant | `conversation_sessions`, `chat_sessions`, `chat_messages`, `kb_documents`, `kb_chunks`, `daily_llm_usage` | assistant history, retrieval, knowledge base, quotas |
 | Metrics | `kra_logs` | KRA calculation and dashboard data |

@@ -33,6 +33,8 @@ interface AuthContextType {
   effectivePhone: string | null;
   activeRole: string;
   activeMode?: string;
+  prototypeRole: 'admin' | 'salesperson' | 'procurement' | null;
+  setPrototypeRole: (role: 'admin' | 'salesperson' | 'procurement' | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -49,10 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const saved = sessionStorage.getItem('enlight_viewing_as');
     return saved ? JSON.parse(saved) : null;
   });
+  const [prototypeRole, setPrototypeRoleState] = useState<'admin' | 'salesperson' | 'procurement' | null>(() => {
+    const saved = sessionStorage.getItem('enlight_prototype_role');
+    return saved === 'admin' || saved === 'salesperson' || saved === 'procurement' ? saved : null;
+  });
 
   useEffect(() => {
     const handlePopState = () => {
-      if (window.location.pathname === '/admin' || window.location.pathname === '/control-panel') {
+      if (window.location.pathname === '/admin') {
         sessionStorage.removeItem('enlight_viewing_as');
         sessionStorage.removeItem('enlight_active_chat_session_id');
         setViewingAsState(null);
@@ -123,7 +129,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setViewingAsState(null);
   };
 
-  const isAdmin = employee?.role === 'admin';
+  const setPrototypeRole = (role: 'admin' | 'salesperson' | 'procurement' | null) => {
+    if (role) sessionStorage.setItem('enlight_prototype_role', role);
+    else sessionStorage.removeItem('enlight_prototype_role');
+    setPrototypeRoleState(role);
+  };
+
+  const effectiveRole = employee?.role;
+  const isAdmin = effectiveRole === 'admin' || effectiveRole === 'super_admin';
   const isSalesManager =
     employee?.role === 'sales_manager' || employee?.role === 'manager';
   const isProcurementManager = employee?.role === 'procurement_manager';
@@ -176,6 +189,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         effectivePhone,
         activeRole,
         activeMode,
+        prototypeRole,
+        setPrototypeRole,
       }}
     >
       {children}

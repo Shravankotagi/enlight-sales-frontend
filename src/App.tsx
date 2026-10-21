@@ -66,7 +66,7 @@ function AppRoutes() {
         element={
           !isAuthenticated ? (
             <Navigate to="/login" replace />
-          ) : isProcurement && location.pathname !== '/inquiries' ? (
+          ) : isProcurement && location.pathname !== '/inquiries' && location.pathname !== '/assistant' ? (
             <Navigate to="/inquiries" replace />
           ) : (
             <Layout />
@@ -78,6 +78,7 @@ function AppRoutes() {
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/pipeline" element={<Navigate to="/inquiries?view=pipeline" replace />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
+        <Route path="/procurement" element={<Navigate to="/inquiries" replace />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/customers/:id" element={<CustomerProfilePage />} />
