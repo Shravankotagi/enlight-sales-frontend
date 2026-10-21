@@ -39,6 +39,7 @@ import CustomerCombobox, { type CustomerDirectoryItem } from '../components/Cust
 import DealProductCombobox, { type SelectedDealItem } from '../components/DealProductCombobox';
 import PaginationControl from '../components/PaginationControl';
 import { Select } from '../components/ui/select';
+import { buildInquiryScopeParams } from '../utils/inquiryScope';
 
 export interface ComplaintAttachment {
   id?: string;
@@ -253,10 +254,11 @@ export default function ComplaintsPage() {
     }
   }, [canViewSalesperson]);
 
-  // Fetch customers directory
+  // Fetch the same assigned-customer list the inquiry form uses
   useEffect(() => {
+    const params = buildInquiryScopeParams(effectivePhone, activeMode);
     customersApi
-      .getAll()
+      .getAll(params)
       .then(res => {
         const raw = res?.data;
         const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
@@ -266,7 +268,7 @@ export default function ComplaintsPage() {
         console.error('Error fetching customers directory:', err);
         setCustomers([]);
       });
-  }, []);
+  }, [effectivePhone, activeMode]);
 
   const employeeMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -284,7 +286,8 @@ export default function ComplaintsPage() {
 
     customers.forEach(c => {
       const rawName = (c?.customer_name || c?.name || '').trim();
-      if (!rawName) return;
+      const assignedPhone = String(c?.assigned_salesperson_phone || '').trim();
+      if (!rawName || !assignedPhone || assignedPhone === 'unassigned' || assignedPhone === 'null') return;
       dirMap.set(rawName.toLowerCase(), {
         id: c.id,
         customer_name: rawName,
@@ -293,22 +296,10 @@ export default function ComplaintsPage() {
       });
     });
 
-    complaints.forEach(c => {
-      const rawName = (c?.customer_name || '').trim();
-      if (!rawName) return;
-      const key = rawName.toLowerCase();
-      if (!dirMap.has(key)) {
-        dirMap.set(key, {
-          id: c.id,
-          customer_name: rawName,
-        });
-      }
-    });
-
     return Array.from(dirMap.values()).sort((a, b) =>
       a.customer_name.localeCompare(b.customer_name)
     );
-  }, [customers, complaints]);
+  }, [customers]);
 
   // Fetch won deals when customer is chosen in Create Form
   useEffect(() => {
@@ -621,7 +612,10 @@ export default function ComplaintsPage() {
     e.preventDefault();
 
     const errors: Record<string, boolean> = {};
-    if (!formCustomerName.trim()) errors.customerName = true;
+    const selectedCustomer = customerDirectory.some(
+      (c) => c.customer_name.trim().toLowerCase() === formCustomerName.trim().toLowerCase(),
+    );
+    if (!selectedCustomer) errors.customerName = true;
     if (!formComplaintDate) errors.complaintDate = true;
     if (!formRaisedBy.trim()) errors.raisedBy = true;
     if (formSelectedDeals.length === 0) errors.deals = true;
@@ -633,7 +627,9 @@ export default function ComplaintsPage() {
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      if (errors.deals) {
+      if (errors.customerName) {
+        toast.error('Select a company from the assigned customer list.');
+      } else if (errors.deals) {
         toast.error('Please select at least one Won Deal / PO & Product.');
       } else if (errors.complaintDate) {
         toast.error('Complaint Date is required.');
@@ -1227,7 +1223,7 @@ export default function ComplaintsPage() {
           className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
           onClick={handleCloseComplaintModal}>
           <div
-            className="mobile-sheet bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto space-y-3.5"
+            className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto space-y-3.5"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
@@ -1794,7 +1790,7 @@ export default function ComplaintsPage() {
       {/* Log Complaint Modal */}
       {showCreateModal && (
         <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] my-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <AlertTriangle className="text-blue-600" size={18} />
@@ -1825,11 +1821,12 @@ export default function ComplaintsPage() {
                       }}
                       onSelectCustomer={handleSelectCustomerForCreate}
                       customers={customerDirectory}
-                      placeholder="Search or enter company name..."
+                      placeholder="Search and select a company..."
+                      allowNew={false}
                       required
                     />
                     {formErrors.customerName && (
-                      <p className="text-[11px] text-rose-500 font-semibold mt-0.5">Please select customer name.</p>
+                      <p className="text-[11px] text-rose-500 font-semibold mt-0.5">Select a company from the list.</p>
                     )}
                   </div>
 

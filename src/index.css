@@ -148,14 +148,14 @@ option {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
   .quotation-share-overlay {
-    padding: max(1.25rem, env(safe-area-inset-top)) 0.75rem 0.75rem !important;
+    padding: max(1.25rem, env(safe-area-inset-top)) 0.75rem 1.25rem !important;
     align-items: flex-start !important;
   }
   .quotation-share-sheet {
     height: auto !important;
-    max-height: calc(100dvh - 2.5rem) !important;
+    max-height: calc(100svh - 6rem) !important;
     border-radius: 1rem !important;
-    margin: 0.5rem 0 0 !important;
+    margin: 0.5rem 0 0.75rem !important;
   }
 }
 
