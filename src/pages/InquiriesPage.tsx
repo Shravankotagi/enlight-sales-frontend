@@ -1355,11 +1355,13 @@ function DealCard({
   onStageChange,
   onDelete,
   onClick,
+  canDelete = false,
 }: {
   deal: any;
   onStageChange: (id: string, stage: string, cardDeal?: any) => void;
   onDelete: (deal: any) => void;
   onClick?: () => void;
+  canDelete?: boolean;
 }) {
   const currentStage = (deal.stage || "new_inquiry").toLowerCase().trim();
   const isWon = currentStage === "won";
@@ -1376,13 +1378,13 @@ function DealCard({
             : "bg-white border-gray-200"
       }`}
     >
-      <div className="flex items-start justify-between mb-2 gap-1">
-        <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
+      <div className="flex items-start justify-between mb-2 gap-1.5">
+        <h4 className="text-sm font-semibold text-gray-800 leading-tight flex-1 min-w-0 line-clamp-2 break-words">
           {deal.customer_name || "Unknown Customer"}
         </h4>
         <div className="flex items-center gap-1 shrink-0">
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+            className={`text-xs px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${
               isWon
                 ? "bg-emerald-100 text-emerald-800 border-emerald-200"
                 : isLost
@@ -1400,17 +1402,19 @@ function DealCard({
                   ? "PO"
                   : "Inquiry"}
           </span>
-          <button
-            type="button"
-            title="Delete this deal and all records"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(deal);
-            }}
-            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
-          >
-            <Trash2 size={13} />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              title="Delete this deal and all records"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(deal);
+              }}
+              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1527,18 +1531,19 @@ function DealCard({
           ))}
       </div>
 
-      <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-        <span className="text-gray-400 font-medium">
-          {new Date(deal.created_at).toLocaleDateString("en-IN")}
+      <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between gap-1.5 text-xs">
+        <span className="text-gray-400 font-medium text-[11px] whitespace-nowrap shrink-0">
+          {deal.created_at
+            ? new Date(deal.created_at).toLocaleDateString("en-IN")
+            : ""}
         </span>
-        <div className="flex items-center gap-1.5">
-          <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded tracking-wide uppercase">
-            #
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded tracking-tight text-[11px] uppercase whitespace-nowrap shrink-0">
             {deal.deal_number
-              ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, "INQ-")
+              ? `#${deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, "INQ-")}`
               : deal.id
-                ? `INQ-${deal.id.substring(0, 6).toUpperCase()}`
-                : "INQ"}
+                ? `#INQ-${deal.id.substring(0, 6).toUpperCase()}`
+                : "#INQ"}
           </span>
         </div>
       </div>
@@ -2519,16 +2524,29 @@ export default function InquiriesPage() {
   }, [wonModal?.poNumber, wonModal?.poReservationToken, wonModal?.dealId]);
 
   const deleteDealMutation = useMutation({
-    mutationFn: (id: string) => dealsApi.delete(id),
-    onSuccess: () => {
+    mutationFn: async (id: string) => {
+      const targetInqId =
+        confirmDeleteDeal?.inquiry_id || confirmDeleteDeal?.rawInquiry?.id;
+      if (targetInqId) {
+        try {
+          return await inquiriesApi.delete(targetInqId);
+        } catch {
+          return await dealsApi.delete(id);
+        }
+      }
+      return await dealsApi.delete(id);
+    },
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["deals"] });
       queryClient.invalidateQueries({ queryKey: ["kanban"] });
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
       queryClient.invalidateQueries({ queryKey: ["kra-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["orders-list"] });
       queryClient.invalidateQueries({ queryKey: ["inquiries-list"] });
+      queryClient.invalidateQueries({ queryKey: ["inquiries"] });
       toast.success("Deal and all associated records deleted successfully");
       setConfirmDeleteDeal(null);
+      await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || "Failed to delete deal");
@@ -5026,11 +5044,11 @@ export default function InquiriesPage() {
       {viewMode === "pipeline" ? (
         /* Kanban Board View */
         <div className="flex-1 min-h-0 overflow-auto pb-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-[1250px] xl:min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-[1360px] 2xl:min-w-0">
             {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
               <div
                 key={key}
-                className={`rounded-xl border-2 ${color} p-3 flex flex-col min-w-[190px]`}
+                className={`rounded-xl border-2 ${color} p-3 flex flex-col min-w-[210px]`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-700 text-sm">
@@ -5051,7 +5069,11 @@ export default function InquiriesPage() {
                       onStageChange={(id, stage, cardDeal) =>
                         handlePipelineStageChange(id, stage, cardDeal || deal)
                       }
-                      onDelete={(d) => setConfirmDeleteDeal(d)}
+                      onDelete={(d) => {
+                        if (!guardAction('inquiries.delete')) return;
+                        setConfirmDeleteDeal(d);
+                      }}
+                      canDelete={can('inquiries.delete')}
                     />
                   ))}
                   {(!pipelineBoard[key] || pipelineBoard[key].length === 0) && (
