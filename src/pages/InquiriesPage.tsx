@@ -53,6 +53,7 @@ import AddAssignedCustomerDialog, {
   isCustomerInAssignedList,
 } from "../components/AddAssignedCustomerDialog";
 import PaginationControl from "../components/PaginationControl";
+import { Select } from "../components/ui/select";
 import { normalizeListResponse, queryKeys } from "../lib/queryKeys";
 import { useAuth } from "../context/AuthContext";
 import { getDaysAgo, formatLocalDate } from "../utils/dateUtils";
@@ -1676,6 +1677,9 @@ export function resolveInquiryDealStageKey(
 
 const EMPTY_INQUIRIES: InquiryItem[] = [];
 const EMPTY_CUSTOMER_NAMES: string[] = [];
+
+const INQUIRY_PREFERRED_MAKES = ['TATA', 'JSW', 'AM/NS India', 'SAIL', 'NMDC', 'Apollo', 'Others'];
+const INQUIRY_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
@@ -4114,12 +4118,13 @@ export default function InquiriesPage() {
     }
 
     if (!formPaymentTerms.trim()) {
-      const el = document.getElementById(
-        "form-payment-terms",
-      ) as HTMLInputElement;
+      toast.error("Please select payment terms");
+      const el = document.getElementById("form-payment-terms");
       if (el) {
         el.focus();
-        el.reportValidity();
+        if (typeof (el as any).reportValidity === "function") {
+          (el as any).reportValidity();
+        }
       }
       return;
     }
@@ -4881,58 +4886,47 @@ export default function InquiriesPage() {
             </div>
 
             {/* 2. Days Filter Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Calendar
-                size={14}
-                className="absolute left-3 text-blue-600 pointer-events-none"
-              />
-              <select
-                value={dayPreset}
-                onChange={(e) => handleDayPresetChange(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="7_days">Last 7 Days</option>
-                <option value="30_days">Last 30 Days</option>
-                <option value="90_days">Last 90 Days</option>
-                <option value="custom">Custom Range</option>
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-2.5 text-slate-400 pointer-events-none"
-              />
-            </div>
+            <Select
+              value={dayPreset}
+              onChange={(e) => handleDayPresetChange(e.target.value)}
+              prefixIcon={<Calendar size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-44"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </Select>
 
             {/* 3. Status Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-              >
-                <option value="all">All ({stageCounts.all})</option>
-                <option value="awaiting_price">Awaiting Price</option>
-                <option value="price_ready">Price Ready</option>
+            <Select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All ({stageCounts.all})</option>
+              <option value="awaiting_price">Awaiting Price</option>
+              <option value="price_ready">Price Ready</option>
               <option value="unavailable">Unavailable</option>
-                <option value="new_inquiry">
-                  New Inquiry ({stageCounts.new_inquiry})
-                </option>
-                <option value="quoted">
-                  Price Quote ({stageCounts.quoted})
-                </option>
-                <option value="negotiation">
-                  Negotiation ({stageCounts.negotiation})
-                </option>
-                <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
-                <option value="won">Won ({stageCounts.won})</option>
-                <option value="lost">Lost ({stageCounts.lost})</option>
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-2.5 text-slate-400 pointer-events-none"
-              />
-            </div>
+              <option value="new_inquiry">
+                New Inquiry ({stageCounts.new_inquiry})
+              </option>
+              <option value="quoted">
+                Price Quote ({stageCounts.quoted})
+              </option>
+              <option value="negotiation">
+                Negotiation ({stageCounts.negotiation})
+              </option>
+              <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
+              <option value="won">Won ({stageCounts.won})</option>
+              <option value="lost">Lost ({stageCounts.lost})</option>
+            </Select>
 
             {/* 4. Clear Filter Button */}
             {(searchTerm || filterStatus !== "all" || dayPreset !== "all") && (
@@ -8652,30 +8646,54 @@ export default function InquiriesPage() {
                     Payment Terms{" "}
                     <span className="text-red-500 font-bold">*</span>
                   </label>
-                  <input
+                  <Select
                     id="form-payment-terms"
-                    type="text"
                     required
-                    placeholder="e.g. 30 Days Credit, 100% Advance"
                     value={formPaymentTerms}
                     onChange={(e) => setFormPaymentTerms(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                    placeholder="Select payment terms"
+                  >
+                    <option value="">Select payment terms</option>
+                    {INQUIRY_PAYMENT_TERMS.map((term) => (
+                      <option key={term} value={term}>
+                        {term}
+                      </option>
+                    ))}
+                    {formPaymentTerms &&
+                      !INQUIRY_PAYMENT_TERMS.includes(formPaymentTerms) && (
+                        <option value={formPaymentTerms}>
+                          {formPaymentTerms}
+                        </option>
+                      )}
+                  </Select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Preferred Make
+                    Preferred Brand / Make
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. JSW, AM/NS, Tata, SAIL, or Any"
+                  <Select
                     value={formPreferredMake}
                     onChange={(e) => setFormPreferredMake(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                    placeholder="Select preferred make"
+                  >
+                    <option value="">Select preferred make</option>
+                    {INQUIRY_PREFERRED_MAKES.map((make) => (
+                      <option key={make} value={make}>
+                        {make}
+                      </option>
+                    ))}
+                    {formPreferredMake &&
+                      !INQUIRY_PREFERRED_MAKES.includes(formPreferredMake) && (
+                        <option value={formPreferredMake}>
+                          {formPreferredMake}
+                        </option>
+                      )}
+                  </Select>
                 </div>
 
                 <div>

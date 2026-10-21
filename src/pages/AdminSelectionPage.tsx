@@ -19,7 +19,6 @@ import {
   ArrowRight,
   Phone,
   Mail,
-  Calendar,
   CheckCircle2,
   TrendingUp,
   Building2,
@@ -473,10 +472,7 @@ export default function AdminSelectionPage() {
 
   const pageTitle = isSalesManager
     ? 'Sales Manager Portal'
-    : 'Admin Control Center';
-  const pageSubtitle = isSalesManager
-    ? `Manage and monitor your assigned sales team · ${employee?.name}`
-    : `Executive employee & admin account management · ${employee?.name}`;
+    : 'User Management';
 
   // Filter accounts based on search query and role filter
   const filteredEmployees = employees.filter((emp) => {
@@ -513,13 +509,6 @@ export default function AdminSelectionPage() {
       e.role === 'procurement_person' || e.role === 'procurement_manager',
   ).length;
 
-  const todayStr = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
   return (
     <div className={isAdmin ? 'space-y-4 animate-fade-in font-sans text-slate-900 pb-8' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
       <div className={isAdmin ? 'space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
@@ -539,17 +528,6 @@ export default function AdminSelectionPage() {
                     <CheckCircle2 size={12} /> {isAdmin ? 'Super Admin System Authority' : 'Assigned Team Authority'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {pageSubtitle}
-                </p>
-                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-medium flex-wrap">
-                  <Calendar size={13} className="text-slate-400" />
-                  <span>{todayStr}</span>
-                  <span className="text-slate-300">·</span>
-                  <span>
-                    Signed in as <strong className="text-slate-700">{employee?.name}</strong> ({employee?.employee_id})
-                  </span>
-                </p>
               </div>
             </div>
 
@@ -584,25 +562,6 @@ export default function AdminSelectionPage() {
 
               {isAdmin && (
                 <>
-                  <button
-                    onClick={handleViewPersonalDashboard}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-blue-500/20 active:scale-95 cursor-pointer"
-                    title="Switch to My Personal Salesperson Dashboard (Your Individual Accounts & Targets)"
-                  >
-                    <UserCheck size={15} />
-                    <span>My Salesperson Dashboard</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      clearViewingAs();
-                      navigate('/admin-dashboard');
-                    }}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="Open Company-wide Admin Overview Dashboard"
-                  >
-                    <ShieldAlert size={15} className="text-blue-600" />
-                    <span>Admin Overview</span>
-                  </button>
                   <button
                     onClick={() => setShowRolesMatrixModal(true)}
                     className="h-9 flex items-center gap-2 px-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
@@ -732,68 +691,6 @@ export default function AdminSelectionPage() {
             </div>
           </div>
         </div>
-
-        {/* Executive Launch Banners (Personal Workspace vs Company Overview) */}
-        {isAdmin && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Banner 1: Personal Salesperson Workspace */}
-            <div
-              onClick={handleViewPersonalDashboard}
-              className="bg-white hover:bg-blue-50/30 border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
-                    <UserCheck size={14} /> Personal Workspace
-                  </span>
-                  <span className="text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    Open Workspace <ArrowRight size={13} />
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                  My Salesperson Dashboard
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Direct view into personal inquiries, won orders, personal deal pipeline, and individual customer accounts.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
-                <span className="text-slate-400">Scoped strictly to personal accounts</span>
-                <span className="font-bold text-blue-600">Launch My View →</span>
-              </div>
-            </div>
-
-            {/* Banner 2: Enterprise Admin Overview */}
-            <div
-              onClick={() => {
-                clearViewingAs();
-                navigate('/reports');
-              }}
-              className="bg-white hover:bg-indigo-50/30 border border-slate-200 hover:border-indigo-300 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
-                    <ShieldAlert size={14} /> Executive Intelligence
-                  </span>
-                  <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    Open Analytics <ArrowRight size={13} />
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                  Company-Wide Admin Overview
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Aggregated executive view covering all sales representatives, total delivered tonnage, review queues, and company-wide won orders.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
-                <span className="text-slate-400">Company-wide aggregated metrics</span>
-                <span className="font-bold text-indigo-600">Launch Analytics →</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Directory Management Console */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
