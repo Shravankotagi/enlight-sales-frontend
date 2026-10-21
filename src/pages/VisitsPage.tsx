@@ -87,6 +87,39 @@ export function formatCityLocality(rawLocation?: string | null, rawAddress?: str
   return parts.slice(-2).join(', ');
 }
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(',');
+  const header = comma >= 0 ? dataUrl.slice(0, comma) : '';
+  const data = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const mime = /data:([^;,]+)/.exec(header)?.[1] || 'application/octet-stream';
+  const binary = /;base64/i.test(header) ? atob(data) : decodeURIComponent(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: mime });
+}
+
+function attachmentName(att: VisitAttachment): string {
+  return att.name || att.file_name || 'Attachment';
+}
+
+function attachmentUrl(att: VisitAttachment): string {
+  return att.url || att.file_url || '';
+}
+
+function isImageAttachment(att: VisitAttachment): boolean {
+  const type = String(att.type || att.file_type || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  return attachmentUrl(att).startsWith('data:image/');
+}
+
+function isPdfAttachment(att: VisitAttachment): boolean {
+  const type = String(att.type || att.file_type || '').toLowerCase();
+  if (type === 'application/pdf') return true;
+  const url = attachmentUrl(att);
+  if (url.startsWith('data:application/pdf')) return true;
+  return attachmentName(att).toLowerCase().endsWith('.pdf');
+}
+
 export default function VisitsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -392,14 +425,41 @@ export default function VisitsPage() {
 
   // Details & Edit Modal States
   const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
-  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; kind?: 'image' | 'pdf' } | null>(null);
+  const previewBlobRef = useRef<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const closeVisitPreview = () => {
+    if (previewBlobRef.current) {
+      URL.revokeObjectURL(previewBlobRef.current);
+      previewBlobRef.current = null;
+    }
+    setPreviewImage(null);
+  };
+
+  const openVisitPreview = (url: string, title: string, kind: 'image' | 'pdf' = 'image') => {
+    if (previewBlobRef.current) {
+      URL.revokeObjectURL(previewBlobRef.current);
+      previewBlobRef.current = null;
+    }
+    if (kind === 'pdf') {
+      const blobUrl = URL.createObjectURL(dataUrlToBlob(url));
+      previewBlobRef.current = blobUrl;
+      setPreviewImage({ url: blobUrl, title, kind: 'pdf' });
+      return;
+    }
+    setPreviewImage({ url, title, kind: 'image' });
+  };
+
+  useEffect(() => () => {
+    if (previewBlobRef.current) URL.revokeObjectURL(previewBlobRef.current);
+  }, []);
 
   useEffect(() => {
     if (!previewImage) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPreviewImage(null);
+      if (event.key === 'Escape') closeVisitPreview();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -2526,20 +2586,28 @@ export default function VisitsPage() {
 
                       {/* GPS Photo Preview Card */}
                       {formGpsPhotoUrl && (
-                        <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200 shadow-2xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <img src={formGpsPhotoUrl} alt="Visit Photo" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
-                            <div className="min-w-0">
-                              <p className="font-semibold text-slate-800 text-[11px] truncate">Customer Visit Photo</p>
-                              {formGpsLat && formGpsLng ? (
-                                <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1 mt-0.5">
-                                  <Compass size={10} className="text-blue-600 shrink-0" />
-                                  GPS: {formGpsLat.toFixed(4)}, {formGpsLng.toFixed(4)} (±{formGpsAccuracy || 10}m)
-                                </p>
-                              ) : (
-                                <p className="text-[10px] text-amber-600 font-medium">GPS location not captured</p>
-                              )}
-                            </div>
+                        <div className="flex items-start justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs">
+                          <div className="min-w-0 space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => openVisitPreview(formGpsPhotoUrl, 'Customer Visit Photo')}
+                              className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              aria-label="Preview visit photo">
+                              <img
+                                src={formGpsPhotoUrl}
+                                alt="Visit Photo"
+                                className="h-40 max-w-full rounded-lg border border-slate-200 bg-slate-50 object-contain"
+                              />
+                            </button>
+                            <p className="font-semibold text-slate-800 text-[11px] truncate">Customer Visit Photo</p>
+                            {formGpsLat && formGpsLng ? (
+                              <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                                <Compass size={10} className="text-blue-600 shrink-0" />
+                                GPS: {formGpsLat.toFixed(4)}, {formGpsLng.toFixed(4)} (±{formGpsAccuracy || 10}m)
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-amber-600 font-medium">GPS location not captured</p>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -2559,20 +2627,41 @@ export default function VisitsPage() {
                       {/* Other Attachments List */}
                       {formAttachments.length > 0 && (
                         <div className="space-y-1.5 pt-1">
-                          {formAttachments.map((att, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-1.5 px-2 bg-white rounded-lg border border-slate-200 text-[11px]">
-                              <span className="truncate max-w-[200px] font-medium text-slate-700 flex items-center gap-1.5">
-                                <FileText size={12} className="text-slate-400 shrink-0" />
-                                {att.name || att.file_name || 'Attachment'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setFormAttachments(prev => prev.filter((_, i) => i !== idx))}
-                                className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer">
-                                <X size={13} />
-                              </button>
-                            </div>
-                          ))}
+                          {formAttachments.map((att, idx) => {
+                            const name = attachmentName(att);
+                            const url = attachmentUrl(att);
+                            const image = isImageAttachment(att);
+                            const pdf = !image && isPdfAttachment(att);
+                            return (
+                              <div key={idx} className="flex items-center justify-between gap-2 p-1.5 px-2 bg-white rounded-lg border border-slate-200 text-[11px]">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {image && url ? (
+                                    <img src={url} alt="" className="h-16 w-16 rounded-md border border-slate-200 object-cover shrink-0" />
+                                  ) : (
+                                    <FileText size={12} className="text-slate-400 shrink-0" />
+                                  )}
+                                  <span className="truncate max-w-[200px] font-medium text-slate-700">{name}</span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {url && (image || pdf) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openVisitPreview(url, name, pdf ? 'pdf' : 'image')}
+                                      className="px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 rounded-md cursor-pointer"
+                                      aria-label={`Preview ${name}`}>
+                                      Preview
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setFormAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                    className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer">
+                                    <X size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -2951,7 +3040,7 @@ export default function VisitsPage() {
                           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-white rounded-xl border border-slate-200">
                             <button
                               type="button"
-                              onClick={() => setPreviewImage({ url: selectedVisit.gps_photo_url!, title: 'Customer Visit Photo' })}
+                              onClick={() => openVisitPreview(selectedVisit.gps_photo_url!, 'Customer Visit Photo')}
                               className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                               aria-label="View customer visit photo">
                               <img
@@ -3488,16 +3577,24 @@ export default function VisitsPage() {
           role="dialog"
           aria-modal="true"
           aria-label={previewImage.title}
-          onClick={() => setPreviewImage(null)}>
+          onClick={closeVisitPreview}>
           <div className="relative max-w-6xl max-h-[90vh]" onClick={event => event.stopPropagation()}>
-            <img
-              src={previewImage.url}
-              alt={previewImage.title}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
-            />
+            {previewImage.kind === 'pdf' ? (
+              <iframe
+                title={previewImage.title}
+                src={previewImage.url}
+                className="h-[85vh] w-[min(90vw,64rem)] rounded-lg bg-white shadow-2xl"
+              />
+            ) : (
+              <img
+                src={previewImage.url}
+                alt={previewImage.title}
+                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+              />
+            )}
             <button
               type="button"
-              onClick={() => setPreviewImage(null)}
+              onClick={closeVisitPreview}
               className="absolute -top-3 -right-3 p-2 bg-white text-slate-700 rounded-full shadow-lg hover:bg-slate-100"
               aria-label="Close image preview">
               <X size={18} />

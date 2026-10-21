@@ -47,7 +47,9 @@ Current regression tests:
 | Frontend | `customer-type-other.test.tsx` | Customer type includes Other, and Other without a typed type is rejected |
 | Frontend | `visit-select-placeholders.test.tsx` | Customer Type and Payment Terms prompts are shown when empty and cannot be selected |
 | Frontend | `visit-future-dates.test.tsx` | A new visit rejects a past next purchase date and follow-up date, and the date pickers start at today |
+| Frontend | `visit-media-preview.test.tsx` | A new visit shows a preview of the captured photo and of each added image or PDF before save |
 | Backend | `visit-future-dates.test.ts` | A new visit rejects a past next purchase date and follow-up date, and accepts today |
+| Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |
 | Bot | `visit-future-dates.test.js` | A past next purchase or follow-up stays in the prompt list until the day is today |
 | Backend | `customer-type-other.test.ts` | Other without a typed type is rejected, and Other with text is stored on the visit row |
 | Bot | `customer-type-other.test.js` | The customer-type prompt includes Other, and the visit row keeps the typed type |
