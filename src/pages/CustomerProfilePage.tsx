@@ -36,7 +36,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import {
-  calculateOrdersTotalTonnage,
   getOrderTonnage,
   INDIAN_GST_STATES,
   resolveCustomerState,
@@ -755,7 +754,7 @@ function CustomerProfilePageContent() {
           <div>
             <p className="text-xs text-slate-500 font-medium">Total Tonnage</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">
-              {calculateOrdersTotalTonnage(wonDeals).formattedText || formatTonnage(customer.total_tonnage)}
+              {formatTonnage(customer.total_tonnage)}
             </p>
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
