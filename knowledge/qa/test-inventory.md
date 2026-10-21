@@ -50,7 +50,10 @@ Current regression tests:
 | Frontend | `visit-media-preview.test.tsx` | A new visit shows a preview of the captured photo and of each added image or PDF before save |
 | Backend | `visit-future-dates.test.ts` | A new visit rejects a past next purchase date and follow-up date, and accepts today |
 | Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |
+| Frontend | `assistant-input-scroll.test.tsx` | A long assistant prompt stays in a scrolling textarea, Enter sends, and Shift+Enter adds a line |
+| Bot | `visit-chat-location-photo.test.js` | A visit pin stores the geocoded address, and only a camera photo after that pin is the visit photo |
 | Bot | `visit-future-dates.test.js` | A past next purchase or follow-up stays in the prompt list until the day is today |
+| Bot | `visit-relative-dates.test.js` | Tomorrow and after a month become calendar days and leave the visit prompt list |
 | Backend | `customer-type-other.test.ts` | Other without a typed type is rejected, and Other with text is stored on the visit row |
 | Bot | `customer-type-other.test.js` | The customer-type prompt includes Other, and the visit row keeps the typed type |
 
