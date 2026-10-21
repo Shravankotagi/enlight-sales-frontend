@@ -10,6 +10,7 @@ Search within the file by exported function, intent/state key, or user-visible r
 - Do not bypass stage/PO validation to make a prompt “work”.
 - Revalidate items/prices/server state on writes; user-provided state is stale or incomplete.
 - Keep response identity and field terms compatible with the UI and retrieval tools.
+- Inquiry payment terms and preferred brand accept only Immediate, Advance, 30 Days, 45 Days, 60 Days, LC, BG, PDC and TATA, JSW, AM/NS India, SAIL, NMDC, Apollo, Others. A close typo maps to that option. Orders and visits keep their own payment-term text.
 - If a customer is already registered under another representative, the current draft is blocked.
   The response preserves the ownership warning and offers only `Discard Draft`; it must not
   invite a replacement customer name or allow arbitrary text to resume that draft.
