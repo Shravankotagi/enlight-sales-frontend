@@ -44,6 +44,10 @@ Current regression tests:
 | Backend | `issue-238-customer-visit-form.test.ts` | New visits require a verified phone, GPS photo, and listed brand and payment terms; Meta 131047 returns the 24-hour message, and other codes return the code in the 400 |
 | Frontend | `issue-238-customer-visit-form.test.tsx` | Missing visit fields, locked GPS address, typed city when the address is missing, brand dropdown, camera overlay, and the assistant attach menu |
 | Bot | `issue-238-visit-required-fields.test.js` | A new bot visit is not inserted until the new fields, GPS photo, and correct code are present |
+| Frontend | `customer-type-other.test.tsx` | Customer type includes Other, and Other without a typed type is rejected |
+| Frontend | `visit-select-placeholders.test.tsx` | Customer Type and Payment Terms prompts are shown when empty and cannot be selected |
+| Backend | `customer-type-other.test.ts` | Other without a typed type is rejected, and Other with text is stored on the visit row |
+| Bot | `customer-type-other.test.js` | The customer-type prompt includes Other, and the visit row keeps the typed type |
 
 ## Cross-repo parity fixture
 `pricing-parity.json` is copied identically to `em-os-bot/test/fixtures/`, `em-os-backend/src/test-utils/fixtures/`, and `em-os-frontend/src/test/fixtures/`. Each repo's parity test runs its own pricing/HSN code against it. Change all three copies together in the same set of PRs.

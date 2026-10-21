@@ -23,6 +23,7 @@ const emptyVisit = (): NewVisitFormInput => ({
   location: '',
   locationSource: '',
   customerType: '',
+  customerTypeOther: '',
   visitDate: '',
   visitTime: '',
   visitType: '',

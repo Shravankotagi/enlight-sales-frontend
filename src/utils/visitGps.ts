@@ -92,7 +92,7 @@ export function createVisitGpsSession(source?: VisitGpsSource | null): VisitGpsS
   const readForPhoto = () => {
     if (best) return Promise.resolve(best);
     if (!addressPromise) return Promise.resolve(null);
-    return new Promise((resolve) => {
+    return new Promise<GpsReading | null>((resolve) => {
       let settled = false;
       const done = (reading: GpsReading | null) => {
         if (settled) return;

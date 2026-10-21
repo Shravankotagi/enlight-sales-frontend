@@ -8,6 +8,15 @@ export const VISIT_BRANDS = [
   'Others',
 ] as const;
 
+export const VISIT_CUSTOMER_TYPES = [
+  'OEM',
+  'Fabricator',
+  'EPC',
+  'Manufacturer',
+  'Trader',
+  'Other',
+] as const;
+
 export const VISIT_PAYMENT_TERMS = [
   'Immediate',
   'Advance',
@@ -30,6 +39,7 @@ export interface NewVisitFormInput {
   location: string;
   locationSource: '' | 'gps' | 'manual';
   customerType: string;
+  customerTypeOther: string;
   visitDate: string;
   visitTime: string;
   visitType: string;
@@ -59,6 +69,13 @@ export function visitPhotoStampLabel(
 ): string {
   const when = at.toLocaleString('en-IN', { hour12: false });
   return `GPS ${latitude.toFixed(5)}, ${longitude.toFixed(5)} · ${when}`;
+}
+
+export function visitCustomerTypeLabel(type: unknown, other: unknown): string {
+  const selected = String(type ?? '').trim();
+  const typed = String(other ?? '').trim();
+  if (selected === 'Other' && typed) return typed;
+  return selected;
 }
 
 export function visitCityLabel(city: unknown): string {
@@ -112,7 +129,12 @@ export function validateNewVisitForm(
   if (!input.location.trim()) {
     errors.location = 'Enter the city.';
   }
-  if (!input.customerType) errors.customerType = 'Select a customer type.';
+  if (!VISIT_CUSTOMER_TYPES.includes(input.customerType as (typeof VISIT_CUSTOMER_TYPES)[number])) {
+    errors.customerType = 'Select a customer type.';
+  }
+  if (input.customerType === 'Other' && !input.customerTypeOther.trim()) {
+    errors.customerTypeOther = 'Enter the other customer type.';
+  }
   if (!input.visitDate) errors.visitDate = 'Please enter the visit date.';
   if (!input.visitTime) errors.visitTime = 'Please enter the visit time.';
   if (!input.visitType) errors.visitType = 'Select a visit type.';

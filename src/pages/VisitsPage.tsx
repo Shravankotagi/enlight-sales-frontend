@@ -38,11 +38,14 @@ import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import VisitLocationField from '../components/VisitLocationField';
 import VisitBrandField from '../components/VisitBrandField';
 import VisitCameraCapture from '../components/VisitCameraCapture';
+import VisitCustomerTypeField from '../components/VisitCustomerTypeField';
 import {
   VISIT_BRANDS,
+  VISIT_CUSTOMER_TYPES,
   VISIT_PAYMENT_TERMS,
   validateNewVisitForm,
   visitCityLabel,
+  visitCustomerTypeLabel,
   visitDocumentError,
   type NewVisitFormInput,
 } from '../utils/visitForm';
@@ -466,6 +469,7 @@ export default function VisitsPage() {
   const [formEmail, setFormEmail] = useState('');
   const [formDesignation, setFormDesignation] = useState('');
   const [formCustomerType, setFormCustomerType] = useState('');
+  const [formCustomerTypeOther, setFormCustomerTypeOther] = useState('');
   const [formVisitType, setFormVisitType] = useState('First Visit');
   const [formCustomerProbability, setFormCustomerProbability] = useState('');
   const [formProductDetails, setFormProductDetails] = useState('');
@@ -570,6 +574,7 @@ export default function VisitsPage() {
     location: formLocation,
     locationSource,
     customerType: formCustomerType,
+    customerTypeOther: formCustomerTypeOther,
     visitDate: formVisitDate,
     visitTime: formVisitTime,
     visitType: formVisitType,
@@ -663,6 +668,7 @@ export default function VisitsPage() {
     setFormEmail('');
     setFormDesignation('');
     setFormCustomerType('');
+    setFormCustomerTypeOther('');
     setFormVisitType('First Visit');
     setFormCustomerProbability('');
     setFormProductDetails('');
@@ -711,6 +717,7 @@ export default function VisitsPage() {
   const [editEmail, setEditEmail] = useState('');
   const [editDesignation, setEditDesignation] = useState('');
   const [editCustomerType, setEditCustomerType] = useState('');
+  const [editCustomerTypeOther, setEditCustomerTypeOther] = useState('');
   const [editVisitType, setEditVisitType] = useState('First Visit');
   const [editCustomerProbability, setEditCustomerProbability] = useState('');
   const [editProductDetails, setEditProductDetails] = useState('');
@@ -863,6 +870,7 @@ export default function VisitsPage() {
         email: formEmail.trim(),
         designation: formDesignation.trim(),
         customer_type: formCustomerType,
+        customer_type_other: formCustomerType === 'Other' ? formCustomerTypeOther.trim() : null,
         visit_type: formVisitType,
         customer_probability: formCustomerProbability,
         product_details: formProductDetails.trim(),
@@ -905,6 +913,7 @@ export default function VisitsPage() {
         setFormEmail('');
         setFormDesignation('');
         setFormCustomerType('');
+        setFormCustomerTypeOther('');
         setFormVisitType('First Visit');
         setFormCustomerProbability('');
         setFormProductDetails('');
@@ -1000,6 +1009,7 @@ export default function VisitsPage() {
     setEditEmail(v.email || '');
     setEditDesignation(v.designation || '');
     setEditCustomerType(v.customer_type || '');
+    setEditCustomerTypeOther(v.customer_type_other || '');
     setEditVisitType(v.visit_type || 'First Visit');
     setEditCustomerProbability(v.customer_probability || '');
     setEditProductDetails(v.product_details || '');
@@ -1040,6 +1050,9 @@ export default function VisitsPage() {
     } else if (cleanEditPhone.length !== 10) {
       errors.contactPhone = 'Please enter a valid 10-digit mobile number.';
     }
+    if (editCustomerType === 'Other' && !editCustomerTypeOther.trim()) {
+      errors.customerTypeOther = 'Enter the other customer type.';
+    }
 
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
@@ -1070,6 +1083,7 @@ export default function VisitsPage() {
         email: editEmail.trim() || null,
         designation: editDesignation.trim() || null,
         customer_type: editCustomerType || null,
+        customer_type_other: editCustomerType === 'Other' ? editCustomerTypeOther.trim() : null,
         visit_type: editVisitType || null,
         customer_probability: editCustomerProbability || null,
         product_details: editProductDetails.trim() || null,
@@ -1547,11 +1561,9 @@ export default function VisitsPage() {
             menuClassName="w-48"
           >
             <option value="all">All Customer Types</option>
-            <option value="OEM">OEM</option>
-            <option value="Fabricator">Fabricator</option>
-            <option value="EPC">EPC</option>
-            <option value="Manufacturer">Manufacturer</option>
-            <option value="Trader">Trader</option>
+            {VISIT_CUSTOMER_TYPES.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
           </Select>
 
           {/* 7. Customer Probability Dropdown */}
@@ -1646,6 +1658,7 @@ export default function VisitsPage() {
                 paginatedVisits.map((v, idx) => {
                   const globalIdx = startIndex + idx + 1;
                   const outcomeLower = getNormalizedOutcome(v);
+                  const customerTypeLabel = visitCustomerTypeLabel(v.customer_type, v.customer_type_other);
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const salespersonName = getSalespersonDisplayName(v);
 
@@ -1673,9 +1686,9 @@ export default function VisitsPage() {
                         )}
                         {/* Extended tags row */}
                         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                          {v.customer_type && (
+                          {customerTypeLabel && (
                             <span className="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              {v.customer_type}
+                              {customerTypeLabel}
                             </span>
                           )}
                           {v.customer_probability && (
@@ -2060,28 +2073,26 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          Customer Type <span className="text-rose-500">*</span>
-                        </label>
-                        <select
+                        <VisitCustomerTypeField
+                          required
                           value={formCustomerType}
-                          onChange={e => {
-                            setFormCustomerType(e.target.value);
-                            if (formErrors.customerType) setFormErrors(prev => ({ ...prev, customerType: false }));
+                          other={formCustomerTypeOther}
+                          error={formErrors.customerType}
+                          otherError={formErrors.customerTypeOther}
+                          onChange={(value) => {
+                            setFormCustomerType(value);
+                            if (value !== 'Other') setFormCustomerTypeOther('');
+                            if (formErrors.customerType || formErrors.customerTypeOther) {
+                              setFormErrors((prev) => ({ ...prev, customerType: false, customerTypeOther: false }));
+                            }
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
-                            formErrors.customerType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
-                          }`}>
-                          <option value="">Select Customer Type</option>
-                          <option value="OEM">OEM</option>
-                          <option value="Fabricator">Fabricator</option>
-                          <option value="EPC">EPC</option>
-                          <option value="Manufacturer">Manufacturer</option>
-                          <option value="Trader">Trader</option>
-                        </select>
-                        {formErrors.customerType && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.customerType)}</p>
-                        )}
+                          onOtherChange={(value) => {
+                            setFormCustomerTypeOther(value);
+                            if (formErrors.customerTypeOther) {
+                              setFormErrors((prev) => ({ ...prev, customerTypeOther: false }));
+                            }
+                          }}
+                        />
                       </div>
                     </div>
 
@@ -2277,6 +2288,7 @@ export default function VisitsPage() {
                           Payment Terms <span className="text-rose-500">*</span>
                         </label>
                         <select
+                          aria-label="Payment Terms"
                           value={formPaymentTerms}
                           onChange={e => {
                             setFormPaymentTerms(e.target.value);
@@ -2285,7 +2297,7 @@ export default function VisitsPage() {
                           className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
                             formErrors.paymentTerms ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
                           }`}>
-                          <option value="">Select Payment Terms</option>
+                          <option value="" disabled hidden>Select Payment Terms</option>
                           {VISIT_PAYMENT_TERMS.map(term => (
                             <option key={term} value={term}>{term}</option>
                           ))}
@@ -2679,9 +2691,9 @@ export default function VisitsPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 {!isEditing && (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {selectedVisit.customer_type && (
+                    {visitCustomerTypeLabel(selectedVisit.customer_type, selectedVisit.customer_type_other) && (
                       <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        {selectedVisit.customer_type}
+                        {visitCustomerTypeLabel(selectedVisit.customer_type, selectedVisit.customer_type_other)}
                       </span>
                     )}
 
@@ -3096,22 +3108,24 @@ export default function VisitsPage() {
                           />
                         </div>
 
-                        <div>
-                          <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
-                          <Select
-                            value={editCustomerType}
-                            onChange={e => setEditCustomerType(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
-                            placeholder="Select Customer Type"
-                          >
-                            <option value="">Select Customer Type</option>
-                            <option value="OEM">OEM</option>
-                            <option value="Fabricator">Fabricator</option>
-                            <option value="EPC">EPC</option>
-                            <option value="Manufacturer">Manufacturer</option>
-                            <option value="Trader">Trader</option>
-                          </Select>
-                        </div>
+                        <VisitCustomerTypeField
+                          value={editCustomerType}
+                          other={editCustomerTypeOther}
+                          otherError={editErrors.customerTypeOther}
+                          onChange={(value) => {
+                            setEditCustomerType(value);
+                            if (value !== 'Other') setEditCustomerTypeOther('');
+                            if (editErrors.customerTypeOther) {
+                              setEditErrors((prev) => ({ ...prev, customerTypeOther: false }));
+                            }
+                          }}
+                          onOtherChange={(value) => {
+                            setEditCustomerTypeOther(value);
+                            if (editErrors.customerTypeOther) {
+                              setEditErrors((prev) => ({ ...prev, customerTypeOther: false }));
+                            }
+                          }}
+                        />
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
