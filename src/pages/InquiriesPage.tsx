@@ -1696,6 +1696,7 @@ export default function InquiriesPage() {
     isProcurement,
     isProcurementManager,
     guardAction,
+    can,
   } = useAuth();
   const canViewSalesperson = isAdmin || isSalesManager || isProcurement;
   const canAssignProcurement = isAdmin || isProcurementManager;
@@ -1709,6 +1710,7 @@ export default function InquiriesPage() {
     reason: string;
   } | null>(null);
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
+  const [confirmDeleteInquiry, setConfirmDeleteInquiry] = useState<InquiryItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -3232,6 +3234,27 @@ export default function InquiriesPage() {
       navigate({ search: newSearch ? `?${newSearch}` : "" }, { replace: true });
     }
   };
+
+  const deleteInquiryMutation = useMutation({
+    mutationFn: (id: string) => inquiriesApi.delete(id),
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ["inquiries-list"] });
+      queryClient.invalidateQueries({ queryKey: ["inquiries"] });
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["kra-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["orders-list"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-names-list"] });
+      toast.success("Inquiry and all associated records deleted successfully");
+      setConfirmDeleteInquiry(null);
+      handleCloseDrawer();
+      await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || "Failed to delete inquiry");
+    },
+  });
 
   const updateInquiryPricingLine = (
     index: number,
@@ -5601,6 +5624,22 @@ export default function InquiriesPage() {
                       : "View Original Inquiry"}
                   </span>
                 </button>
+
+                {can('inquiries.delete') && (
+                  <button
+                    type="button"
+                    disabled={deleteInquiryMutation.isPending}
+                    onClick={() => {
+                      if (!guardAction('inquiries.delete')) return;
+                      setConfirmDeleteInquiry(selectedInquiry);
+                    }}
+                    className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 disabled:opacity-60 text-rose-700 hover:text-rose-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-rose-200 shadow-2xs cursor-pointer"
+                    title="Delete Inquiry"
+                  >
+                    <Trash2 size={14} className="text-rose-600" />
+                    <span>Delete</span>
+                  </button>
+                )}
 
                 <button
                   onClick={handleCloseDrawer}
@@ -8847,6 +8886,94 @@ export default function InquiriesPage() {
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Confirm Lost
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inquiry & Audit Permanent Delete Confirmation Modal */}
+      {confirmDeleteInquiry && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in"
+        >
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Delete Inquiry Permanently?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1.5 mb-5">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Inquiry Ref:</span>
+                <span className="font-mono font-bold text-indigo-600">
+                  #{confirmDeleteInquiry.id
+                    ? `INQ-${confirmDeleteInquiry.id.substring(0, 6).toUpperCase()}`
+                    : "N/A"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Customer / Company:</span>
+                <span className="font-bold text-slate-900 truncate max-w-[200px]">
+                  {(confirmDeleteInquiry as any).company_name ||
+                    confirmDeleteInquiry.customer_name ||
+                    confirmDeleteInquiry.sender_name ||
+                    confirmDeleteInquiry.sender_phone ||
+                    "N/A"}
+                </span>
+              </div>
+              {confirmDeleteInquiry.status && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Status:</span>
+                  <span className="capitalize font-semibold text-slate-700">
+                    {confirmDeleteInquiry.status}
+                  </span>
+                </div>
+              )}
+              <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
+                All line items, pricing, linked deals, orders, and audit history tied to this inquiry will be permanently deleted from the database.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                disabled={deleteInquiryMutation.isPending}
+                onClick={() => setConfirmDeleteInquiry(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteInquiryMutation.isPending}
+                onClick={() => {
+                  if (!guardAction('inquiries.delete')) return;
+                  deleteInquiryMutation.mutate(confirmDeleteInquiry.id);
+                }}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {deleteInquiryMutation.isPending ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Yes, Delete Inquiry</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
