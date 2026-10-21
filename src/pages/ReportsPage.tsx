@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3, MapPin } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import PaginationControl, { pageOf } from '../components/PaginationControl';
 import { formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
@@ -18,6 +19,9 @@ export default function ReportsPage() {
     from: '2000-01-01',
     to: formatLocalDate(),
   });
+  const [skuPage, setSkuPage] = useState(1);
+  const [loginPage, setLoginPage] = useState(1);
+  const [visitsPage, setVisitsPage] = useState(1);
 
   useEffect(() => {
     document.title = 'Reports - Enlight Sigma';
@@ -167,6 +171,9 @@ export default function ReportsPage() {
   const funnelList: any[] = Array.isArray(overview?.funnel)
     ? overview.funnel
     : (overview?.funnel?.funnel || []);
+  const skuPager = pageOf(overview?.skus || [], skuPage);
+  const loginPager = pageOf(loginActivity, loginPage);
+  const visitsPager = pageOf(reportVisits, visitsPage);
 
   const maxFunnelCount = Math.max(
     ...funnelList.map((f: any) => Number(f.count) || 0),
@@ -421,7 +428,7 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
-                    {(overview?.skus || []).map((item: any, i: number) => {
+                    {skuPager.rows.map((item: any, i: number) => {
                       const hsn = detectHsnCode(item.sku_text || item.sku || '');
                       const qtyStr = `${Number(item.total_quantity || item.quantity || 0).toLocaleString('en-IN')} ${item.unit || 'MT'}`;
                       return (
@@ -464,6 +471,17 @@ export default function ReportsPage() {
                   </p>
                 </div>
               )}
+              {(overview?.skus || []).length > 0 && (
+                <PaginationControl
+                  currentPage={skuPager.current}
+                  totalPages={skuPager.totalPages}
+                  onPageChange={setSkuPage}
+                  totalItems={skuPager.total}
+                  startIndex={skuPager.startIndex}
+                  endIndex={skuPager.endIndex}
+                  itemLabel="SKUs"
+                />
+              )}
             </div>
             {isAdmin && (
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -485,7 +503,7 @@ export default function ReportsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {loginActivity.map((log: any, i: number) => {
+                        {loginPager.rows.map((log: any, i: number) => {
                           const when = formatIstDateTime(log.timestamp);
                           return (
                             <tr key={log.id || i} className="border-t border-slate-100">
@@ -506,6 +524,17 @@ export default function ReportsPage() {
                       </tbody>
                     </table>
                   </div>
+                )}
+                {loginActivity.length > 0 && (
+                  <PaginationControl
+                    currentPage={loginPager.current}
+                    totalPages={loginPager.totalPages}
+                    onPageChange={setLoginPage}
+                    totalItems={loginPager.total}
+                    startIndex={loginPager.startIndex}
+                    endIndex={loginPager.endIndex}
+                    itemLabel="logins"
+                  />
                 )}
               </div>
             )}
@@ -528,7 +557,7 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {reportVisits.map((visit: any) => (
+                    {visitsPager.rows.map((visit: any) => (
                       <tr key={visit.id} className="hover:bg-slate-50/80">
                         <td className="px-5 py-3.5 font-bold text-slate-900">{visit.customer_name || '-'}</td>
                         <td className="px-5 py-3.5 text-xs">
@@ -564,6 +593,17 @@ export default function ReportsPage() {
                   <MapPin size={28} className="mx-auto mb-2 text-slate-300" />
                   <p className="font-semibold text-slate-700">No customer visits in this period</p>
                 </div>
+              )}
+              {reportVisits.length > 0 && (
+                <PaginationControl
+                  currentPage={visitsPager.current}
+                  totalPages={visitsPager.totalPages}
+                  onPageChange={setVisitsPage}
+                  totalItems={visitsPager.total}
+                  startIndex={visitsPager.startIndex}
+                  endIndex={visitsPager.endIndex}
+                  itemLabel="visits"
+                />
               )}
             </div>
           </div>
