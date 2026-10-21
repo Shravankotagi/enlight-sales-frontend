@@ -7,8 +7,18 @@ import VisitCustomerTypeField from '../../components/VisitCustomerTypeField';
 import {
   VISIT_CUSTOMER_TYPES,
   validateNewVisitForm,
+  visitCalendarToday,
   type NewVisitFormInput,
 } from '../../utils/visitForm';
+
+function isoDaysFromToday(days: number): string {
+  const [year, month, day] = visitCalendarToday().split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 function readyVisit(overrides: Partial<NewVisitFormInput> = {}): NewVisitFormInput {
   return {
@@ -35,7 +45,7 @@ function readyVisit(overrides: Partial<NewVisitFormInput> = {}): NewVisitFormInp
     nextPurchase: '2026-11-01',
     currentRequirement: '10 MT',
     followup: 'Send quote',
-    followupDate: '2026-10-20',
+    followupDate: isoDaysFromToday(7),
     remarks: 'Discussed rates',
     photoUrl: 'data:image/jpeg;base64,abc',
     photoLatitude: 18.52,

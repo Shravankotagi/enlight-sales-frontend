@@ -44,6 +44,7 @@ import {
   VISIT_CUSTOMER_TYPES,
   VISIT_PAYMENT_TERMS,
   validateNewVisitForm,
+  visitCalendarToday,
   visitCityLabel,
   visitCustomerTypeLabel,
   visitDocumentError,
@@ -2336,6 +2337,8 @@ export default function VisitsPage() {
                         </label>
                         <input
                           type="date"
+                          aria-label="Next Purchase Expected"
+                          min={visitCalendarToday()}
                           value={formNextPurchaseExpected}
                           onChange={e => {
                             setFormNextPurchaseExpected(e.target.value);
@@ -2427,6 +2430,8 @@ export default function VisitsPage() {
                         <div>
                           <input
                             type="date"
+                            aria-label="Follow-up Date"
+                            min={visitCalendarToday()}
                             value={formFollowupDate}
                             onChange={e => {
                               setFormFollowupDate(e.target.value);

@@ -46,6 +46,9 @@ Current regression tests:
 | Bot | `issue-238-visit-required-fields.test.js` | A new bot visit is not inserted until the new fields, GPS photo, and correct code are present |
 | Frontend | `customer-type-other.test.tsx` | Customer type includes Other, and Other without a typed type is rejected |
 | Frontend | `visit-select-placeholders.test.tsx` | Customer Type and Payment Terms prompts are shown when empty and cannot be selected |
+| Frontend | `visit-future-dates.test.tsx` | A new visit rejects a past next purchase date and follow-up date, and the date pickers start at today |
+| Backend | `visit-future-dates.test.ts` | A new visit rejects a past next purchase date and follow-up date, and accepts today |
+| Bot | `visit-future-dates.test.js` | A past next purchase or follow-up stays in the prompt list until the day is today |
 | Backend | `customer-type-other.test.ts` | Other without a typed type is rejected, and Other with text is stored on the visit row |
 | Bot | `customer-type-other.test.js` | The customer-type prompt includes Other, and the visit row keeps the typed type |
 

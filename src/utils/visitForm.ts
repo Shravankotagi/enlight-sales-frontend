@@ -78,6 +78,36 @@ export function visitCustomerTypeLabel(type: unknown, other: unknown): string {
   return selected;
 }
 
+export function visitCalendarToday(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === 'year')?.value ?? '';
+  const month = parts.find((part) => part.type === 'month')?.value ?? '';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '';
+  return `${year}-${month}-${day}`;
+}
+
+export function visitCalendarDay(value: string): string {
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== day
+  ) {
+    return '';
+  }
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
 export function visitCityLabel(city: unknown): string {
   const text = String(city ?? '').trim();
   if (/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(text)) return '';
@@ -162,11 +192,17 @@ export function validateNewVisitForm(
     errors.deliveryLocation = 'Please enter the delivery location.';
   }
   if (!input.nextPurchase) errors.nextPurchase = 'Please enter the next purchase date.';
+  else if (visitCalendarDay(input.nextPurchase) < visitCalendarToday()) {
+    errors.nextPurchase = 'Choose a next purchase date that is today or later.';
+  }
   if (!input.currentRequirement.trim()) {
     errors.currentRequirement = 'Please enter the current requirement.';
   }
   if (!input.followup.trim()) errors.followup = 'Please enter the follow-up action.';
   if (!input.followupDate) errors.followupDate = 'Please enter the follow-up date.';
+  else if (visitCalendarDay(input.followupDate) < visitCalendarToday()) {
+    errors.followupDate = 'Choose a follow-up date that is today or later.';
+  }
   if (!input.remarks.trim()) errors.remarks = 'Please enter meeting remarks.';
   if (!input.photoUrl) errors.photo = 'Take a visit photo with the camera.';
   else if (input.photoLatitude == null || input.photoLongitude == null) {
