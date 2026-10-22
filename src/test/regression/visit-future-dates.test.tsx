@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import VisitsPage from '../../pages/VisitsPage';
+import { fillCommercialStep, fillCompanyAndContact, fillVisitDetails, goToNextVisitStep } from '../fillNewVisitWizard';
 import { renderWithProviders } from '../renderWithProviders';
 import {
   validateNewVisitForm,
@@ -96,7 +97,13 @@ describe('new visit future dates', () => {
     renderWithProviders(<VisitsPage />);
     await user.click(screen.getByRole('button', { name: 'Log Customer Visit' }));
     const today = visitCalendarToday();
+    await fillCompanyAndContact(user);
+    await goToNextVisitStep(user);
+    await fillVisitDetails(user);
+    await goToNextVisitStep(user);
     expect((screen.getByLabelText('Next Purchase Expected') as HTMLInputElement).min).toBe(today);
+    await fillCommercialStep(user);
+    await goToNextVisitStep(user);
     expect((screen.getByLabelText('Follow-up Date') as HTMLInputElement).min).toBe(today);
   });
 });

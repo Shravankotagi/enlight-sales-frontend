@@ -4,6 +4,13 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import VisitsPage from '../../pages/VisitsPage';
+import {
+  fillCommercialStep,
+  fillCompanyAndContact,
+  fillFollowUpStep,
+  fillVisitDetails,
+  goToNextVisitStep,
+} from '../fillNewVisitWizard';
 import { renderWithProviders } from '../renderWithProviders';
 
 vi.mock('../../lib/api', () => ({
@@ -73,6 +80,14 @@ describe('new visit media preview', () => {
     const user = userEvent.setup();
     renderWithProviders(<VisitsPage />);
     await user.click(screen.getByRole('button', { name: 'Log Customer Visit' }));
+    await fillCompanyAndContact(user);
+    await goToNextVisitStep(user);
+    await fillVisitDetails(user);
+    await goToNextVisitStep(user);
+    await fillCommercialStep(user);
+    await goToNextVisitStep(user);
+    await fillFollowUpStep(user);
+    await goToNextVisitStep(user);
     await user.click(screen.getByRole('button', { name: 'Take visit photo' }));
 
     await user.click(screen.getByRole('button', { name: 'Preview visit photo' }));

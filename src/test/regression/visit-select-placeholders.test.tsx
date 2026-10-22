@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import VisitCustomerTypeField from '../../components/VisitCustomerTypeField';
 import VisitsPage from '../../pages/VisitsPage';
+import { fillCompanyAndContact, fillVisitDetails, goToNextVisitStep } from '../fillNewVisitWizard';
 import { renderWithProviders } from '../renderWithProviders';
 
 vi.mock('../../lib/api', () => ({
@@ -50,6 +51,10 @@ describe('visit select placeholders', () => {
     const user = userEvent.setup();
     renderWithProviders(<VisitsPage />);
     await user.click(screen.getByRole('button', { name: 'Log Customer Visit' }));
+    await fillCompanyAndContact(user);
+    await goToNextVisitStep(user);
+    await fillVisitDetails(user);
+    await goToNextVisitStep(user);
     const select = screen.getByLabelText('Payment Terms');
     const option = placeholderOption(select);
     expect(option.textContent).toBe('Select Payment Terms');

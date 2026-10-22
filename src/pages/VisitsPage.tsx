@@ -43,9 +43,14 @@ import {
   VISIT_BRANDS,
   VISIT_CUSTOMER_TYPES,
   VISIT_PAYMENT_TERMS,
+  VISIT_WIZARD_STEPS,
   validateNewVisitForm,
+  visitCalendarPlusDays,
   visitCalendarToday,
   visitCityLabel,
+  visitWizardFieldKeys,
+  visitWizardProgress,
+  visitWizardStepErrors,
   visitCustomerTypeLabel,
   visitDocumentError,
   type NewVisitFormInput,
@@ -511,6 +516,7 @@ export default function VisitsPage() {
   const [formVisitDate, setFormVisitDate] = useState(formatLocalDate());
   const [formVisitTime, setFormVisitTime] = useState(formatLocalTime());
   const [formErrors, setFormErrors] = useState<Record<string, string | boolean>>({});
+  const [createStep, setCreateStep] = useState(0);
 
   // Extended Fields for Create Form
   const [formEmail, setFormEmail] = useState('');
@@ -741,9 +747,45 @@ export default function VisitsPage() {
     setFormGpsLng(null);
     setFormGpsAccuracy(null);
     setFormAttachments([]);
+    setCreateStep(0);
 
     setShowModal(true);
     void refreshVisitLocation();
+  };
+
+  const closeCreateModal = () => {
+    setShowModal(false);
+    setCreateStep(0);
+  };
+
+  const openCreateStep = (index: number) => {
+    if (index === createStep) return;
+    if (index < createStep) {
+      setFormErrors({});
+      setCreateStep(index);
+      return;
+    }
+    const input = newVisitInput();
+    for (let step = createStep; step < index; step += 1) {
+      const stepErrors = visitWizardStepErrors(input, step);
+      if (Object.keys(stepErrors).length > 0) {
+        setFormErrors(stepErrors);
+        setCreateStep(step);
+        return;
+      }
+    }
+    setFormErrors({});
+    setCreateStep(index);
+  };
+
+  const goToNextCreateStep = () => {
+    const stepErrors = visitWizardStepErrors(newVisitInput(), createStep);
+    if (Object.keys(stepErrors).length > 0) {
+      setFormErrors(stepErrors);
+      return;
+    }
+    setFormErrors({});
+    setCreateStep((step) => Math.min(step + 1, VISIT_WIZARD_STEPS.length - 1));
   };
 
   // Edit Form state
@@ -892,9 +934,14 @@ export default function VisitsPage() {
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const errors = validateNewVisitForm(newVisitInput());
+    const input = newVisitInput();
+    const errors = validateNewVisitForm(input);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
+      const firstInvalid = VISIT_WIZARD_STEPS.findIndex((_, step) =>
+        visitWizardFieldKeys(step, input).some((field) => errors[field]),
+      );
+      if (firstInvalid >= 0) setCreateStep(firstInvalid);
       return;
     }
 
@@ -949,6 +996,7 @@ export default function VisitsPage() {
       setTimeout(() => {
         setIsSavedSuccess(false);
         setShowModal(false);
+        setCreateStep(0);
         setSelectedVisit(null);
         setFormCustomerName('');
         setFormPersonMet('');
@@ -1391,6 +1439,8 @@ export default function VisitsPage() {
       to: undefined,
     });
   };
+
+  const createProgress = visitWizardProgress(newVisitInput(), createStep);
 
   return (
     <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
@@ -1954,21 +2004,65 @@ export default function VisitsPage() {
       {/* Log Visit Modal */}
       {showModal && (
         <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <MapPin className="text-blue-600" size={18} />
-                Log Customer Field Visit
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
-                <X size={18} />
-              </button>
+          <div
+            role="dialog"
+            aria-labelledby="log-visit-title"
+            className="visit-wizard mobile-sheet bg-white rounded-2xl max-w-3xl w-full p-4 sm:p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+            <div className="sheet-header flex items-start justify-between gap-3 pb-3 border-b border-slate-100 shrink-0">
+              <div className="min-w-0">
+                <h2 id="log-visit-title" className="text-base sm:text-lg font-bold text-slate-900">
+                  Log customer field visit
+                </h2>
+                <p className="mt-1 text-[11px] sm:text-xs text-slate-500">
+                  Capture the meeting while you are still on site. Fields marked * are required.
+                </p>
+              </div>
+              <div className="flex items-start gap-2 shrink-0">
+                <div className="text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Required on this step</p>
+                  <p className="text-sm font-bold text-slate-800">
+                    {createProgress.filled}/{createProgress.total}
+                  </p>
+                  <div className="mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-blue-600"
+                      style={{
+                        width: `${createProgress.total ? (createProgress.filled / createProgress.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  aria-label="Close"
+                  className="wizard-tap text-slate-400 hover:text-slate-600 p-2 rounded-lg transition-colors cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
+            <nav aria-label="Visit form steps" className="mt-3 flex gap-1 overflow-x-auto pb-1 shrink-0">
+              {VISIT_WIZARD_STEPS.map((step, index) => (
+                <button
+                  key={step.title}
+                  type="button"
+                  onClick={() => openCreateStep(index)}
+                  aria-label={`Step ${index + 1} ${step.title}`}
+                  aria-current={createStep === index ? 'step' : undefined}
+                  className={`wizard-tap shrink-0 rounded-lg px-3 py-2 text-left ${
+                    createStep === index
+                      ? 'border-b-2 border-blue-600 text-blue-700'
+                      : 'text-slate-500 hover:bg-slate-50'
+                  }`}>
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide">Step {index + 1}</span>
+                  <span className="block text-xs font-bold whitespace-nowrap">{step.title}</span>
+                </button>
+              ))}
+            </nav>
+
             <form onSubmit={handleCreateVisit} className="flex flex-col flex-1 overflow-hidden mt-3">
-              <div className="overflow-y-auto flex-1 px-3.5 py-2.5 text-xs">
+              <div className="overflow-y-auto flex-1 px-1 py-2.5 text-xs">
                 {isSavedSuccess && (
                   <div className="p-3 mb-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-2 animate-fadeIn">
                     <CheckCircle2 size={16} className="text-emerald-600" />
@@ -1976,13 +2070,16 @@ export default function VisitsPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* Left Column: Stakeholder & Classification */}
+                <div className="space-y-4">
                   <div className="space-y-3.5">
-                    <div className="pb-1 border-b border-slate-100">
-                      <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <Building2 size={13} /> Company &amp; Contact Details
-                      </span>
+                    {createStep === 0 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">1</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Company &amp; contact</p>
+                        <p className="text-[11px] text-slate-500">Who you met</p>
+                      </div>
                     </div>
 
                     <div>
@@ -2007,7 +2104,7 @@ export default function VisitsPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Person Met <span className="text-rose-500">*</span>
@@ -2051,7 +2148,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Contact Phone <span className="text-rose-500">*</span>
@@ -2103,7 +2200,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3">
                       <div>
                       <VisitLocationField
                         value={formLocation}
@@ -2146,8 +2243,20 @@ export default function VisitsPage() {
                         />
                       </div>
                     </div>
+                    </div>
+                    )}
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {createStep === 1 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">2</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Visit details</p>
+                        <p className="text-[11px] text-slate-500">When and how it went</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Visit Date <span className="text-rose-500">*</span>
@@ -2184,47 +2293,60 @@ export default function VisitsPage() {
                           <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitTime)}</p>
                         )}
                       </div>
+                    </div>
 
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          Visit Type <span className="text-rose-500">*</span>
-                        </label>
-                        <select
-                          value={formVisitType}
-                          onChange={e => {
-                            setFormVisitType(e.target.value);
-                            if (formErrors.visitType) setFormErrors(prev => ({ ...prev, visitType: false }));
-                          }}
-                          className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
-                            formErrors.visitType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
-                          }`}>
-                          <option value="First Visit">First Visit</option>
-                          <option value="Follow-up 1">Follow-up 1</option>
-                          <option value="Follow-up 2">Follow-up 2</option>
-                          <option value="Follow-up 3">Follow-up 3</option>
-                          <option value="Regular Visit">Regular Visit</option>
-                        </select>
-                        {formErrors.visitType && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitType)}</p>
-                        )}
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Visit type <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {['First Visit', 'Follow-up 1', 'Follow-up 2', 'Follow-up 3', 'Regular Visit'].map(type => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => {
+                              setFormVisitType(type);
+                              if (formErrors.visitType) setFormErrors(prev => ({ ...prev, visitType: false }));
+                            }}
+                            className={`wizard-choice rounded-xl border px-3 py-2 text-xs font-bold ${
+                              formVisitType === type
+                                ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                : 'border-slate-200 bg-white text-slate-600'
+                            }`}>
+                            {type}
+                          </button>
+                        ))}
                       </div>
+                      {formErrors.visitType && (
+                        <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitType)}</p>
+                      )}
+                    </div>
 
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          Outcome <span className="text-rose-500">*</span>
-                        </label>
-                        <Select
-                          value={formOutcome}
-                          onChange={e => {
-                            setFormOutcome(e.target.value);
-                            if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
-                          }}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
-                        >
-                          <option value="positive">Positive</option>
-                          <option value="neutral">Neutral</option>
-                          <option value="negative">Negative</option>
-                        </Select>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Outcome <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          ['positive', 'Positive'],
+                          ['neutral', 'Neutral'],
+                          ['negative', 'Negative'],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => {
+                              setFormOutcome(value);
+                              if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
+                            }}
+                            className={`wizard-choice rounded-xl border px-3 py-2 text-xs font-bold ${
+                              formOutcome === value
+                                ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                : 'border-slate-200 bg-white text-slate-600'
+                            }`}>
+                            {label}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
@@ -2241,7 +2363,7 @@ export default function VisitsPage() {
                               setFormCustomerProbability(p);
                               if (formErrors.probability) setFormErrors(prev => ({ ...prev, probability: false }));
                             }}
-                            className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            className={`wizard-choice rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                               formCustomerProbability === p
                                 ? p === 'Hot'
                                   ? 'bg-rose-50 border-rose-400 text-rose-700 ring-2 ring-rose-200'
@@ -2258,14 +2380,19 @@ export default function VisitsPage() {
                         <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.probability)}</p>
                       )}
                     </div>
+                    </div>
+                    )}
                   </div>
 
-                  {/* Right Column: Commercials, Requirements, Follow-up & Attachments */}
                   <div className="space-y-3.5">
-                    <div className="pb-1 border-b border-slate-100">
-                      <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <Briefcase size={13} /> Commercial Intelligence &amp; Requirements
-                      </span>
+                    {createStep === 2 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">3</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Commercial intelligence</p>
+                        <p className="text-[11px] text-slate-500">What they need and buy</p>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2424,6 +2551,18 @@ export default function VisitsPage() {
                         <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.currentRequirement)}</p>
                       )}
                     </div>
+                    </div>
+                    )}
+
+                    {createStep === 3 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">4</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Follow-up</p>
+                        <p className="text-[11px] text-slate-500">What happens next</p>
+                      </div>
+                    </div>
 
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2434,20 +2573,29 @@ export default function VisitsPage() {
                           <span className="text-slate-400 font-medium">Quick Due:</span>
                           <button
                             type="button"
-                            onClick={() => setFollowupPresetDays(1, false)}
-                            className="px-1.5 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded font-medium cursor-pointer shadow-2xs">
+                            onClick={() => {
+                              setFormFollowupDate(visitCalendarPlusDays(1));
+                              setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
+                            className="wizard-choice px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium cursor-pointer shadow-2xs">
                             +1d
                           </button>
                           <button
                             type="button"
-                            onClick={() => setFollowupPresetDays(3, false)}
-                            className="px-1.5 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded font-medium cursor-pointer shadow-2xs">
+                            onClick={() => {
+                              setFormFollowupDate(visitCalendarPlusDays(3));
+                              setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
+                            className="wizard-choice px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium cursor-pointer shadow-2xs">
                             +3d
                           </button>
                           <button
                             type="button"
-                            onClick={() => setFollowupPresetDays(7, false)}
-                            className="px-1.5 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded font-medium cursor-pointer shadow-2xs">
+                            onClick={() => {
+                              setFormFollowupDate(visitCalendarPlusDays(7));
+                              setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
+                            className="wizard-choice px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium cursor-pointer shadow-2xs">
                             +7d
                           </button>
                         </div>
@@ -2518,8 +2666,19 @@ export default function VisitsPage() {
                         <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter meeting remarks.</p>
                       )}
                     </div>
+                    </div>
+                    )}
 
-                    {/* Attachments Section */}
+                    {createStep === 4 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">5</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Proof &amp; verify</p>
+                        <p className="text-[11px] text-slate-500">Photo from site and customer confirmation</p>
+                      </div>
+                    </div>
+
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
                       <div className="flex items-center justify-between">
                         <label className="block font-semibold text-slate-700">
@@ -2540,7 +2699,7 @@ export default function VisitsPage() {
                           }}
                         />
 
-                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-medium border border-slate-200 shadow-2xs transition-colors">
+                        <label className="wizard-tap cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-medium border border-slate-200 shadow-2xs transition-colors">
                           <input
                             type="file"
                             multiple
@@ -2668,7 +2827,7 @@ export default function VisitsPage() {
                           type="button"
                           onClick={() => { void sendVisitCode(); }}
                           disabled={otpSending || resendSeconds > 0}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                          className="wizard-tap px-3 py-2 bg-blue-600 text-white rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
                         >
                           {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : otpVerified ? 'Resend code' : 'Send code'}
                         </button>
@@ -2686,7 +2845,7 @@ export default function VisitsPage() {
                           type="button"
                           onClick={() => { void confirmVisitCode(); }}
                           disabled={otpSending || otpCode.length !== 6}
-                          className="px-3 py-1.5 bg-slate-100 text-slate-800 rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                          className="wizard-tap px-3 py-2 bg-slate-100 text-slate-800 rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
                         >
                           Verify
                         </button>
@@ -2701,25 +2860,44 @@ export default function VisitsPage() {
                         <p className="text-[11px] text-rose-500 font-semibold">{String(formErrors.otp)}</p>
                       )}
                     </div>
+                    </div>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons with Pill-Shaped "Save" Button */}
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
+              <div className="sheet-actions pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
+                  onClick={closeCreateModal}
+                  className="wizard-tap px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={submitting || isSavedSuccess}
-                  className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50">
-                  <Save size={16} />
-                  {submitting ? 'Saving...' : isSavedSuccess ? 'Saved!' : 'Save'}
-                </button>
+                {createStep > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openCreateStep(createStep - 1)}
+                    className="wizard-tap px-4 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
+                    Back
+                  </button>
+                )}
+                {createStep < VISIT_WIZARD_STEPS.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={goToNextCreateStep}
+                    className="wizard-tap px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer">
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={submitting || isSavedSuccess}
+                    className="wizard-tap flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50">
+                    <Save size={16} />
+                    {submitting ? 'Saving...' : isSavedSuccess ? 'Saved!' : 'Save'}
+                  </button>
+                )}
               </div>
             </form>
           </div>
