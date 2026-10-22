@@ -97,7 +97,11 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() =>
+    new URLSearchParams(window.location.search).get('reason') === 'deactivated'
+      ? 'Your account has been deactivated. Please contact your admin.'
+      : '',
+  );
   const [devOtp, setDevOtp] = useState('');
 
   const handleRequestOtp = async () => {

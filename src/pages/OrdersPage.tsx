@@ -481,6 +481,23 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
   };
 }
 
+const ORDER_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
+
+function orderPaymentTerm(raw: string): string {
+  const text = raw.trim().toLowerCase();
+  const exact = ORDER_PAYMENT_TERMS.find((term) => term.toLowerCase() === text);
+  if (exact) return exact;
+  if (/\b30\b/.test(text)) return '30 Days';
+  if (/\b45\b/.test(text)) return '45 Days';
+  if (/\b60\b/.test(text)) return '60 Days';
+  if (/\blc\b/.test(text)) return 'LC';
+  if (/\bbg\b/.test(text)) return 'BG';
+  if (/\bpdc\b/.test(text)) return 'PDC';
+  if (text.includes('immediate')) return 'Immediate';
+  if (text.includes('advance')) return 'Advance';
+  return '';
+}
+
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -744,6 +761,7 @@ export default function OrdersPage() {
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [poFileName, setPoFileName] = useState('');
   const [formUploadedBase64, setFormUploadedBase64] = useState<string | null>(null);
+  const uploadRequestRef = useRef(0);
 
   // Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -829,13 +847,54 @@ export default function OrdersPage() {
       });
   };
 
-  const handleCancelCreateOrder = () => {
-    const token = poReservationToken;
-    const poNumber = formGeneratedPoNumber || formPoNumber;
-    setShowModal(false);
+  const clearExtractedOrderFields = () => {
+    setFormCustomerName('');
+    setFormCustomerPhone('');
+    setFormReferencePoNumber('');
+    setFormPoDate(new Date().toISOString().split('T')[0]);
+    setFormDeliveryLocation('');
+    setFormPaymentTerms('');
+    setFormNotes('');
+    setExtractedCustomerExtras({ contactPerson: '', gstin: '' });
+    setShowAddCustomer(false);
+    setShowCompanyDropdown(false);
+    setPoFileName('');
+    setFormUploadedBase64(null);
+    setFormLineItems([
+      {
+        sku_text: '',
+        dimensions: '',
+        hsn_code: '',
+        quantity: 0,
+        unit: 'MT',
+        rate: 0,
+        amount: 0,
+      },
+    ]);
+  };
+
+  const resetCreateOrderForm = () => {
+    clearExtractedOrderFields();
+    setFormPoNumber('');
+    setFormGeneratedPoNumber('');
     setPoReservationToken('');
     setPoConflict(null);
     poInputDirtyRef.current = false;
+    setCheckingPoAvailability(false);
+    setIsParsingDoc(false);
+  };
+
+  const handleRemoveUploadedOrderDocument = () => {
+    uploadRequestRef.current += 1;
+    setIsParsingDoc(false);
+    clearExtractedOrderFields();
+  };
+
+  const handleCancelCreateOrder = () => {
+    const token = poReservationToken;
+    const poNumber = formGeneratedPoNumber || formPoNumber;
+    resetCreateOrderForm();
+    setShowModal(false);
     releaseOrderPoReservation(token, poNumber);
   };
 
@@ -927,11 +986,14 @@ export default function OrdersPage() {
       (e.target as HTMLInputElement).value = '';
     }
 
+    const requestId = ++uploadRequestRef.current;
+    clearExtractedOrderFields();
     setPoFileName(file.name);
     setIsParsingDoc(true);
 
     const reader = new FileReader();
     reader.onload = async () => {
+      if (requestId !== uploadRequestRef.current) return;
       try {
         const base64Data = reader.result as string;
 
@@ -949,6 +1011,7 @@ export default function OrdersPage() {
           file_base64: base64Data,
           mime_type: mimeType,
         });
+        if (requestId !== uploadRequestRef.current) return;
 
         if (!res?.data?.success || !res?.data?.data) {
           throw new Error(res?.data?.error || 'Failed to extract PO details from document');
@@ -1016,7 +1079,7 @@ export default function OrdersPage() {
           gstin: String(extraction.customer_gst || extraction.gstin || extraction.gst || '').trim(),
         });
         if (extraction.payment_terms || extraction.paymentTerms) {
-          setFormPaymentTerms(String(extraction.payment_terms || extraction.paymentTerms).trim());
+          setFormPaymentTerms(orderPaymentTerm(String(extraction.payment_terms || extraction.paymentTerms)));
         }
 
         const extractedCustName = String(rawCust || formCustomerName || '').trim();
@@ -1086,13 +1149,14 @@ export default function OrdersPage() {
         }
         toast.success('PO Document parsed! All details auto-filled.');
       } catch (err: any) {
+        if (requestId !== uploadRequestRef.current) return;
         console.error('Error parsing PO document:', err);
         setFormUploadedBase64(null);
         setPoFileName('');
         setFormNotes('');
         toast.error(err?.message || 'Could not auto-extract PO details. You can enter the fields manually.');
       } finally {
-        setIsParsingDoc(false);
+        if (requestId === uploadRequestRef.current) setIsParsingDoc(false);
       }
     };
     reader.readAsDataURL(file);
@@ -1194,7 +1258,7 @@ export default function OrdersPage() {
       return;
     }
 
-    if (!formPaymentTerms.trim()) {
+    if (!ORDER_PAYMENT_TERMS.includes(formPaymentTerms)) {
       const el = document.getElementById('form-payment-terms') as HTMLInputElement;
       if (el) {
         el.focus();
@@ -1284,32 +1348,7 @@ export default function OrdersPage() {
 
       toast.success('Order Confirmed & Won! Sales Achievement & Payment tracking updated.');
       setShowModal(false);
-
-      setFormCustomerName('');
-      setFormCustomerPhone('');
-      setFormPoNumber('');
-      setFormGeneratedPoNumber('');
-      setFormReferencePoNumber('');
-      setPoReservationToken('');
-      setPoConflict(null);
-      poInputDirtyRef.current = false;
-      setFormPoDate(new Date().toISOString().split('T')[0]);
-      setFormDeliveryLocation('');
-      setFormPaymentTerms('');
-      setFormNotes('');
-      setFormLineItems([
-        {
-          sku_text: '',
-          dimensions: '',
-          hsn_code: '',
-          quantity: 0,
-          unit: 'MT',
-          rate: 0,
-          amount: 0,
-        },
-      ]);
-      setPoFileName('');
-      setFormUploadedBase64(null);
+      resetCreateOrderForm();
 
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
@@ -1932,8 +1971,7 @@ export default function OrdersPage() {
                 <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
               </div>
 
-              <label
-                htmlFor="order-po-file-upload"
+              <div
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1946,7 +1984,7 @@ export default function OrdersPage() {
                     handleFileUpload({ target: { files } } as any);
                   }
                 }}
-                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl transition-all">
                 <input
                   id="order-po-file-upload"
                   type="file"
@@ -1963,14 +2001,29 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
                     <CheckCircle size={15} className="text-emerald-600 shrink-0" />
                     <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
-                    <span className="text-[10px] text-blue-600 underline ml-1">Change</span>
+                    <label
+                      htmlFor="order-po-file-upload"
+                      className="text-[10px] text-blue-600 underline ml-1 cursor-pointer"
+                    >
+                      Change
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRemoveUploadedOrderDocument}
+                      className="text-[10px] text-rose-600 underline ml-1 cursor-pointer"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-600 font-medium py-1">
+                  <label
+                    htmlFor="order-po-file-upload"
+                    className="text-xs text-slate-600 font-medium py-1 cursor-pointer"
+                  >
                     Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
-                  </p>
+                  </label>
                 )}
-              </label>
+              </div>
             </div>
 
             <form onSubmit={handleCreateOrder} className="space-y-4">
@@ -2662,15 +2715,18 @@ export default function OrdersPage() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Payment Terms <span className="text-red-500 font-bold">*</span>
                   </label>
-                  <input
+                  <Select
                     id="form-payment-terms"
-                    type="text"
                     required
-                    placeholder="e.g. 30 Days Credit, 100% Advance"
-                    value={formPaymentTerms}
+                    value={ORDER_PAYMENT_TERMS.includes(formPaymentTerms) ? formPaymentTerms : ''}
                     onChange={e => setFormPaymentTerms(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                  >
+                    <option value="">Select payment terms</option>
+                    {ORDER_PAYMENT_TERMS.map((term) => (
+                      <option key={term} value={term}>{term}</option>
+                    ))}
+                  </Select>
                 </div>
               </div>
 

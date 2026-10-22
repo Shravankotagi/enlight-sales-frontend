@@ -24,7 +24,7 @@ const SidebarDemo = lazy(() => import('./components/SidebarDemo'));
 import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
-  const { isAuthenticated, employee, clearViewingAs } = useAuth();
+  const { isAuthenticated, employee, clearViewingAs, isSalesManager } = useAuth();
   const location = useLocation();
   const isAdmin = employee?.role === 'admin';
 
@@ -85,7 +85,7 @@ function AppRoutes() {
         />
         <Route
           path="/control-panel"
-          element={isAdmin ? <AdminSelectionPage /> : <Navigate to="/home" replace />}
+          element={(isAdmin || isSalesManager) ? <AdminSelectionPage /> : <Navigate to="/home" replace />}
         />
       </Route>
 

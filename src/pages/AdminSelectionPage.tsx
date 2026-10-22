@@ -455,8 +455,8 @@ export default function AdminSelectionPage() {
   ).length;
 
   return (
-    <div className={isAdmin ? 'space-y-6 animate-fade-in pb-12 font-sans text-slate-900' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
-      <div className={isAdmin ? 'space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
+    <div className={(isAdmin || isSalesManager) ? 'space-y-6 animate-fade-in pb-12 font-sans text-slate-900' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
+      <div className={(isAdmin || isSalesManager) ? 'space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
         {/* Top Executive Header Card */}
         <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -555,9 +555,11 @@ export default function AdminSelectionPage() {
                 {employees.length}
               </h2>
               <div className="flex items-center gap-2 mt-2">
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
-                  <CheckCircle2 size={11} /> 100% Active Staff
-                </span>
+                {employees.length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                    <CheckCircle2 size={11} /> 100% Active Staff
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -628,68 +630,6 @@ export default function AdminSelectionPage() {
             </div>
           </div>
         </div>
-
-        {/* Executive Launch Banners (Personal Workspace vs Company Overview) */}
-        {isAdmin && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Banner 1: Personal Salesperson Workspace */}
-            <div
-              onClick={handleViewPersonalDashboard}
-              className="bg-white hover:bg-blue-50/30 border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
-                    <UserCheck size={14} /> Personal Workspace
-                  </span>
-                  <span className="text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    Open Workspace <ArrowRight size={13} />
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                  My Salesperson Dashboard
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Direct view into Dhananjay's personal inquiries, won orders (470+ MT), personal deal pipeline, and individual customer accounts.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
-                <span className="text-slate-400">Scoped strictly to personal accounts</span>
-                <span className="font-bold text-blue-600">Launch My View →</span>
-              </div>
-            </div>
-
-            {/* Banner 2: Enterprise Admin Overview */}
-            <div
-              onClick={() => {
-                clearViewingAs();
-                navigate('/reports');
-              }}
-              className="bg-white hover:bg-indigo-50/30 border border-slate-200 hover:border-indigo-300 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
-                    <ShieldAlert size={14} /> Executive Intelligence
-                  </span>
-                  <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    Open Analytics <ArrowRight size={13} />
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                  Company-Wide Admin Overview
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Aggregated executive view covering all 13 sales representatives, total delivered tonnage (4,992+ MT), review queues, and company-wide won orders.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
-                <span className="text-slate-400">Company-wide aggregated metrics</span>
-                <span className="font-bold text-indigo-600">Launch Analytics →</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Directory Management Console */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -839,11 +779,15 @@ export default function AdminSelectionPage() {
             <div className="text-center py-16 p-8">
               <Users size={44} className="text-slate-300 mx-auto mb-3" />
               <p className="text-slate-800 font-bold text-sm">
-                No matching accounts found
+                {isSalesManager && employees.length === 0
+                  ? 'No salespeople are assigned to you.'
+                  : 'No matching accounts found'}
               </p>
-              <p className="text-slate-400 text-xs mt-1">
-                Try adjusting your search criteria or role filters.
-              </p>
+              {!isSalesManager || employees.length > 0 ? (
+                <p className="text-slate-400 text-xs mt-1">
+                  Try adjusting your search criteria or role filters.
+                </p>
+              ) : null}
             </div>
           ) : viewMode === 'table' ? (
             /* High-Density Enterprise Table View */
@@ -1303,7 +1247,9 @@ export default function AdminSelectionPage() {
                       placeholder="-- None (Direct to Admin) --"
                     >
                       <option value="">-- None (Direct to Admin) --</option>
-                      {allManagers.map((mgr) => (
+                      {allManagers
+                        .filter((mgr) => mgr.id !== form.id)
+                        .map((mgr) => (
                         <option key={mgr.id} value={mgr.id}>
                           {mgr.name} ({mgr.employee_id})
                         </option>

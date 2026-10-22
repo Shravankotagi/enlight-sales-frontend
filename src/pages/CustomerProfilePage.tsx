@@ -36,12 +36,15 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import {
-  calculateOrdersTotalTonnage,
   getOrderTonnage,
   INDIAN_GST_STATES,
   resolveCustomerState,
 } from '../utils/pricingEngine';
 import { Select } from '../components/ui/select';
+import {
+  evaluateCustomerGstin,
+  GSTIN_LOCATION_ERROR,
+} from '../utils/customerGstin';
 
 function safeStr(val: any): string {
   if (val === null || val === undefined) return '';
@@ -307,6 +310,13 @@ function CustomerProfilePageContent() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
+  const [gstinErrorRevealed, setGstinErrorRevealed] = useState(false);
+  const gstinEvaluation = evaluateCustomerGstin(editForm.customer_gst);
+  const gstinError =
+    gstinEvaluation.status === 'invalid' &&
+    (gstinErrorRevealed || gstinEvaluation.normalized.length >= 15)
+      ? GSTIN_LOCATION_ERROR
+      : null;
 
   // Fetch employees for rep mapping
   const { data: rawEmployees = [] } = useQuery<any[]>({
@@ -446,19 +456,22 @@ function CustomerProfilePageContent() {
 
   const handleOpenEdit = () => {
     if (!customer) return;
+    const gstinResult = evaluateCustomerGstin(customer.customer_gst);
+    const address = customer.customer_address || customer.address || '';
     const derivedState =
       customer.customer_state ||
       resolveCustomerState({
-        gstin: customer.customer_gst,
-        address: customer.customer_address || customer.address,
+        gstin: gstinResult.status === 'valid' ? gstinResult.normalized : undefined,
+        address,
       })?.label ||
       '';
+    setGstinErrorRevealed(gstinResult.status === 'invalid');
     setEditForm({
       customer_name: customer.customer_name || '',
       contact_person: customer.contact_person || '',
       customer_phone: customer.customer_phone || '',
-      customer_gst: customer.customer_gst || '',
-      customer_address: customer.customer_address || customer.address || '',
+      customer_gst: gstinResult.normalized,
+      customer_address: address,
       customer_state: derivedState,
       assigned_salesperson_phone: customer.assigned_salesperson_phone || '',
       avg_order_frequency_days: customer.avg_order_frequency_days || 30,
@@ -471,6 +484,11 @@ function CustomerProfilePageContent() {
     e.preventDefault();
     if (!editForm.customer_name || !editForm.customer_name.trim()) {
       toast.error('Customer name is required');
+      return;
+    }
+    if (evaluateCustomerGstin(editForm.customer_gst).status === 'invalid') {
+      setGstinErrorRevealed(true);
+      toast.error(GSTIN_LOCATION_ERROR);
       return;
     }
     updateMutation.mutate(editForm);
@@ -755,7 +773,7 @@ function CustomerProfilePageContent() {
           <div>
             <p className="text-xs text-slate-500 font-medium">Total Tonnage</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">
-              {calculateOrdersTotalTonnage(wonDeals).formattedText || formatTonnage(customer.total_tonnage)}
+              {formatTonnage(customer.total_tonnage)}
             </p>
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -1591,23 +1609,51 @@ function CustomerProfilePageContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">
+                  <label
+                    htmlFor="customer-gstin"
+                    className="block text-slate-600 font-semibold mb-1"
+                  >
                     GSTIN Number
                   </label>
                   <input
+                    id="customer-gstin"
                     type="text"
                     value={editForm.customer_gst}
+                    aria-invalid={gstinError ? true : undefined}
+                    aria-describedby={gstinError ? 'customer-gstin-error' : undefined}
+                    onBlur={e => {
+                      if (evaluateCustomerGstin(e.target.value).status === 'invalid') {
+                        setGstinErrorRevealed(true);
+                      }
+                    }}
                     onChange={e => {
-                      const nextGst = e.target.value;
-                      const gstState = resolveCustomerState({ gstin: nextGst });
+                      const result = evaluateCustomerGstin(e.target.value);
+                      setGstinErrorRevealed(
+                        result.status === 'invalid' &&
+                          (result.normalized.length >= 15 || gstinErrorRevealed),
+                      );
                       setEditForm({
                         ...editForm,
-                        customer_gst: nextGst,
-                        customer_state: gstState?.label || editForm.customer_state,
+                        customer_gst: result.normalized,
+                        customer_state:
+                          result.status === 'valid'
+                            ? result.state.label
+                            : editForm.customer_state,
                       });
                     }}
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono transition-all shadow-2xs"
+                    className={`w-full px-3.5 py-2.5 border ${
+                      gstinError ? 'border-rose-400' : 'border-slate-300'
+                    } rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono transition-all shadow-2xs`}
                   />
+                  {gstinError && (
+                    <p
+                      id="customer-gstin-error"
+                      role="alert"
+                      className="mt-1 text-xs font-medium text-rose-600"
+                    >
+                      {gstinError}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1645,9 +1691,13 @@ function CustomerProfilePageContent() {
                     value={editForm.customer_address}
                     onChange={e => {
                       const nextAddr = e.target.value;
+                      const gstinResult = evaluateCustomerGstin(editForm.customer_gst);
                       const derivedState = !editForm.customer_state
                         ? resolveCustomerState({
-                            gstin: editForm.customer_gst,
+                            gstin:
+                              gstinResult.status === 'valid'
+                                ? gstinResult.normalized
+                                : undefined,
                             address: nextAddr,
                           })?.label || ''
                         : editForm.customer_state;
