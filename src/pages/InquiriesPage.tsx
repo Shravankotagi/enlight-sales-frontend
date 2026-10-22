@@ -845,6 +845,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
       paymentTerms = '45 Days Credit';
     } else if (textLower.includes('60 days') || textLower.includes('60-day')) {
       paymentTerms = '60 Days Credit';
+    } else if (textLower.includes('90 days') || textLower.includes('90-day')) {
+      paymentTerms = '90 Days Credit';
     } else {
       paymentTerms = '';
     }
@@ -1223,7 +1225,7 @@ const createDashboardWonReservationToken = () =>
   `dashboard-won:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
 
 const INQUIRY_PREFERRED_MAKES = ['TATA', 'JSW', 'AM/NS India', 'SAIL', 'NMDC', 'Apollo', 'Others'];
-const INQUIRY_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
+const INQUIRY_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', '90 Days', 'LC', 'BG', 'PDC'];
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
