@@ -148,7 +148,7 @@ function getCachedMessages(sessionId: string | null): ChatMessage[] {
 const COMPOSER_MAX_HEIGHT = 160;
 
 function assistantAsksForVisitLocation(text: string) {
-  return /location pin or city|type the city/i.test(text);
+  return /log customer field visit|location is auto-fetched|location pin or city|type the city/i.test(text);
 }
 
 function fitComposer(el: HTMLTextAreaElement) {

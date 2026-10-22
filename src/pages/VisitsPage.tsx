@@ -70,21 +70,7 @@ export { getFollowUpStatusInfo };
 export function formatCityLocality(rawLocation?: string | null, rawAddress?: string | null): string {
   const str = (rawLocation || rawAddress || '').trim();
   if (!str || str === '-' || str.toLowerCase() === 'null') return '-';
-
-  // Clean up pin codes, trailing states/countries
-  const cleaned = str
-    .replace(/,\s*India\b/i, '')
-    .replace(/,\s*Maharashtra\b/i, '')
-    .replace(/\b\d{6}\b/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^[,\s]+|[,\s]+$/g, '');
-
-  const parts = cleaned.split(',').map(p => p.trim()).filter(Boolean);
-  if (parts.length <= 2) {
-    return parts.join(', ');
-  }
-  return parts.slice(-2).join(', ');
+  return str;
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
@@ -1808,7 +1794,7 @@ export default function VisitsPage() {
 
                       {/* 3. Location */}
                       <td className="px-4 py-3.5 text-xs">
-                        <div className="font-semibold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
+                        <div className="font-semibold text-slate-800 flex items-start gap-1.5 whitespace-normal">
                           <MapIcon size={12} className="text-slate-400 shrink-0" />
                           {formatCityLocality(v.location, v.customer_address)}
                         </div>
