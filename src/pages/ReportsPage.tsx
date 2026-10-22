@@ -116,12 +116,35 @@ export default function ReportsPage() {
 
   const refetchAll = () => {
     refetchOverview();
+    refetchWonOrders();
   };
 
-  // Single source of truth: calculate total tonnage across actual won orders in scope
+  const { data: wonOrders = [], refetch: refetchWonOrders } = useQuery({
+    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode],
+    queryFn: () =>
+      ordersApi
+        .getAll({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+          ...(dateRange.preset === 'all'
+            ? {}
+            : { from: dateRange.from, to: dateRange.to }),
+        })
+        .then((response) => {
+          const raw = response?.data;
+          return Array.isArray(raw)
+            ? raw
+            : Array.isArray(raw?.data)
+              ? raw.data
+              : [];
+        }),
+    placeholderData: keepPreviousData,
+  });
+
+  // Same won orders and tonnage helper as the dashboard and Orders page.
   const totalTonnageResult = useMemo(() => {
-    return calculateOrdersTotalTonnage(overview?.orders || []);
-  }, [overview?.orders]);
+    return calculateOrdersTotalTonnage(wonOrders);
+  }, [wonOrders]);
 
   const totalMt = totalTonnageResult.totalMt;
 
