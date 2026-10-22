@@ -18,7 +18,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { routeAllowed } from '../utils/aclConstants';
 import {
@@ -494,7 +494,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
         {/* Page Content */}
         <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-          {children || <Outlet />}
+          <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+            {children || <Outlet />}
+          </Suspense>
         </div>
       </div>
     </div>

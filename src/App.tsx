@@ -85,7 +85,7 @@ function AppRoutes() {
           )
         }
       >
-        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/pipeline" element={<Navigate to="/inquiries?view=pipeline" replace />} />
