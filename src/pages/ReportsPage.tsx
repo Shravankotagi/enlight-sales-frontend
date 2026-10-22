@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { reportsApi, ordersApi, inquiriesApi, visitsApi, activityLogsApi } from '../lib/api';
+import { reportsApi, ordersApi, inquiriesApi, dealsApi, visitsApi, activityLogsApi } from '../lib/api';
 import { formatIstDateTime, formatSessionDuration } from '../utils/istDateTime';
 import SyncBiginButton from '../components/SyncBiginButton';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,29 @@ import PaginationControl, { pageOf } from '../components/PaginationControl';
 import { formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
+import { buildInquiryScopeParams } from '../utils/inquiryScope';
+import {
+  isProductInquiry,
+  parseInquiryText,
+  resolveInquiryDealStageKey,
+} from './InquiriesPage';
+
+const FUNNEL_ROWS = [
+  { key: 'new_inquiry', label: 'New Inquiry' },
+  { key: 'quoted', label: 'Price Quote' },
+  { key: 'negotiation', label: 'Negotiation' },
+  { key: 'on_hold', label: 'On Hold' },
+  { key: 'won', label: 'Closed Won' },
+  { key: 'lost', label: 'Closed Lost' },
+];
+
+function inquiryCreatedDay(value?: string) {
+  if (!value) return '';
+  const trimmed = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().split('T')[0];
+}
 
 export default function ReportsPage() {
   const { effectivePhone, isAdmin, employee, activeRole, activeMode } = useAuth();
@@ -114,9 +137,40 @@ export default function ReportsPage() {
     staleTime: 30000,
   });
 
+  const { data: funnelInquiries = [], refetch: refetchFunnelInquiries } = useQuery({
+    queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
+    queryFn: async () => {
+      const res = await inquiriesApi.getAll(buildInquiryScopeParams(effectivePhone, activeMode));
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: funnelDeals = [], refetch: refetchFunnelDeals } = useQuery({
+    queryKey: ['reports-funnel-deals', effectivePhone, dateRange, activeRole, activeMode],
+    queryFn: async () => {
+      const params = buildInquiryScopeParams(effectivePhone, activeMode);
+      if (dateRange.preset !== 'all') {
+        if (dateRange.from) {
+          params.from = dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`;
+        }
+        if (dateRange.to) {
+          params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
+        }
+      }
+      const res = await dealsApi.getAll(params).catch(() => null);
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+    },
+    placeholderData: keepPreviousData,
+  });
+
   const refetchAll = () => {
     refetchOverview();
     refetchWonOrders();
+    refetchFunnelInquiries();
+    refetchFunnelDeals();
   };
 
   const { data: wonOrders = [], refetch: refetchWonOrders } = useQuery({
@@ -191,9 +245,34 @@ export default function ReportsPage() {
     },
   });
 
-  const funnelList: any[] = Array.isArray(overview?.funnel)
-    ? overview.funnel
-    : (overview?.funnel?.funnel || []);
+  const funnelList = useMemo(() => {
+    const from = dateRange.preset === 'all' ? '' : (dateRange.from || '').split('T')[0];
+    const to = dateRange.preset === 'all' ? '' : (dateRange.to || '').split('T')[0];
+    const counts: Record<string, number> = {
+      new_inquiry: 0,
+      quoted: 0,
+      negotiation: 0,
+      on_hold: 0,
+      won: 0,
+      lost: 0,
+    };
+    for (const inq of funnelInquiries) {
+      if (!isProductInquiry(inq)) continue;
+      if (from && to) {
+        const day = inquiryCreatedDay(inq.created_at);
+        if (day && (day < from || day > to)) continue;
+      }
+      const companyName = parseInquiryText(inq.raw_text || '', inq).companyName;
+      let stage = resolveInquiryDealStageKey(inq, companyName, funnelDeals);
+      if (stage === 'qualified' || stage === 'saved' || stage === 'confirmed') stage = 'quoted';
+      if (stage === 'hold') stage = 'on_hold';
+      if (counts[stage] !== undefined) counts[stage] += 1;
+    }
+    return FUNNEL_ROWS.map((row) => ({ stage: row.key, label: row.label, count: counts[row.key] }));
+  }, [funnelInquiries, funnelDeals, dateRange]);
+  const funnelTotal = funnelList.reduce((sum, row) => sum + row.count, 0);
+  const funnelWon = funnelList.find((row) => row.stage === 'won')?.count || 0;
+  const funnelWinRate = funnelTotal > 0 ? Math.round((funnelWon / funnelTotal) * 100) : 0;
   const skuPager = pageOf(overview?.skus || [], skuPage);
   const loginPager = pageOf(loginActivity, loginPage);
   const visitsPager = pageOf(reportVisits, visitsPage);
@@ -371,7 +450,7 @@ export default function ReportsPage() {
                 <p className="text-sm text-gray-500 mt-5 pt-3 border-t">
                   Overall win rate:{' '}
                   <span className="font-bold text-green-600 text-base">
-                    {overview?.summary?.conversion_rate || 0}%
+                    {funnelWinRate}%
                   </span>
                 </p>
               </>
