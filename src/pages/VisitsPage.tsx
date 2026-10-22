@@ -860,7 +860,11 @@ export default function VisitsPage() {
       const res = await visitsApi.requestVisitOtp(formContactPhone);
       const body = res?.data?.data || res?.data;
       setResendSeconds(Number(body?.resend_after_seconds) || 60);
-      setOtpNotice(body?.message || 'Code sent to the customer WhatsApp number.');
+      setOtpNotice(
+        body?.test_otp
+          ? `Temporary test code: ${body.test_otp}. WhatsApp was not used.`
+          : body?.message || 'Code sent to the customer WhatsApp number.',
+      );
       setOtpVerified(false);
       setVerificationToken('');
     } catch (err: any) {

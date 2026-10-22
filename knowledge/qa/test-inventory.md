@@ -54,6 +54,7 @@ Current regression tests:
 | Bot | `visit-chat-location-photo.test.js` | A visit pin stores the geocoded address, and only a camera photo after that pin is the visit photo |
 | Bot | `visit-future-dates.test.js` | A past next purchase or follow-up stays in the prompt list until the day is today |
 | Bot | `visit-relative-dates.test.js` | Tomorrow and after a month become calendar days and leave the visit prompt list |
+| Backend, Bot | `visit-otp-test-mode.test.ts`, `visit-otp-test-mode.test.js` | A visit test flag returns the code without WhatsApp, and the WhatsApp configuration error remains when the flag is off |
 | Backend | `customer-type-other.test.ts` | Other without a typed type is rejected, and Other with text is stored on the visit row |
 | Bot | `customer-type-other.test.js` | The customer-type prompt includes Other, and the visit row keeps the typed type |
 
