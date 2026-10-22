@@ -41,14 +41,38 @@ export function calculateLineRate(
   );
 }
 
+const PIECE_UNITS = new Set([
+  "nos",
+  "no",
+  "pcs",
+  "pc",
+  "pieces",
+  "piece",
+  "units",
+  "unit",
+  "sheets",
+  "sheet",
+  "plates",
+  "plate",
+  "bundles",
+  "bundle",
+  "coils",
+  "coil",
+]);
+
 export function calculateLineAmount(
   ratePerMt: number,
   quantity: number,
   unit: string,
+  weightMt?: number | null,
 ): number {
-  return money(
-    Math.max(0, Number(ratePerMt) || 0) * quantityToMt(quantity, unit),
-  );
+  const rate = Math.max(0, Number(ratePerMt) || 0);
+  const explicit = Number(weightMt);
+  if (weightMt != null && Number.isFinite(explicit) && explicit > 0) {
+    return money(rate * explicit);
+  }
+  if (PIECE_UNITS.has(String(unit || "").toLowerCase())) return 0;
+  return money(rate * quantityToMt(quantity, unit));
 }
 
 export function getGstSplit(amount: number, deliveryAddress = "") {

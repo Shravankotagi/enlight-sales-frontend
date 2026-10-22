@@ -4,19 +4,12 @@
 `InquiriesModule` manages early-stage customer demand in `inquiries` and `inquiry_items`, including intake, status/review queues, document/text parsing, quotation preview/send, and PDF generation.
 
 ## Interface
-Frontend calls `/inquiries`, `/inquiries/:id`, `/inquiries/review-queue`, `/inquiries/stats`, `/inquiries/:id/status`, `/inquiries/:id/procurement-assignee`, quotation preview/send endpoints, `/inquiries/generate-pdf`, `/inquiries/parse-document`, and `/inquiries/parse-text`.
-
-### Procurement Assignment Endpoint
-- `PATCH /inquiries/:id/procurement-assignee`:
-  - Body: `{ procurementEmployeeId: string | null }`
-  - Allowed for `admin` and `procurement_manager` (reassigning within their team).
-  - Sets `inquiries.procurement_employee_id` and stamps `inquiries.procurement_assigned_at = NOW()`.
-  - Passing `null` returns the inquiry to the unassigned intake pool.
+Frontend calls `/inquiries`, `/inquiries/:id`, `/inquiries/review-queue`, `/inquiries/stats`, `/inquiries/:id/status`, quotation preview/send endpoints, `/inquiries/generate-pdf`, `/inquiries/parse-document`, and `/inquiries/parse-text`.
 
 ### Procurement Scoping & Intake Pool
 When an inquiry query is issued by a procurement role (`procurement_person` or `procurement_manager`), `InquiriesService` applies `procurementScope`:
 - Assigned Inquiries: inquiries where `procurement_employee_id` matches the accessible procurement IDs.
-- Unassigned Intake Pool: open inquiries where `stage IN ('new', 'pending', 'review', 'draft')` and `procurement_employee_id IS NULL`. This allows procurement specialists to view and claim incoming demands or populate supplier base prices.
+- Unassigned Intake Pool: open inquiries where `stage IN ('new', 'pending', 'review', 'draft')` and `procurement_employee_id IS NULL`. Procurement specialists can view those inquiries and enter supplier base prices.
 
 ### Procurement Guardrails & Prohibitions
 To preserve commercial integrity, procurement roles are strictly restricted:
@@ -27,6 +20,8 @@ To preserve commercial integrity, procurement roles are strictly restricted:
 
 ### Quotation email CC contract
 Quotation emails use the subject `Enlight Metals- Quotation for {customer name}`. The body greets the customer in capital letters, and the sent message is HTML with the company logo at the top and bottom. The quotation PDF attachment is unchanged. If the Share Quotation subject does not already start with `Enlight Metals- `, the backend adds that prefix before sending. Purchase-order emails keep their own template.
+
+Quotation preview and send allow the inquiry when the caller's `employees.id` owns it, the same way line pricing does. A raw phone match is not enough. The Share Quotation modal shows the API `error` field when prepare or send fails.
 
 `POST /inquiries/quotation-preview/:id` returns the resolved default `cc` list for the Share Quotation modal. The frontend may add extra CC chips, but `dj@enlightmetals.com` and `vedant@enlightmetals.com` are fixed: they cannot be removed, and the backend adds them to every quotation send even if the request omits them. The customer `To` address is still excluded from CC. If `cc` is omitted, the backend also keeps the sender on the default list.
 
@@ -43,7 +38,7 @@ Each inquiry has its own `procurement_number` (`PR-10001`, `PR-10002`, ...). Tha
 
 `pricing_status` is set to `awaiting_price` only when a new inquiry is created. Inquiries created before 15 Oct 2026 keep their original status: `supabase-pricing-status-preserve.sql` clears the column default and nulls `awaiting_price` on those rows when they have no saved line prices. The list shows the deal status when `pricing_status` is null.
 
-`procurement_person` sees inquiries whose `procurement_employee_id` is their own employee id. `procurement_manager` also sees their team's rows and open unassigned inquiries (`new`, `pending`, `review`, `draft` with a null owner). Scope is applied in Node, not with a PostgREST `.or()`. They can edit non-terminal inquiries and cannot create inquiries, send or preview quotations, or move an inquiry to confirmed, won, or lost. A manager can delete only rows already assigned to the team. `PATCH /inquiries/:id/procurement-assignee` assigns an owner; admins are unrestricted, managers only within their team.
+`procurement_person` sees inquiries whose `procurement_employee_id` is their own employee id. `procurement_manager` also sees their team's rows and open unassigned inquiries (`new`, `pending`, `review`, `draft` with a null owner). Scope is applied in Node, not with a PostgREST `.or()`. They can edit non-terminal inquiries and cannot create inquiries, send or preview quotations, or move an inquiry to confirmed, won, or lost. A manager can delete only rows already assigned to the team. An inquiry owner is copied from the salesperson when the inquiry is created, or when that salesperson is routed to a procurement person. There is no control to assign or clear an owner on an existing inquiry.
 
 The assistant uses this same scope. A procurement base-price reply follows `PATCH /inquiries/:id/procurement-pricing`: one priced line makes the inquiry `price_ready`, and every line blank makes it `unavailable`. That save does not replace credit, transport, loading, or margin. Sales then sends transport, loading, credit, and margin. The sell rate is `base + transport + loading + credit + margin`. The inquiry becomes `sales_priced`, and its stage becomes `quoted` (Price Quote) unless it is already Negotiation, On Hold, Won, or Lost. Apply `supabase-inquiry-line-credit.sql` before credit can be stored. The bot retries a pricing save without `credit_per_mt` when that column is missing.
 
