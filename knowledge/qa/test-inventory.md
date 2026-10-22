@@ -53,6 +53,7 @@ Current regression tests:
 | Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |
 | Frontend | `assistant-input-scroll.test.tsx` | A long assistant prompt stays in a scrolling textarea, Enter sends, and Shift+Enter adds a line |
 | Frontend | `assistant-visit-gps.test.tsx` | Opening Log Visit in the assistant starts the device location watch, and an ordinary reply does not |
+| Frontend | `assistant-upload-pdf.test.tsx` | Upload from device accepts a PDF and refuses an image |
 | Bot | `visit-chat-location-photo.test.js` | A WhatsApp visit accepts only a location pin, the assistant stores the full auto-fetched address instead of a shortened city, and only a camera photo after the pin is the visit photo |
 | Bot | `visit-location-edit-lock.test.js` | A new visit's confirmation and edit steps cannot change the captured location, and a delivery location edit still goes through |
 | Bot | `visit-future-dates.test.js` | A past next purchase or follow-up stays in the prompt list until the day is today |

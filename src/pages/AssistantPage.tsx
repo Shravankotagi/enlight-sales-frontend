@@ -274,9 +274,13 @@ export default function AssistantPage() {
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const isPdf = file.type === 'application/pdf';
-    if (!file.type.startsWith('image/') && !isPdf) {
-      setError('Please attach an image or PDF document.');
+    const type = file.type.toLowerCase();
+    const name = file.name.toLowerCase();
+    const isPdf = type === 'application/pdf' || name.endsWith('.pdf');
+    const isImage = type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/.test(name);
+    if (!isPdf || isImage) {
+      setError('Upload a PDF. Use Capture an image for photos.');
+      e.target.value = '';
       return;
     }
 
@@ -291,6 +295,7 @@ export default function AssistantPage() {
       focusInput();
     };
     reader.readAsDataURL(file);
+    setError(null);
     photoSourceRef.current = 'upload';
     setGpsLocation(null);
     setGpsStatus('idle');
@@ -1038,7 +1043,7 @@ export default function AssistantPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,.pdf,application/pdf"
+                accept=".pdf,application/pdf"
                 className="hidden"
                 onChange={handlePhotoSelect}
               />
