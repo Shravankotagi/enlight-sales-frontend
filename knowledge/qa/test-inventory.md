@@ -48,6 +48,7 @@ Current regression tests:
 | Frontend | `visit-select-placeholders.test.tsx` | Customer Type and Payment Terms prompts are shown when empty and cannot be selected |
 | Frontend | `visit-future-dates.test.tsx` | A new visit rejects a past next purchase date and follow-up date, and the date pickers start at today |
 | Frontend | `visit-media-preview.test.tsx` | A new visit shows a preview of the captured photo and of each added image or PDF before save |
+| Frontend | `issue-visit-logging-wizard.test.tsx` | The new-visit dialog opens on company and contact, hides later fields, and stays there when Next is pressed with an empty company |
 | Frontend | `visit-list-address.test.tsx` | The visits list shows the full autofetched address instead of only the area and city |
 | Backend | `visit-future-dates.test.ts` | A new visit rejects a past next purchase date and follow-up date, and accepts today |
 | Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |

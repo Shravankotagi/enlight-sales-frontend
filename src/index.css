@@ -159,6 +159,15 @@ option {
   }
 }
 
+.visit-wizard input:not([type="checkbox"]):not([type="file"]),
+.visit-wizard select,
+.visit-wizard textarea,
+.visit-wizard .wizard-choice,
+.visit-wizard .wizard-tap,
+.visit-wizard [aria-haspopup="listbox"] {
+  min-height: 2.75rem;
+}
+
 /* Animated Login Page Background Effects */
 @keyframes loginDotDrift {
   0% {

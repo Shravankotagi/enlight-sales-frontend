@@ -91,6 +91,80 @@ export function visitCalendarToday(now: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+export function visitCalendarPlusDays(days: number, now: Date = new Date()): string {
+  const [year, month, day] = visitCalendarToday(now).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  const nextYear = date.getUTCFullYear();
+  const nextMonth = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const nextDay = String(date.getUTCDate()).padStart(2, '0');
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
+export const VISIT_WIZARD_STEPS = [
+  { title: 'Company & contact', subtitle: 'Who you met' },
+  { title: 'Visit details', subtitle: 'When and how it went' },
+  { title: 'Commercial intelligence', subtitle: 'What they need and buy' },
+  { title: 'Follow-up', subtitle: 'What happens next' },
+  { title: 'Proof & verify', subtitle: 'Photo from site and customer confirmation' },
+] as const;
+
+export function visitWizardFieldKeys(
+  step: number,
+  input: NewVisitFormInput,
+): string[] {
+  if (step === 0) {
+    return [
+      'customerName',
+      'personMet',
+      'designation',
+      'contactPhone',
+      'email',
+      'location',
+      'customerType',
+      ...(input.customerType === 'Other' ? ['customerTypeOther'] : []),
+    ];
+  }
+  if (step === 1) {
+    return ['visitDate', 'visitTime', 'visitType', 'outcome', 'probability'];
+  }
+  if (step === 2) {
+    return [
+      'productDetails',
+      'monthlyConsumption',
+      'brands',
+      'paymentTerms',
+      'deliveryLocation',
+      'nextPurchase',
+      'currentRequirement',
+      ...(input.brands.includes('Others') ? ['brandOther'] : []),
+    ];
+  }
+  if (step === 3) return ['followup', 'followupDate', 'remarks'];
+  if (step === 4) return ['photo', 'otp'];
+  return [];
+}
+
+export function visitWizardStepErrors(
+  input: NewVisitFormInput,
+  step: number,
+): Record<string, string> {
+  const errors = validateNewVisitForm(input);
+  const stepErrors: Record<string, string> = {};
+  visitWizardFieldKeys(step, input).forEach((field) => {
+    if (errors[field]) stepErrors[field] = errors[field];
+  });
+  return stepErrors;
+}
+
+export function visitWizardProgress(input: NewVisitFormInput, step: number) {
+  const errors = validateNewVisitForm(input);
+  const fields = visitWizardFieldKeys(step, input);
+  return {
+    filled: fields.filter((field) => !errors[field]).length,
+    total: fields.length,
+  };
+}
+
 export function visitCalendarDay(value: string): string {
   const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!match) return '';
