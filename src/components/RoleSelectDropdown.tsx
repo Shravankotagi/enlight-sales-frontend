@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getAllRoles, setRolesCache, type RoleItem } from '../utils/aclConstants';
+import { getAllRoles, setRolesCache, isSystemRoleId, type RoleItem } from '../utils/aclConstants';
 import { rolesApi } from '../lib/api';
 import { ChevronDown, Search, Check, Shield } from 'lucide-react';
 
@@ -51,7 +51,7 @@ export const RoleSelectDropdown: React.FC<RoleSelectDropdownProps> = ({
           id: row.id,
           name: row.name,
           description: row.description || '',
-          isSystem: Boolean(row.is_system ?? row.isSystem),
+          isSystem: Boolean(row.is_system ?? row.isSystem) || isSystemRoleId(row.id),
           data_scope: row.data_scope,
           permissions: row.permissions || {},
         }));

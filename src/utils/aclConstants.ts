@@ -557,12 +557,29 @@ export interface RoleItem {
   permissions: Record<string, boolean>;
 }
 
+export const SYSTEM_ROLE_IDS = [
+  'admin',
+  'sales_manager',
+  'salesperson',
+  'procurement_manager',
+  'procurement_person',
+] as const;
+
+export type SystemRoleId = (typeof SYSTEM_ROLE_IDS)[number];
+
+export function isSystemRoleId(roleId: string | null | undefined): boolean {
+  if (!roleId) return false;
+  const norm = roleId === 'manager' ? 'sales_manager' : String(roleId).trim().toLowerCase();
+  return (SYSTEM_ROLE_IDS as readonly string[]).includes(norm);
+}
+
 export const INITIAL_SYSTEM_ROLES: RoleItem[] = [
   {
     id: 'admin',
     name: 'Admin',
     description: 'Full company-wide visibility, staff management, and system configuration.',
     isSystem: true,
+    data_scope: 'all',
     permissions: DEFAULT_ROLE_TEMPLATES.admin,
   },
   {
@@ -570,6 +587,7 @@ export const INITIAL_SYSTEM_ROLES: RoleItem[] = [
     name: 'Sales Manager',
     description: 'Team supervisor: manages assigned sales reps, customer accounts, deals, and field visits.',
     isSystem: true,
+    data_scope: 'team',
     permissions: DEFAULT_ROLE_TEMPLATES.sales_manager,
   },
   {
@@ -577,6 +595,7 @@ export const INITIAL_SYSTEM_ROLES: RoleItem[] = [
     name: 'Salesperson',
     description: 'Standard field representative: creates visits, handles inquiries, applies margins, and issues quotes.',
     isSystem: true,
+    data_scope: 'own',
     permissions: DEFAULT_ROLE_TEMPLATES.salesperson,
   },
   {
@@ -584,6 +603,7 @@ export const INITIAL_SYSTEM_ROLES: RoleItem[] = [
     name: 'Procurement Manager',
     description: 'Procurement supervisor: reviews raw inquiries and provides base product purchase rates for all assigned procurement team inquiries.',
     isSystem: true,
+    data_scope: 'team',
     permissions: DEFAULT_ROLE_TEMPLATES.procurement_manager,
   },
   {
@@ -591,6 +611,7 @@ export const INITIAL_SYSTEM_ROLES: RoleItem[] = [
     name: 'Procurement Person',
     description: 'Receives raw customer inquiries, fills in base product purchase prices, and forwards rated inquiry to salesperson. Scoped strictly to inquiries received by them.',
     isSystem: true,
+    data_scope: 'own',
     permissions: DEFAULT_ROLE_TEMPLATES.procurement_person,
   },
   {
@@ -598,6 +619,7 @@ export const INITIAL_SYSTEM_ROLES: RoleItem[] = [
     name: 'Staff (Assigned Customers Only)',
     description: 'Operational sales staff limited strictly to assigned customer portfolios.',
     isSystem: false,
+    data_scope: 'own',
     permissions: {
       ...DEFAULT_ROLE_TEMPLATES.salesperson,
       'inquiries.delete': false,
@@ -629,12 +651,17 @@ export function getAllRoles(): RoleItem[] {
           merged = [...parsed, ...missingSystem];
           saveAllRoles(merged);
         }
-        // Always sync system roles with their latest active template
+        // Always sync system roles with their latest fixed active template
         return merged.map((r: RoleItem) => {
-          if (r.isSystem) {
+          if (isSystemRoleId(r.id) || r.isSystem) {
+            const sysId = r.id === 'manager' ? 'sales_manager' : r.id;
+            const sysTemplate = DEFAULT_ROLE_TEMPLATES[sysId] || DEFAULT_ROLE_TEMPLATES.salesperson;
+            const sysScope = sysId === 'admin' ? 'all' : (sysId === 'sales_manager' || sysId === 'procurement_manager') ? 'team' : 'own';
             return {
               ...r,
-              permissions: getRoleTemplate(r.id),
+              isSystem: true,
+              data_scope: sysScope,
+              permissions: sysTemplate,
             };
           }
           return r;
@@ -646,13 +673,27 @@ export function getAllRoles(): RoleItem[] {
   }
   return INITIAL_SYSTEM_ROLES.map((r) => ({
     ...r,
+    isSystem: isSystemRoleId(r.id),
     permissions: getRoleTemplate(r.id),
   }));
 }
 
 export function saveAllRoles(roles: RoleItem[]): void {
+  // Guarantee system roles never have their default permissions corrupted in localStorage
+  const sanitized = roles.map((r) => {
+    if (isSystemRoleId(r.id) || r.isSystem) {
+      const sysId = r.id === 'manager' ? 'sales_manager' : r.id;
+      return {
+        ...r,
+        isSystem: true,
+        permissions: DEFAULT_ROLE_TEMPLATES[sysId] || DEFAULT_ROLE_TEMPLATES.salesperson,
+      };
+    }
+    return r;
+  });
+  rolesCache = sanitized;
   try {
-    localStorage.setItem(ROLES_LIST_STORAGE_KEY, JSON.stringify(roles));
+    localStorage.setItem(ROLES_LIST_STORAGE_KEY, JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent('enlight_roles_updated'));
   } catch (err) {
     console.error('Failed to save roles list to localStorage', err);
@@ -682,6 +723,10 @@ export function updateExistingRole(
   id: string,
   updates: Partial<RoleItem>,
 ): void {
+  if (isSystemRoleId(id)) {
+    console.warn(`Attempted to update fixed system role "${id}". System roles cannot be modified.`);
+    return;
+  }
   const current = getAllRoles();
   const updated = current.map((r) => {
     if (r.id === id) {
@@ -693,8 +738,12 @@ export function updateExistingRole(
 }
 
 export function deleteRole(id: string): void {
+  if (isSystemRoleId(id)) {
+    console.warn(`Attempted to delete system role "${id}". System roles cannot be deleted.`);
+    return;
+  }
   const current = getAllRoles();
-  const filtered = current.filter((r) => r.id !== id || r.isSystem);
+  const filtered = current.filter((r) => r.id !== id && !isSystemRoleId(r.id));
   saveAllRoles(filtered);
 }
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   getAllRoles,
-  resetRoleTemplate,
   DEFAULT_ROLE_TEMPLATES,
   setRolesCache,
+  isSystemRoleId,
   type RoleItem,
 } from '../utils/aclConstants';
 import { ZohoPermissionsTable } from './ZohoPermissionsTable';
@@ -14,7 +14,6 @@ import {
   Shield,
   Users,
   Plus,
-  RotateCcw,
   Save,
   Check,
   AlertCircle,
@@ -27,6 +26,7 @@ import {
   Edit2,
   Loader2,
   Mail,
+  Lock,
 } from 'lucide-react';
 
 interface EmployeeItem {
@@ -218,6 +218,10 @@ export const RolePermissionsMatrixModal: React.FC<
         );
       }
     } else {
+      if (isSystemRoleId(selectedRoleId) || roles.find((r) => r.id === selectedRoleId)?.isSystem) {
+        showToast('Default system roles are fixed and non-editable. Create a new custom role to customize permissions.', true);
+        return;
+      }
       try {
         await rolesApi.update(selectedRoleId, {
           permissions: activePermissions,
@@ -234,22 +238,6 @@ export const RolePermissionsMatrixModal: React.FC<
       } catch (err: any) {
         showToast(err?.response?.data?.message || 'Could not save permissions', true);
       }
-    }
-  };
-
-  const handleResetCurrentRoleToStandard = async () => {
-    const factory = resetRoleTemplate(selectedRoleId);
-    setActivePermissions({ ...factory });
-    try {
-      await rolesApi.update(selectedRoleId, { permissions: factory });
-      const next = roles.map((role) =>
-        role.id === selectedRoleId ? { ...role, permissions: factory } : role,
-      );
-      setRolesCache(next);
-      setRoles(next);
-      showToast('Role permissions reset to default template.');
-    } catch (err: any) {
-      showToast(err?.response?.data?.message || 'Could not reset role', true);
     }
   };
 
@@ -441,6 +429,9 @@ export const RolePermissionsMatrixModal: React.FC<
   });
 
   const selectedRoleObj = roles.find((r) => r.id === selectedRoleId);
+  const isCurrentRoleSystem =
+    !isCreatingRole &&
+    (Boolean(selectedRoleObj?.isSystem) || isSystemRoleId(selectedRoleId));
 
   const salesManagers = userList.filter(
     (u) => u.role === 'sales_manager' || u.role === 'manager',
@@ -550,15 +541,22 @@ export const RolePermissionsMatrixModal: React.FC<
                       }}
                     />
                   </div>
+                  {isCurrentRoleSystem && (
+                    <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1 shadow-2xs shrink-0 select-none">
+                      <Lock size={12} className="text-amber-600" />
+                      <span>Fixed System Role</span>
+                    </span>
+                  )}
                 </div>
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                   Data scope
                   <select
                     value={dataScope}
+                    disabled={isCurrentRoleSystem}
                     onChange={(event) =>
                       setDataScope(event.target.value as 'own' | 'team' | 'all')
                     }
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   >
                     <option value="own">Own records</option>
                     <option value="team">Team</option>
@@ -597,15 +595,14 @@ export const RolePermissionsMatrixModal: React.FC<
               <div className="flex items-center gap-2">
                 {!isCreatingRole && selectedRoleObj && (
                   <>
-                    {selectedRoleObj.isSystem ? (
-                      <button
-                        onClick={handleResetCurrentRoleToStandard}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                        title="Reset to factory default permissions"
+                    {isCurrentRoleSystem ? (
+                      <div
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-xl text-xs font-bold border border-slate-200 cursor-not-allowed select-none"
+                        title="Default system roles are fixed and non-editable"
                       >
-                        <RotateCcw size={12} />
-                        <span>Reset Defaults</span>
-                      </button>
+                        <Lock size={12} className="text-slate-400" />
+                        <span>Fixed (Non-editable)</span>
+                      </div>
                     ) : (
                       <button
                         onClick={() => handleDeleteRole(selectedRoleObj.id)}
@@ -669,9 +666,46 @@ export const RolePermissionsMatrixModal: React.FC<
 
             {/* Permissions Table */}
             <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              {isCurrentRoleSystem && (
+                <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-2xs animate-in fade-in">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="p-2 bg-amber-100 text-amber-800 rounded-xl shrink-0">
+                      <Shield size={18} className="text-amber-700" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-sm">
+                          {selectedRoleObj?.name} is a Default System Role
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 uppercase tracking-wide">
+                          Fixed &amp; Non-editable
+                        </span>
+                      </div>
+                      <p className="text-amber-800 text-xs mt-0.5">
+                        Default system roles and their permissions cannot be modified. If you need a customized version, click <strong>Create Editable Copy</strong> to create a new custom role using this template as a baseline.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingRole(true);
+                      setCloneFromRoleId(selectedRoleId);
+                      setNewRoleName(`${selectedRoleObj?.name || ''} (Custom)`);
+                      setNewRoleDesc(`Custom copy based on ${selectedRoleObj?.name || ''}`);
+                    }}
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow flex items-center gap-1.5 shrink-0 text-xs cursor-pointer active:scale-95 self-start sm:self-auto"
+                  >
+                    <Plus size={14} />
+                    <span>Create Editable Copy</span>
+                  </button>
+                </div>
+              )}
+
               <ZohoPermissionsTable
                 permissions={activePermissions}
                 onChange={setActivePermissions}
+                readOnly={isCurrentRoleSystem}
               />
             </div>
           </div>
@@ -848,15 +882,25 @@ export const RolePermissionsMatrixModal: React.FC<
           </p>
           <div className="flex items-center gap-2.5">
             {mainTab === 'roles' && (
-              <button
-                onClick={handleSaveCurrentRolePermissions}
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-blue-500/20 active:scale-95 flex items-center gap-1.5"
-              >
-                <Save size={14} />
-                <span>
-                  {isCreatingRole ? 'Create & Save Role' : 'Save Template'}
-                </span>
-              </button>
+              isCurrentRoleSystem ? (
+                <div
+                  className="px-4 py-2 bg-slate-100 text-slate-400 font-bold rounded-xl text-xs border border-slate-200 flex items-center gap-1.5 cursor-not-allowed select-none"
+                  title="Default system roles cannot be modified"
+                >
+                  <Lock size={13} />
+                  <span>Fixed System Role</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleSaveCurrentRolePermissions}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-blue-500/20 active:scale-95 flex items-center gap-1.5"
+                >
+                  <Save size={14} />
+                  <span>
+                    {isCreatingRole ? 'Create & Save Role' : 'Save Template'}
+                  </span>
+                </button>
+              )
             )}
             <button
               onClick={onClose}
