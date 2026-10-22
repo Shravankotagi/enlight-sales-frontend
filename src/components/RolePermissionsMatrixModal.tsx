@@ -8,6 +8,7 @@ import {
 } from '../utils/aclConstants';
 import { ZohoPermissionsTable } from './ZohoPermissionsTable';
 import { RoleSelectDropdown } from './RoleSelectDropdown';
+import { Select } from './ui/select';
 import { employeesApi, rolesApi } from '../lib/api';
 import {
   X,
@@ -22,7 +23,6 @@ import {
   Phone,
   KeyRound,
   UserPlus,
-  ChevronDown,
   Edit2,
   Loader2,
   Mail,
@@ -45,11 +45,12 @@ interface RolePermissionsMatrixModalProps {
   onClose: () => void;
   employees?: EmployeeItem[];
   onEmployeeRoleUpdated?: (empId: string, newRole: string) => void;
+  asPage?: boolean;
 }
 
 export const RolePermissionsMatrixModal: React.FC<
   RolePermissionsMatrixModalProps
-> = ({ isOpen, onClose, employees: propEmployees, onEmployeeRoleUpdated }) => {
+> = ({ isOpen, onClose, employees: propEmployees, onEmployeeRoleUpdated, asPage = false }) => {
   // Top 2 Main Tabs: 'roles' vs 'users'
   const [mainTab, setMainTab] = useState<'roles' | 'users'>('roles');
 
@@ -94,7 +95,7 @@ export const RolePermissionsMatrixModal: React.FC<
 
   // Load roles & employees on open
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen || asPage) {
       rolesApi
         .list()
         .then((res) => {
@@ -138,7 +139,7 @@ export const RolePermissionsMatrixModal: React.FC<
         setUserList(propEmployees);
       }
     }
-  }, [isOpen, propEmployees]);
+  }, [isOpen, asPage, propEmployees]);
 
   // Sync active permissions when selected role changes
   useEffect(() => {
@@ -154,10 +155,9 @@ export const RolePermissionsMatrixModal: React.FC<
         setDataScope(current.data_scope || (current.id === 'admin' ? 'all' : current.id === 'sales_manager' ? 'team' : 'own'));
       }
     }
-    setFeedback(null);
   }, [selectedRoleId, isCreatingRole, cloneFromRoleId, roles]);
 
-  if (!isOpen) return null;
+  if (!isOpen && !asPage) return null;
 
   const showToast = (msg: string, isError: boolean = false) => {
     setFeedback({ msg, isError });
@@ -318,7 +318,7 @@ export const RolePermissionsMatrixModal: React.FC<
       name: user.name || '',
       email: user.email || '',
       phone: user.phone || '91',
-      role: user.role || 'salesperson',
+      role: user.role === 'manager' ? 'sales_manager' : user.role || 'salesperson',
       manager_id: user.manager_id || '',
       manager_phone: user.manager_phone || '',
     });
@@ -441,8 +441,10 @@ export const RolePermissionsMatrixModal: React.FC<
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+    <div className={asPage ? 'w-full min-w-0' : 'fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150'}>
+      <div className={asPage
+        ? 'bg-white rounded-2xl border border-slate-200 shadow-xs w-full min-w-0 flex flex-col'
+        : 'bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150'}>
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-3">
@@ -451,8 +453,8 @@ export const RolePermissionsMatrixModal: React.FC<
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900">
-                  Access Control List (ACL) &amp; Role Management
+                <h3 className={`${asPage ? 'text-2xl tracking-tight' : 'text-base'} font-bold text-slate-900`}>
+                  Roles and Permissions
                 </h3>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -460,12 +462,14 @@ export const RolePermissionsMatrixModal: React.FC<
               </p>
             </div>
           </div>
+          {!asPage && (
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
+          )}
         </div>
 
         {/* Primary Navigation Tabs */}
@@ -541,27 +545,24 @@ export const RolePermissionsMatrixModal: React.FC<
                       }}
                     />
                   </div>
-                  {isCurrentRoleSystem && (
-                    <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1 shadow-2xs shrink-0 select-none">
-                      <Lock size={12} className="text-amber-600" />
-                      <span>Fixed System Role</span>
-                    </span>
-                  )}
+                  
                 </div>
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                   Data scope
-                  <select
+                  <Select
                     value={dataScope}
                     disabled={isCurrentRoleSystem}
                     onChange={(event) =>
                       setDataScope(event.target.value as 'own' | 'team' | 'all')
                     }
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    wrapperClassName="inline-flex"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-medium gap-1.5"
+                    menuClassName="w-36"
                   >
                     <option value="own">Own records</option>
                     <option value="team">Team</option>
                     <option value="all">All company</option>
-                  </select>
+                  </Select>
                 </label>
                 {localImportCount > 0 && (
                   <button
@@ -649,58 +650,25 @@ export const RolePermissionsMatrixModal: React.FC<
                   <label className="block text-xs font-bold text-indigo-950 uppercase mb-1">
                     Clone Baseline From
                   </label>
-                  <select
+                  <Select
                     value={cloneFromRoleId}
                     onChange={(e) => setCloneFromRoleId(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer font-medium"
+                    menuClassName="w-full"
                   >
                     {roles.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
             )}
 
             {/* Permissions Table */}
-            <div className="overflow-y-auto flex-1 p-6 space-y-4">
-              {isCurrentRoleSystem && (
-                <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-2xs animate-in fade-in">
-                  <div className="flex items-start sm:items-center gap-3">
-                    <div className="p-2 bg-amber-100 text-amber-800 rounded-xl shrink-0">
-                      <Shield size={18} className="text-amber-700" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900 text-sm">
-                          {selectedRoleObj?.name} is a Default System Role
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 uppercase tracking-wide">
-                          Fixed &amp; Non-editable
-                        </span>
-                      </div>
-                      <p className="text-amber-800 text-xs mt-0.5">
-                        Default system roles and their permissions cannot be modified. If you need a customized version, click <strong>Create Editable Copy</strong> to create a new custom role using this template as a baseline.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsCreatingRole(true);
-                      setCloneFromRoleId(selectedRoleId);
-                      setNewRoleName(`${selectedRoleObj?.name || ''} (Custom)`);
-                      setNewRoleDesc(`Custom copy based on ${selectedRoleObj?.name || ''}`);
-                    }}
-                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow flex items-center gap-1.5 shrink-0 text-xs cursor-pointer active:scale-95 self-start sm:self-auto"
-                  >
-                    <Plus size={14} />
-                    <span>Create Editable Copy</span>
-                  </button>
-                </div>
-              )}
+            <div className={`p-4 sm:p-6 space-y-4 overflow-x-auto ${asPage ? '' : 'overflow-y-auto flex-1'}`}>
+              
 
               <ZohoPermissionsTable
                 permissions={activePermissions}
@@ -915,9 +883,9 @@ export const RolePermissionsMatrixModal: React.FC<
       {/* Zoho Books "Invite User" / "Assign Role" Modal (EXACTLY matching img2) */}
       {showInviteModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg animate-in zoom-in-95 duration-150">
             {/* Card Header matching img2 */}
-            <div className="px-6 py-4.5 border-b border-slate-200 flex items-center justify-between">
+            <div className="px-6 py-4.5 border-b border-slate-200 flex items-center justify-between rounded-t-2xl">
               <h3 className="text-xl font-bold text-slate-900">
                 {editingUser ? 'Edit User & Role' : 'Invite User'}
               </h3>
@@ -940,8 +908,8 @@ export const RolePermissionsMatrixModal: React.FC<
 
               {/* Name* */}
               <div>
-                <label className="block text-sm font-medium text-red-500 mb-1.5">
-                  Name*
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -957,8 +925,8 @@ export const RolePermissionsMatrixModal: React.FC<
 
               {/* Email Address* */}
               <div>
-                <label className="block text-sm font-medium text-red-500 mb-1.5">
-                  Email Address*
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Email Address <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -973,8 +941,8 @@ export const RolePermissionsMatrixModal: React.FC<
 
               {/* WhatsApp Number* (Required for Enlight Sigma WhatsApp OTP) */}
               <div>
-                <label className="block text-sm font-medium text-red-500 mb-1.5">
-                  WhatsApp Number*
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  WhatsApp Number <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -996,28 +964,23 @@ export const RolePermissionsMatrixModal: React.FC<
 
               {/* Role* matching img2 */}
               <div>
-                <label className="block text-sm font-medium text-red-500 mb-1.5">
-                  Role*
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Role <span className="text-rose-500">*</span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={inviteForm.role}
-                    onChange={(e) =>
-                      setInviteForm((prev) => ({ ...prev, role: e.target.value }))
-                    }
-                    className="w-full appearance-none px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer pr-10"
-                  >
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={18}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                </div>
+                <Select
+                  value={inviteForm.role}
+                  onChange={(e) =>
+                    setInviteForm((prev) => ({ ...prev, role: e.target.value }))
+                  }
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer font-medium"
+                  menuClassName="w-full"
+                >
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </Select>
               </div>
 
               {/* Notice for Procurement Manager role */}
@@ -1047,31 +1010,26 @@ export const RolePermissionsMatrixModal: React.FC<
                     Assigned Sales Manager{' '}
                     <span className="text-slate-400 text-xs font-normal">(optional)</span>
                   </label>
-                  <div className="relative">
-                    <select
-                      value={inviteForm.manager_id || ''}
-                      onChange={(e) => {
-                        const mgr = salesManagers.find((m) => m.id === e.target.value);
-                        setInviteForm((prev) => ({
-                          ...prev,
-                          manager_id: e.target.value,
-                          manager_phone: mgr?.phone || '',
-                        }));
-                      }}
-                      className="w-full appearance-none px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer pr-10"
-                    >
-                      <option value="">-- None (Direct to Admin) --</option>
-                      {salesManagers.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.employee_id})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={18}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                    />
-                  </div>
+                  <Select
+                    value={inviteForm.manager_id || ''}
+                    onChange={(e) => {
+                      const mgr = salesManagers.find((m) => m.id === e.target.value);
+                      setInviteForm((prev) => ({
+                        ...prev,
+                        manager_id: e.target.value,
+                        manager_phone: mgr?.phone || '',
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer font-medium"
+                    menuClassName="w-full"
+                  >
+                    <option value="">-- None (Direct to Admin) --</option>
+                    {salesManagers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.employee_id})
+                      </option>
+                    ))}
+                  </Select>
                 </div>
               )}
 
@@ -1082,31 +1040,26 @@ export const RolePermissionsMatrixModal: React.FC<
                     Assigned Procurement Manager{' '}
                     <span className="text-slate-400 text-xs font-normal">(optional)</span>
                   </label>
-                  <div className="relative">
-                    <select
-                      value={inviteForm.manager_id || ''}
-                      onChange={(e) => {
-                        const mgr = procurementManagers.find((m) => m.id === e.target.value);
-                        setInviteForm((prev) => ({
-                          ...prev,
-                          manager_id: e.target.value,
-                          manager_phone: mgr?.phone || '',
-                        }));
-                      }}
-                      className="w-full appearance-none px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer pr-10"
-                    >
-                      <option value="">-- None (Direct to Admin) --</option>
-                      {procurementManagers.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.employee_id})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={18}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                    />
-                  </div>
+                  <Select
+                    value={inviteForm.manager_id || ''}
+                    onChange={(e) => {
+                      const mgr = procurementManagers.find((m) => m.id === e.target.value);
+                      setInviteForm((prev) => ({
+                        ...prev,
+                        manager_id: e.target.value,
+                        manager_phone: mgr?.phone || '',
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer font-medium"
+                    menuClassName="w-full"
+                  >
+                    <option value="">-- None (Direct to Admin) --</option>
+                    {procurementManagers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.employee_id})
+                      </option>
+                    ))}
+                  </Select>
                   <p className="text-slate-400 text-[11px] mt-1 font-sans">
                     Procurement Manager who oversees this person&apos;s inquiries and provides team base rates.
                   </p>

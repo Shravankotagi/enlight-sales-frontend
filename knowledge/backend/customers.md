@@ -1,6 +1,6 @@
 # Customers and customer intelligence
 
-`CustomersModule` owns `recurring_customers` and customer-facing analytics. It exposes customer list/detail/update/import plus churn risk, reorder queue, and loss analytics. `customer-insights.service.ts` derives behavior from orders/deals, visit and ownership data.
+`CustomersModule` owns `recurring_customers` and customer-facing analytics. It exposes customer list/detail/update/import plus `POST /customers` (permission `customers.create`, assigned to the caller's own phone) and churn risk, reorder queue, and loss analytics. `customer-insights.service.ts` derives behavior from orders/deals, visit and ownership data.
 
 A customer may be resolved by name/ID in different bot flows. Normalize carefully and preserve salesperson/manager scope. Customer onboarding/update is also performed by bot tools; align field names and ownership assignment with those tools.
 

@@ -12,6 +12,7 @@ import {
   ShoppingBag,
   History,
   Sparkles,
+  KeyRound,
   ChevronsUpDown,
   PanelLeft,
   Menu,
@@ -241,6 +242,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     );
   };
 
+  const showRoles = (isAdmin || can('staff.manage_acl')) && !isImpersonatingOther;
+
   const navItems = [
     { path: '/home', label: 'Dashboard', icon: Home },
     ...(showAdminTab
@@ -248,6 +251,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       : []),
     ...(showUserManagement
       ? [{ path: '/control-panel', label: 'User Management', icon: Settings }]
+      : []),
+    ...(showRoles
+      ? [{ path: '/roles', label: 'Roles and Permissions', icon: KeyRound }]
       : []),
     { path: '/assistant', label: 'AI Assistant', icon: Sparkles },
     { path: '/inquiries', label: 'Inquiries', icon: FileText },
@@ -263,7 +269,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     if (isProcurement) {
       return item.path === '/inquiries' || item.path === '/assistant';
     }
-    if (isAdminRole && (item.path === '/admin-dashboard' || item.path === '/control-panel')) {
+    if (isAdminRole && (item.path === '/admin-dashboard' || item.path === '/control-panel' || item.path === '/roles')) {
       return true;
     }
     return routeAllowed(item.path, can);

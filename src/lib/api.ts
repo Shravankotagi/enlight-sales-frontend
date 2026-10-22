@@ -174,6 +174,7 @@ export const customersApi = {
   getReorderQueue: (params?: any) => API.get('/customers/reorder-queue', { params }),
   getLossAnalytics: (params?: any) => API.get('/customers/loss-analytics', { params }),
   importClients: (data: any) => API.post('/customers/import', data),
+  create: (data: any) => API.post('/customers', data),
   update: (id: string, data: any) => API.patch(`/customers/${encodeURIComponent(id)}`, data),
 };
 
@@ -336,6 +337,12 @@ export const activityLogsApi = {
     mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
+  getCounts: (params?: {
+    from?: string;
+    to?: string;
+    salesperson_phone?: string;
+    mode?: string;
+  }) => API.get('/activity-logs/counts', { params }),
 };
 
 export function postAuthLogout(reason: 'manual' | 'session_expired') {

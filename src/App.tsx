@@ -14,6 +14,7 @@ const KRADashboard = lazy(() => import('./pages/KRADashboard'));
 const InquiriesPage = lazy(() => import('./pages/InquiriesPage'));
 const LogsPage = lazy(() => import('./pages/LogsPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const RolesPermissionsPage = lazy(() => import('./pages/RolesPermissionsPage'));
 const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 const ComplaintsPage = lazy(() => import('./pages/ComplaintsPage'));
 const VisitsPage = lazy(() => import('./pages/VisitsPage'));
@@ -98,6 +99,10 @@ function AppRoutes() {
         <Route path="/kra" element={<KRADashboard />} />
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route
+          path="/roles"
+          element={isAdminRole || routeAllowed('/roles', can) ? <RolesPermissionsPage /> : <Navigate to="/home" replace />}
+        />
         <Route path="/intelligence" element={<IntelligencePage />} />
         <Route
           path="/admin-dashboard"

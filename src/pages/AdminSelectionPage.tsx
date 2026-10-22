@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Users,
-  LogOut,
   Loader2,
   UserPlus,
   X,
   ShieldAlert,
-  Shield,
   FileSpreadsheet,
   LayoutDashboard,
   UserCheck,
@@ -32,7 +30,6 @@ import {
 } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
 import { EmployeeAclSection } from '../components/EmployeeAclSection';
-import { RolePermissionsMatrixModal } from '../components/RolePermissionsMatrixModal';
 import { RoleSelectDropdown } from '../components/RoleSelectDropdown';
 import { getRoleTemplate, countOverrides, getCachedRoles } from '../utils/aclConstants';
 import { employeesApi } from '../lib/api';
@@ -74,7 +71,6 @@ export default function AdminSelectionPage() {
   const {
     token,
     employee,
-    logout,
     setViewingAs,
     clearViewingAs,
     isSalesManager,
@@ -91,7 +87,6 @@ export default function AdminSelectionPage() {
 
   // Add / Edit Modal state
   const [showModal, setShowModal] = useState(false);
-  const [showRolesMatrixModal, setShowRolesMatrixModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
@@ -465,10 +460,6 @@ export default function AdminSelectionPage() {
     navigate('/home');
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   const pageTitle = isSalesManager
     ? 'Sales Manager Portal'
@@ -563,14 +554,6 @@ export default function AdminSelectionPage() {
               {isAdmin && (
                 <>
                   <button
-                    onClick={() => setShowRolesMatrixModal(true)}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="View standard Roles & Permissions Matrix (Zoho Model)"
-                  >
-                    <Shield size={15} className="text-blue-600" />
-                    <span>Roles</span>
-                  </button>
-                  <button
                     onClick={() => setShowImportModal(true)}
                     className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
                     title="Import clients via CSV"
@@ -588,15 +571,6 @@ export default function AdminSelectionPage() {
                   </button>
                 </>
               )}
-
-              <button
-                onClick={handleLogout}
-                className="h-9 flex items-center gap-1.5 px-3 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-                title="Sign out"
-              >
-                <LogOut size={14} />
-                <span>Logout</span>
-              </button>
             </div>
           </div>
         </div>
@@ -1363,8 +1337,8 @@ export default function AdminSelectionPage() {
               <div className="space-y-4">
                 {/* Name* */}
                 <div>
-                  <label className="block text-sm font-medium text-red-500 mb-1.5">
-                    Name*
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Name <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1379,8 +1353,8 @@ export default function AdminSelectionPage() {
 
                 {/* Email Address* */}
                 <div>
-                  <label className="block text-sm font-medium text-red-500 mb-1.5">
-                    Email Address*
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Email Address <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="email"
@@ -1395,8 +1369,8 @@ export default function AdminSelectionPage() {
 
                 {/* WhatsApp Number* */}
                 <div>
-                  <label className="block text-sm font-medium text-red-500 mb-1.5">
-                    WhatsApp Number*
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    WhatsApp Number <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="tel"
@@ -1418,8 +1392,8 @@ export default function AdminSelectionPage() {
 
                 {/* Role* (Zoho Dropdown) */}
                 <div>
-                  <label className="block text-sm font-medium text-red-500 mb-1.5">
-                    Role*
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Role <span className="text-rose-500">*</span>
                   </label>
                   <RoleSelectDropdown
                     value={form.role}
@@ -1674,18 +1648,6 @@ export default function AdminSelectionPage() {
           phone: e.phone,
           employee_id: e.employee_id,
         }))}
-      />
-
-      {/* Role & Permissions Matrix Modal (Zoho Model with Roles & Users Tabs) */}
-      <RolePermissionsMatrixModal
-        isOpen={showRolesMatrixModal}
-        onClose={() => setShowRolesMatrixModal(false)}
-        employees={employees}
-        onEmployeeRoleUpdated={(empId, newRole) => {
-          setEmployees((prev) =>
-            prev.map((e) => (e.id === empId ? { ...e, role: newRole } : e)),
-          );
-        }}
       />
 
       {/* Permanent Delete Confirmation Modal */}

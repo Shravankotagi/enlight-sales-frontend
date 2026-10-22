@@ -762,6 +762,13 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
     'staff.delete',
     'staff.manage_acl',
   ],
+  '/roles': [
+    'staff.view',
+    'staff.create',
+    'staff.manage',
+    'staff.delete',
+    'staff.manage_acl',
+  ],
 };
 
 export function routeAllowed(
