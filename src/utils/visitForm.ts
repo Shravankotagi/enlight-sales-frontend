@@ -23,6 +23,7 @@ export const VISIT_PAYMENT_TERMS = [
   '30 Days',
   '45 Days',
   '60 Days',
+  '90 Days',
   'LC',
   'BG',
   'PDC',

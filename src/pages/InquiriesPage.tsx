@@ -845,6 +845,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
       paymentTerms = '45 Days Credit';
     } else if (textLower.includes('60 days') || textLower.includes('60-day')) {
       paymentTerms = '60 Days Credit';
+    } else if (textLower.includes('90 days') || textLower.includes('90-day')) {
+      paymentTerms = '90 Days Credit';
     } else {
       paymentTerms = '';
     }
