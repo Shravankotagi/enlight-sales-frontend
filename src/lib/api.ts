@@ -230,8 +230,6 @@ export const inquiriesApi = {
     API.post('/inquiries/parse-document', payload, { timeout: 150000 }),
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
   delete: (id: string) => API.delete(`/inquiries/${id}`),
-  assignProcurement: (id: string, procurement_employee_id: string | null) =>
-    API.patch(`/inquiries/${id}/procurement-assignee`, { procurement_employee_id }),
   getLinePricing: (id: string) => API.get(`/inquiries/${id}/line-pricing`),
   saveProcurementPricing: (id: string, payload: any) =>
     API.patch(`/inquiries/${id}/procurement-pricing`, payload),

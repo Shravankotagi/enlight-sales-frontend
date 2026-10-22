@@ -676,6 +676,24 @@ export function formatLineItemWeightMt(
   };
 }
 
+/** MT figure shown in the inquiry weight field. Line amounts use this same number. */
+export function displayedLineWeightMt(item: LineItemInput): number | null {
+  const itemWeight = formatLineItemWeightMt(item);
+  const hasFormulaWeight =
+    itemWeight.canConvert && itemWeight.mt !== null && itemWeight.mt > 0;
+  const hasManualOrMetricWeight =
+    (item.is_manual_mt || normalizeUnit(item.unit) === 'MT') &&
+    item.converted_mt !== undefined &&
+    item.converted_mt !== null &&
+    item.converted_mt !== '';
+  if (hasManualOrMetricWeight) {
+    const mt = Number(item.converted_mt);
+    return Number.isFinite(mt) && mt > 0 ? mt : null;
+  }
+  if (hasFormulaWeight && itemWeight.mt !== null) return itemWeight.mt;
+  return null;
+}
+
 /**
  * Calculates converted total tonnage in MT across all line items with precision and transparency.
  * Displays both commercial units breakdown and converted metric tons.

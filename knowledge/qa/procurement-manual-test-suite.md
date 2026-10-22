@@ -60,8 +60,7 @@ Record the result of each case as Pass or Fail. A case fails if the expected res
 |---|---|---|
 | A1 | Edit the procurement person and choose the procurement manager. | The person saves with that manager. |
 | A2 | Edit the same person and choose a sales manager. | The save is rejected because a procurement person must report to a procurement manager. |
-| A3 | On an inquiry, set the procurement owner as admin. | The selected procurement user then sees that inquiry. |
-| A4 | On the procurement person, select one or more salespeople and save. | Each selected salesperson is routed to that person. Their unassigned inquiries, including older won or quoted rows and phones stored in another format, appear in that person's list. A row already owned by another procurement person stays there. A new inquiry for one of those salespeople appears without a manual assign. Its procurement id is `PR-` plus a number, and that id is not the inquiry id. |
+| A3 | On the procurement person, select one or more salespeople and save. | Each selected salesperson is routed to that person. Their unassigned inquiries, including older won or quoted rows and phones stored in another format, appear in that person's list. A row already owned by another procurement person stays there. A new inquiry for one of those salespeople appears without a manual assign. The inquiry drawer has no Procurement owner control. Its procurement id is `PR-` plus a number, and that id is not the inquiry id. |
 
 ## Automated coverage
 

@@ -17,7 +17,6 @@
 - [ ] Inquiry create/read/update and scoped listing.
 - [ ] Procurement scope: assigned inquiries + unassigned intake pool accessible to `procurement_person` and `procurement_manager`.
 - [ ] Procurement guardrails: commercial terminal statuses (`confirmed`, `won`, `lost`), deal conversion, and quotations are blocked for procurement roles.
-- [ ] Procurement inquiry assignment (`PATCH /inquiries/:id/procurement-assignee`) allowed for Admin and Procurement Manager.
 - [ ] Product/HSN and pricing parity.
 - [ ] Quotation/PDF behavior.
 - [ ] Stage transition and won-order view.
