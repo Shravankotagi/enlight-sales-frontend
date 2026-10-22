@@ -24,7 +24,7 @@ Faster local loops: backend `npm test` / `npm run test:regression`, bot `npm run
 ## Coverage today
 - Backend: employee phone helpers and salesperson scope (`getAccessibleSalespersonPhones`), `RolesGuard`/`RoleGuard`, report date ranges and `allowedPhones` scope, leaderboard identity, pricing parity, plus the existing deals/inquiries/KRA/reports/app specs.
 - Bot: JSON utils, pricing engine, HSN detector, pricing parity, catalog-flow helpers, new-customer catalog flow state machine, PO resolver, network guard.
-- Frontend: date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, recent order fields/navigation, the new customer visit form, and `Layout.sidebar` (sidebar 200ms ease-out timing, `will-change-[width,transform]`, reduced motion safety, `localStorage` persistence, and hover enlargement/collapse).
+- Frontend: date utilities and presets, `DateFilterControl`, pricing parity, `systemPo`, Admin Overview leaderboard scoring/identity/info popover/drill-in, date filters, Review Queue removal, recent order fields/navigation, the new customer visit form, customer-profile GSTIN validation, removing an uploaded order or inquiry document and clearing its extracted fields, and `Layout.sidebar` (sidebar 200ms ease-out timing, `will-change-[width,transform]`, reduced motion safety, `localStorage` persistence, and hover enlargement/collapse).
 
 ## Regression tests: one per fixed bug
 Every bug fix adds a test that fails before the fix and passes after it.
@@ -44,6 +44,25 @@ Current regression tests:
 | Backend | `issue-238-customer-visit-form.test.ts` | New visits require a verified phone, GPS photo, and listed brand and payment terms; Meta 131047 returns the 24-hour message, and other codes return the code in the 400 |
 | Frontend | `issue-238-customer-visit-form.test.tsx` | Missing visit fields, locked GPS address, typed city when the address is missing, brand dropdown, camera overlay, and the assistant attach menu |
 | Bot | `issue-238-visit-required-fields.test.js` | A new bot visit is not inserted until the new fields, GPS photo, and correct code are present |
+| Frontend | `customer-type-other.test.tsx` | Customer type includes Other, and Other without a typed type is rejected |
+| Frontend | `visit-select-placeholders.test.tsx` | Customer Type and Payment Terms prompts are shown when empty and cannot be selected |
+| Frontend | `visit-future-dates.test.tsx` | A new visit rejects a past next purchase date and follow-up date, and the date pickers start at today |
+| Frontend | `visit-media-preview.test.tsx` | A new visit shows a preview of the captured photo and of each added image or PDF before save |
+| Frontend | `visit-list-address.test.tsx` | The visits list shows the full autofetched address instead of only the area and city |
+| Backend | `visit-future-dates.test.ts` | A new visit rejects a past next purchase date and follow-up date, and accepts today |
+| Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |
+| Frontend | `assistant-input-scroll.test.tsx` | A long assistant prompt stays in a scrolling textarea, Enter sends, and Shift+Enter adds a line |
+| Frontend | `assistant-visit-gps.test.tsx` | Opening Log Visit in the assistant starts the device location watch, and an ordinary reply does not |
+| Frontend | `assistant-upload-pdf.test.tsx` | Upload from device accepts a PDF and refuses an image |
+| Bot | `visit-chat-location-photo.test.js` | A WhatsApp visit accepts only a location pin, the assistant stores the full auto-fetched address instead of a shortened city, and only a camera photo after the pin is the visit photo |
+| Bot | `visit-location-edit-lock.test.js` | A new visit's confirmation and edit steps cannot change the captured location, and a delivery location edit still goes through |
+| Bot | `visit-future-dates.test.js` | A past next purchase or follow-up stays in the prompt list until the day is today |
+| Bot | `visit-relative-dates.test.js` | Tomorrow and after a month become calendar days and leave the visit prompt list |
+| Backend, Bot | `visit-otp-test-mode.test.ts`, `visit-otp-test-mode.test.js` | A visit test flag returns the code without WhatsApp, and the WhatsApp configuration error remains when the flag is off |
+| Backend | `customer-type-other.test.ts` | Other without a typed type is rejected, and Other with text is stored on the visit row |
+| Bot | `customer-type-other.test.js` | The customer-type prompt includes Other, and the visit row keeps the typed type |
+| Frontend | `invalid-gstin-customer-edit.test.tsx` | Profile edit modal does not set state from a partial or invalid GSTIN, shows an error, blocks save, and still fills state from a valid GSTIN |
+| Frontend | `remove-uploaded-document.test.tsx` | Remove on Record New Order and Log New Inquiry clears the file and extracted fields; the order system PO stays reserved; a replacement document does not keep the previous extraction |
 
 ## Cross-repo parity fixture
 `pricing-parity.json` is copied identically to `em-os-bot/test/fixtures/`, `em-os-backend/src/test-utils/fixtures/`, and `em-os-frontend/src/test/fixtures/`. Each repo's parity test runs its own pricing/HSN code against it. Change all three copies together in the same set of PRs.

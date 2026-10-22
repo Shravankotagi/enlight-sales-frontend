@@ -1225,7 +1225,9 @@ const createDashboardWonReservationToken = () =>
   `dashboard-won:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
 
 const INQUIRY_PREFERRED_MAKES = ['TATA', 'JSW', 'AM/NS India', 'SAIL', 'NMDC', 'Apollo', 'Others'];
-const INQUIRY_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', '90 Days', 'LC', 'BG', 'PDC'];
+const INQUIRY_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
+const EMPTY_INQUIRIES: InquiryItem[] = [];
+const EMPTY_CUSTOMER_NAMES: string[] = [];
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
@@ -1595,6 +1597,7 @@ export default function InquiriesPage() {
   const [poFileBase64, setPoFileBase64] = useState<string | null>(null);
   const [drawerFileBase64, setDrawerFileBase64] = useState<string | null>(null);
   const [isExtractingPo, setIsExtractingPo] = useState(false);
+  const uploadRequestRef = useRef(0);
   const formExtractedJsonRef = useRef<any>(null);
   const [formExtractedJson, setFormExtractedJson] = useState<any>(null);
   const [formLineItems, setFormLineItems] = useState<LineItemDetail[]>([
@@ -1615,13 +1618,10 @@ export default function InquiriesPage() {
     },
   ]);
 
-  const handleCancelCreateInquiry = () => {
-    setShowModal(false);
+  const clearExtractedInquiryFields = () => {
     setFormCustomerName('');
     setFormCustomerEmail('');
     setShowAddCustomer(false);
-    setAddProductModalRowIdx(null);
-    setShowProductListModal(false);
     setShowCompanyDropdown(false);
     setFormPhone('');
     setFormPreferredMake('');
@@ -1652,12 +1652,25 @@ export default function InquiriesPage() {
     ]);
   };
 
+  const handleRemoveUploadedInquiryDocument = () => {
+    uploadRequestRef.current += 1;
+    setIsExtractingPo(false);
+    clearExtractedInquiryFields();
+  };
+
+  const handleCancelCreateInquiry = () => {
+    setShowModal(false);
+    setAddProductModalRowIdx(null);
+    setShowProductListModal(false);
+    clearExtractedInquiryFields();
+  };
+
   const isPdf = (url: string) => {
     if (!url) return false;
     return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
   };
 
-  const { data: rawInquiries = [], isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
+  const { data: rawInquiries = EMPTY_INQUIRIES, isLoading: loading, isFetching, refetch: fetchMonthlyInquiries } = useQuery<InquiryItem[]>({
     queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
     queryFn: async () => {
       const params = buildInquiryScopeParams(effectivePhone, activeMode);
@@ -1675,7 +1688,7 @@ export default function InquiriesPage() {
     Record<string, { gstin?: string; address?: string; state?: string }>
   >({});
 
-  const { data: rawCustomers = [] } = useQuery<string[]>({
+  const { data: rawCustomers = EMPTY_CUSTOMER_NAMES } = useQuery<string[]>({
     queryKey: queryKeys.customerNames(effectivePhone, activeRole, activeMode),
     queryFn: async (): Promise<string[]> => {
       const params = buildInquiryScopeParams(effectivePhone, activeMode);
@@ -2755,21 +2768,28 @@ export default function InquiriesPage() {
     await executeSaveDrawerDetails(currentItems);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | File[] } },
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if ('value' in e.target) {
+      (e.target as HTMLInputElement).value = '';
+    }
+
+    const requestId = ++uploadRequestRef.current;
+    clearExtractedInquiryFields();
     setPoFileName(file.name);
     setIsExtractingPo(true);
-    formExtractedJsonRef.current = null;
-    setFormExtractedJson(null);
 
     try {
       const reader = new FileReader();
       reader.onload = async (evt) => {
+        if (requestId !== uploadRequestRef.current) return;
         const base64String = evt.target?.result as string;
         if (!base64String) {
-          setIsExtractingPo(false);
+          if (requestId === uploadRequestRef.current) setIsExtractingPo(false);
           return;
         }
 
@@ -2785,6 +2805,7 @@ export default function InquiriesPage() {
             file_base64: cleanBase64,
             mime_type: file.type || 'image/jpeg',
           });
+          if (requestId !== uploadRequestRef.current) return;
           const body = res.data;
           const candidate = body?.data?.customer_name || body?.data?.line_items || body?.data?.customer
             ? body.data
@@ -2799,9 +2820,12 @@ export default function InquiriesPage() {
             extractError = body?.data?.error || body?.error || body?.message || '';
           }
         } catch (apiErr: any) {
+          if (requestId !== uploadRequestRef.current) return;
           console.warn('Backend parse-document failed:', apiErr);
           extractError = apiErr?.response?.data?.message || apiErr?.message || '';
         }
+
+        if (requestId !== uploadRequestRef.current) return;
 
         if (extracted) {
           formExtractedJsonRef.current = extracted;
@@ -2957,13 +2981,13 @@ export default function InquiriesPage() {
           toast.error(extractError || 'Could not auto-extract inquiry details. You can enter the fields manually.');
         }
 
-        setIsExtractingPo(false);
+        if (requestId === uploadRequestRef.current) setIsExtractingPo(false);
       };
 
       reader.readAsDataURL(file);
     } catch (err) {
       console.error('FileReader error:', err);
-      setIsExtractingPo(false);
+      if (requestId === uploadRequestRef.current) setIsExtractingPo(false);
     }
   };
 
@@ -5617,8 +5641,7 @@ export default function InquiriesPage() {
                 <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
               </div>
 
-              <label
-                htmlFor="inquiry-doc-file-upload"
+              <div
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -5631,7 +5654,7 @@ export default function InquiriesPage() {
                     handleFileUpload({ target: { files } } as any);
                   }
                 }}
-                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-all">
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl transition-all">
                 <input
                   id="inquiry-doc-file-upload"
                   type="file"
@@ -5648,14 +5671,29 @@ export default function InquiriesPage() {
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
                     <CheckCircle size={15} className="text-emerald-600 shrink-0" />
                     <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
-                    <span className="text-[10px] text-blue-600 underline ml-1">Change</span>
+                    <label
+                      htmlFor="inquiry-doc-file-upload"
+                      className="text-[10px] text-blue-600 underline ml-1 cursor-pointer"
+                    >
+                      Change
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRemoveUploadedInquiryDocument}
+                      className="text-[10px] text-rose-600 underline ml-1 cursor-pointer"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-600 font-medium py-1">
+                  <label
+                    htmlFor="inquiry-doc-file-upload"
+                    className="text-xs text-slate-600 font-medium py-1 cursor-pointer"
+                  >
                     Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
-                  </p>
+                  </label>
                 )}
-              </label>
+              </div>
             </div>
 
             <form onSubmit={handleCreateInquiry} className="space-y-4">
