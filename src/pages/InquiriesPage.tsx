@@ -4764,24 +4764,26 @@ export default function InquiriesPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              disabled={isSyncingZoho}
-              onClick={handleTriggerZohoSync}
-              className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60"
-            >
-              <RefreshCw
-                size={14}
-                className={
-                  isSyncingZoho
-                    ? "animate-spin text-blue-600"
-                    : "text-slate-500"
-                }
-              />
-              <span>
-                {isSyncingZoho ? "Syncing with Bigin..." : "Sync Bigin"}
-              </span>
-            </button>
+            {!isProcurement && (
+              <button
+                type="button"
+                disabled={isSyncingZoho}
+                onClick={handleTriggerZohoSync}
+                className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                <RefreshCw
+                  size={14}
+                  className={
+                    isSyncingZoho
+                      ? "animate-spin text-blue-600"
+                      : "text-slate-500"
+                  }
+                />
+                <span>
+                  {isSyncingZoho ? "Syncing with Bigin..." : "Sync Bigin"}
+                </span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -4811,20 +4813,24 @@ export default function InquiriesPage() {
               />
             </button>
 
-            <button
-              onClick={() => navigate("/orders")}
-              className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-            >
-              <ShoppingBag size={14} className="text-emerald-600" /> View
-              Confirmed Orders
-            </button>
+            {!isProcurement && (
+              <>
+                <button
+                  onClick={() => navigate("/orders")}
+                  className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+                >
+                  <ShoppingBag size={14} className="text-emerald-600" /> View
+                  Confirmed Orders
+                </button>
 
-            <button
-              onClick={() => setShowModal(true)}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
-            >
-              <Plus size={15} /> Log New Inquiry
-            </button>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+                >
+                  <Plus size={15} /> Log New Inquiry
+                </button>
+              </>
+            )}
           </div>
         </div>
 

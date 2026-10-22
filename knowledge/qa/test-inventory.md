@@ -54,6 +54,7 @@ Current regression tests:
 | Frontend | `issue-procurement-price-columns.test.tsx` | A wrapped pricing save keeps the base price; procurement edits only that column; a salesperson save collapses the price columns into Rate; a saved row shows 18% GST without a stored tax amount |
 | Frontend | `issue-send-quotation-button.test.tsx` | A priced inquiry drawer has one quotation button, and the email modal scrolls inside the screen |
 | Frontend | `issue-procurement-kanban-click.test.tsx` | A procurement person opens Kanban View on the first click |
+| Frontend | `procurement-header-actions.test.tsx` | Procurement person and manager inquiries headers hide Sync Bigin, View Confirmed Orders, and Log New Inquiry, and keep Refresh |
 | Backend | `inquiry-pricing.workflow.spec.ts`, `inquiries.procurement-scope.spec.ts` | Procurement scope, customer-field stripping, partial and unavailable pricing, sales override, decline eligibility |
 | Backend | `issue-procurement-routing-details.spec.ts` | Mapped salesperson inquiries get that procurement person and a unique `PR-` number; product lines survive procurement detail |
 
