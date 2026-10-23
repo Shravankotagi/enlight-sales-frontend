@@ -147,7 +147,7 @@ export default function HomePage() {
     viewingAs?.original_role === 'admin';
 
   const canSwitchRole = isSalesManagerUser || isAdminUser;
-  const showSyncBigin = isAdmin || employee?.role === 'salesperson';
+  const showSyncBigin = isAdmin;
 
   const handleTriggerZohoSync = async () => {
     try {
@@ -687,8 +687,13 @@ export default function HomePage() {
     return reps
       .map(rep => {
         const cleanPhone = (rep.phone || '').replace(/\D/g, '').slice(-10);
+        const samePhone = (value?: string) =>
+          cleanPhone && (value || '').replace(/\D/g, '').slice(-10) === cleanPhone;
         const repOrders = safeOrders.filter(
-          o => (o.salesperson_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone,
+          (o) =>
+            samePhone(o.salesperson_phone) ||
+            samePhone(o.raw_salesperson_phone) ||
+            samePhone(o.assigned_owner_phone),
         );
         const repVisits = safeVisits.filter(
           v => (v.salesperson_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone,
@@ -696,10 +701,10 @@ export default function HomePage() {
         const repComplaints = safeComplaints.filter(
           c => (c.reported_by || '').replace(/\D/g, '').slice(-10) === cleanPhone && c.status !== 'resolved',
         );
-        const deliveredTonnage = repOrders.reduce((sum, o) => sum + getOrderTonnage(o), 0);
+        const deliveredTonnage = calculateOrdersTotalTonnage(repOrders).totalMt;
         return {
           ...rep,
-          deliveredTonnage: Math.round(deliveredTonnage * 10) / 10,
+          deliveredTonnage,
           ordersCount: repOrders.length,
           visitsCount: repVisits.length,
           complaintsCount: repComplaints.length,

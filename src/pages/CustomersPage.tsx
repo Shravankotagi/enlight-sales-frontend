@@ -154,7 +154,7 @@ export default function CustomersPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const { effectivePhone, isSalesManager, isAdmin, employee, activeRole, activeMode, can, viewingAs } = useAuth();
+  const { effectivePhone, isSalesManager, isAdmin, activeRole, activeMode, can, viewingAs } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -423,7 +423,7 @@ export default function CustomersPage() {
 
           <div className="flex items-center gap-2.5 shrink-0">
             <SyncBiginButton
-              show={isAdmin || employee?.role === 'salesperson'}
+              show={isAdmin}
               onSynced={() => {
                 queryClient.invalidateQueries({ queryKey: ['orders-list'] });
                 queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
