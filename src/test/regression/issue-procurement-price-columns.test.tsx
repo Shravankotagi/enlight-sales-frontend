@@ -47,6 +47,7 @@ vi.mock('../../lib/api', () => ({
   employeesApi: { getAll: vi.fn(async () => ({ data: [] })) },
   dealsApi: { getAll: vi.fn(async () => ({ data: [] })) },
   productsApi: { getAll: vi.fn(async () => ({ data: [] })) },
+  activityLogsApi: { getAll: vi.fn(async () => ({ data: [] })) },
 }))
 
 function signIn(role: string) {
@@ -89,7 +90,7 @@ describe('saved price columns', () => {
       data: {
         success: true,
         data: {
-          pricing_status: 'price_ready',
+          pricing_status: 'awaiting_price',
           lines: [
             {
               line_key: '0:HR Coil',
@@ -371,4 +372,46 @@ describe('saved price columns', () => {
     expect(screen.getAllByText('49,000.00').length).toBeGreaterThan(0)
     expect(screen.getAllByText('8,820.00').length).toBeGreaterThan(0)
   })
+
+  it.each(['procurement_person', 'procurement_manager'] as const)(
+    'keeps a quoted price-ready inquiry read-only for a %s',
+    async (role) => {
+      signIn(role)
+      getAll.mockImplementation(async () => ({
+        data: inquiries.map((item) => ({
+          ...item,
+          pricing_status: 'price_ready',
+          stage: 'quoted',
+          status: 'quoted',
+        })),
+      }))
+      getLinePricing.mockResolvedValue({
+        data: {
+          success: true,
+          data: {
+            pricing_status: 'price_ready',
+            lines: [
+              {
+                line_key: '0:HR Coil',
+                sku_text: 'HR Coil',
+                quantity: 12,
+                unit: 'MT',
+                procurement_base_price_per_mt: 61000,
+                line_status: 'priced',
+              },
+            ],
+          },
+        },
+      })
+      const user = userEvent.setup()
+      renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
+      await user.click(await screen.findByText('PR-10041'))
+
+      expect(await screen.findByDisplayValue('61000')).toBeDisabled()
+      expect(screen.queryByRole('button', { name: 'Save Prices' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /share quotation/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /share again/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /view pdf/i })).toBeInTheDocument()
+    },
+  )
 })
