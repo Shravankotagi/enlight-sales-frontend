@@ -24,7 +24,8 @@ export interface CustomerVisit {
   salesperson_name?: string | null;
   email?: string | null;
   designation?: string | null;
-  customer_type?: 'OEM' | 'Fabricator' | 'EPC' | 'Manufacturer' | 'Trader' | string | null;
+  customer_type?: 'OEM' | 'Fabricator' | 'EPC' | 'Manufacturer' | 'Trader' | 'Other' | string | null;
+  customer_type_other?: string | null;
   visit_type?: 'First Visit' | 'Follow-up 1' | 'Follow-up 2' | 'Follow-up 3' | 'Regular Visit' | string | null;
   customer_probability?: 'Hot' | 'Warm' | 'Cold' | string | null;
   product_details?: string | null;

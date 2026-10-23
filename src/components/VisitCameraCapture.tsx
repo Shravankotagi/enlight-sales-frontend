@@ -117,6 +117,15 @@ export default function VisitCameraCapture({
       setError(NO_CAMERA);
       return;
     }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setError(NO_CAMERA);
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
     setBusy(true);
     setError('');
     try {
@@ -125,15 +134,6 @@ export default function VisitCameraCapture({
         setError(NO_GPS);
         return;
       }
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        setError(NO_CAMERA);
-        return;
-      }
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
       const label = visitPhotoStampLabel(
         coords.latitude,
         coords.longitude,

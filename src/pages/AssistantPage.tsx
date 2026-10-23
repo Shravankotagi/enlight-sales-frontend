@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { chatbotApi } from '../lib/api';
+import { chatbotApi, visitsApi } from '../lib/api';
 import {
   Sparkles,
   Send,
@@ -25,6 +25,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import AssistantAttachMenu from '../components/AssistantAttachMenu';
+import { createVisitGpsSession, type GpsReading } from '../utils/visitGps';
+import { visitCityLabel } from '../utils/visitForm';
 import KnowledgeBaseModal from '../components/KnowledgeBaseModal';
 import MarkdownMessage from '../components/MarkdownMessage';
 import InteractiveButtons, { type InteractiveButton } from '../components/chat/InteractiveButtons';
@@ -153,6 +155,17 @@ function getCachedMessages(sessionId: string | null): ChatMessage[] {
   return [];
 }
 
+const COMPOSER_MAX_HEIGHT = 160;
+
+function assistantAsksForVisitLocation(text: string) {
+  return /log customer field visit|location is auto-fetched|location pin or city|type the city/i.test(text);
+}
+
+function fitComposer(el: HTMLTextAreaElement) {
+  el.style.height = 'auto';
+  el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT)}px`;
+}
+
 export default function AssistantPage() {
   const { employee, viewingAs } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -170,7 +183,7 @@ export default function AssistantPage() {
   const [kbModalOpen, setKbModalOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textInputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLTextAreaElement>(null);
 
   const focusInput = () => {
     setTimeout(() => {
@@ -191,7 +204,14 @@ export default function AssistantPage() {
   } | null>(null);
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'acquiring' | 'acquired' | 'error'>('idle');
   const [gpsStatusText, setGpsStatusText] = useState<string>('');
+  const [visitFix, setVisitFix] = useState<GpsReading | null>(null);
+  const [visitAddress, setVisitAddress] = useState('');
+  const [visitLocationPrompt, setVisitLocationPrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoSourceRef = useRef<'camera' | 'upload' | null>(null);
+  const gpsSessionRef = useRef<ReturnType<typeof createVisitGpsSession> | null>(null);
+  const visitWatchStarted = useRef(false);
+  const pageMounted = useRef(true);
 
   const activeEmployee = viewingAs || employee;
   const role = (activeEmployee?.role || 'salesperson').toLowerCase();
@@ -215,12 +235,64 @@ export default function AssistantPage() {
     }
   }, [loading]);
 
+  useEffect(() => {
+    pageMounted.current = true;
+    return () => {
+      pageMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (textInputRef.current) fitComposer(textInputRef.current);
+  }, [inputText]);
+
+  const beginVisitGps = () => {
+    if (!gpsSessionRef.current) gpsSessionRef.current = createVisitGpsSession();
+    const session = gpsSessionRef.current;
+    if (visitWatchStarted.current) return session;
+    visitWatchStarted.current = true;
+    setVisitLocationPrompt((current) => current || 'Reading the visit location…');
+    void session.watchForAddress().then(async (coords) => {
+      if (!pageMounted.current) return;
+      if (!coords) {
+        visitWatchStarted.current = false;
+        setVisitFix(null);
+        setVisitAddress('');
+        setVisitLocationPrompt('Type the city if GPS is unavailable.');
+        return;
+      }
+      setVisitFix(coords);
+      try {
+        const res = await visitsApi.reverseGeocode(coords.latitude, coords.longitude);
+        const body = res?.data?.data || res?.data;
+        const address = visitCityLabel(body?.address) || visitCityLabel(body?.city);
+        if (!pageMounted.current) return;
+        setVisitAddress(address);
+        setVisitLocationPrompt(address || 'Type the city if GPS is unavailable.');
+      } catch {
+        if (!pageMounted.current) return;
+        setVisitLocationPrompt('Type the city if GPS is unavailable.');
+      }
+    });
+    return session;
+  };
+
+  useEffect(() => {
+    const latest = [...messages].reverse().find((msg) => msg.role === 'assistant');
+    if (!latest || !assistantAsksForVisitLocation(latest.content || '')) return;
+    beginVisitGps();
+  }, [messages]);
+
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const isPdf = file.type === 'application/pdf';
-    if (!file.type.startsWith('image/') && !isPdf) {
-      setError('Please attach an image or PDF document.');
+    const type = file.type.toLowerCase();
+    const name = file.name.toLowerCase();
+    const isPdf = type === 'application/pdf' || name.endsWith('.pdf');
+    const isImage = type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/.test(name);
+    if (!isPdf || isImage) {
+      setError('Upload a PDF. Use Capture an image for photos.');
+      e.target.value = '';
       return;
     }
 
@@ -235,41 +307,11 @@ export default function AssistantPage() {
       focusInput();
     };
     reader.readAsDataURL(file);
-
-    // Automatically capture GPS location from browser geolocation
-    if (!isPdf && 'geolocation' in navigator) {
-      setGpsStatus('acquiring');
-      setGpsStatusText('Acquiring GPS location...');
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const coords = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          };
-          setGpsLocation(coords);
-          setGpsStatus('acquired');
-          setGpsStatusText(`GPS Tagged: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)} (±${Math.round(coords.accuracy)}m)`);
-          focusInput();
-        },
-        (geoErr) => {
-          console.warn('Geolocation capture notice:', geoErr.message);
-          setGpsStatus('error');
-          setGpsStatusText('GPS unavailable');
-          focusInput();
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-      );
-    } else if (!isPdf) {
-      setGpsStatus('error');
-      setGpsStatusText('Geolocation not supported');
-      focusInput();
-    } else {
-      setGpsLocation(null);
-      setGpsStatus('idle');
-      setGpsStatusText('');
-      focusInput();
-    }
+    setError(null);
+    photoSourceRef.current = 'upload';
+    setGpsLocation(null);
+    setGpsStatus('idle');
+    setGpsStatusText('');
   };
 
   const handleClearPhoto = () => {
@@ -280,6 +322,7 @@ export default function AssistantPage() {
     setGpsLocation(null);
     setGpsStatus('idle');
     setGpsStatusText('');
+    photoSourceRef.current = null;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -360,6 +403,10 @@ export default function AssistantPage() {
     setMessages([]);
     setError(null);
     setInputText('');
+    visitWatchStarted.current = false;
+    setVisitFix(null);
+    setVisitAddress('');
+    setVisitLocationPrompt('');
     handleClearPhoto();
     focusInput();
   };
@@ -404,7 +451,15 @@ export default function AssistantPage() {
       }
     }
     const photoToSend = selectedPhoto;
-    const gpsToSend = gpsLocation;
+    const source = photoSourceRef.current;
+    const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant');
+    const wantsLocation = assistantAsksForVisitLocation(lastAssistant?.content || '');
+    const gpsToSend =
+      source === 'upload' ? null : source === 'camera' ? gpsLocation : wantsLocation ? visitFix : null;
+    let outbound = textToSend || (photoToSend ? 'Attached image' : '');
+    if (wantsLocation && visitAddress && source !== 'upload' && !outbound.includes(visitAddress)) {
+      outbound = `${outbound}\nLocation: ${visitAddress}`.trim();
+    }
 
     setInputText('');
     handleClearPhoto();
@@ -432,10 +487,11 @@ export default function AssistantPage() {
 
     try {
       const res = await chatbotApi.sendMessage({
-        message: textToSend || (photoToSend ? 'Attached image' : ''),
+        message: outbound,
         sessionId: activeSessionId || undefined,
         image: photoToSend ? { base64: photoToSend.base64, mimeType: photoToSend.file.type } : undefined,
         gps: gpsToSend || undefined,
+        photoSource: source === 'camera' || source === 'upload' ? source : undefined,
       });
 
       const resData = res.data?.data || res.data || {};
@@ -1002,30 +1058,14 @@ export default function AssistantPage() {
                 e.preventDefault();
                 handleSend();
               }}
-              className="flex items-center gap-2 bg-gray-50 border border-gray-300 focus-within:border-blue-500 focus-within:bg-white px-3 py-2 rounded-xl transition-all shadow-2xs"
+              className="flex items-end gap-2 bg-gray-50 border border-gray-300 focus-within:border-blue-500 focus-within:bg-white px-3 py-2 rounded-xl transition-all shadow-2xs"
             >
               <AssistantAttachMenu
                 disabled={loading}
                 onUpload={() => fileInputRef.current?.click()}
-                readGps={() =>
-                  new Promise((resolve) => {
-                    if (!navigator.geolocation) {
-                      resolve(null);
-                      return;
-                    }
-                    navigator.geolocation.getCurrentPosition(
-                      (position) =>
-                        resolve({
-                          latitude: position.coords.latitude,
-                          longitude: position.coords.longitude,
-                          accuracy: position.coords.accuracy,
-                        }),
-                      () => resolve(null),
-                      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-                    );
-                  })
-                }
+                readGps={() => beginVisitGps().readForPhoto()}
                 onCapture={(photoUrl, coords) => {
+                  photoSourceRef.current = 'camera';
                   setSelectedPhoto({
                     file: new File([photoUrl], 'visit-photo.jpg', { type: 'image/jpeg' }),
                     previewUrl: photoUrl,
@@ -1042,17 +1082,27 @@ export default function AssistantPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,.pdf,application/pdf"
+                accept=".pdf,application/pdf"
                 className="hidden"
                 onChange={handlePhotoSelect}
               />
-              <input
+              <textarea
                 ref={textInputRef}
-                type="text"
+                rows={1}
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                aria-label="Message"
+                onChange={(e) => {
+                  setInputText(e.target.value);
+                  fitComposer(e.target);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
                 placeholder={selectedPhoto ? "Add notes for this attachment..." : isProcurement ? "Reply with a procurement number or a menu choice..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
-                className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+                className="max-h-40 min-h-[1.5rem] flex-1 resize-none overflow-y-auto bg-transparent text-sm leading-5 text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />
               <button
@@ -1063,6 +1113,13 @@ export default function AssistantPage() {
                 <Send size={16} />
               </button>
             </form>
+            {visitLocationPrompt && assistantAsksForVisitLocation(
+              [...messages].reverse().find((msg) => msg.role === 'assistant')?.content || '',
+            ) && (
+              <p className="mt-2 text-xs text-gray-500" aria-live="polite">
+                {visitLocationPrompt}
+              </p>
+            )}
           </div>
         </div>
       </div>

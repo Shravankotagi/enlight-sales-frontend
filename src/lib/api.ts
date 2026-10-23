@@ -278,6 +278,7 @@ export const chatbotApi = {
     sessionId?: string;
     image?: { base64: string; mimeType: string };
     gps?: { latitude: number; longitude: number; accuracy?: number };
+    photoSource?: 'camera' | 'upload';
   }) => API.post('/chat/message', data, { timeout: 120000 }),
   getSessions: () => API.get('/chat/sessions'),
   getSessionMessages: (sessionId: string) =>

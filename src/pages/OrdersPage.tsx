@@ -481,7 +481,7 @@ export function extractCleanProductAndSpecs(rawSku?: string, rawDimensions?: str
   };
 }
 
-const ORDER_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
+const ORDER_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', '90 Days', 'LC', 'BG', 'PDC'];
 
 function orderPaymentTerm(raw: string): string {
   const text = raw.trim().toLowerCase();
@@ -490,6 +490,7 @@ function orderPaymentTerm(raw: string): string {
   if (/\b30\b/.test(text)) return '30 Days';
   if (/\b45\b/.test(text)) return '45 Days';
   if (/\b60\b/.test(text)) return '60 Days';
+  if (/\b90\b/.test(text)) return '90 Days';
   if (/\blc\b/.test(text)) return 'LC';
   if (/\bbg\b/.test(text)) return 'BG';
   if (/\bpdc\b/.test(text)) return 'PDC';

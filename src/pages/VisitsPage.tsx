@@ -38,14 +38,24 @@ import { visitsApi, employeesApi, customersApi } from '../lib/api';
 import VisitLocationField from '../components/VisitLocationField';
 import VisitBrandField from '../components/VisitBrandField';
 import VisitCameraCapture from '../components/VisitCameraCapture';
+import VisitCustomerTypeField from '../components/VisitCustomerTypeField';
 import {
   VISIT_BRANDS,
+  VISIT_CUSTOMER_TYPES,
   VISIT_PAYMENT_TERMS,
+  VISIT_WIZARD_STEPS,
   validateNewVisitForm,
+  visitCalendarPlusDays,
+  visitCalendarToday,
   visitCityLabel,
+  visitWizardFieldKeys,
+  visitWizardProgress,
+  visitWizardStepErrors,
+  visitCustomerTypeLabel,
   visitDocumentError,
   type NewVisitFormInput,
 } from '../utils/visitForm';
+import { createVisitGpsSession } from '../utils/visitGps';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -65,21 +75,40 @@ export { getFollowUpStatusInfo };
 export function formatCityLocality(rawLocation?: string | null, rawAddress?: string | null): string {
   const str = (rawLocation || rawAddress || '').trim();
   if (!str || str === '-' || str.toLowerCase() === 'null') return '-';
+  return str;
+}
 
-  // Clean up pin codes, trailing states/countries
-  const cleaned = str
-    .replace(/,\s*India\b/i, '')
-    .replace(/,\s*Maharashtra\b/i, '')
-    .replace(/\b\d{6}\b/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^[,\s]+|[,\s]+$/g, '');
+function dataUrlToBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(',');
+  const header = comma >= 0 ? dataUrl.slice(0, comma) : '';
+  const data = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const mime = /data:([^;,]+)/.exec(header)?.[1] || 'application/octet-stream';
+  const binary = /;base64/i.test(header) ? atob(data) : decodeURIComponent(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: mime });
+}
 
-  const parts = cleaned.split(',').map(p => p.trim()).filter(Boolean);
-  if (parts.length <= 2) {
-    return parts.join(', ');
-  }
-  return parts.slice(-2).join(', ');
+function attachmentName(att: VisitAttachment): string {
+  return att.name || att.file_name || 'Attachment';
+}
+
+function attachmentUrl(att: VisitAttachment): string {
+  return att.url || att.file_url || '';
+}
+
+function isImageAttachment(att: VisitAttachment): boolean {
+  const type = String(att.type || att.file_type || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  return attachmentUrl(att).startsWith('data:image/');
+}
+
+function isPdfAttachment(att: VisitAttachment): boolean {
+  const type = String(att.type || att.file_type || '').toLowerCase();
+  if (type === 'application/pdf') return true;
+  const url = attachmentUrl(att);
+  if (url.startsWith('data:application/pdf')) return true;
+  return attachmentName(att).toLowerCase().endsWith('.pdf');
 }
 
 export default function VisitsPage() {
@@ -387,14 +416,41 @@ export default function VisitsPage() {
 
   // Details & Edit Modal States
   const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
-  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; kind?: 'image' | 'pdf' } | null>(null);
+  const previewBlobRef = useRef<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const closeVisitPreview = () => {
+    if (previewBlobRef.current) {
+      URL.revokeObjectURL(previewBlobRef.current);
+      previewBlobRef.current = null;
+    }
+    setPreviewImage(null);
+  };
+
+  const openVisitPreview = (url: string, title: string, kind: 'image' | 'pdf' = 'image') => {
+    if (previewBlobRef.current) {
+      URL.revokeObjectURL(previewBlobRef.current);
+      previewBlobRef.current = null;
+    }
+    if (kind === 'pdf') {
+      const blobUrl = URL.createObjectURL(dataUrlToBlob(url));
+      previewBlobRef.current = blobUrl;
+      setPreviewImage({ url: blobUrl, title, kind: 'pdf' });
+      return;
+    }
+    setPreviewImage({ url, title, kind: 'image' });
+  };
+
+  useEffect(() => () => {
+    if (previewBlobRef.current) URL.revokeObjectURL(previewBlobRef.current);
+  }, []);
 
   useEffect(() => {
     if (!previewImage) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPreviewImage(null);
+      if (event.key === 'Escape') closeVisitPreview();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -460,11 +516,13 @@ export default function VisitsPage() {
   const [formVisitDate, setFormVisitDate] = useState(formatLocalDate());
   const [formVisitTime, setFormVisitTime] = useState(formatLocalTime());
   const [formErrors, setFormErrors] = useState<Record<string, string | boolean>>({});
+  const [createStep, setCreateStep] = useState(0);
 
   // Extended Fields for Create Form
   const [formEmail, setFormEmail] = useState('');
   const [formDesignation, setFormDesignation] = useState('');
   const [formCustomerType, setFormCustomerType] = useState('');
+  const [formCustomerTypeOther, setFormCustomerTypeOther] = useState('');
   const [formVisitType, setFormVisitType] = useState('First Visit');
   const [formCustomerProbability, setFormCustomerProbability] = useState('');
   const [formProductDetails, setFormProductDetails] = useState('');
@@ -494,6 +552,8 @@ export default function VisitsPage() {
   const [otpNotice, setOtpNotice] = useState('');
   const [resendSeconds, setResendSeconds] = useState(0);
   const [capturingGps, setCapturingGps] = useState(false);
+  const gpsSessionRef = useRef<ReturnType<typeof createVisitGpsSession> | null>(null);
+  if (!gpsSessionRef.current) gpsSessionRef.current = createVisitGpsSession();
 
   // Preset Days Helper
   const setFollowupPresetDays = (days: number, isEdit = false) => {
@@ -508,49 +568,14 @@ export default function VisitsPage() {
   };
 
   // GPS Coordinates & File Upload Helpers
-  const captureGpsCoordinates = (): Promise<{ latitude: number; longitude: number; accuracy: number } | null> => {
-    const targetMeters = 20;
-    const watchMs = 15000;
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        resolve(null);
-        return;
-      }
-      let settled = false;
-      let watchId = 0;
-      let best: { latitude: number; longitude: number; accuracy: number } | null = null;
-      const finish = (reading: { latitude: number; longitude: number; accuracy: number } | null) => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timer);
-        if (watchId) navigator.geolocation.clearWatch(watchId);
-        resolve(reading);
-      };
-      const timer = window.setTimeout(() => finish(best), watchMs);
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const reading = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracy: Math.round(pos.coords.accuracy),
-          };
-          if (!best || reading.accuracy < best.accuracy) best = reading;
-          if (reading.accuracy <= targetMeters) finish(best);
-        },
-        (err) => {
-          console.warn('Geolocation capture failed or denied:', err);
-          finish(best);
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: watchMs },
-      );
-    });
-  };
+  const watchVisitGps = () => gpsSessionRef.current!.watchForAddress();
+  const readPhotoGps = () => gpsSessionRef.current!.readForPhoto();
 
   const refreshVisitLocation = async () => {
     setLocating(true);
     setLocationNotice('');
     try {
-      const coords = await captureGpsCoordinates();
+      const coords = await watchVisitGps();
       if (!coords) {
         setLocationSource('manual');
         setLocationLocked(false);
@@ -602,6 +627,7 @@ export default function VisitsPage() {
     location: formLocation,
     locationSource,
     customerType: formCustomerType,
+    customerTypeOther: formCustomerTypeOther,
     visitDate: formVisitDate,
     visitTime: formVisitTime,
     visitType: formVisitType,
@@ -628,7 +654,7 @@ export default function VisitsPage() {
     if (!file) return;
     setCapturingGps(true);
     try {
-      const coords = await captureGpsCoordinates();
+      const coords = await readPhotoGps();
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
@@ -696,6 +722,7 @@ export default function VisitsPage() {
     setFormEmail('');
     setFormDesignation('');
     setFormCustomerType('');
+    setFormCustomerTypeOther('');
     setFormVisitType('First Visit');
     setFormCustomerProbability('');
     setFormProductDetails('');
@@ -721,9 +748,45 @@ export default function VisitsPage() {
     setFormGpsLng(null);
     setFormGpsAccuracy(null);
     setFormAttachments([]);
+    setCreateStep(0);
 
     setShowModal(true);
     void refreshVisitLocation();
+  };
+
+  const closeCreateModal = () => {
+    setShowModal(false);
+    setCreateStep(0);
+  };
+
+  const openCreateStep = (index: number) => {
+    if (index === createStep) return;
+    if (index < createStep) {
+      setFormErrors({});
+      setCreateStep(index);
+      return;
+    }
+    const input = newVisitInput();
+    for (let step = createStep; step < index; step += 1) {
+      const stepErrors = visitWizardStepErrors(input, step);
+      if (Object.keys(stepErrors).length > 0) {
+        setFormErrors(stepErrors);
+        setCreateStep(step);
+        return;
+      }
+    }
+    setFormErrors({});
+    setCreateStep(index);
+  };
+
+  const goToNextCreateStep = () => {
+    const stepErrors = visitWizardStepErrors(newVisitInput(), createStep);
+    if (Object.keys(stepErrors).length > 0) {
+      setFormErrors(stepErrors);
+      return;
+    }
+    setFormErrors({});
+    setCreateStep((step) => Math.min(step + 1, VISIT_WIZARD_STEPS.length - 1));
   };
 
   // Edit Form state
@@ -744,6 +807,7 @@ export default function VisitsPage() {
   const [editEmail, setEditEmail] = useState('');
   const [editDesignation, setEditDesignation] = useState('');
   const [editCustomerType, setEditCustomerType] = useState('');
+  const [editCustomerTypeOther, setEditCustomerTypeOther] = useState('');
   const [editVisitType, setEditVisitType] = useState('First Visit');
   const [editCustomerProbability, setEditCustomerProbability] = useState('');
   const [editProductDetails, setEditProductDetails] = useState('');
@@ -825,7 +889,11 @@ export default function VisitsPage() {
       const res = await visitsApi.requestVisitOtp(formContactPhone);
       const body = res?.data?.data || res?.data;
       setResendSeconds(Number(body?.resend_after_seconds) || 60);
-      setOtpNotice(body?.message || 'Code sent to the customer WhatsApp number.');
+      setOtpNotice(
+        body?.test_otp
+          ? `Temporary test code: ${body.test_otp}. WhatsApp was not used.`
+          : body?.message || 'Code sent to the customer WhatsApp number.',
+      );
       setOtpVerified(false);
       setVerificationToken('');
     } catch (err: any) {
@@ -868,9 +936,14 @@ export default function VisitsPage() {
     e.preventDefault();
     if (!guardAction('visits.log')) return;
 
-    const errors = validateNewVisitForm(newVisitInput());
+    const input = newVisitInput();
+    const errors = validateNewVisitForm(input);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
+      const firstInvalid = VISIT_WIZARD_STEPS.findIndex((_, step) =>
+        visitWizardFieldKeys(step, input).some((field) => errors[field]),
+      );
+      if (firstInvalid >= 0) setCreateStep(firstInvalid);
       return;
     }
 
@@ -897,6 +970,7 @@ export default function VisitsPage() {
         email: formEmail.trim(),
         designation: formDesignation.trim(),
         customer_type: formCustomerType,
+        customer_type_other: formCustomerType === 'Other' ? formCustomerTypeOther.trim() : null,
         visit_type: formVisitType,
         customer_probability: formCustomerProbability,
         product_details: formProductDetails.trim(),
@@ -924,6 +998,7 @@ export default function VisitsPage() {
       setTimeout(() => {
         setIsSavedSuccess(false);
         setShowModal(false);
+        setCreateStep(0);
         setSelectedVisit(null);
         setFormCustomerName('');
         setFormPersonMet('');
@@ -939,6 +1014,7 @@ export default function VisitsPage() {
         setFormEmail('');
         setFormDesignation('');
         setFormCustomerType('');
+        setFormCustomerTypeOther('');
         setFormVisitType('First Visit');
         setFormCustomerProbability('');
         setFormProductDetails('');
@@ -1034,6 +1110,7 @@ export default function VisitsPage() {
     setEditEmail(v.email || '');
     setEditDesignation(v.designation || '');
     setEditCustomerType(v.customer_type || '');
+    setEditCustomerTypeOther(v.customer_type_other || '');
     setEditVisitType(v.visit_type || 'First Visit');
     setEditCustomerProbability(v.customer_probability || '');
     setEditProductDetails(v.product_details || '');
@@ -1071,6 +1148,9 @@ export default function VisitsPage() {
     } else if (cleanEditPhone.length !== 10) {
       errors.contactPhone = 'Please enter a valid 10-digit mobile number.';
     }
+    if (editCustomerType === 'Other' && !editCustomerTypeOther.trim()) {
+      errors.customerTypeOther = 'Enter the other customer type.';
+    }
 
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
@@ -1101,6 +1181,7 @@ export default function VisitsPage() {
         email: editEmail.trim() || null,
         designation: editDesignation.trim() || null,
         customer_type: editCustomerType || null,
+        customer_type_other: editCustomerType === 'Other' ? editCustomerTypeOther.trim() : null,
         visit_type: editVisitType || null,
         customer_probability: editCustomerProbability || null,
         product_details: editProductDetails.trim() || null,
@@ -1358,6 +1439,8 @@ export default function VisitsPage() {
     });
   };
 
+  const createProgress = visitWizardProgress(newVisitInput(), createStep);
+
   return (
     <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Stats, Filters) */}
@@ -1578,11 +1661,9 @@ export default function VisitsPage() {
             menuClassName="w-48"
           >
             <option value="all">All Customer Types</option>
-            <option value="OEM">OEM</option>
-            <option value="Fabricator">Fabricator</option>
-            <option value="EPC">EPC</option>
-            <option value="Manufacturer">Manufacturer</option>
-            <option value="Trader">Trader</option>
+            {VISIT_CUSTOMER_TYPES.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
           </Select>
 
           {/* 7. Customer Probability Dropdown */}
@@ -1677,6 +1758,7 @@ export default function VisitsPage() {
                 paginatedVisits.map((v, idx) => {
                   const globalIdx = startIndex + idx + 1;
                   const outcomeLower = getNormalizedOutcome(v);
+                  const customerTypeLabel = visitCustomerTypeLabel(v.customer_type, v.customer_type_other);
                   const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '-';
                   const salespersonName = getSalespersonDisplayName(v);
 
@@ -1704,9 +1786,9 @@ export default function VisitsPage() {
                         )}
                         {/* Extended tags row */}
                         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                          {v.customer_type && (
+                          {customerTypeLabel && (
                             <span className="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              {v.customer_type}
+                              {customerTypeLabel}
                             </span>
                           )}
                           {v.customer_probability && (
@@ -1761,7 +1843,7 @@ export default function VisitsPage() {
 
                       {/* 3. Location */}
                       <td className="px-4 py-3.5 text-xs">
-                        <div className="font-semibold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
+                        <div className="font-semibold text-slate-800 flex items-start gap-1.5 whitespace-normal">
                           <MapIcon size={12} className="text-slate-400 shrink-0" />
                           {formatCityLocality(v.location, v.customer_address)}
                         </div>
@@ -1921,21 +2003,65 @@ export default function VisitsPage() {
       {/* Log Visit Modal */}
       {showModal && (
         <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <MapPin className="text-blue-600" size={18} />
-                Log Customer Field Visit
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer">
-                <X size={18} />
-              </button>
+          <div
+            role="dialog"
+            aria-labelledby="log-visit-title"
+            className="visit-wizard mobile-sheet bg-white rounded-2xl max-w-3xl w-full p-4 sm:p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+            <div className="sheet-header flex items-start justify-between gap-3 pb-3 border-b border-slate-100 shrink-0">
+              <div className="min-w-0">
+                <h2 id="log-visit-title" className="text-base sm:text-lg font-bold text-slate-900">
+                  Log customer field visit
+                </h2>
+                <p className="mt-1 text-[11px] sm:text-xs text-slate-500">
+                  Capture the meeting while you are still on site. Fields marked * are required.
+                </p>
+              </div>
+              <div className="flex items-start gap-2 shrink-0">
+                <div className="text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Required on this step</p>
+                  <p className="text-sm font-bold text-slate-800">
+                    {createProgress.filled}/{createProgress.total}
+                  </p>
+                  <div className="mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-blue-600"
+                      style={{
+                        width: `${createProgress.total ? (createProgress.filled / createProgress.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  aria-label="Close"
+                  className="wizard-tap text-slate-400 hover:text-slate-600 p-2 rounded-lg transition-colors cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
+            <nav aria-label="Visit form steps" className="mt-3 flex gap-1 overflow-x-auto pb-1 shrink-0">
+              {VISIT_WIZARD_STEPS.map((step, index) => (
+                <button
+                  key={step.title}
+                  type="button"
+                  onClick={() => openCreateStep(index)}
+                  aria-label={`Step ${index + 1} ${step.title}`}
+                  aria-current={createStep === index ? 'step' : undefined}
+                  className={`wizard-tap shrink-0 rounded-lg px-3 py-2 text-left ${
+                    createStep === index
+                      ? 'border-b-2 border-blue-600 text-blue-700'
+                      : 'text-slate-500 hover:bg-slate-50'
+                  }`}>
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide">Step {index + 1}</span>
+                  <span className="block text-xs font-bold whitespace-nowrap">{step.title}</span>
+                </button>
+              ))}
+            </nav>
+
             <form onSubmit={handleCreateVisit} className="flex flex-col flex-1 overflow-hidden mt-3">
-              <div className="overflow-y-auto flex-1 px-3.5 py-2.5 text-xs">
+              <div className="overflow-y-auto flex-1 px-1 py-2.5 text-xs">
                 {isSavedSuccess && (
                   <div className="p-3 mb-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-2 animate-fadeIn">
                     <CheckCircle2 size={16} className="text-emerald-600" />
@@ -1943,13 +2069,16 @@ export default function VisitsPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* Left Column: Stakeholder & Classification */}
+                <div className="space-y-4">
                   <div className="space-y-3.5">
-                    <div className="pb-1 border-b border-slate-100">
-                      <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <Building2 size={13} /> Company &amp; Contact Details
-                      </span>
+                    {createStep === 0 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">1</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Company &amp; contact</p>
+                        <p className="text-[11px] text-slate-500">Who you met</p>
+                      </div>
                     </div>
 
                     <div>
@@ -1974,7 +2103,7 @@ export default function VisitsPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Person Met <span className="text-rose-500">*</span>
@@ -2018,7 +2147,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Contact Phone <span className="text-rose-500">*</span>
@@ -2070,7 +2199,7 @@ export default function VisitsPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3">
                       <div>
                       <VisitLocationField
                         value={formLocation}
@@ -2091,32 +2220,42 @@ export default function VisitsPage() {
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          Customer Type <span className="text-rose-500">*</span>
-                        </label>
-                        <select
+                        <VisitCustomerTypeField
+                          required
                           value={formCustomerType}
-                          onChange={e => {
-                            setFormCustomerType(e.target.value);
-                            if (formErrors.customerType) setFormErrors(prev => ({ ...prev, customerType: false }));
+                          other={formCustomerTypeOther}
+                          error={formErrors.customerType}
+                          otherError={formErrors.customerTypeOther}
+                          onChange={(value) => {
+                            setFormCustomerType(value);
+                            if (value !== 'Other') setFormCustomerTypeOther('');
+                            if (formErrors.customerType || formErrors.customerTypeOther) {
+                              setFormErrors((prev) => ({ ...prev, customerType: false, customerTypeOther: false }));
+                            }
                           }}
-                          className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
-                            formErrors.customerType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
-                          }`}>
-                          <option value="">Select Customer Type</option>
-                          <option value="OEM">OEM</option>
-                          <option value="Fabricator">Fabricator</option>
-                          <option value="EPC">EPC</option>
-                          <option value="Manufacturer">Manufacturer</option>
-                          <option value="Trader">Trader</option>
-                        </select>
-                        {formErrors.customerType && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.customerType)}</p>
-                        )}
+                          onOtherChange={(value) => {
+                            setFormCustomerTypeOther(value);
+                            if (formErrors.customerTypeOther) {
+                              setFormErrors((prev) => ({ ...prev, customerTypeOther: false }));
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    </div>
+                    )}
+
+                    {createStep === 1 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">2</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Visit details</p>
+                        <p className="text-[11px] text-slate-500">When and how it went</p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">
                           Visit Date <span className="text-rose-500">*</span>
@@ -2153,47 +2292,60 @@ export default function VisitsPage() {
                           <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitTime)}</p>
                         )}
                       </div>
+                    </div>
 
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          Visit Type <span className="text-rose-500">*</span>
-                        </label>
-                        <select
-                          value={formVisitType}
-                          onChange={e => {
-                            setFormVisitType(e.target.value);
-                            if (formErrors.visitType) setFormErrors(prev => ({ ...prev, visitType: false }));
-                          }}
-                          className={`w-full px-2.5 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
-                            formErrors.visitType ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
-                          }`}>
-                          <option value="First Visit">First Visit</option>
-                          <option value="Follow-up 1">Follow-up 1</option>
-                          <option value="Follow-up 2">Follow-up 2</option>
-                          <option value="Follow-up 3">Follow-up 3</option>
-                          <option value="Regular Visit">Regular Visit</option>
-                        </select>
-                        {formErrors.visitType && (
-                          <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitType)}</p>
-                        )}
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Visit type <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {['First Visit', 'Follow-up 1', 'Follow-up 2', 'Follow-up 3', 'Regular Visit'].map(type => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => {
+                              setFormVisitType(type);
+                              if (formErrors.visitType) setFormErrors(prev => ({ ...prev, visitType: false }));
+                            }}
+                            className={`wizard-choice rounded-xl border px-3 py-2 text-xs font-bold ${
+                              formVisitType === type
+                                ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                : 'border-slate-200 bg-white text-slate-600'
+                            }`}>
+                            {type}
+                          </button>
+                        ))}
                       </div>
+                      {formErrors.visitType && (
+                        <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.visitType)}</p>
+                      )}
+                    </div>
 
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">
-                          Outcome <span className="text-rose-500">*</span>
-                        </label>
-                        <Select
-                          value={formOutcome}
-                          onChange={e => {
-                            setFormOutcome(e.target.value);
-                            if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
-                          }}
-                          className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
-                        >
-                          <option value="positive">Positive</option>
-                          <option value="neutral">Neutral</option>
-                          <option value="negative">Negative</option>
-                        </Select>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Outcome <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          ['positive', 'Positive'],
+                          ['neutral', 'Neutral'],
+                          ['negative', 'Negative'],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => {
+                              setFormOutcome(value);
+                              if (formErrors.outcome) setFormErrors(prev => ({ ...prev, outcome: false }));
+                            }}
+                            className={`wizard-choice rounded-xl border px-3 py-2 text-xs font-bold ${
+                              formOutcome === value
+                                ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                : 'border-slate-200 bg-white text-slate-600'
+                            }`}>
+                            {label}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
@@ -2210,7 +2362,7 @@ export default function VisitsPage() {
                               setFormCustomerProbability(p);
                               if (formErrors.probability) setFormErrors(prev => ({ ...prev, probability: false }));
                             }}
-                            className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            className={`wizard-choice rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                               formCustomerProbability === p
                                 ? p === 'Hot'
                                   ? 'bg-rose-50 border-rose-400 text-rose-700 ring-2 ring-rose-200'
@@ -2227,14 +2379,19 @@ export default function VisitsPage() {
                         <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.probability)}</p>
                       )}
                     </div>
+                    </div>
+                    )}
                   </div>
 
-                  {/* Right Column: Commercials, Requirements, Follow-up & Attachments */}
                   <div className="space-y-3.5">
-                    <div className="pb-1 border-b border-slate-100">
-                      <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <Briefcase size={13} /> Commercial Intelligence &amp; Requirements
-                      </span>
+                    {createStep === 2 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">3</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Commercial intelligence</p>
+                        <p className="text-[11px] text-slate-500">What they need and buy</p>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2308,6 +2465,7 @@ export default function VisitsPage() {
                           Payment Terms <span className="text-rose-500">*</span>
                         </label>
                         <select
+                          aria-label="Payment Terms"
                           value={formPaymentTerms}
                           onChange={e => {
                             setFormPaymentTerms(e.target.value);
@@ -2316,7 +2474,7 @@ export default function VisitsPage() {
                           className={`w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium ${
                             formErrors.paymentTerms ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
                           }`}>
-                          <option value="">Select Payment Terms</option>
+                          <option value="" disabled hidden>Select Payment Terms</option>
                           {VISIT_PAYMENT_TERMS.map(term => (
                             <option key={term} value={term}>{term}</option>
                           ))}
@@ -2355,6 +2513,8 @@ export default function VisitsPage() {
                         </label>
                         <input
                           type="date"
+                          aria-label="Next Purchase Expected"
+                          min={visitCalendarToday()}
                           value={formNextPurchaseExpected}
                           onChange={e => {
                             setFormNextPurchaseExpected(e.target.value);
@@ -2390,6 +2550,18 @@ export default function VisitsPage() {
                         <p className="text-[11px] text-rose-500 font-semibold mt-1">{String(formErrors.currentRequirement)}</p>
                       )}
                     </div>
+                    </div>
+                    )}
+
+                    {createStep === 3 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">4</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Follow-up</p>
+                        <p className="text-[11px] text-slate-500">What happens next</p>
+                      </div>
+                    </div>
 
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2400,20 +2572,29 @@ export default function VisitsPage() {
                           <span className="text-slate-400 font-medium">Quick Due:</span>
                           <button
                             type="button"
-                            onClick={() => setFollowupPresetDays(1, false)}
-                            className="px-1.5 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded font-medium cursor-pointer shadow-2xs">
+                            onClick={() => {
+                              setFormFollowupDate(visitCalendarPlusDays(1));
+                              setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
+                            className="wizard-choice px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium cursor-pointer shadow-2xs">
                             +1d
                           </button>
                           <button
                             type="button"
-                            onClick={() => setFollowupPresetDays(3, false)}
-                            className="px-1.5 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded font-medium cursor-pointer shadow-2xs">
+                            onClick={() => {
+                              setFormFollowupDate(visitCalendarPlusDays(3));
+                              setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
+                            className="wizard-choice px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium cursor-pointer shadow-2xs">
                             +3d
                           </button>
                           <button
                             type="button"
-                            onClick={() => setFollowupPresetDays(7, false)}
-                            className="px-1.5 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded font-medium cursor-pointer shadow-2xs">
+                            onClick={() => {
+                              setFormFollowupDate(visitCalendarPlusDays(7));
+                              setFormErrors(prev => ({ ...prev, followupDate: false }));
+                            }}
+                            className="wizard-choice px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium cursor-pointer shadow-2xs">
                             +7d
                           </button>
                         </div>
@@ -2446,6 +2627,8 @@ export default function VisitsPage() {
                         <div>
                           <input
                             type="date"
+                            aria-label="Follow-up Date"
+                            min={visitCalendarToday()}
                             value={formFollowupDate}
                             onChange={e => {
                               setFormFollowupDate(e.target.value);
@@ -2482,8 +2665,19 @@ export default function VisitsPage() {
                         <p className="text-[11px] text-rose-500 font-semibold mt-1">Please enter meeting remarks.</p>
                       )}
                     </div>
+                    </div>
+                    )}
 
-                    {/* Attachments Section */}
+                    {createStep === 4 && (
+                    <div className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">5</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Proof &amp; verify</p>
+                        <p className="text-[11px] text-slate-500">Photo from site and customer confirmation</p>
+                      </div>
+                    </div>
+
                     <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
                       <div className="flex items-center justify-between">
                         <label className="block font-semibold text-slate-700">
@@ -2494,7 +2688,7 @@ export default function VisitsPage() {
 
                       <div className="flex flex-wrap items-center gap-2">
                         <VisitCameraCapture
-                          readGps={captureGpsCoordinates}
+                          readGps={readPhotoGps}
                           onCapture={(photoUrl, coords) => {
                             setFormGpsPhotoUrl(photoUrl);
                             setFormGpsLat(coords.latitude);
@@ -2504,7 +2698,7 @@ export default function VisitsPage() {
                           }}
                         />
 
-                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-medium border border-slate-200 shadow-2xs transition-colors">
+                        <label className="wizard-tap cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-medium border border-slate-200 shadow-2xs transition-colors">
                           <input
                             type="file"
                             multiple
@@ -2540,20 +2734,28 @@ export default function VisitsPage() {
 
                       {/* GPS Photo Preview Card */}
                       {formGpsPhotoUrl && (
-                        <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200 shadow-2xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <img src={formGpsPhotoUrl} alt="Visit Photo" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
-                            <div className="min-w-0">
-                              <p className="font-semibold text-slate-800 text-[11px] truncate">Customer Visit Photo</p>
-                              {formGpsLat && formGpsLng ? (
-                                <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1 mt-0.5">
-                                  <Compass size={10} className="text-blue-600 shrink-0" />
-                                  GPS: {formGpsLat.toFixed(4)}, {formGpsLng.toFixed(4)} (±{formGpsAccuracy || 10}m)
-                                </p>
-                              ) : (
-                                <p className="text-[10px] text-amber-600 font-medium">GPS location not captured</p>
-                              )}
-                            </div>
+                        <div className="flex items-start justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs">
+                          <div className="min-w-0 space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => openVisitPreview(formGpsPhotoUrl, 'Customer Visit Photo')}
+                              className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              aria-label="Preview visit photo">
+                              <img
+                                src={formGpsPhotoUrl}
+                                alt="Visit Photo"
+                                className="h-40 max-w-full rounded-lg border border-slate-200 bg-slate-50 object-contain"
+                              />
+                            </button>
+                            <p className="font-semibold text-slate-800 text-[11px] truncate">Customer Visit Photo</p>
+                            {formGpsLat && formGpsLng ? (
+                              <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                                <Compass size={10} className="text-blue-600 shrink-0" />
+                                GPS: {formGpsLat.toFixed(4)}, {formGpsLng.toFixed(4)} (±{formGpsAccuracy || 10}m)
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-amber-600 font-medium">GPS location not captured</p>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -2573,20 +2775,41 @@ export default function VisitsPage() {
                       {/* Other Attachments List */}
                       {formAttachments.length > 0 && (
                         <div className="space-y-1.5 pt-1">
-                          {formAttachments.map((att, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-1.5 px-2 bg-white rounded-lg border border-slate-200 text-[11px]">
-                              <span className="truncate max-w-[200px] font-medium text-slate-700 flex items-center gap-1.5">
-                                <FileText size={12} className="text-slate-400 shrink-0" />
-                                {att.name || att.file_name || 'Attachment'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setFormAttachments(prev => prev.filter((_, i) => i !== idx))}
-                                className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer">
-                                <X size={13} />
-                              </button>
-                            </div>
-                          ))}
+                          {formAttachments.map((att, idx) => {
+                            const name = attachmentName(att);
+                            const url = attachmentUrl(att);
+                            const image = isImageAttachment(att);
+                            const pdf = !image && isPdfAttachment(att);
+                            return (
+                              <div key={idx} className="flex items-center justify-between gap-2 p-1.5 px-2 bg-white rounded-lg border border-slate-200 text-[11px]">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {image && url ? (
+                                    <img src={url} alt="" className="h-16 w-16 rounded-md border border-slate-200 object-cover shrink-0" />
+                                  ) : (
+                                    <FileText size={12} className="text-slate-400 shrink-0" />
+                                  )}
+                                  <span className="truncate max-w-[200px] font-medium text-slate-700">{name}</span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {url && (image || pdf) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openVisitPreview(url, name, pdf ? 'pdf' : 'image')}
+                                      className="px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 rounded-md cursor-pointer"
+                                      aria-label={`Preview ${name}`}>
+                                      Preview
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setFormAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                    className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer">
+                                    <X size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -2603,7 +2826,7 @@ export default function VisitsPage() {
                           type="button"
                           onClick={() => { void sendVisitCode(); }}
                           disabled={otpSending || resendSeconds > 0}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                          className="wizard-tap px-3 py-2 bg-blue-600 text-white rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
                         >
                           {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : otpVerified ? 'Resend code' : 'Send code'}
                         </button>
@@ -2621,7 +2844,7 @@ export default function VisitsPage() {
                           type="button"
                           onClick={() => { void confirmVisitCode(); }}
                           disabled={otpSending || otpCode.length !== 6}
-                          className="px-3 py-1.5 bg-slate-100 text-slate-800 rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                          className="wizard-tap px-3 py-2 bg-slate-100 text-slate-800 rounded-xl text-[11px] font-bold cursor-pointer disabled:opacity-60"
                         >
                           Verify
                         </button>
@@ -2636,25 +2859,44 @@ export default function VisitsPage() {
                         <p className="text-[11px] text-rose-500 font-semibold">{String(formErrors.otp)}</p>
                       )}
                     </div>
+                    </div>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons with Pill-Shaped "Save" Button */}
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
+              <div className="sheet-actions pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
+                  onClick={closeCreateModal}
+                  className="wizard-tap px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={submitting || isSavedSuccess}
-                  className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50">
-                  <Save size={16} />
-                  {submitting ? 'Saving...' : isSavedSuccess ? 'Saved!' : 'Save'}
-                </button>
+                {createStep > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openCreateStep(createStep - 1)}
+                    className="wizard-tap px-4 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-full transition-all shadow-2xs cursor-pointer">
+                    Back
+                  </button>
+                )}
+                {createStep < VISIT_WIZARD_STEPS.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={goToNextCreateStep}
+                    className="wizard-tap px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer">
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={submitting || isSavedSuccess}
+                    className="wizard-tap flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50">
+                    <Save size={16} />
+                    {submitting ? 'Saving...' : isSavedSuccess ? 'Saved!' : 'Save'}
+                  </button>
+                )}
               </div>
             </form>
           </div>
@@ -2710,9 +2952,9 @@ export default function VisitsPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 {!isEditing && (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {selectedVisit.customer_type && (
+                    {visitCustomerTypeLabel(selectedVisit.customer_type, selectedVisit.customer_type_other) && (
                       <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        {selectedVisit.customer_type}
+                        {visitCustomerTypeLabel(selectedVisit.customer_type, selectedVisit.customer_type_other)}
                       </span>
                     )}
 
@@ -2965,7 +3207,7 @@ export default function VisitsPage() {
                           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-white rounded-xl border border-slate-200">
                             <button
                               type="button"
-                              onClick={() => setPreviewImage({ url: selectedVisit.gps_photo_url!, title: 'Customer Visit Photo' })}
+                              onClick={() => openVisitPreview(selectedVisit.gps_photo_url!, 'Customer Visit Photo')}
                               className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                               aria-label="View customer visit photo">
                               <img
@@ -3127,22 +3369,24 @@ export default function VisitsPage() {
                           />
                         </div>
 
-                        <div>
-                          <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
-                          <Select
-                            value={editCustomerType}
-                            onChange={e => setEditCustomerType(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white cursor-pointer font-medium hover:border-blue-400"
-                            placeholder="Select Customer Type"
-                          >
-                            <option value="">Select Customer Type</option>
-                            <option value="OEM">OEM</option>
-                            <option value="Fabricator">Fabricator</option>
-                            <option value="EPC">EPC</option>
-                            <option value="Manufacturer">Manufacturer</option>
-                            <option value="Trader">Trader</option>
-                          </Select>
-                        </div>
+                        <VisitCustomerTypeField
+                          value={editCustomerType}
+                          other={editCustomerTypeOther}
+                          otherError={editErrors.customerTypeOther}
+                          onChange={(value) => {
+                            setEditCustomerType(value);
+                            if (value !== 'Other') setEditCustomerTypeOther('');
+                            if (editErrors.customerTypeOther) {
+                              setEditErrors((prev) => ({ ...prev, customerTypeOther: false }));
+                            }
+                          }}
+                          onOtherChange={(value) => {
+                            setEditCustomerTypeOther(value);
+                            if (editErrors.customerTypeOther) {
+                              setEditErrors((prev) => ({ ...prev, customerTypeOther: false }));
+                            }
+                          }}
+                        />
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -3500,16 +3744,24 @@ export default function VisitsPage() {
           role="dialog"
           aria-modal="true"
           aria-label={previewImage.title}
-          onClick={() => setPreviewImage(null)}>
+          onClick={closeVisitPreview}>
           <div className="relative max-w-6xl max-h-[90vh]" onClick={event => event.stopPropagation()}>
-            <img
-              src={previewImage.url}
-              alt={previewImage.title}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
-            />
+            {previewImage.kind === 'pdf' ? (
+              <iframe
+                title={previewImage.title}
+                src={previewImage.url}
+                className="h-[85vh] w-[min(90vw,64rem)] rounded-lg bg-white shadow-2xl"
+              />
+            ) : (
+              <img
+                src={previewImage.url}
+                alt={previewImage.title}
+                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+              />
+            )}
             <button
               type="button"
-              onClick={() => setPreviewImage(null)}
+              onClick={closeVisitPreview}
               className="absolute -top-3 -right-3 p-2 bg-white text-slate-700 rounded-full shadow-lg hover:bg-slate-100"
               aria-label="Close image preview">
               <X size={18} />
