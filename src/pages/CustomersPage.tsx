@@ -351,7 +351,6 @@ export default function CustomersPage() {
 
           <div className="flex items-center gap-2.5 shrink-0">
             <SyncBiginButton
-              show={isAdmin}
               onSynced={() => {
                 queryClient.invalidateQueries({ queryKey: ['orders-list'] });
                 queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
