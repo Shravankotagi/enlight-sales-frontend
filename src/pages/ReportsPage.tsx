@@ -182,7 +182,14 @@ export default function ReportsPage() {
           ...(activeMode ? { mode: activeMode } : {}),
           ...(dateRange.preset === 'all'
             ? {}
-            : { from: dateRange.from, to: dateRange.to }),
+            : {
+                from: dateRange.from,
+                to: dateRange.to
+                  ? dateRange.to.includes('T')
+                    ? dateRange.to
+                    : `${dateRange.to}T23:59:59.999Z`
+                  : undefined,
+              }),
         })
         .then((response) => {
           const raw = response?.data;
@@ -202,18 +209,7 @@ export default function ReportsPage() {
 
   const totalMt = totalTonnageResult.totalMt;
 
-  // Exact parity for KPI cards:
-  const totalDealsCount =
-    overview?.inquiries_count ||
-    overview?.summary?.total_deals ||
-    overview?.summary?.total_inquiries ||
-    0;
-
-  const wonOrdersCount =
-    overview?.summary?.deals_won ||
-    overview?.summary?.won ||
-    (overview?.orders || []).length ||
-    0;
+  const wonOrdersCount = wonOrders.length;
 
   const { data: loginActivity = [] } = useQuery({
     queryKey: ['reports-login-activity', dateRange, effectivePhone, activeMode, isAdmin],
@@ -311,8 +307,8 @@ export default function ReportsPage() {
         /* ── Progressive Skeleton Shimmer UI ── */
         <div className="space-y-8 animate-pulse">
           {/* Skeleton Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
               <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm space-y-2">
                 <div className="h-7 w-20 bg-slate-200 rounded-lg mx-auto" />
                 <div className="h-4 w-28 bg-slate-100 rounded mx-auto" />
@@ -366,17 +362,10 @@ export default function ReportsPage() {
       ) : (
         <div className="space-y-8">
           {/* SECTION 1 - Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {/* Card 1: Total Deals */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-              <p className="text-2xl font-bold text-gray-900">{totalDealsCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Total Deals</p>
-            </div>
-
-            {/* Card 2: Won */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
               <p className="text-2xl font-bold text-gray-900">{wonOrdersCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Won</p>
+              <p className="text-sm text-gray-500 mt-1">Won Orders</p>
             </div>
 
             {/* Card 3: Total Tonnage (MT) - auto-converted from all SKU units */}
