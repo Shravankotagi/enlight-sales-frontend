@@ -123,6 +123,18 @@ function isInquiryEmail(value: string): boolean {
   return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value.trim());
 }
 
+const NOS_MT_MISSING_MESSAGE =
+  'MT not calculated: enter Length*Width*Thickness in spec (e.g. 2500*1250*10) or type MT manually.';
+
+/** Nos weight comes from three dimensions. A typed MT is accepted instead. */
+export function nosMtMissing(item: LineItemDetail): boolean {
+  if (normalizeUnit(item.unit) !== 'Nos') return false;
+  if (!(Number(item.quantity) > 0)) return false;
+  if (item.is_manual_mt && Number(item.converted_mt) > 0) return false;
+  const weight = formatLineItemWeightMt(item);
+  return !(weight.mt != null && weight.mt > 0);
+}
+
 function quotationCustomerEmail(details?: { customerEmail?: string } | null, inq?: any): string {
   const extracted = inquiryEmailFrom(details?.customerEmail, inq?.customer_email);
   if (extracted) return extracted;
@@ -2724,6 +2736,8 @@ export default function InquiriesPage() {
       }
       if (item.quantity === null || item.quantity === undefined || Number(item.quantity) <= 0 || isNaN(Number(item.quantity))) {
         errors[`qty_${i}`] = 'Quantity must be > 0.';
+      } else if (nosMtMissing(item)) {
+        errors[`qty_${i}`] = NOS_MT_MISSING_MESSAGE;
       }
     }
 
@@ -3073,6 +3087,12 @@ export default function InquiriesPage() {
           el.focus();
           el.reportValidity();
         }
+        return;
+      }
+      if (nosMtMissing(item)) {
+        toast.error(`Line ${i + 1}: ${NOS_MT_MISSING_MESSAGE}`);
+        const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
+        if (el) el.focus();
         return;
       }
     }
@@ -4493,6 +4513,9 @@ export default function InquiriesPage() {
                                     if (fieldErrors[`dim_${idx}`]) {
                                       setFieldErrors(prev => { const n = { ...prev }; delete n[`dim_${idx}`]; return n; });
                                     }
+                                    if (fieldErrors[`qty_${idx}`] === NOS_MT_MISSING_MESSAGE && !nosMtMissing(updated[idx])) {
+                                      setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
+                                    }
                                     if (finalHsn && fieldErrors[`hsn_${idx}`]) {
                                       setFieldErrors(prev => { const n = { ...prev }; delete n[`hsn_${idx}`]; return n; });
                                     }
@@ -4608,6 +4631,9 @@ export default function InquiriesPage() {
                                   const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                   setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                   setSaveSuccess(false);
+                                  if (fieldErrors[`qty_${idx}`] === NOS_MT_MISSING_MESSAGE && !nosMtMissing(updated[idx])) {
+                                    setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
+                                  }
                                 }}
                                 wrapperClassName="w-[58px] shrink-0"
                                 className="w-full px-1 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] font-bold text-slate-700 hover:border-blue-400"
@@ -4677,6 +4703,9 @@ export default function InquiriesPage() {
                                         const totalTons = calculateTotalTonnageMt(updated).totalMt;
                                         setEditDetails({ ...editDetails, lineItems: updated, totalAmount: totalAmt, quantityTons: totalTons });
                                         setSaveSuccess(false);
+                                        if (fieldErrors[`qty_${idx}`] === NOS_MT_MISSING_MESSAGE && !nosMtMissing(updated[idx])) {
+                                          setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
+                                        }
                                       }}
                                       placeholder={hasFormulaWeight ? String(itemWeight.mt) : '0.000'}
                                       className="w-[50px] bg-transparent text-[11px] font-mono font-bold text-center text-blue-900 outline-none placeholder:text-slate-400 placeholder:font-normal"
@@ -4686,8 +4715,11 @@ export default function InquiriesPage() {
                                 );
                               })()}
                             </div>
-                            {fieldErrors[`qty_${idx}`] && (
+                            {fieldErrors[`qty_${idx}`] && fieldErrors[`qty_${idx}`] !== NOS_MT_MISSING_MESSAGE && (
                               <span className="text-[10px] text-red-600 font-bold block text-center mt-0.5">{fieldErrors[`qty_${idx}`]}</span>
+                            )}
+                            {nosMtMissing(item) && (
+                              <span className="text-[9px] text-red-600 font-normal block text-left mt-0.5 leading-snug max-w-[240px]">{NOS_MT_MISSING_MESSAGE}</span>
                             )}
                           </td>
                           <td data-label="Rate" className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono lg:min-w-[95px]">
@@ -6150,6 +6182,9 @@ export default function InquiriesPage() {
                               );
                             })()}
                           </div>
+                          {nosMtMissing(item) && (
+                            <span className="text-[9px] text-red-600 font-normal block text-left mt-0.5 leading-snug max-w-[240px]">{NOS_MT_MISSING_MESSAGE}</span>
+                          )}
                         </td>
                         <td data-label="Rate" className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono lg:min-w-[95px]">
                           <input
