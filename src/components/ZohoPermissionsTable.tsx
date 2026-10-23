@@ -212,9 +212,7 @@ export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
                                 false,
                                 () => toggleKey(row.otherAction!.key),
                               )}
-                              <span className="text-[11px] text-slate-600 truncate max-w-[140px]" title={row.otherAction.label}>
-                                {row.otherAction.label}
-                              </span>
+                              <TruncatedLabel text={row.otherAction.label} />
                             </div>
                           ) : (
                             <span className="text-slate-300 text-xs">—</span>
