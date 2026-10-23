@@ -956,7 +956,6 @@ export default function ComplaintsPage() {
 
           <div className="flex items-center gap-2.5 shrink-0">
             <SyncBiginButton
-              show={isAdmin}
               onSynced={() => fetchComplaints()}
             />
             <button

@@ -294,7 +294,6 @@ export default function ReportsPage() {
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <SyncBiginButton
-            show={isAdmin}
             onSynced={refetchAll}
           />
           <DateFilterControl onChange={setDateRange} />

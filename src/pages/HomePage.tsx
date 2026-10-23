@@ -147,7 +147,7 @@ export default function HomePage() {
     viewingAs?.original_role === 'admin';
 
   const canSwitchRole = isSalesManagerUser || isAdminUser;
-  const showSyncBigin = isAdmin;
+  const showSyncBigin = true;
 
   const handleTriggerZohoSync = async () => {
     try {
