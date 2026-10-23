@@ -970,7 +970,7 @@ function CustomerProfilePageContent() {
                             </td>
                             <td className="py-3 px-3 text-slate-600">
                               {items.length > 0 ? (
-                                <p className="truncate max-w-xs">{items.map((i: any) => i.sku_text || 'Item').join(', ')}</p>
+                                <p className="whitespace-nowrap">{items.length} {items.length === 1 ? 'Item' : 'Items'}</p>
                               ) : (
                                 <span className="text-slate-400">Standard Spec</span>
                               )}
