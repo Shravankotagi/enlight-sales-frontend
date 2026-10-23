@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 export default function IntelligencePage() {
-  const { effectivePhone, isAdmin, employee, activeRole, activeMode } = useAuth();
+  const { effectivePhone, activeRole, activeMode } = useAuth();
   const salespersonPhone = effectivePhone || undefined;
   const [attentionPage, setAttentionPage] = useState(1);
   const [reorderPage, setReorderPage] = useState(1);
@@ -215,7 +215,6 @@ export default function IntelligencePage() {
 
         <div className="flex items-center gap-2.5 shrink-0">
           <SyncBiginButton
-            show={isAdmin || employee?.role === 'salesperson'}
             onSynced={async () => {
               await Promise.all([
                 refetchChurn(),

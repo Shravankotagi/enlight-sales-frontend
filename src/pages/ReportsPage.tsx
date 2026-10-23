@@ -35,7 +35,7 @@ function inquiryCreatedDay(value?: string) {
 }
 
 export default function ReportsPage() {
-  const { effectivePhone, isAdmin, employee, activeRole, activeMode } = useAuth();
+  const { effectivePhone, isAdmin, activeRole, activeMode } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
@@ -290,7 +290,6 @@ export default function ReportsPage() {
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <SyncBiginButton
-            show={isAdmin || employee?.role === 'salesperson'}
             onSynced={refetchAll}
           />
           <DateFilterControl onChange={setDateRange} />

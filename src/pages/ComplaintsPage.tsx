@@ -100,7 +100,7 @@ export default function ComplaintsPage() {
   const autoOpenedComplaintRef = useRef<string | null>(null);
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
-  const { isSalesManager, isAdmin, employee, effectivePhone, activeRole, activeMode } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -952,7 +952,6 @@ export default function ComplaintsPage() {
 
           <div className="flex items-center gap-2.5 shrink-0">
             <SyncBiginButton
-              show={isAdmin || employee?.role === 'salesperson'}
               onSynced={() => fetchComplaints()}
             />
             <button
