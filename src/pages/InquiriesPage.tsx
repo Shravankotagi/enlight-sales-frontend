@@ -3372,6 +3372,7 @@ export default function InquiriesPage() {
 
   const saveInquiryPrices = async () => {
     if (!selectedInquiry || !inquiryPricing || !procurementRequest || savingPrices) return;
+    if (isProcurement && inquiryStatusFromServer(selectedInquiry) !== "awaiting_price") return;
     const lines = inquiryPricing.lines.map((line, index) => ({
       line_key:
         procurementRequest.line_items[index]?.line_key ||
@@ -3529,6 +3530,8 @@ export default function InquiriesPage() {
   const currentInquiryPricingStatus = selectedInquiry
     ? inquiryStatusFromServer(selectedInquiry)
     : null;
+  const procurementCanEditPrices =
+    isProcurement && currentInquiryPricingStatus === "awaiting_price";
   const isInquiryPricingSaved = inquiryPricing?.saved === true;
   const hasAvailableProcurementLine = Boolean(
     procurementRequest?.line_items.some(
@@ -6559,7 +6562,10 @@ export default function InquiriesPage() {
                                     <input
                                       type="number"
                                       min="0"
-                                      disabled={procurementRequest?.line_items[idx]?.line_status === "cannot_price"}
+                                      disabled={
+                                        procurementRequest?.line_items[idx]?.line_status === "cannot_price" ||
+                                        (isProcurement && !procurementCanEditPrices)
+                                      }
                                       value={current}
                                       onChange={(event) =>
                                         updateInquiryPricingLine(
@@ -6577,7 +6583,7 @@ export default function InquiriesPage() {
                                       }
                                       className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs font-mono disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                                     />
-                                    {isProcurement &&
+                                    {procurementCanEditPrices &&
                                       field === "basePricePerMt" &&
                                       (current === "" ||
                                         procurementRequest?.line_items[idx]
@@ -7061,7 +7067,7 @@ export default function InquiriesPage() {
                 <Eye size={15} /> View PDF
               </button>
 
-              {isProcurement && !isInquiryPricingSaved && (
+              {procurementCanEditPrices && !isInquiryPricingSaved && (
                 <button
                   type="button"
                   disabled={savingPrices || !procurementRequest?.line_items.length}
@@ -7117,7 +7123,7 @@ export default function InquiriesPage() {
                 const isQuotedDrawerStage =
                   currentDrawerDealStage === "quoted" ||
                   currentDrawerDealStage === "qualified";
-                if (!selectedInquiry || !isQuotedDrawerStage) return null;
+                if (!selectedInquiry || !isQuotedDrawerStage || isProcurement) return null;
                 if (activeRole === "salesperson" && hasAvailableProcurementLine) return null;
 
                 const shareAgain =

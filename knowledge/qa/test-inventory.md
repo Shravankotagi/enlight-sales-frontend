@@ -37,6 +37,8 @@ Current regression tests:
 | Repo | File | Guards |
 |---|---|---|
 | Bot | `issue-procurement-chatbot.test.js` | Procurement scope, exact awaiting-price match, text-only base-price list, inquiry details, cancel then menu, customer-field hiding, salesperson price buttons, price confirmation before save, a dashboard yes that saves, a saved price that becomes Price Quote, and a salesperson log that does not save a sell rate |
+| Bot | `issue-procurement-all-inquiries.test.js` | All inquiries counts every status badge, pages the newest 10, accepts next and the old current-inquiries phrase, and a pasted line opens details without base-price entry |
+| Bot | `issue-procurement-base-price-lines.test.js` | Log a base price shows every line, a price is stored on the chosen line only, and the other lines’ prices and notes stay as they were; a price-ready number does not open or save a base price |
 | Bot | `duplicate-customer-discard-draft.test.js` | Duplicate-customer warning shows only **Discard Draft**; blocked state ignores other text; discard finalizes the draft |
 | Backend | `leaderboard-salesperson-identity.test.ts` | Mixed phone formats resolve to one named row; never "Unknown" |
 | Frontend | `admin-leaderboard-identity-and-orders.test.tsx` | Leaderboard shows names/IDs/phones, counts orders (not deals), excludes admins |
@@ -51,12 +53,13 @@ Current regression tests:
 | Frontend | `issue-procurement-routing-details.test.tsx` | Sales and procurement both show the stored product quantity and the `PR-` id; procurement does not show the customer name |
 | Frontend | `issue-historical-pricing-status.test.tsx` | An inquiry with no pricing status keeps its deal status; only an explicit `awaiting_price` shows Awaiting Price |
 | Frontend | `issue-procurement-search.test.tsx` | A procurement person can filter inquiries by procurement id and product |
-| Frontend | `issue-procurement-price-columns.test.tsx` | A wrapped pricing save keeps the base price; procurement edits only that column; a salesperson opening Price Ready sees the saved base price with Transport still visible; a salesperson save collapses the price columns into Rate; a saved row shows 18% GST from the saved rate even when the inquiry line has no amount, including after a list refresh |
+| Frontend | `issue-procurement-price-columns.test.tsx` | A wrapped pricing save keeps the base price; procurement edits only that column on Awaiting Price; a Price Ready inquiry is read-only and hides Share Quotation and Share Again for a procurement person and manager; a salesperson opening Price Ready sees the saved base price with Transport still visible; a salesperson save collapses the price columns into Rate; a saved row shows 18% GST from the saved rate even when the inquiry line has no amount, including after a list refresh |
 | Backend | `issue-salesperson-sees-base-price.spec.ts` | Line pricing follows `employees.id` for a stored id, a customer owner, or a deal; a stranger and a phone with no employee are denied; creating an inquiry stores that id |
 | Frontend | `issue-procurement-mt-line-amount.test.tsx` | 300 Nos at 7.359 MT and ₹200/MT show ₹1,471.80, and IGST is 18% of that subtotal |
 | Frontend | `issue-procurement-save-base-price.test.tsx` | Procurement Save Prices sends the base price; a rejected save shows the server error; a stale list refresh does not clear Price Ready |
 | Backend | `issue-procurement-mt-line-amount.spec.ts` | A Nos line stores taxable amount as its MT weight times the per-MT rate |
 | Backend | `issue-procurement-save-base-price.spec.ts` | A missing `credit_per_mt` column retries the upsert, and a failed pricing-status update rejects the save |
+| Backend | `issue-procurement-awaiting-price-edit.spec.ts` | Procurement base-price and status updates are rejected for Price Ready, Unavailable, and a pre-cutoff Awaiting Price; an Awaiting Price save and an admin save still proceed |
 | Backend | `issue-procurement-save-access.spec.ts` | A procurement person who can see an inquiry via the sender or customer owner can open it to save prices; another owner's inquiry stays denied |
 | Bot | `issue-procurement-mt-line-amount.test.js` | A sales price taxable amount uses the line weight in MT, and an MT line still uses its tonnage |
 | Frontend | `issue-send-quotation-button.test.tsx` | A priced inquiry drawer has one quotation button, and the email modal scrolls inside the screen; a denied preview shows the server error |
