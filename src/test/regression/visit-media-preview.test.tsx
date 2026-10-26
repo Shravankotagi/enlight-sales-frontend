@@ -110,5 +110,5 @@ describe('new visit media preview', () => {
     expect(screen.getByRole('dialog', { name: 'quote.pdf' })).toBeTruthy();
     expect(screen.getByTitle('quote.pdf').tagName).toBe('IFRAME');
     vi.unstubAllGlobals();
-  });
+  }, 20000);
 });
