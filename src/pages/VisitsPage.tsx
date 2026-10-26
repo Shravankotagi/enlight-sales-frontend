@@ -72,10 +72,71 @@ import { type CustomerVisit, type VisitAttachment, getFollowUpStatusInfo } from 
 export type { CustomerVisit, VisitAttachment };
 export { getFollowUpStatusInfo };
 
+const INDIAN_STATES = new Set([
+  'andhra pradesh',
+  'arunachal pradesh',
+  'assam',
+  'bihar',
+  'chhattisgarh',
+  'goa',
+  'gujarat',
+  'haryana',
+  'himachal pradesh',
+  'jharkhand',
+  'karnataka',
+  'kerala',
+  'madhya pradesh',
+  'maharashtra',
+  'manipur',
+  'meghalaya',
+  'mizoram',
+  'nagaland',
+  'odisha',
+  'orissa',
+  'punjab',
+  'rajasthan',
+  'sikkim',
+  'tamil nadu',
+  'telangana',
+  'tripura',
+  'uttar pradesh',
+  'uttarakhand',
+  'uttaranchal',
+  'west bengal',
+  'delhi',
+  'new delhi',
+  'nct of delhi',
+  'jammu and kashmir',
+  'ladakh',
+  'puducherry',
+  'chandigarh',
+  'andaman and nicobar islands',
+  'dadra and nagar haveli and daman and diu',
+  'lakshadweep',
+]);
+
 export function formatCityLocality(rawLocation?: string | null, rawAddress?: string | null): string {
   const str = (rawLocation || rawAddress || '').trim();
   if (!str || str === '-' || str.toLowerCase() === 'null') return '-';
-  return str;
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const raw of str.split(',')) {
+    const withoutPin = raw.replace(/\b\d{6}\b/g, '').replace(/\s+/g, ' ').trim();
+    if (!withoutPin || /^india$/i.test(withoutPin)) continue;
+    const key = withoutPin.toLowerCase();
+    if (INDIAN_STATES.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    parts.push(withoutPin);
+  }
+  if (!parts.length) return '-';
+  return parts.slice(-2).join(', ');
+}
+
+function visitMapHref(visit: CustomerVisit): string | null {
+  const lat = visit.visit_latitude ?? visit.gps_latitude;
+  const lng = visit.visit_longitude ?? visit.gps_longitude;
+  if (lat == null || lng == null || Number.isNaN(Number(lat)) || Number.isNaN(Number(lng))) return null;
+  return `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
@@ -1443,7 +1504,7 @@ export default function VisitsPage() {
   const createProgress = visitWizardProgress(newVisitInput(), createStep);
 
   return (
-    <div className="flex flex-col lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
+    <div className="flex flex-col min-w-0 overflow-x-hidden lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, Stats, Filters) */}
       <div className="shrink-0 space-y-4">
         {/* Header */}
@@ -1735,16 +1796,100 @@ export default function VisitsPage() {
       {/* Lower Section - Scrollable Table Card */}
       <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 overflow-auto ${!loading && filtered.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="stack-table w-full text-left text-sm text-slate-700">
+          <div className="lg:hidden divide-y divide-slate-200">
+            {loading ? (
+              <div className="px-4 py-12 text-center text-slate-400">
+                <RefreshCw size={20} className="animate-spin inline mr-2 text-blue-600" />
+                Loading visit logs...
+              </div>
+            ) : (
+              paginatedVisits.map((v) => {
+                const outcomeLower = getNormalizedOutcome(v);
+                const phone = v.contact_phone || (v as any).phone || (v as any).customer_phone || (v as any).contact_no || '';
+                const fullAddress = (v.location || (v as any).customer_address || '').trim();
+                const shortLocation = formatCityLocality(v.location, (v as any).customer_address);
+                const mapHref = visitMapHref(v);
+                const followUp = getFollowUpStatusInfo(v);
+                const outcomeClass =
+                  outcomeLower === 'positive'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : outcomeLower === 'neutral'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-rose-100 text-rose-800';
+                const outcomeLabel =
+                  outcomeLower === 'positive' ? 'Positive' : outcomeLower === 'neutral' ? 'Neutral' : 'Negative';
+                return (
+                  <article key={v.id} className="p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 text-sm truncate">{v.customer_name || 'Customer'}</p>
+                        <p className="text-xs text-slate-500 font-mono mt-0.5">
+                          {v.visited_at ? new Date(v.visited_at).toLocaleString('en-IN') : '-'}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 px-2.5 py-1 text-xs font-semibold rounded-full ${outcomeClass}`}>
+                        {outcomeLabel}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700">
+                      <span className="text-slate-400">Contact </span>
+                      {v.person_met && v.person_met !== 'null' ? v.person_met : '-'}
+                      {phone ? ` · ${phone}` : ''}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-800 line-clamp-2" title={fullAddress || undefined}>
+                      {shortLocation}
+                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-slate-600">
+                        {followUp.hasFollowUp ? followUp.relativeText : 'No follow-up'}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {mapHref && (
+                          <a
+                            href={mapHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label="Open in Google Maps"
+                            title="Open in Google Maps"
+                            className="text-blue-600">
+                            <MapIcon size={14} />
+                          </a>
+                        )}
+                        {v.phone_verified && (
+                          <CheckCircle2 size={14} className="text-emerald-600" aria-label="Phone verified" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openVisitDetails(v, false)}
+                          className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 rounded-lg">
+                          View
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+          <table className="hidden lg:table w-full table-fixed text-left text-sm text-slate-700">
+            <colgroup>
+              <col className="w-[4%]" />
+              <col className="w-[22%]" />
+              <col className="w-[18%]" />
+              <col className="w-[22%]" />
+              <col className="w-[11%]" />
+              <col className="w-[16%]" />
+              <col className="w-[7%]" />
+            </colgroup>
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="px-3 py-3.5 text-center w-12">#</th>
-                <th className="px-5 py-3.5 text-left min-w-[200px]">Customer</th>
-                <th className="px-4 py-3.5 text-left min-w-[150px]">Contact Person</th>
-                <th className="px-4 py-3.5 text-left min-w-[150px]">Location</th>
-                <th className="px-4 py-3.5 text-center min-w-[120px]">Outcome</th>
-                <th className="px-4 py-3.5 text-left min-w-[220px]">Follow-up</th>
-                <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center w-28">Actions</th>
+                <th className="px-3 py-3.5 text-center">#</th>
+                <th className="px-5 py-3.5 text-left">Customer</th>
+                <th className="px-4 py-3.5 text-left">Contact Person</th>
+                <th className="px-4 py-3.5 text-left">Location</th>
+                <th className="px-4 py-3.5 text-center">Outcome</th>
+                <th className="px-4 py-3.5 text-left">Follow-up</th>
+                <th className="pl-4 pr-6 sm:pr-8 py-3.5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -1766,7 +1911,7 @@ export default function VisitsPage() {
                   return (
                     <tr
                       key={v.id || idx}
-                      className="hover:bg-slate-50/70 transition-colors group">
+                      className="hover:bg-slate-50/70 transition-colors group align-top">
                       {/* 0. Serial Number */}
                       <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
@@ -1820,47 +1965,65 @@ export default function VisitsPage() {
                       </td>
 
                       {/* 2. Contact Person */}
-                      <td className="px-4 py-3.5 text-xs">
-                        <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <td className="px-4 py-3.5 text-xs overflow-hidden">
+                        <div className="font-semibold text-slate-800 flex items-center gap-1.5 min-w-0">
                           <User size={13} className="text-slate-400 shrink-0" />
-                          {v.person_met && v.person_met !== 'null' ? v.person_met : '-'}
+                          <span className="truncate">{v.person_met && v.person_met !== 'null' ? v.person_met : '-'}</span>
                         </div>
                         {v.designation && (
-                          <div className="text-[11px] text-slate-500 font-medium pl-5 mt-0.5">
+                          <div className="text-[11px] text-slate-500 font-medium pl-5 mt-0.5 truncate">
                             {v.designation}
                           </div>
                         )}
                         {phone && phone !== '-' && (
-                          <div className="text-slate-500 font-mono flex items-center gap-1 mt-0.5 whitespace-nowrap">
-                            <Phone size={11} className="text-slate-400 shrink-0" /> {phone}
+                          <div className="text-slate-500 font-mono flex items-center gap-1 mt-0.5 min-w-0">
+                            <Phone size={11} className="text-slate-400 shrink-0" />
+                            <span className="truncate">{phone}</span>
                           </div>
                         )}
                         {v.email && (
-                          <div className="text-slate-500 font-mono flex items-center gap-1 mt-0.5 whitespace-nowrap">
-                            <Mail size={11} className="text-slate-400 shrink-0" /> {v.email}
+                          <div className="text-slate-500 font-mono flex items-center gap-1 mt-0.5 min-w-0">
+                            <Mail size={11} className="text-slate-400 shrink-0" />
+                            <span className="truncate">{v.email}</span>
                           </div>
                         )}
                       </td>
 
                       {/* 3. Location */}
-                      <td className="px-4 py-3.5 text-xs">
-                        <div className="font-semibold text-slate-800 flex items-start gap-1.5 whitespace-normal">
-                          <MapIcon size={12} className="text-slate-400 shrink-0" />
-                          {formatCityLocality(v.location, v.customer_address)}
-                        </div>
-                        {v.location_source && (
-                          <div className="text-[10px] text-slate-500 mt-0.5">
-                            {v.location_source === 'manual' ? 'Typed location' : 'GPS location'}
-                          </div>
-                        )}
-                        {typeof v.phone_verified === 'boolean' && (
-                          <div className={`text-[10px] font-bold mt-0.5 ${v.phone_verified ? 'text-emerald-700' : 'text-amber-700'}`}>
-                            {v.phone_verified ? 'Phone verified' : 'Phone not verified'}
-                          </div>
-                        )}
-                        {Array.isArray(v.attachments) && v.attachments.length > 0 && (
-                          <div className="text-[10px] text-slate-500 mt-0.5">{v.attachments.length} document{v.attachments.length === 1 ? '' : 's'}</div>
-                        )}
+                      <td className="px-4 py-3.5 text-xs align-top overflow-hidden">
+                        {(() => {
+                          const fullAddress = (v.location || (v as any).customer_address || '').trim();
+                          const mapHref = visitMapHref(v);
+                          return (
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {mapHref ? (
+                                <a
+                                  href={mapHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  aria-label="Open in Google Maps"
+                                  title="Open in Google Maps"
+                                  className="text-blue-600 shrink-0">
+                                  <MapIcon size={12} />
+                                </a>
+                              ) : (
+                                <MapIcon size={12} className="text-slate-400 shrink-0" />
+                              )}
+                              <span
+                                className="min-w-0 truncate font-semibold text-slate-800"
+                                title={fullAddress || undefined}>
+                                {formatCityLocality(v.location, (v as any).customer_address)}
+                              </span>
+                              {v.phone_verified && (
+                                <CheckCircle2
+                                  size={12}
+                                  className="shrink-0 text-emerald-600"
+                                  aria-label="Phone verified"
+                                />
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* 4. Outcome */}
@@ -1889,7 +2052,7 @@ export default function VisitsPage() {
                           }
                           const isCompleted = fu.status === 'completed';
                           return (
-                            <div className="space-y-1.5 lg:min-w-[200px] lg:max-w-[280px]">
+                            <div className="space-y-1.5">
                               <div className="flex items-start gap-2">
                                 <button
                                   type="button"
@@ -2008,37 +2171,31 @@ export default function VisitsPage() {
             role="dialog"
             aria-labelledby="log-visit-title"
             className="visit-wizard mobile-sheet bg-white rounded-2xl max-w-3xl w-full p-4 sm:p-6 shadow-xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
-            <div className="sheet-header flex items-start justify-between gap-3 pb-3 border-b border-slate-100 shrink-0">
-              <div className="min-w-0">
+            <div className="sheet-header pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center justify-between gap-3">
                 <h2 id="log-visit-title" className="text-base sm:text-lg font-bold text-slate-900">
                   Log customer field visit
                 </h2>
-                <p className="mt-1 text-[11px] sm:text-xs text-slate-500">
-                  Capture the meeting while you are still on site. Fields marked * are required.
-                </p>
-              </div>
-              <div className="flex items-start gap-2 shrink-0">
-                <div className="text-right">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Required on this step</p>
+                <div className="flex items-center gap-2 shrink-0">
                   <p className="text-sm font-bold text-slate-800">
                     {createProgress.filled}/{createProgress.total}
                   </p>
-                  <div className="mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-blue-600"
-                      style={{
-                        width: `${createProgress.total ? (createProgress.filled / createProgress.total) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={closeCreateModal}
+                    aria-label="Close"
+                    className="wizard-tap text-slate-400 hover:text-slate-600 p-2 rounded-lg transition-colors cursor-pointer">
+                    <X size={18} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeCreateModal}
-                  aria-label="Close"
-                  className="wizard-tap text-slate-400 hover:text-slate-600 p-2 rounded-lg transition-colors cursor-pointer">
-                  <X size={18} />
-                </button>
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-blue-600"
+                  style={{
+                    width: `${createProgress.total ? (createProgress.filled / createProgress.total) * 100 : 0}%`,
+                  }}
+                />
               </div>
             </div>
 
@@ -2849,9 +3006,6 @@ export default function VisitsPage() {
                         >
                           Verify
                         </button>
-                        {otpVerified && (
-                          <span className="text-[11px] font-bold text-emerald-700">Verified</span>
-                        )}
                       </div>
                       {otpNotice && (
                         <p className={`text-[11px] font-semibold ${otpVerified ? 'text-emerald-700' : 'text-slate-600'}`}>{otpNotice}</p>
@@ -2907,13 +3061,13 @@ export default function VisitsPage() {
       {/* Interactive Visit Details & Edit Modal */}
       {selectedVisit && (
         <div
-          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto"
+          className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-stretch sm:items-center justify-center p-0 sm:p-4 z-50 animate-fadeIn overflow-hidden"
           onClick={handleCloseVisitModal}>
           <div
-            className="mobile-sheet bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto"
+            className="mobile-sheet bg-white sm:rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 flex flex-col h-[100dvh] max-h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-hidden"
             onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
-            <div className="flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
+            <div className="sheet-header flex justify-between items-start pb-3 border-b border-slate-100 shrink-0 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 flex-wrap">
                 {(modalReturnTo || returnTo) && (
                   <button
@@ -2999,8 +3153,8 @@ export default function VisitsPage() {
 
             {/* View Mode */}
             {!isEditing ? (
-              <div className="flex flex-col flex-1 overflow-hidden">
-                <div className="overflow-y-auto flex-1 space-y-4 pr-1.5 py-3 text-xs">
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="overflow-y-auto flex-1 min-h-0 space-y-4 pr-1.5 py-3 text-xs">
                   {/* 2-Column Info Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Left Card: Stakeholder & Contact Details */}
@@ -3243,6 +3397,43 @@ export default function VisitsPage() {
                           </div>
                         )}
 
+                        {Array.isArray(selectedVisit.attachments) && selectedVisit.attachments.map((att, idx) => {
+                          const name = attachmentName(att);
+                          const url = attachmentUrl(att);
+                          const image = isImageAttachment(att);
+                          const pdf = !image && isPdfAttachment(att);
+                          return (
+                            <div key={`${name}-${idx}`} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200">
+                              {image && url ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openVisitPreview(url, name)}
+                                  className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  aria-label={`View ${name}`}>
+                                  <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                                </button>
+                              ) : (
+                                <FileText size={18} className="text-slate-400 shrink-0" />
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-semibold text-slate-800 text-xs truncate">{name}</p>
+                                {url && (image || pdf) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openVisitPreview(url, name, pdf ? 'pdf' : 'image')}
+                                    className="mt-1 text-[11px] font-semibold text-blue-700 hover:text-blue-800">
+                                    View
+                                  </button>
+                                ) : url ? (
+                                  <a href={url} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-[11px] font-semibold text-blue-700">
+                                    Open
+                                  </a>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+
                       </div>
                     ) : (
                       <p className="text-slate-400 text-xs italic">No photo or document attachments recorded for this visit.</p>
@@ -3251,7 +3442,7 @@ export default function VisitsPage() {
                 </div>
 
                 {/* View Mode Footer */}
-                <div className="pt-3 border-t border-slate-100 flex justify-end items-center gap-2 shrink-0">
+                <div className="sheet-actions pt-3 border-t border-slate-100 flex justify-end items-center gap-2 shrink-0">
                   {canEditVisit && (
                     <button
                       type="button"
@@ -3265,8 +3456,8 @@ export default function VisitsPage() {
               </div>
             ) : (
               /* Edit Mode Form */
-              <form onSubmit={handleUpdateVisit} className="flex flex-col flex-1 overflow-hidden mt-3 text-xs">
-                <div className="overflow-y-auto flex-1 px-3.5 py-2.5">
+              <form onSubmit={handleUpdateVisit} className="flex flex-col flex-1 min-h-0 overflow-hidden mt-3 text-xs">
+                <div className="overflow-y-auto flex-1 min-h-0 px-3.5 py-2.5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {/* Left Column: Stakeholder & Classification */}
                     <div className="space-y-3.5">
@@ -3719,7 +3910,7 @@ export default function VisitsPage() {
                 </div>
 
                 {/* Edit Mode Footer */}
-                <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
+                <div className="sheet-actions pt-3 border-t border-slate-100 flex justify-end gap-2.5 shrink-0 mt-3">
                   <button
                     type="button"
                     onClick={handleCloseVisitModal}
