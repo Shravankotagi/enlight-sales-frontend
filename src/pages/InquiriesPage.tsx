@@ -56,6 +56,10 @@ import PaginationControl from "../components/PaginationControl";
 import { Select } from "../components/ui/select";
 import { normalizeListResponse, queryKeys } from "../lib/queryKeys";
 import { useAuth } from "../context/AuthContext";
+import {
+  canFillProcurementBasePrices,
+  canSendProcurementQuote,
+} from "../utils/aclConstants";
 import { getDaysAgo, formatLocalDate } from "../utils/dateUtils";
 import {
   calculateLineItem,
@@ -63,6 +67,7 @@ import {
   calculateSubtotal,
   calculateQuotationBreakdown,
   calculateTotalTonnageMt,
+  displayedLineWeightMt,
   formatLineItemWeightMt,
   normalizeUnit,
   formatIndianCurrency,
@@ -88,6 +93,50 @@ import {
   isValidQuotationEmail,
   normalizeQuotationEmail,
 } from "../utils/quotationCc";
+
+function pricedLineAmount(rate: number, item: any) {
+  return calculateLineAmount(
+    rate,
+    Number(item?.quantity) || 0,
+    item?.unit || "MT",
+    displayedLineWeightMt(item),
+  );
+}
+
+function shownLineRate(item: any, pricingLine: any, procurementBase?: number) {
+  const stored = Number(item?.rate) || 0;
+  if (stored > 0) return stored;
+  return calculateLineRate({
+    basePricePerMt:
+      Number(pricingLine?.basePricePerMt ?? procurementBase) || 0,
+    transportPerMt: Number(pricingLine?.transportPerMt) || 0,
+    loadingPerMt: Number(pricingLine?.loadingPerMt) || 0,
+    creditPerMt: Number(pricingLine?.creditPerMt) || 0,
+    marginPerMt: Number(pricingLine?.marginPerMt) || 0,
+  });
+}
+
+function taxableLineAmount(item: any, rate: number) {
+  if (rate > 0) {
+    const fromRate = pricedLineAmount(rate, item);
+    if (fromRate > 0) return fromRate;
+  }
+  return Number(item?.amount) || 0;
+}
+
+const PRICING_STATUS_RANK: Record<string, number> = {
+  awaiting_price: 1,
+  unavailable: 2,
+  price_ready: 2,
+  sales_priced: 3,
+};
+
+function keptPricingStatus(current?: string | null, incoming?: string | null) {
+  const currentRank = PRICING_STATUS_RANK[String(current || "")] || 0;
+  const incomingRank = PRICING_STATUS_RANK[String(incoming || "")] || 0;
+  if (currentRank > incomingRank) return current || null;
+  return incoming ?? current ?? null;
+}
 
 export interface InquiryItem {
   id: string;
@@ -1706,7 +1755,6 @@ export default function InquiriesPage() {
     can,
   } = useAuth();
   const canViewSalesperson = isAdmin || isSalesManager || isProcurement;
-  const canAssignProcurement = isAdmin || isProcurementManager;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "pipeline">(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1727,6 +1775,7 @@ export default function InquiriesPage() {
     null,
   );
   const autoOpenedInquiryRef = useRef<string | null>(null);
+  const pricingDirtyRef = useRef(false);
   const [drawerReturnTo, setDrawerReturnTo] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get("returnTo"),
   );
@@ -1759,6 +1808,7 @@ export default function InquiriesPage() {
 
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [savingPrices, setSavingPrices] = useState(false);
   const [editDetails, setEditDetails] = useState<ExtractedDetails | null>(null);
   const [procurementRequest, setProcurementRequest] =
     useState<ProcurementRequest | null>(null);
@@ -1839,7 +1889,8 @@ export default function InquiriesPage() {
       .catch((err: any) => {
         if (cancelled) return;
         setQuotationPreviewError(
-          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+            err?.response?.data?.message ||
             "Unable to prepare the quotation email. Please try again.",
         );
         setQuotationSenderEmail("");
@@ -2955,7 +3006,11 @@ export default function InquiriesPage() {
           (i: InquiryItem) => i.id === selectedInquiry.id,
         );
         if (freshItem) {
-          setSelectedInquiry(freshItem);
+          const pricing_status = keptPricingStatus(
+            selectedInquiry.pricing_status,
+            freshItem.pricing_status,
+          );
+          setSelectedInquiry({ ...freshItem, pricing_status });
           const ai = (freshItem.ai_extraction_json as any) || {};
           const lineItemsSrc: any[] = ai.line_items || ai.lineItems || [];
           const resolvedSp = getSalespersonName(freshItem);
@@ -2977,12 +3032,20 @@ export default function InquiriesPage() {
                   Number(item.original_quantity ?? item.quantity ?? item.qty) || 0,
                 unit: item.original_unit || item.unit || "MT",
                 rate: Number(item.rate) || 0,
-                amount:
-                  Number(item.amount) ||
-                  Math.round(
-                    Number(item.original_quantity ?? item.quantity ?? item.qty) *
-                      Number(item.rate),
-                  ),
+                amount: (() => {
+                  const quantity =
+                    Number(item.original_quantity ?? item.quantity ?? item.qty) || 0;
+                  const unit = item.original_unit || item.unit || "MT";
+                  const rate = Number(item.rate) || 0;
+                  if (rate <= 0) return Number(item.amount) || 0;
+                  return pricedLineAmount(rate, {
+                    ...item,
+                    sku_text: skuText,
+                    dimensions: itemDim,
+                    quantity,
+                    unit,
+                  });
+                })(),
               };
             });
             const frozenTotal =
@@ -2994,7 +3057,16 @@ export default function InquiriesPage() {
 
             setEditDetails((prev) => {
               if (!prev) return null;
-              const lineItems = mergeDrawerLineRates(prev.lineItems, frozenLineItems);
+              const lineItems = mergeDrawerLineRates(
+                prev.lineItems,
+                frozenLineItems,
+              ).map((item: any) => {
+                const rate = Number(item.rate) || 0;
+                if (rate > 0 && !(Number(item.amount) > 0)) {
+                  return { ...item, amount: pricedLineAmount(rate, item) };
+                }
+                return item;
+              });
               return {
                 ...prev,
                 companyName:
@@ -3071,10 +3143,12 @@ export default function InquiriesPage() {
 
   const handleOpenDrawer = (inq: InquiryItem) => {
     setSelectedInquiry(inq);
+    pricingDirtyRef.current = false;
     const mapped = applyServerLines(inq, []);
     setProcurementRequest(mapped.request);
     setInquiryPricing(mapped.pricing);
     inquiriesApi.getLinePricing(inq.id).then((response) => {
+      if (pricingDirtyRef.current) return;
       applyPricingResult(inq, response);
     }).catch(() => undefined);
     setExpandedRateIndex(null);
@@ -3147,7 +3221,16 @@ export default function InquiriesPage() {
           quantity: rawQty,
           unit: rawUnit,
           rate: rate,
-          amount: calc.amount,
+          amount:
+            rate > 0
+              ? pricedLineAmount(rate, {
+                  ...item,
+                  quantity: rawQty,
+                  unit: rawUnit,
+                  sku_text: skuText,
+                  dimensions: itemDim,
+                })
+              : calc.amount,
           converted_mt:
             (item as any).converted_mt !== undefined
               ? (item as any).converted_mt
@@ -3235,6 +3318,8 @@ export default function InquiriesPage() {
     setEditDetails(null);
     setProcurementRequest(null);
     setInquiryPricing(null);
+    pricingDirtyRef.current = false;
+    setSavingPrices(false);
     setDrawerFileBase64(null);
     setDrawerReturnTo(null);
 
@@ -3282,6 +3367,7 @@ export default function InquiriesPage() {
     rawValue: string,
   ) => {
     if (!editDetails || !selectedInquiry || !procurementRequest) return;
+    pricingDirtyRef.current = true;
     const baseFromProcurement =
       procurementRequest.line_items[index]?.base_price_per_mt;
     const existing = inquiryPricing?.lines[index] || {
@@ -3306,11 +3392,7 @@ export default function InquiriesPage() {
       marginPerMt: Number(line.marginPerMt) || 0,
     });
     const currentItem = editDetails.lineItems[index];
-    const amount = calculateLineAmount(
-      rate,
-      currentItem.quantity,
-      currentItem.unit || "MT",
-    );
+    const amount = pricedLineAmount(rate, currentItem);
     const gst = getGstSplit(amount, editDetails.deliveryLocation);
     const updatedItems = [...editDetails.lineItems];
     updatedItems[index] = {
@@ -3341,7 +3423,9 @@ export default function InquiriesPage() {
   };
 
   const saveInquiryPrices = async () => {
-    if (!selectedInquiry || !inquiryPricing || !procurementRequest) return;
+    if (!selectedInquiry || !inquiryPricing || !procurementRequest || savingPrices) return;
+    if (isProcurement && !canFillProcurementBasePrices(employee)) return;
+    if (isProcurement && inquiryStatusFromServer(selectedInquiry) !== "awaiting_price") return;
     const lines = inquiryPricing.lines.map((line, index) => ({
       line_key:
         procurementRequest.line_items[index]?.line_key ||
@@ -3361,12 +3445,24 @@ export default function InquiriesPage() {
           }),
       margin_per_mt: line.marginPerMt === "" ? 0 : Number(line.marginPerMt),
     }));
-    const response = isProcurement
-      ? await inquiriesApi.saveProcurementPricing(selectedInquiry.id, { lines })
-      : await inquiriesApi.saveSalesPricing(selectedInquiry.id, { lines });
-    applyPricingResult(selectedInquiry, response);
-    setExpandedRateIndex(null);
-    toast.success("Prices saved");
+    setSavingPrices(true);
+    try {
+      const response = isProcurement
+        ? await inquiriesApi.saveProcurementPricing(selectedInquiry.id, { lines })
+        : await inquiriesApi.saveSalesPricing(selectedInquiry.id, { lines });
+      applyPricingResult(selectedInquiry, response);
+      pricingDirtyRef.current = false;
+      setExpandedRateIndex(null);
+      toast.success("Prices saved");
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          "Could not save prices",
+      );
+    } finally {
+      setSavingPrices(false);
+    }
   };
 
   const updateProcurementLineNote = (index: number, note: string) => {
@@ -3398,14 +3494,30 @@ export default function InquiriesPage() {
     if (!result.lines.length) return;
     setEditDetails((current) => {
       if (!current?.lineItems?.length) return current;
+      const lineItems = current.lineItems.map((item, index) => {
+        const row = result.lines[index];
+        const rate = Number(row?.rate_per_mt);
+        if (!row || !rate) return item;
+        const amount = pricedLineAmount(rate, item);
+        const gst = getGstSplit(amount, current.deliveryLocation || "");
+        return {
+          ...item,
+          rate,
+          amount,
+          cgst_amount: gst.cgst,
+          sgst_amount: gst.sgst,
+          igst_amount: gst.igst,
+          total_gst: gst.total,
+          final_amount: amount + gst.total,
+        };
+      });
       return {
         ...current,
-        lineItems: current.lineItems.map((item, index) => {
-          const row = result.lines[index];
-          const rate = Number(row?.rate_per_mt);
-          if (!row || !rate) return item;
-          return { ...item, rate };
-        }),
+        lineItems,
+        totalAmount: lineItems.reduce(
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0,
+        ),
       };
     });
   };
@@ -3439,7 +3551,7 @@ export default function InquiriesPage() {
         creditPerMt: Number(line.creditPerMt) || 0,
         marginPerMt: Number(line.marginPerMt) || 0,
       });
-      const amount = calculateLineAmount(rate, item.quantity, item.unit || "MT");
+      const amount = pricedLineAmount(rate, item);
       const gst = getGstSplit(amount, editDetails.deliveryLocation);
       return {
         ...item,
@@ -3471,6 +3583,11 @@ export default function InquiriesPage() {
   const currentInquiryPricingStatus = selectedInquiry
     ? inquiryStatusFromServer(selectedInquiry)
     : null;
+  const procurementCanEditPrices =
+    isProcurement &&
+    canFillProcurementBasePrices(employee) &&
+    currentInquiryPricingStatus === "awaiting_price";
+  const procurementCanSendQuote = isProcurement && canSendProcurementQuote(employee);
   const isInquiryPricingSaved = inquiryPricing?.saved === true;
   const hasAvailableProcurementLine = Boolean(
     procurementRequest?.line_items.some(
@@ -4815,24 +4932,26 @@ export default function InquiriesPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              disabled={isSyncingZoho}
-              onClick={handleTriggerZohoSync}
-              className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60"
-            >
-              <RefreshCw
-                size={14}
-                className={
-                  isSyncingZoho
-                    ? "animate-spin text-blue-600"
-                    : "text-slate-500"
-                }
-              />
-              <span>
-                {isSyncingZoho ? "Syncing with Bigin..." : "Sync Bigin"}
-              </span>
-            </button>
+            {!isProcurement && (
+              <button
+                type="button"
+                disabled={isSyncingZoho}
+                onClick={handleTriggerZohoSync}
+                className="h-9 px-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                <RefreshCw
+                  size={14}
+                  className={
+                    isSyncingZoho
+                      ? "animate-spin text-blue-600"
+                      : "text-slate-500"
+                  }
+                />
+                <span>
+                  {isSyncingZoho ? "Syncing with Bigin..." : "Sync Bigin"}
+                </span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -4862,20 +4981,24 @@ export default function InquiriesPage() {
               />
             </button>
 
-            <button
-              onClick={() => navigate("/orders")}
-              className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-            >
-              <ShoppingBag size={14} className="text-emerald-600" /> View
-              Confirmed Orders
-            </button>
+            {!isProcurement && (
+              <>
+                <button
+                  onClick={() => navigate("/orders")}
+                  className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+                >
+                  <ShoppingBag size={14} className="text-emerald-600" /> View
+                  Confirmed Orders
+                </button>
 
-            <button
-              onClick={() => setShowModal(true)}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
-            >
-              <Plus size={15} /> Log New Inquiry
-            </button>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+                >
+                  <Plus size={15} /> Log New Inquiry
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -5252,7 +5375,7 @@ export default function InquiriesPage() {
                       dealStageKey === "negotiation" ||
                       dealStageKey === "on_hold");
                     const showShareQuotation =
-                      !isProcurement &&
+                      (!isProcurement || procurementCanSendQuote) &&
                       (dealStageKey === "qualified" || dealStageKey === "quoted");
 
                     return (
@@ -5582,35 +5705,6 @@ export default function InquiriesPage() {
                         : `Inquiry ID: ${inqIdDisplay.replace(/^#/, "")}`;
                     })()}
                   </p>
-                  {canAssignProcurement && (
-                    <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-slate-600">
-                      Procurement owner
-                      <select
-                        value={selectedInquiry.procurement_employee_id || ""}
-                        onChange={async (event) => {
-                          const nextId = event.target.value || null;
-                          try {
-                            await inquiriesApi.assignProcurement(selectedInquiry.id, nextId);
-                            setSelectedInquiry((previous) =>
-                              previous
-                                ? { ...previous, procurement_employee_id: nextId }
-                                : previous,
-                            );
-                            toast.success(nextId ? "Procurement owner assigned" : "Procurement owner cleared");
-                            fetchMonthlyInquiries();
-                          } catch (error: any) {
-                            toast.error(error?.response?.data?.message || "Could not assign procurement owner");
-                          }
-                        }}
-                        className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Unassigned</option>
-                        {rawEmployees
-                          .filter((item: any) => item.role === "procurement_person" || item.role === "procurement_manager")
-                          .map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                      </select>
-                    </label>
-                  )}
                 </div>
               </div>
 
@@ -6303,23 +6397,8 @@ export default function InquiriesPage() {
                               </div>
                               {(() => {
                                 const itemWeight = formatLineItemWeightMt(item);
-                                const hasFormulaWeight =
-                                  itemWeight.canConvert &&
-                                  itemWeight.mt !== null &&
-                                  itemWeight.mt > 0;
-                                const displayMt =
-                                  (item.is_manual_mt ||
-                                    normalizeUnit(item.unit) === "MT") &&
-                                  item.converted_mt !== undefined &&
-                                  item.converted_mt !== null &&
-                                  item.converted_mt !== ""
-                                    ? item.converted_mt
-                                    : hasFormulaWeight && itemWeight.mt !== null
-                                      ? itemWeight.mt
-                                      : "";
-                                const hasWeight =
-                                  (displayMt !== "" && Number(displayMt) > 0) ||
-                                  hasFormulaWeight;
+                                const displayMt = displayedLineWeightMt(item);
+                                const hasWeight = displayMt != null && displayMt > 0;
 
                                 return (
                                   <div
@@ -6396,7 +6475,7 @@ export default function InquiriesPage() {
                                         setSaveSuccess(false);
                                       }}
                                       placeholder={
-                                        hasFormulaWeight
+                                        itemWeight.canConvert && itemWeight.mt
                                           ? String(itemWeight.mt)
                                           : "0.000"
                                       }
@@ -6429,34 +6508,12 @@ export default function InquiriesPage() {
                                   className="w-full rounded border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-left text-blue-800 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   {formatIndianCurrency(
-                                    Number(item.rate) ||
-                                      calculateLineRate({
-                                        basePricePerMt:
-                                          Number(
-                                            inquiryPricing?.lines[idx]
-                                              ?.basePricePerMt,
-                                          ) || 0,
-                                        transportPerMt:
-                                          Number(
-                                            inquiryPricing?.lines[idx]
-                                              ?.transportPerMt,
-                                          ) || 0,
-                                        loadingPerMt:
-                                          Number(
-                                            inquiryPricing?.lines[idx]
-                                              ?.loadingPerMt,
-                                          ) || 0,
-                                        creditPerMt:
-                                          Number(
-                                            inquiryPricing?.lines[idx]
-                                              ?.creditPerMt,
-                                          ) || 0,
-                                        marginPerMt:
-                                          Number(
-                                            inquiryPricing?.lines[idx]
-                                              ?.marginPerMt,
-                                          ) || 0,
-                                      }),
+                                    shownLineRate(
+                                      item,
+                                      inquiryPricing?.lines[idx],
+                                      procurementRequest?.line_items[idx]
+                                        ?.base_price_per_mt,
+                                    ),
                                     true,
                                   )}
                                 </button>
@@ -6517,7 +6574,15 @@ export default function InquiriesPage() {
                               <td className="w-[10%] max-w-[100px] px-2 py-3.5 border-r border-slate-200 font-mono text-right">
                                 {(() => {
                                   const split = getGstSplit(
-                                    Number(item.amount) || 0,
+                                    taxableLineAmount(
+                                      item,
+                                      shownLineRate(
+                                        item,
+                                        inquiryPricing?.lines[idx],
+                                        procurementRequest?.line_items[idx]
+                                          ?.base_price_per_mt,
+                                      ),
+                                    ),
                                     editDetails?.deliveryLocation || "",
                                   );
                                   return isInterstateDelivery ? (
@@ -6565,7 +6630,10 @@ export default function InquiriesPage() {
                                     <input
                                       type="number"
                                       min="0"
-                                      disabled={procurementRequest?.line_items[idx]?.line_status === "cannot_price"}
+                                      disabled={
+                                        procurementRequest?.line_items[idx]?.line_status === "cannot_price" ||
+                                        (isProcurement && !procurementCanEditPrices)
+                                      }
                                       value={current}
                                       onChange={(event) =>
                                         updateInquiryPricingLine(
@@ -6591,6 +6659,7 @@ export default function InquiriesPage() {
                                         <input
                                           type="text"
                                           aria-label={`Note for ${procurementRequest?.line_items[idx]?.sku_text || "line"}`}
+                                          disabled={!procurementCanEditPrices}
                                           value={
                                             procurementRequest?.line_items[idx]
                                               ?.line_note || ""
@@ -6602,7 +6671,7 @@ export default function InquiriesPage() {
                                             )
                                           }
                                           placeholder="Optional note if unavailable"
-                                          className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-[10px]"
+                                          className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                                         />
                                       )}
                                     {field !== "basePricePerMt" && procurementRequest?.line_items[idx]?.line_status !== "cannot_price" && (
@@ -6622,16 +6691,14 @@ export default function InquiriesPage() {
                           <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
                             {(() => {
                               const draftLine = inquiryPricing?.lines[idx];
-                              const draftRate = calculateLineRate({
-                                basePricePerMt: Number(draftLine?.basePricePerMt ?? procurementRequest?.line_items[idx]?.base_price_per_mt) || 0,
-                                transportPerMt: Number(draftLine?.transportPerMt) || 0,
-                                loadingPerMt: Number(draftLine?.loadingPerMt) || 0,
-                                creditPerMt: Number(draftLine?.creditPerMt) || 0,
-                                marginPerMt: Number(draftLine?.marginPerMt) || 0,
-                              });
+                              const draftRate = shownLineRate(
+                                item,
+                                draftLine,
+                                procurementRequest?.line_items[idx]?.base_price_per_mt,
+                              );
                               const taxableAmount = isInquiryPricingSaved
-                                ? Number(item.amount) || 0
-                                : calculateLineAmount(draftRate, Number(item.quantity) || 0, item.unit || "MT");
+                                ? taxableLineAmount(item, draftRate)
+                                : pricedLineAmount(draftRate, item);
                               const displayedAmount = taxableAmount;
                               return (
                                 <div className="space-y-1 rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-right text-xs font-bold">
@@ -6735,20 +6802,19 @@ export default function InquiriesPage() {
                     </tbody>
                   </table>
 
-                  {!isInquiryPricingSaved && (
+                  {!isProcurement && !isInquiryPricingSaved && (
                     <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-4 py-3">
                       <button
                         type="button"
                         disabled={
-                          isProcurement
-                            ? !procurementRequest?.line_items.length
-                            : !pricingLinesComplete ||
-                              currentInquiryPricingStatus === "unavailable"
+                          savingPrices ||
+                          !pricingLinesComplete ||
+                          currentInquiryPricingStatus === "unavailable"
                         }
                         onClick={saveInquiryPrices}
                         className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
                       >
-                        Save Prices
+                        {savingPrices ? "Saving..." : "Save Prices"}
                       </button>
                     </div>
                   )}
@@ -6806,14 +6872,29 @@ export default function InquiriesPage() {
                             },
                           ];
 
+                    const amountFor = (item: any, index: number) => {
+                      if (!isInquiryPricingSaved) return Number(item.amount) || 0;
+                      return taxableLineAmount(
+                        item,
+                        shownLineRate(
+                          item,
+                          inquiryPricing?.lines[index],
+                          procurementRequest?.line_items[index]?.base_price_per_mt,
+                        ),
+                      );
+                    };
                     const subtotal = activeLineItems.reduce(
-                      (sum, item) => sum + (Number(item.amount) || 0),
+                      (sum, item, index) => {
+                        const sourceIndex = (editDetails.lineItems || []).indexOf(item);
+                        return sum + amountFor(item, sourceIndex >= 0 ? sourceIndex : index);
+                      },
                       0,
                     );
                     const gstTotals = activeLineItems.reduce(
-                      (totals, item) => {
+                      (totals, item, index) => {
+                        const sourceIndex = (editDetails.lineItems || []).indexOf(item);
                         const split = getGstSplit(
-                          Number(item.amount) || 0,
+                          amountFor(item, sourceIndex >= 0 ? sourceIndex : index),
                           editDetails.deliveryLocation,
                         );
                         return {
@@ -7055,6 +7136,23 @@ export default function InquiriesPage() {
                 <Eye size={15} /> View PDF
               </button>
 
+              {procurementCanEditPrices && !isInquiryPricingSaved && (
+                <button
+                  type="button"
+                  disabled={savingPrices || !procurementRequest?.line_items.length}
+                  onClick={saveInquiryPrices}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {savingPrices ? (
+                    <>
+                      <RefreshCw size={15} className="animate-spin" /> Saving...
+                    </>
+                  ) : (
+                    "Save Prices"
+                  )}
+                </button>
+              )}
+
               {!isProcurement && (
               <button
                 type="button"
@@ -7095,6 +7193,7 @@ export default function InquiriesPage() {
                   currentDrawerDealStage === "quoted" ||
                   currentDrawerDealStage === "qualified";
                 if (!selectedInquiry || !isQuotedDrawerStage) return null;
+                if (isProcurement && !procurementCanSendQuote) return null;
                 if (activeRole === "salesperson" && hasAvailableProcurementLine) return null;
 
                 const shareAgain =
@@ -7820,6 +7919,7 @@ export default function InquiriesPage() {
                   } catch (err: any) {
                     console.error("Error sending quotation:", err);
                     const errMsg =
+                      err?.response?.data?.error ||
                       err?.response?.data?.message ||
                       "Quotation recorded! Add RESEND_API_KEY in backend .env to send live emails.";
                     setResendNotice(errMsg);

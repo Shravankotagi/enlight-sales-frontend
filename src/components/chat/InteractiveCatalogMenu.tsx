@@ -52,7 +52,7 @@ export default function InteractiveCatalogMenu({
     const number = (String(title || '').match(/^(\d+)\./) || [])[1] || '';
     if (key.includes('menu_price') || key.includes('add price')) return IndianRupee;
     if (key.includes('pending price') || key.includes('proc_1')) return Clock;
-    if (key.includes('current inquir') || key.includes('proc_2')) return CheckSquare;
+    if (key.includes('current inquir') || key.includes('all inquir') || key.includes('proc_2')) return CheckSquare;
     if (key.includes('base price') || key.includes('proc_3')) return IndianRupee;
     if (key.includes('my team') || key.includes('proc_4')) return Users;
     if (/^pr-\d+/i.test(id)) return Sparkles;

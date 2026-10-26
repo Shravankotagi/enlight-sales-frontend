@@ -100,7 +100,7 @@ const TECHNICAL_PAYLOAD_DISPLAY_MAP: Record<string, string> = {
   btn_att_no: 'No',
 
   proc_1: 'Pending prices',
-  proc_2: 'Current inquiries',
+  proc_2: 'All inquiries',
   proc_3: 'Log a Base Price',
   proc_4: 'My team',
 
@@ -585,7 +585,7 @@ export default function AssistantPage() {
   const quickPrompts = isProcurement
     ? [
         { label: 'Pending prices', text: 'pending prices', icon: TrendingUp },
-        { label: 'Current inquiries', text: 'current inquiries', icon: Search },
+        { label: 'All inquiries', text: 'all inquiries', icon: Search },
         { label: 'Log a base price', text: 'log a base price', icon: FileText },
         ...(role === 'procurement_manager'
           ? [{ label: 'My team', text: 'my team', icon: Users }]
@@ -683,7 +683,7 @@ export default function AssistantPage() {
             </div>
             <p className="text-xs text-gray-500">
               {isProcurement
-                ? 'Pending prices, current inquiries, and base prices'
+                ? 'Pending prices, all inquiries, and base prices'
                 : 'Conversational Sales OS & Knowledge Base RAG Assistant'}
             </p>
           </div>
@@ -836,7 +836,7 @@ export default function AssistantPage() {
                   </h2>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
                     {isProcurement
-                      ? 'List pending or current inquiries, or log a base price in rupees per MT.'
+                      ? 'List pending or all inquiries, or log a base price in rupees per MT.'
                       : 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'}
                   </p>
                 </div>

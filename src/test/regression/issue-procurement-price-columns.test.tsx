@@ -47,9 +47,10 @@ vi.mock('../../lib/api', () => ({
   employeesApi: { getAll: vi.fn(async () => ({ data: [] })) },
   dealsApi: { getAll: vi.fn(async () => ({ data: [] })) },
   productsApi: { getAll: vi.fn(async () => ({ data: [] })) },
+  activityLogsApi: { getAll: vi.fn(async () => ({ data: [] })) },
 }))
 
-function signIn(role: string) {
+function signIn(role: string, permissions?: Record<string, boolean> | null) {
   sessionStorage.clear()
   sessionStorage.setItem('enlight_token', 'token')
   sessionStorage.setItem(
@@ -60,6 +61,7 @@ function signIn(role: string) {
       name: role === 'procurement_person' ? 'Rishi Mehta' : 'Akruti',
       phone: '919800000001',
       role,
+      ...(permissions !== undefined ? { permissions } : {}),
     }),
   )
 }
@@ -89,7 +91,7 @@ describe('saved price columns', () => {
       data: {
         success: true,
         data: {
-          pricing_status: 'price_ready',
+          pricing_status: 'awaiting_price',
           lines: [
             {
               line_key: '0:HR Coil',
@@ -113,6 +115,40 @@ describe('saved price columns', () => {
     expect(screen.getByRole('button', { name: 'Save Prices' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Save$/ })).not.toBeInTheDocument()
     expect(screen.getByDisplayValue('HR Coil')).toHaveAttribute('readonly')
+  })
+
+  it('shows a salesperson the saved procurement base price on a Price Ready inquiry', async () => {
+    signIn('salesperson')
+    getAll.mockImplementation(async () => ({
+      data: inquiries.map((item) => ({
+        ...item,
+        pricing_status: 'price_ready',
+      })),
+    }))
+    getLinePricing.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          pricing_status: 'price_ready',
+          lines: [
+            {
+              line_key: '0:HR Coil',
+              sku_text: 'HR Coil',
+              quantity: 12,
+              unit: 'MT',
+              procurement_base_price_per_mt: 61000,
+              line_status: 'priced',
+            },
+          ],
+        },
+      },
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
+    await user.click(await screen.findByText('PR-10041'))
+
+    expect(await screen.findByDisplayValue('61000')).toBeInTheDocument()
+    expect(screen.getByText('Transport *')).toBeInTheDocument()
   })
 
   it('collapses salesperson price columns into Rate after a wrapped save', async () => {
@@ -281,5 +317,134 @@ describe('saved price columns', () => {
     expect(await screen.findAllByText('21,600.00')).not.toHaveLength(0)
     expect(screen.getAllByText('1,20,000.00').length).toBeGreaterThan(0)
     expect(screen.getByText('1,41,600.00')).toBeInTheDocument()
+  })
+
+  it('fills GST from a saved rate when the inquiry line has no amount', async () => {
+    signIn('salesperson')
+    getAll.mockImplementation(async () => ({
+      data: [
+        {
+          ...inquiries[0],
+          pricing_status: 'sales_priced',
+          delivery_location: 'Ahmedabad',
+          ai_extraction_json: {
+            line_items: [
+              {
+                sku_text: 'Heavy Structural Beam (ISMB)',
+                dimensions: 'ISMB 300',
+                quantity: 35,
+                unit: 'MT',
+              },
+            ],
+          },
+        },
+      ],
+    }))
+    getLinePricing.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          pricing_status: 'sales_priced',
+          lines: [
+            {
+              line_key: '0:Heavy Structural Beam (ISMB)',
+              sku_text: 'Heavy Structural Beam (ISMB)',
+              quantity: 35,
+              unit: 'MT',
+              sales_base_price_per_mt: 1400,
+              rate_per_mt: 1400,
+              line_status: 'priced',
+            },
+          ],
+        },
+      },
+    })
+    const user = userEvent.setup()
+    const { queryClient } = renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
+    await user.click(await screen.findByText('PR-10041'))
+
+    expect(await screen.findByRole('button', { name: '1,400.00' })).toBeInTheDocument()
+    expect(screen.getAllByText('49,000.00').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('8,820.00').length).toBeGreaterThan(0)
+
+    await queryClient.refetchQueries({ queryKey: ['inquiries-list'] })
+
+    expect(screen.getByRole('button', { name: '1,400.00' })).toBeInTheDocument()
+    expect(screen.getAllByText('49,000.00').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('8,820.00').length).toBeGreaterThan(0)
+  })
+
+  it.each(['procurement_person', 'procurement_manager'] as const)(
+    'keeps a quoted price-ready inquiry read-only for a %s',
+    async (role) => {
+      signIn(role)
+      getAll.mockImplementation(async () => ({
+        data: inquiries.map((item) => ({
+          ...item,
+          pricing_status: 'price_ready',
+          stage: 'quoted',
+          status: 'quoted',
+        })),
+      }))
+      getLinePricing.mockResolvedValue({
+        data: {
+          success: true,
+          data: {
+            pricing_status: 'price_ready',
+            lines: [
+              {
+                line_key: '0:HR Coil',
+                sku_text: 'HR Coil',
+                quantity: 12,
+                unit: 'MT',
+                procurement_base_price_per_mt: 61000,
+                line_status: 'priced',
+              },
+            ],
+          },
+        },
+      })
+      const user = userEvent.setup()
+      renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
+      await user.click(await screen.findByText('PR-10041'))
+
+      expect(await screen.findByDisplayValue('61000')).toBeDisabled()
+      expect(screen.queryByRole('button', { name: 'Save Prices' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /share quotation/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /share again/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /view pdf/i })).toBeInTheDocument()
+    },
+  )
+
+  it('disables the price and note boxes for a view-only procurement user', async () => {
+    signIn('procurement_person', {
+      'inquiries.view': true,
+      'inquiries.edit': false,
+      'inquiries.fill_base_prices': true,
+    })
+    getLinePricing.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          pricing_status: 'awaiting_price',
+          lines: [
+            {
+              line_key: '0:HR Coil',
+              sku_text: 'HR Coil',
+              quantity: 12,
+              unit: 'MT',
+              line_status: 'needs_price',
+            },
+          ],
+        },
+      },
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
+    await user.click(await screen.findByText('PR-10041'))
+
+    expect(await screen.findByPlaceholderText('Enter base price')).toBeDisabled()
+    expect(screen.getByLabelText('Note for HR Coil')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Save Prices' })).not.toBeInTheDocument()
   })
 })

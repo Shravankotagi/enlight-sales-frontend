@@ -117,4 +117,30 @@ describe('send quotation button', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Share Quotation Email/ })).toBeInTheDocument()
   })
+
+  it('shows the server error when quotation preview is denied', async () => {
+    previewQuotation.mockRejectedValue({
+      response: {
+        data: {
+          error:
+            'Access Denied: You do not have permission to send quotations for this record.',
+        },
+      },
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
+    await user.click(await screen.findByText('PR-10041'))
+    await user.click(
+      await screen.findByRole('button', { name: /send quotation|share quotation|share again/i }),
+    )
+
+    expect(
+      await screen.findByText(
+        'Access Denied: You do not have permission to send quotations for this record.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Unable to prepare the quotation email. Please try again.'),
+    ).not.toBeInTheDocument()
+  })
 })
