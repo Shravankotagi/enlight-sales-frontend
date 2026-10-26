@@ -13,12 +13,37 @@ export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
   onChange,
   readOnly = false,
 }) => {
+  const clearInquiryDependents = (
+    updated: Record<string, boolean>,
+    key: string,
+    next: boolean,
+  ) => {
+    if (next) return updated;
+    if (key === 'inquiries.view') {
+      for (const dependent of [
+        'inquiries.manage',
+        'inquiries.edit',
+        'inquiries.delete',
+        'inquiries.send_quote',
+        'inquiries.scope_assigned',
+        'inquiries.fill_base_prices',
+        'inquiries.price_override',
+        'inquiries.team_inquiries',
+      ]) {
+        updated[dependent] = false;
+      }
+    }
+    if (key === 'inquiries.edit' || key === 'inquiries.view') {
+      updated['inquiries.fill_base_prices'] = false;
+      updated['inquiries.price_override'] = false;
+    }
+    return updated;
+  };
+
   const toggleKey = (key: string) => {
     if (readOnly) return;
-    onChange({
-      ...permissions,
-      [key]: !permissions[key],
-    });
+    const next = !permissions[key];
+    onChange(clearInquiryDependents({ ...permissions, [key]: next }, key, next));
   };
 
   const handleToggleFullRow = (crudKeys: {
@@ -35,13 +60,17 @@ export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
       Boolean(permissions[crudKeys.delete]);
 
     const targetVal = !allActive;
-    onChange({
+    const updated = {
       ...permissions,
       [crudKeys.view]: targetVal,
       [crudKeys.create]: targetVal,
       [crudKeys.edit]: targetVal,
       [crudKeys.delete]: targetVal,
-    });
+    };
+    if (!targetVal && crudKeys.view === 'inquiries.view') {
+      clearInquiryDependents(updated, 'inquiries.view', false);
+    }
+    onChange(updated);
   };
 
   const renderBubble = (

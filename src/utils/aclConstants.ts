@@ -328,7 +328,7 @@ export const DEFAULT_ROLE_TEMPLATES: Record<string, Record<string, boolean>> = {
     'visits.photo_required': false,
     // Inquiries (Exclusive module - receives inquiries & inputs base purchase rates)
     'inquiries.view': true,
-    'inquiries.manage': true,
+    'inquiries.manage': false,
     'inquiries.edit': true,
     'inquiries.delete': false,
     'inquiries.send_quote': false,
@@ -377,7 +377,7 @@ export const DEFAULT_ROLE_TEMPLATES: Record<string, Record<string, boolean>> = {
     'visits.photo_required': false,
     // Inquiries (Exclusive module - reviews & provides base purchase rates for assigned procurement team)
     'inquiries.view': true,
-    'inquiries.manage': true,
+    'inquiries.manage': false,
     'inquiries.edit': true,
     'inquiries.delete': true,
     'inquiries.send_quote': false,
@@ -459,6 +459,65 @@ export const DEFAULT_ROLE_TEMPLATES: Record<string, Record<string, boolean>> = {
 };
 
 const STORAGE_KEY_PREFIX = 'enlight_role_template_';
+
+export function resolveEmployeeInquiryPermissions(
+  role?: string | null,
+  stored?: Record<string, boolean> | null,
+): Record<string, boolean> {
+  const normalized = role === 'manager' ? 'sales_manager' : role || '';
+  const defaults = { ...(DEFAULT_ROLE_TEMPLATES[normalized] || {}) };
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+    return defaults;
+  }
+  const overlay: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(stored)) {
+    if (typeof value === 'boolean') overlay[key] = value;
+  }
+  return { ...defaults, ...overlay };
+}
+
+export function canFillProcurementBasePrices(employee?: {
+  role?: string | null;
+  permissions?: Record<string, boolean> | null;
+} | null) {
+  const permissions = resolveEmployeeInquiryPermissions(
+    employee?.role,
+    employee?.permissions,
+  );
+  return (
+    permissions['inquiries.view'] === true &&
+    permissions['inquiries.edit'] === true &&
+    permissions['inquiries.fill_base_prices'] === true
+  );
+}
+
+export function canSendProcurementQuote(employee?: {
+  role?: string | null;
+  permissions?: Record<string, boolean> | null;
+} | null) {
+  const permissions = resolveEmployeeInquiryPermissions(
+    employee?.role,
+    employee?.permissions,
+  );
+  return (
+    permissions['inquiries.view'] === true &&
+    permissions['inquiries.send_quote'] === true
+  );
+}
+
+export function canDeleteProcurementInquiries(employee?: {
+  role?: string | null;
+  permissions?: Record<string, boolean> | null;
+} | null) {
+  const permissions = resolveEmployeeInquiryPermissions(
+    employee?.role,
+    employee?.permissions,
+  );
+  return (
+    permissions['inquiries.view'] === true &&
+    permissions['inquiries.delete'] === true
+  );
+}
 
 export function getRoleTemplate(role: string): Record<string, boolean> {
   const normalized = role === 'manager' ? 'sales_manager' : role;

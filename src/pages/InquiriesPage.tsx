@@ -55,6 +55,10 @@ import AddAssignedCustomerDialog, {
 import PaginationControl from "../components/PaginationControl";
 import { normalizeListResponse, queryKeys } from "../lib/queryKeys";
 import { useAuth } from "../context/AuthContext";
+import {
+  canFillProcurementBasePrices,
+  canSendProcurementQuote,
+} from "../utils/aclConstants";
 import { getDaysAgo, formatLocalDate } from "../utils/dateUtils";
 import {
   calculateLineItem,
@@ -3372,6 +3376,7 @@ export default function InquiriesPage() {
 
   const saveInquiryPrices = async () => {
     if (!selectedInquiry || !inquiryPricing || !procurementRequest || savingPrices) return;
+    if (isProcurement && !canFillProcurementBasePrices(employee)) return;
     if (isProcurement && inquiryStatusFromServer(selectedInquiry) !== "awaiting_price") return;
     const lines = inquiryPricing.lines.map((line, index) => ({
       line_key:
@@ -3531,7 +3536,10 @@ export default function InquiriesPage() {
     ? inquiryStatusFromServer(selectedInquiry)
     : null;
   const procurementCanEditPrices =
-    isProcurement && currentInquiryPricingStatus === "awaiting_price";
+    isProcurement &&
+    canFillProcurementBasePrices(employee) &&
+    currentInquiryPricingStatus === "awaiting_price";
+  const procurementCanSendQuote = isProcurement && canSendProcurementQuote(employee);
   const isInquiryPricingSaved = inquiryPricing?.saved === true;
   const hasAvailableProcurementLine = Boolean(
     procurementRequest?.line_items.some(
@@ -5323,7 +5331,7 @@ export default function InquiriesPage() {
                       dealStageKey === "negotiation" ||
                       dealStageKey === "on_hold");
                     const showShareQuotation =
-                      !isProcurement &&
+                      (!isProcurement || procurementCanSendQuote) &&
                       (dealStageKey === "qualified" || dealStageKey === "quoted");
 
                     return (
@@ -6583,7 +6591,7 @@ export default function InquiriesPage() {
                                       }
                                       className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs font-mono disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                                     />
-                                    {procurementCanEditPrices &&
+                                    {isProcurement &&
                                       field === "basePricePerMt" &&
                                       (current === "" ||
                                         procurementRequest?.line_items[idx]
@@ -6591,6 +6599,7 @@ export default function InquiriesPage() {
                                         <input
                                           type="text"
                                           aria-label={`Note for ${procurementRequest?.line_items[idx]?.sku_text || "line"}`}
+                                          disabled={!procurementCanEditPrices}
                                           value={
                                             procurementRequest?.line_items[idx]
                                               ?.line_note || ""
@@ -6602,7 +6611,7 @@ export default function InquiriesPage() {
                                             )
                                           }
                                           placeholder="Optional note if unavailable"
-                                          className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-[10px]"
+                                          className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                                         />
                                       )}
                                     {field !== "basePricePerMt" && procurementRequest?.line_items[idx]?.line_status !== "cannot_price" && (
@@ -7123,7 +7132,8 @@ export default function InquiriesPage() {
                 const isQuotedDrawerStage =
                   currentDrawerDealStage === "quoted" ||
                   currentDrawerDealStage === "qualified";
-                if (!selectedInquiry || !isQuotedDrawerStage || isProcurement) return null;
+                if (!selectedInquiry || !isQuotedDrawerStage) return null;
+                if (isProcurement && !procurementCanSendQuote) return null;
                 if (activeRole === "salesperson" && hasAvailableProcurementLine) return null;
 
                 const shareAgain =
