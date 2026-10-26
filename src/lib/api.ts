@@ -169,7 +169,10 @@ export const customersApi = {
   getReorderQueue: (params?: any) => API.get('/customers/reorder-queue', { params }),
   getLossAnalytics: (params?: any) => API.get('/customers/loss-analytics', { params }),
   importClients: (data: any) => API.post('/customers/import', data),
+  createCustomer: (data: any, params?: any) => API.post('/customers', data, { params }),
+  checkConflict: (params: any) => API.get('/customers/check-conflict', { params }),
   update: (id: string, data: any) => API.patch(`/customers/${encodeURIComponent(id)}`, data),
+  delete: (id: string) => API.delete(`/customers/${encodeURIComponent(id)}`),
 };
 
 export const kraApi = {
