@@ -488,6 +488,24 @@ export default function AdminSelectionPage() {
     return true;
   });
 
+  const availableSalesManagers = allManagers.filter(
+    (mgr) =>
+      !form.id ||
+      (mgr.id !== form.id &&
+        mgr.employee_id !== form.employee_id &&
+        mgr.phone.replace(/\D/g, '').slice(-10) !==
+          form.phone.replace(/\D/g, '').slice(-10)),
+  );
+
+  const availableProcurementManagers = procurementManagers.filter(
+    (mgr) =>
+      !form.id ||
+      (mgr.id !== form.id &&
+        mgr.employee_id !== form.employee_id &&
+        mgr.phone.replace(/\D/g, '').slice(-10) !==
+          form.phone.replace(/\D/g, '').slice(-10)),
+  );
+
   const adminCount = employees.filter((e) => e.role === 'admin').length;
   const managerCount = employees.filter(
     (e) => e.role === 'sales_manager' || e.role === 'manager',
@@ -1308,7 +1326,7 @@ export default function AdminSelectionPage() {
                 {isEditMode ? (
                   <>
                     <Edit2 size={18} className="text-blue-600" />
-                    Edit User &amp; Role
+                    Edit User
                   </>
                 ) : (
                   <>
@@ -1390,7 +1408,8 @@ export default function AdminSelectionPage() {
                   </p>
                 </div>
 
-                {/* Role* (Zoho Dropdown) */}
+                {/* Role is assigned on /roles. Edit keeps the role already saved on the user. */}
+                {!isEditMode && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Role <span className="text-rose-500">*</span>
@@ -1415,6 +1434,7 @@ export default function AdminSelectionPage() {
                     }}
                   />
                 </div>
+                )}
 
                 {/* Notice for Admin role */}
                 {form.role === 'admin' && (
@@ -1447,7 +1467,7 @@ export default function AdminSelectionPage() {
                 )}
 
                 {/* Manager Assignment (when role is salesperson) */}
-                {form.role === 'salesperson' && allManagers.length > 0 && (
+                {form.role === 'salesperson' && availableSalesManagers.length > 0 && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Assigned Sales Manager{' '}
@@ -1460,14 +1480,14 @@ export default function AdminSelectionPage() {
                           ...f,
                           manager_id: e.target.value,
                           manager_phone:
-                            allManagers.find((m) => m.id === e.target.value)
+                            availableSalesManagers.find((m) => m.id === e.target.value)
                               ?.phone || '',
                         }))
                       }
                       className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                     >
                       <option value="">-- None (Direct to Admin) --</option>
-                      {allManagers.map((mgr) => (
+                      {availableSalesManagers.map((mgr) => (
                         <option key={mgr.id} value={mgr.id}>
                           {mgr.name} ({mgr.employee_id})
                         </option>
@@ -1490,14 +1510,14 @@ export default function AdminSelectionPage() {
                           ...f,
                           manager_id: e.target.value,
                           manager_phone:
-                            procurementManagers.find((m) => m.id === e.target.value)
+                            availableProcurementManagers.find((m) => m.id === e.target.value)
                               ?.phone || '',
                         }))
                       }
                       className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                     >
                       <option value="">-- None (Direct to Admin) --</option>
-                      {procurementManagers.map((mgr) => (
+                      {availableProcurementManagers.map((mgr) => (
                         <option key={mgr.id} value={mgr.id}>
                           {mgr.name} ({mgr.employee_id})
                         </option>
@@ -1515,11 +1535,11 @@ export default function AdminSelectionPage() {
                       Assigned Salespeople
                     </label>
                     <div className="max-h-40 overflow-auto rounded-xl border border-slate-200 bg-slate-50/60 p-2 space-y-1">
-                      {employees.filter((person) => person.role === 'salesperson' && person.is_active !== false).length === 0 ? (
+                      {employees.filter((person) => person.role === 'salesperson' && person.is_active !== false && (!form.id || person.id !== form.id)).length === 0 ? (
                         <p className="px-2 py-1.5 text-xs text-slate-400">No active salespeople</p>
                       ) : (
                         employees
-                          .filter((person) => person.role === 'salesperson' && person.is_active !== false)
+                          .filter((person) => person.role === 'salesperson' && person.is_active !== false && (!form.id || person.id !== form.id))
                           .map((person) => {
                             const selected = (form.assigned_salesperson_ids || []).includes(person.id);
                             return (
@@ -1556,15 +1576,17 @@ export default function AdminSelectionPage() {
                   </div>
                 )}
 
-                {/* Zoho Books-style Role & Permissions (ACL) Section */}
-                <EmployeeAclSection
-                  role={form.role}
-                  permissions={form.permissions || getRoleTemplate(form.role)}
-                  onChange={(updated) => {
-                    setAclTouched(true);
-                    setForm((f) => ({ ...f, permissions: updated }));
-                  }}
-                />
+                {/* Edit User does not customize permissions. Those live on /roles. */}
+                {!isEditMode && (
+                  <EmployeeAclSection
+                    role={form.role}
+                    permissions={form.permissions || getRoleTemplate(form.role)}
+                    onChange={(updated) => {
+                      setAclTouched(true);
+                      setForm((f) => ({ ...f, permissions: updated }));
+                    }}
+                  />
+                )}
 
                 {/* Employee ID */}
                 <div>

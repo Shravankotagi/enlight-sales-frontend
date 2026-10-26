@@ -79,13 +79,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (meData) {
         if (meData.role) {
           setEmployee((prev) => {
-            if (!prev) return prev;
-            if (prev.role === meData.role && prev.name === meData.name) return prev;
-            const updated = {
-              ...prev,
+            const base = prev || {
+              id: meData.id,
+              employee_id: meData.employee_id,
+              name: meData.name,
+              phone: meData.phone,
               role: meData.role,
-              name: meData.name || prev.name,
-              phone: meData.phone || prev.phone,
+            };
+            if (prev && prev.role === meData.role && prev.name === meData.name) return prev;
+            const updated = {
+              ...base,
+              id: meData.id || base.id,
+              employee_id: meData.employee_id || base.employee_id,
+              role: meData.role,
+              name: meData.name || base.name,
+              phone: meData.phone || base.phone,
             };
             sessionStorage.setItem('enlight_employee', JSON.stringify(updated));
             return updated;
@@ -248,13 +256,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = isSuperOrAdmin || can('staff.manage_acl');
-  const isSalesManager =
-    dataScope === 'team' ||
-    employee?.role === 'sales_manager' ||
-    employee?.role === 'manager';
   const isProcurementManager = employee?.role === 'procurement_manager';
   const isProcurementPerson = employee?.role === 'procurement_person';
   const isProcurement = isProcurementManager || isProcurementPerson;
+  const isSalesManager =
+    !isProcurement &&
+    (dataScope === 'team' ||
+      employee?.role === 'sales_manager' ||
+      employee?.role === 'manager');
   const isSalesperson = !isAdmin && !isSalesManager && !isProcurement;
 
   // effectivePhone:

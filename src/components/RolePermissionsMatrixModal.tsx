@@ -440,6 +440,23 @@ export const RolePermissionsMatrixModal: React.FC<
     (u) => u.role === 'procurement_manager',
   );
 
+  const availableSalesManagers = salesManagers.filter(
+    (m) =>
+      !editingUser ||
+      (m.id !== editingUser.id &&
+        m.employee_id !== editingUser.employee_id &&
+        m.phone?.replace(/\D/g, '').slice(-10) !==
+          editingUser.phone?.replace(/\D/g, '').slice(-10)),
+  );
+  const availableProcurementManagers = procurementManagers.filter(
+    (m) =>
+      !editingUser ||
+      (m.id !== editingUser.id &&
+        m.employee_id !== editingUser.employee_id &&
+        m.phone?.replace(/\D/g, '').slice(-10) !==
+          editingUser.phone?.replace(/\D/g, '').slice(-10)),
+  );
+
   return (
     <div className={asPage ? 'w-full min-w-0' : 'fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150'}>
       <div className={asPage
@@ -970,7 +987,12 @@ export const RolePermissionsMatrixModal: React.FC<
                 <Select
                   value={inviteForm.role}
                   onChange={(e) =>
-                    setInviteForm((prev) => ({ ...prev, role: e.target.value }))
+                    setInviteForm((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                      manager_id: e.target.value === prev.role ? prev.manager_id : '',
+                      manager_phone: e.target.value === prev.role ? prev.manager_phone : '',
+                    }))
                   }
                   className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer font-medium"
                   menuClassName="w-full"
@@ -1004,7 +1026,7 @@ export const RolePermissionsMatrixModal: React.FC<
               )}
 
               {/* Assigned Sales Manager (for salesperson) */}
-              {inviteForm.role === 'salesperson' && salesManagers.length > 0 && (
+              {inviteForm.role === 'salesperson' && availableSalesManagers.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Assigned Sales Manager{' '}
@@ -1013,7 +1035,7 @@ export const RolePermissionsMatrixModal: React.FC<
                   <Select
                     value={inviteForm.manager_id || ''}
                     onChange={(e) => {
-                      const mgr = salesManagers.find((m) => m.id === e.target.value);
+                      const mgr = availableSalesManagers.find((m) => m.id === e.target.value);
                       setInviteForm((prev) => ({
                         ...prev,
                         manager_id: e.target.value,
@@ -1024,7 +1046,7 @@ export const RolePermissionsMatrixModal: React.FC<
                     menuClassName="w-full"
                   >
                     <option value="">-- None (Direct to Admin) --</option>
-                    {salesManagers.map((m) => (
+                    {availableSalesManagers.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name} ({m.employee_id})
                       </option>
@@ -1043,7 +1065,7 @@ export const RolePermissionsMatrixModal: React.FC<
                   <Select
                     value={inviteForm.manager_id || ''}
                     onChange={(e) => {
-                      const mgr = procurementManagers.find((m) => m.id === e.target.value);
+                      const mgr = availableProcurementManagers.find((m) => m.id === e.target.value);
                       setInviteForm((prev) => ({
                         ...prev,
                         manager_id: e.target.value,
@@ -1054,7 +1076,7 @@ export const RolePermissionsMatrixModal: React.FC<
                     menuClassName="w-full"
                   >
                     <option value="">-- None (Direct to Admin) --</option>
-                    {procurementManagers.map((m) => (
+                    {availableProcurementManagers.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name} ({m.employee_id})
                       </option>

@@ -39,7 +39,7 @@ export const EmployeeAclSection: React.FC<EmployeeAclSectionProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Role &amp; Permissions (Zoho-Style ACL)
+                Role &amp; Permissions
               </h4>
               {overrides > 0 ? (
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">

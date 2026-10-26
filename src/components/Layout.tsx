@@ -70,16 +70,16 @@ function UserMenu({
 
   // Always reflect the user's own true identity & role (never overridden by impersonated user's role)
   const ownRoleLabel =
-    (roleName && !['salesperson', 'admin', 'sales_manager', 'manager', 'procurement_manager', 'procurement_person'].includes(roleName.toLowerCase()))
+    (roleName && !['salesperson', 'admin', 'sales_manager', 'manager', 'procurement_manager', 'procurement manager', 'procurement_person', 'procurement person'].includes(roleName.toLowerCase()))
       ? formatRole(roleName)
       : isAdmin
         ? 'Admin'
-        : isSalesManager
-          ? 'Sales Manager'
-          : isProcurementManager
-            ? 'Procurement Manager'
-            : isProcurementPerson
-              ? 'Procurement Person'
+        : isProcurementManager
+          ? 'Procurement Manager'
+          : isProcurementPerson
+            ? 'Procurement Person'
+            : isSalesManager
+              ? 'Sales Manager'
               : 'Salesperson';
 
   const isImpersonatingOther = Boolean(
