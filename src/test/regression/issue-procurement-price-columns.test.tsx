@@ -50,7 +50,7 @@ vi.mock('../../lib/api', () => ({
   activityLogsApi: { getAll: vi.fn(async () => ({ data: [] })) },
 }))
 
-function signIn(role: string) {
+function signIn(role: string, permissions?: Record<string, boolean> | null) {
   sessionStorage.clear()
   sessionStorage.setItem('enlight_token', 'token')
   sessionStorage.setItem(
@@ -61,6 +61,7 @@ function signIn(role: string) {
       name: role === 'procurement_person' ? 'Rishi Mehta' : 'Akruti',
       phone: '919800000001',
       role,
+      ...(permissions !== undefined ? { permissions } : {}),
     }),
   )
 }
@@ -414,4 +415,36 @@ describe('saved price columns', () => {
       expect(screen.getByRole('button', { name: /view pdf/i })).toBeInTheDocument()
     },
   )
+
+  it('disables the price and note boxes for a view-only procurement user', async () => {
+    signIn('procurement_person', {
+      'inquiries.view': true,
+      'inquiries.edit': false,
+      'inquiries.fill_base_prices': true,
+    })
+    getLinePricing.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          pricing_status: 'awaiting_price',
+          lines: [
+            {
+              line_key: '0:HR Coil',
+              sku_text: 'HR Coil',
+              quantity: 12,
+              unit: 'MT',
+              line_status: 'needs_price',
+            },
+          ],
+        },
+      },
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
+    await user.click(await screen.findByText('PR-10041'))
+
+    expect(await screen.findByPlaceholderText('Enter base price')).toBeDisabled()
+    expect(screen.getByLabelText('Note for HR Coil')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Save Prices' })).not.toBeInTheDocument()
+  })
 })

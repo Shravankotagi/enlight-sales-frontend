@@ -13,6 +13,7 @@ export interface Employee {
   is_active?: boolean;
   manager_id?: string | null;
   manager_phone?: string | null;
+  permissions?: Record<string, boolean> | null;
 }
 
 interface AuthContextType {

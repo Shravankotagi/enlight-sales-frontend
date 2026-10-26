@@ -61,6 +61,9 @@ In addition to system role scoping, the frontend supports granular module-level 
 - Default permission sets are defined in `aclConstants.ts` for each role.
 - Controls View, Create, Edit, Delete capabilities across each functional module.
 - Supports fine-grained sub-permissions (e.g. `inquiries.fill_base_prices`, `inquiries.team_inquiries`).
-- Controls navigation visibility in `Layout.tsx` and conditional UI controls on pages.
+- Procurement navigation in `Layout.tsx` still follows the role. Inquiry actions follow the resolved permissions.
+- Turning off View clears the other inquiry keys. Turning off Edit clears `inquiries.fill_base_prices` and `inquiries.price_override`.
+
+For a procurement role, each inquiry request loads `employees.permissions` from the employee row. The API returns 403 when the action is off: view for the list and detail, edit for a status change, view plus edit plus fill base prices for `PATCH /inquiries/:id/procurement-pricing`, delete for `DELETE /inquiries/:id`, and send quote for quotation preview and send. The drawer disables the price box, the note box, and Save Prices from the same rule. The assistant refuses a base price and shows the team summary only when `inquiries.team_inquiries` is on. Pending prices and All inquiries stay available with view. A grant does not reopen an inquiry that has left Awaiting Price, and procurement still cannot create inquiries.
 
 Client filters are a convenience; server perimeter guards and database scope checks are the actual authorization boundary. Test salesperson, sales manager, procurement person, procurement manager, and admin cases for every query/mutation.
