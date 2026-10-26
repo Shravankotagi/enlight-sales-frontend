@@ -12,13 +12,15 @@ import {
   ShoppingBag,
   History,
   Sparkles,
+  KeyRound,
   ChevronsUpDown,
   PanelLeft,
   Menu,
   X,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { routeAllowed } from '../utils/aclConstants';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -42,6 +44,7 @@ function UserMenu({
     isSalesManager,
     isProcurementManager,
     isProcurementPerson,
+    roleName,
     clearViewingAs,
     viewingAs,
   } = useAuth();
@@ -57,15 +60,27 @@ function UserMenu({
     navigate(isAdmin ? '/control-panel' : '/admin');
   };
 
-  const ownRoleLabel = isAdmin
-    ? 'Admin'
-    : isSalesManager
-      ? 'Sales Manager'
-      : isProcurementManager
-        ? 'Procurement Manager'
-        : isProcurementPerson
-          ? 'Procurement Person'
-          : 'Salesperson';
+  const formatRole = (r?: string) => {
+    if (!r) return '';
+    return r
+      .split(/[_\s]+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
+  // Always reflect the user's own true identity & role (never overridden by impersonated user's role)
+  const ownRoleLabel =
+    (roleName && !['salesperson', 'admin', 'sales_manager', 'manager', 'procurement_manager', 'procurement manager', 'procurement_person', 'procurement person'].includes(roleName.toLowerCase()))
+      ? formatRole(roleName)
+      : isAdmin
+        ? 'Admin'
+        : isProcurementManager
+          ? 'Procurement Manager'
+          : isProcurementPerson
+            ? 'Procurement Person'
+            : isSalesManager
+              ? 'Sales Manager'
+              : 'Salesperson';
 
   const isImpersonatingOther = Boolean(
     viewingAs &&
@@ -173,7 +188,16 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   });
   const [isHovered, setIsHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { employee, viewingAs, isAdmin, isSalesManager, isProcurement, clearViewingAs } = useAuth();
+  const {
+    employee,
+    viewingAs,
+    isAdmin,
+    isSalesManager,
+    isProcurement,
+    clearViewingAs,
+    can = () => false,
+  } = useAuth();
+  const isAdminRole = employee?.role === 'admin';
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const toggleSidebar = () => {
@@ -205,8 +229,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         employee.phone?.replace(/\D/g, '').slice(-10)
   );
 
-  const showAdminTab = isAdmin && !isImpersonatingOther;
-  const showUserManagement = (isAdmin || isSalesManager) && !isImpersonatingOther;
+  const staffKeys = ['staff.view', 'staff.create', 'staff.manage', 'staff.delete', 'staff.manage_acl'];
+  const showAdminTab = (isAdmin || can('staff.view')) && !isImpersonatingOther;
+  const showUserManagement = (isAdmin || isSalesManager || staffKeys.some((key) => can(key))) && !isImpersonatingOther;
 
   const isActive = (path: string) => {
     if (path === '/pipeline')
@@ -217,6 +242,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     );
   };
 
+  const showRoles = (isAdmin || can('staff.manage_acl')) && !isImpersonatingOther;
+
   const navItems = [
     { path: '/home', label: 'Dashboard', icon: Home },
     ...(showAdminTab
@@ -224,6 +251,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       : []),
     ...(showUserManagement
       ? [{ path: '/control-panel', label: 'User Management', icon: Settings }]
+      : []),
+    ...(showRoles
+      ? [{ path: '/roles', label: 'Roles and Permissions', icon: KeyRound }]
       : []),
     { path: '/assistant', label: 'AI Assistant', icon: Sparkles },
     { path: '/inquiries', label: 'Inquiries', icon: FileText },
@@ -235,9 +265,15 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     { path: '/reports', label: 'Reports', icon: BarChart3 },
     { path: '/logs', label: 'Logs', icon: History },
   ];
-  const visibleNavItems = isProcurement
-    ? navItems.filter((item) => item.path === '/inquiries' || item.path === '/assistant')
-    : navItems;
+  const visibleNavItems = navItems.filter((item) => {
+    if (isProcurement) {
+      return item.path === '/inquiries' || item.path === '/assistant';
+    }
+    if (isAdminRole && (item.path === '/admin-dashboard' || item.path === '/control-panel' || item.path === '/roles')) {
+      return true;
+    }
+    return routeAllowed(item.path, can);
+  });
 
   // Hover enlargement only active when sidebar is OPEN and user hovers over it
   const isEnlarged = sidebarOpen && isHovered;
@@ -458,7 +494,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
         {/* Page Content */}
         <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-          {children || <Outlet />}
+          <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading...</div>}>
+            {children || <Outlet />}
+          </Suspense>
         </div>
       </div>
     </div>

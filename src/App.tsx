@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { routeAllowed } from './utils/aclConstants';
 import Layout from './components/Layout';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -13,6 +14,7 @@ const KRADashboard = lazy(() => import('./pages/KRADashboard'));
 const InquiriesPage = lazy(() => import('./pages/InquiriesPage'));
 const LogsPage = lazy(() => import('./pages/LogsPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const RolesPermissionsPage = lazy(() => import('./pages/RolesPermissionsPage'));
 const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 const ComplaintsPage = lazy(() => import('./pages/ComplaintsPage'));
 const VisitsPage = lazy(() => import('./pages/VisitsPage'));
@@ -24,9 +26,19 @@ const SidebarDemo = lazy(() => import('./components/SidebarDemo'));
 import { setupRealtimeSubscriptions } from './lib/supabase';
 
 function AppRoutes() {
-  const { isAuthenticated, employee, clearViewingAs, isProcurement, isSalesManager } = useAuth();
+  const { isAuthenticated, clearViewingAs, can, employee, isProcurement, isSalesManager } = useAuth();
   const location = useLocation();
-  const isAdmin = employee?.role === 'admin';
+  const isAdminRole = employee?.role === 'admin';
+  const canOpenStaff =
+    isAdminRole ||
+    ['staff.view', 'staff.create', 'staff.manage', 'staff.delete', 'staff.manage_acl'].some((key) => can(key));
+  const inquiryOnly =
+    can('inquiries.view') &&
+    !can('customers.view') &&
+    !can('visits.view') &&
+    !can('orders.view') &&
+    !can('complaints.view') &&
+    !can('staff.view');
 
   const prevPathRef = useRef(location.pathname);
   useEffect(() => {
@@ -49,9 +61,9 @@ function AppRoutes() {
         element={
           !isAuthenticated ? (
             <Navigate to="/login" replace />
-          ) : isAdmin ? (
+          ) : canOpenStaff ? (
             <Navigate to="/control-panel" replace />
-          ) : isProcurement ? (
+          ) : inquiryOnly ? (
             <Navigate to="/inquiries" replace />
           ) : (
             <AdminSelectionPage />
@@ -66,35 +78,39 @@ function AppRoutes() {
         element={
           !isAuthenticated ? (
             <Navigate to="/login" replace />
-          ) : isProcurement && location.pathname !== '/inquiries' && location.pathname !== '/assistant' ? (
+          ) : (inquiryOnly || (isProcurement && location.pathname !== '/assistant')) && location.pathname !== '/inquiries' ? (
             <Navigate to="/inquiries" replace />
           ) : (
             <Layout />
           )
         }
       >
-        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/pipeline" element={<Navigate to="/inquiries?view=pipeline" replace />} />
-        <Route path="/inquiries" element={<InquiriesPage />} />
+        <Route path="/inquiries" element={routeAllowed('/inquiries', can) ? <InquiriesPage /> : <Navigate to="/home" replace />} />
         <Route path="/procurement" element={<Navigate to="/inquiries" replace />} />
-        <Route path="/orders" element={<OrdersPage />} />
-        <Route path="/customers" element={<CustomersPage />} />
-        <Route path="/customers/:id" element={<CustomerProfilePage />} />
-        <Route path="/visits" element={<VisitsPage />} />
-        <Route path="/complaints" element={<ComplaintsPage />} />
+        <Route path="/orders" element={routeAllowed('/orders', can) ? <OrdersPage /> : <Navigate to="/home" replace />} />
+        <Route path="/customers" element={routeAllowed('/customers', can) ? <CustomersPage /> : <Navigate to="/home" replace />} />
+        <Route path="/customers/:id" element={routeAllowed('/customers', can) ? <CustomerProfilePage /> : <Navigate to="/home" replace />} />
+        <Route path="/visits" element={routeAllowed('/visits', can) ? <VisitsPage /> : <Navigate to="/home" replace />} />
+        <Route path="/complaints" element={routeAllowed('/complaints', can) ? <ComplaintsPage /> : <Navigate to="/home" replace />} />
         <Route path="/kra" element={<KRADashboard />} />
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route
+          path="/roles"
+          element={isAdminRole || routeAllowed('/roles', can) ? <RolesPermissionsPage /> : <Navigate to="/home" replace />}
+        />
         <Route path="/intelligence" element={<IntelligencePage />} />
         <Route
           path="/admin-dashboard"
-          element={isAdmin ? <AdminDashboard /> : <Navigate to="/home" replace />}
+          element={isAdminRole || routeAllowed('/admin-dashboard', can) ? <AdminDashboard /> : <Navigate to="/home" replace />}
         />
         <Route
           path="/control-panel"
-          element={(isAdmin || isSalesManager) ? <AdminSelectionPage /> : <Navigate to="/home" replace />}
+          element={isAdminRole || isSalesManager || routeAllowed('/control-panel', can) ? <AdminSelectionPage /> : <Navigate to="/home" replace />}
         />
       </Route>
 

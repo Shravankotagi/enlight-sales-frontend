@@ -23,7 +23,7 @@ describe('procurement role navigation', () => {
   it('shows Procurement and hides salesperson navigation', () => {
     render(
       <AuthProvider>
-        <MemoryRouter initialEntries={['/procurement']}>
+        <MemoryRouter initialEntries={['/inquiries']}>
           <Layout><div>Prototype content</div></Layout>
         </MemoryRouter>
       </AuthProvider>,
@@ -32,5 +32,26 @@ describe('procurement role navigation', () => {
     expect(screen.getByRole('link', { name: 'Inquiries' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'AI Assistant' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Orders' })).not.toBeInTheDocument();
+    expect(screen.getByText(/EMP-DEMO · Procurement Person/i)).toBeInTheDocument();
+  });
+
+  it('renders Procurement Manager role label and navigation correctly', () => {
+    sessionStorage.setItem(
+      'enlight_employee',
+      JSON.stringify({ ...employee, role: 'procurement_manager' }),
+    );
+
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={['/inquiries']}>
+          <Layout><div>Prototype content</div></Layout>
+        </MemoryRouter>
+      </AuthProvider>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Inquiries' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'AI Assistant' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Orders' })).not.toBeInTheDocument();
+    expect(screen.getByText(/EMP-DEMO · Procurement Manager/i)).toBeInTheDocument();
   });
 });

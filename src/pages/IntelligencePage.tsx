@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { customersApi, dealsApi } from '../lib/api';
 import SyncBiginButton from '../components/SyncBiginButton';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import PaginationControl, { pageOf } from '../components/PaginationControl';
 import {
   Clock,
   TrendingDown,
@@ -14,8 +15,11 @@ import {
 } from 'lucide-react';
 
 export default function IntelligencePage() {
-  const { effectivePhone, isAdmin, employee, activeRole, activeMode } = useAuth();
+  const { effectivePhone, activeRole, activeMode } = useAuth();
   const salespersonPhone = effectivePhone || undefined;
+  const [attentionPage, setAttentionPage] = useState(1);
+  const [reorderPage, setReorderPage] = useState(1);
+  const [lossPage, setLossPage] = useState(1);
 
   useEffect(() => {
     document.title = 'Intelligence Center - Enlight Sigma';
@@ -193,6 +197,10 @@ export default function IntelligencePage() {
   }, [lostDealsList]);
 
   const recentLossesList: any[] = lostDealsList;
+  const attentionAccounts = [...highRiskCustomers, ...atRiskCustomers];
+  const attentionPager = pageOf(attentionAccounts, attentionPage);
+  const reorderPager = pageOf(reorderList, reorderPage);
+  const lossPager = pageOf(recentLossesList, lossPage);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12 font-sans">
@@ -207,7 +215,6 @@ export default function IntelligencePage() {
 
         <div className="flex items-center gap-2.5 shrink-0">
           <SyncBiginButton
-            show={isAdmin || employee?.role === 'salesperson'}
             onSynced={async () => {
               await Promise.all([
                 refetchChurn(),
@@ -410,7 +417,7 @@ export default function IntelligencePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {[...highRiskCustomers, ...atRiskCustomers].map((item: any, idx: number) => {
+                  {attentionPager.rows.map((item: any, idx: number) => {
                     const isHigh = item.churn_risk === 'churning' || item.churn_risk === 'credit_watch' || item.churn_risk === 'high';
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/60 transition-colors">
@@ -451,6 +458,15 @@ export default function IntelligencePage() {
                 </tbody>
               </table>
             </div>
+            <PaginationControl
+              currentPage={attentionPager.current}
+              totalPages={attentionPager.totalPages}
+              onPageChange={setAttentionPage}
+              totalItems={attentionPager.total}
+              startIndex={attentionPager.startIndex}
+              endIndex={attentionPager.endIndex}
+              itemLabel="accounts"
+            />
           </div>
         )}
       </section>
@@ -562,7 +578,7 @@ export default function IntelligencePage() {
             </div>
           ) : (
             <div className="pt-4 divide-y divide-slate-100">
-              {reorderList.map((item: any) => (
+              {reorderPager.rows.map((item: any) => (
                 <div
                   key={item.id}
                   className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50/50 px-2 rounded-lg transition-colors"
@@ -605,6 +621,17 @@ export default function IntelligencePage() {
                 </div>
               ))}
             </div>
+          )}
+          {reorderList.length > 0 && (
+            <PaginationControl
+              currentPage={reorderPager.current}
+              totalPages={reorderPager.totalPages}
+              onPageChange={setReorderPage}
+              totalItems={reorderPager.total}
+              startIndex={reorderPager.startIndex}
+              endIndex={reorderPager.endIndex}
+              itemLabel="customers"
+            />
           )}
         </div>
       </section>
@@ -756,7 +783,7 @@ export default function IntelligencePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {recentLossesList.map((item: any, idx: number) => {
+                  {lossPager.rows.map((item: any, idx: number) => {
                     const dateFormatted = item.created_at
                       ? new Date(item.created_at).toLocaleDateString('en-GB', {
                           day: 'numeric',
@@ -791,6 +818,17 @@ export default function IntelligencePage() {
                 </tbody>
               </table>
             </div>
+          )}
+          {recentLossesList.length > 0 && (
+            <PaginationControl
+              currentPage={lossPager.current}
+              totalPages={lossPager.totalPages}
+              onPageChange={setLossPage}
+              totalItems={lossPager.total}
+              startIndex={lossPager.startIndex}
+              endIndex={lossPager.endIndex}
+              itemLabel="deals"
+            />
           )}
         </div>
       </section>

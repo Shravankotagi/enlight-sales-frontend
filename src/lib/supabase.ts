@@ -270,6 +270,27 @@ export function setupRealtimeSubscriptions(queryClient: QueryClient) {
         ]);
       }
     )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'employees' },
+      (payload) => {
+        console.log('[Realtime] Employees table change:', payload.eventType);
+        notifyChange('employees', payload.eventType, payload);
+        debounceInvalidate([['employees']]);
+        window.dispatchEvent(new CustomEvent('enlight_permissions_stale'));
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'roles' },
+      (payload) => {
+        console.log('[Realtime] Roles table change:', payload.eventType);
+        notifyChange('roles', payload.eventType, payload);
+        debounceInvalidate([['roles']]);
+        window.dispatchEvent(new CustomEvent('enlight_permissions_stale'));
+        window.dispatchEvent(new CustomEvent('enlight_roles_updated'));
+      }
+    )
     .subscribe((status) => {
       console.log('[Supabase Realtime] Subscription status:', status);
     });

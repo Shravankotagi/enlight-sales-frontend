@@ -1,23 +1,50 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { reportsApi, ordersApi, inquiriesApi, visitsApi, activityLogsApi } from '../lib/api';
+import { reportsApi, ordersApi, inquiriesApi, dealsApi, visitsApi, activityLogsApi } from '../lib/api';
 import { formatIstDateTime, formatSessionDuration } from '../utils/istDateTime';
 import SyncBiginButton from '../components/SyncBiginButton';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3, MapPin } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
+import PaginationControl, { pageOf } from '../components/PaginationControl';
 import { formatLocalDate } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
+import { buildInquiryScopeParams } from '../utils/inquiryScope';
+import {
+  isProductInquiry,
+  parseInquiryText,
+  resolveInquiryDealStageKey,
+} from './InquiriesPage';
+
+const FUNNEL_ROWS = [
+  { key: 'new_inquiry', label: 'New Inquiry' },
+  { key: 'quoted', label: 'Price Quote' },
+  { key: 'negotiation', label: 'Negotiation' },
+  { key: 'on_hold', label: 'On Hold' },
+  { key: 'won', label: 'Closed Won' },
+  { key: 'lost', label: 'Closed Lost' },
+];
+
+function inquiryCreatedDay(value?: string) {
+  if (!value) return '';
+  const trimmed = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().split('T')[0];
+}
 
 export default function ReportsPage() {
-  const { effectivePhone, isAdmin, employee, activeRole, activeMode } = useAuth();
+  const { effectivePhone, isAdmin, activeRole, activeMode } = useAuth();
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
     from: '2000-01-01',
     to: formatLocalDate(),
   });
+  const [skuPage, setSkuPage] = useState(1);
+  const [loginPage, setLoginPage] = useState(1);
+  const [visitsPage, setVisitsPage] = useState(1);
 
   useEffect(() => {
     document.title = 'Reports - Enlight Sigma';
@@ -110,29 +137,79 @@ export default function ReportsPage() {
     staleTime: 30000,
   });
 
+  const { data: funnelInquiries = [], refetch: refetchFunnelInquiries } = useQuery({
+    queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
+    queryFn: async () => {
+      const res = await inquiriesApi.getAll(buildInquiryScopeParams(effectivePhone, activeMode));
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: funnelDeals = [], refetch: refetchFunnelDeals } = useQuery({
+    queryKey: ['reports-funnel-deals', effectivePhone, dateRange, activeRole, activeMode],
+    queryFn: async () => {
+      const params = buildInquiryScopeParams(effectivePhone, activeMode);
+      if (dateRange.preset !== 'all') {
+        if (dateRange.from) {
+          params.from = dateRange.from.includes('T') ? dateRange.from : `${dateRange.from}T00:00:00.000Z`;
+        }
+        if (dateRange.to) {
+          params.to = dateRange.to.includes('T') ? dateRange.to : `${dateRange.to}T23:59:59.999Z`;
+        }
+      }
+      const res = await dealsApi.getAll(params).catch(() => null);
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+    },
+    placeholderData: keepPreviousData,
+  });
+
   const refetchAll = () => {
     refetchOverview();
+    refetchWonOrders();
+    refetchFunnelInquiries();
+    refetchFunnelDeals();
   };
 
-  // Single source of truth: calculate total tonnage across actual won orders in scope
+  const { data: wonOrders = [], refetch: refetchWonOrders } = useQuery({
+    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode],
+    queryFn: () =>
+      ordersApi
+        .getAll({
+          ...(effectivePhone ? { salesperson_phone: effectivePhone } : {}),
+          ...(activeMode ? { mode: activeMode } : {}),
+          ...(dateRange.preset === 'all'
+            ? {}
+            : {
+                from: dateRange.from,
+                to: dateRange.to
+                  ? dateRange.to.includes('T')
+                    ? dateRange.to
+                    : `${dateRange.to}T23:59:59.999Z`
+                  : undefined,
+              }),
+        })
+        .then((response) => {
+          const raw = response?.data;
+          return Array.isArray(raw)
+            ? raw
+            : Array.isArray(raw?.data)
+              ? raw.data
+              : [];
+        }),
+    placeholderData: keepPreviousData,
+  });
+
+  // Same won orders and tonnage helper as the dashboard and Orders page.
   const totalTonnageResult = useMemo(() => {
-    return calculateOrdersTotalTonnage(overview?.orders || []);
-  }, [overview?.orders]);
+    return calculateOrdersTotalTonnage(wonOrders);
+  }, [wonOrders]);
 
   const totalMt = totalTonnageResult.totalMt;
 
-  // Exact parity for KPI cards:
-  const totalDealsCount =
-    overview?.inquiries_count ||
-    overview?.summary?.total_deals ||
-    overview?.summary?.total_inquiries ||
-    0;
-
-  const wonOrdersCount =
-    overview?.summary?.deals_won ||
-    overview?.summary?.won ||
-    (overview?.orders || []).length ||
-    0;
+  const wonOrdersCount = wonOrders.length;
 
   const { data: loginActivity = [] } = useQuery({
     queryKey: ['reports-login-activity', dateRange, effectivePhone, activeMode, isAdmin],
@@ -164,9 +241,37 @@ export default function ReportsPage() {
     },
   });
 
-  const funnelList: any[] = Array.isArray(overview?.funnel)
-    ? overview.funnel
-    : (overview?.funnel?.funnel || []);
+  const funnelList = useMemo(() => {
+    const from = dateRange.preset === 'all' ? '' : (dateRange.from || '').split('T')[0];
+    const to = dateRange.preset === 'all' ? '' : (dateRange.to || '').split('T')[0];
+    const counts: Record<string, number> = {
+      new_inquiry: 0,
+      quoted: 0,
+      negotiation: 0,
+      on_hold: 0,
+      won: 0,
+      lost: 0,
+    };
+    for (const inq of funnelInquiries) {
+      if (!isProductInquiry(inq)) continue;
+      if (from && to) {
+        const day = inquiryCreatedDay(inq.created_at);
+        if (day && (day < from || day > to)) continue;
+      }
+      const companyName = parseInquiryText(inq.raw_text || '', inq).companyName;
+      let stage = resolveInquiryDealStageKey(inq, companyName, funnelDeals);
+      if (stage === 'qualified' || stage === 'saved' || stage === 'confirmed') stage = 'quoted';
+      if (stage === 'hold') stage = 'on_hold';
+      if (counts[stage] !== undefined) counts[stage] += 1;
+    }
+    return FUNNEL_ROWS.map((row) => ({ stage: row.key, label: row.label, count: counts[row.key] }));
+  }, [funnelInquiries, funnelDeals, dateRange]);
+  const funnelTotal = funnelList.reduce((sum, row) => sum + row.count, 0);
+  const funnelWon = funnelList.find((row) => row.stage === 'won')?.count || 0;
+  const funnelWinRate = funnelTotal > 0 ? Math.round((funnelWon / funnelTotal) * 100) : 0;
+  const skuPager = pageOf(overview?.skus || [], skuPage);
+  const loginPager = pageOf(loginActivity, loginPage);
+  const visitsPager = pageOf(reportVisits, visitsPage);
 
   const maxFunnelCount = Math.max(
     ...funnelList.map((f: any) => Number(f.count) || 0),
@@ -185,7 +290,6 @@ export default function ReportsPage() {
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <SyncBiginButton
-            show={isAdmin || employee?.role === 'salesperson'}
             onSynced={refetchAll}
           />
           <DateFilterControl onChange={setDateRange} />
@@ -203,8 +307,8 @@ export default function ReportsPage() {
         /* ── Progressive Skeleton Shimmer UI ── */
         <div className="space-y-8 animate-pulse">
           {/* Skeleton Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
               <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm space-y-2">
                 <div className="h-7 w-20 bg-slate-200 rounded-lg mx-auto" />
                 <div className="h-4 w-28 bg-slate-100 rounded mx-auto" />
@@ -258,17 +362,10 @@ export default function ReportsPage() {
       ) : (
         <div className="space-y-8">
           {/* SECTION 1 - Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {/* Card 1: Total Deals */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-              <p className="text-2xl font-bold text-gray-900">{totalDealsCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Total Deals</p>
-            </div>
-
-            {/* Card 2: Won */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
               <p className="text-2xl font-bold text-gray-900">{wonOrdersCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Won</p>
+              <p className="text-sm text-gray-500 mt-1">Won Orders</p>
             </div>
 
             {/* Card 3: Total Tonnage (MT) - auto-converted from all SKU units */}
@@ -341,7 +438,7 @@ export default function ReportsPage() {
                 <p className="text-sm text-gray-500 mt-5 pt-3 border-t">
                   Overall win rate:{' '}
                   <span className="font-bold text-green-600 text-base">
-                    {overview?.summary?.conversion_rate || 0}%
+                    {funnelWinRate}%
                   </span>
                 </p>
               </>
@@ -421,7 +518,7 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
-                    {(overview?.skus || []).map((item: any, i: number) => {
+                    {skuPager.rows.map((item: any, i: number) => {
                       const hsn = detectHsnCode(item.sku_text || item.sku || '');
                       const qtyStr = `${Number(item.total_quantity || item.quantity || 0).toLocaleString('en-IN')} ${item.unit || 'MT'}`;
                       return (
@@ -464,6 +561,17 @@ export default function ReportsPage() {
                   </p>
                 </div>
               )}
+              {(overview?.skus || []).length > 0 && (
+                <PaginationControl
+                  currentPage={skuPager.current}
+                  totalPages={skuPager.totalPages}
+                  onPageChange={setSkuPage}
+                  totalItems={skuPager.total}
+                  startIndex={skuPager.startIndex}
+                  endIndex={skuPager.endIndex}
+                  itemLabel="SKUs"
+                />
+              )}
             </div>
             {isAdmin && (
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -485,7 +593,7 @@ export default function ReportsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {loginActivity.map((log: any, i: number) => {
+                        {loginPager.rows.map((log: any, i: number) => {
                           const when = formatIstDateTime(log.timestamp);
                           return (
                             <tr key={log.id || i} className="border-t border-slate-100">
@@ -506,6 +614,17 @@ export default function ReportsPage() {
                       </tbody>
                     </table>
                   </div>
+                )}
+                {loginActivity.length > 0 && (
+                  <PaginationControl
+                    currentPage={loginPager.current}
+                    totalPages={loginPager.totalPages}
+                    onPageChange={setLoginPage}
+                    totalItems={loginPager.total}
+                    startIndex={loginPager.startIndex}
+                    endIndex={loginPager.endIndex}
+                    itemLabel="logins"
+                  />
                 )}
               </div>
             )}
@@ -528,7 +647,7 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {reportVisits.map((visit: any) => (
+                    {visitsPager.rows.map((visit: any) => (
                       <tr key={visit.id} className="hover:bg-slate-50/80">
                         <td className="px-5 py-3.5 font-bold text-slate-900">{visit.customer_name || '-'}</td>
                         <td className="px-5 py-3.5 text-xs">
@@ -564,6 +683,17 @@ export default function ReportsPage() {
                   <MapPin size={28} className="mx-auto mb-2 text-slate-300" />
                   <p className="font-semibold text-slate-700">No customer visits in this period</p>
                 </div>
+              )}
+              {reportVisits.length > 0 && (
+                <PaginationControl
+                  currentPage={visitsPager.current}
+                  totalPages={visitsPager.totalPages}
+                  onPageChange={setVisitsPage}
+                  totalItems={visitsPager.total}
+                  startIndex={visitsPager.startIndex}
+                  endIndex={visitsPager.endIndex}
+                  itemLabel="visits"
+                />
               )}
             </div>
           </div>

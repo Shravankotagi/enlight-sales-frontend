@@ -16,7 +16,9 @@ import {
   TrendingUp,
   Sparkles,
   UserCheck,
+  UserPlus,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
@@ -114,11 +116,45 @@ export function deriveSegment(c: any): string {
   return 'new';
 }
 
+const GSTIN_FORMAT = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMPTY_CUSTOMER = {
+  customer_name: '',
+  contact_person: '',
+  customer_phone: '',
+  delivery_location: '',
+  customer_email: '',
+  customer_gst: '',
+};
+
+function newCustomerProblems(form: typeof EMPTY_CUSTOMER) {
+  const phone = form.customer_phone.replace(/\D/g, '');
+  const last10 = phone.length >= 10 ? phone.slice(-10) : phone;
+  return {
+    customer_name: form.customer_name.trim() ? '' : 'Company name is required',
+    contact_person: form.contact_person.trim() ? '' : 'Contact person is required',
+    customer_phone: /^[6-9]\d{9}$/.test(last10)
+      ? ''
+      : form.customer_phone.trim()
+        ? 'Enter a valid 10-digit mobile number'
+        : 'Mobile number is required',
+    delivery_location: form.delivery_location.trim() ? '' : 'Delivery location is required',
+    customer_email:
+      !form.customer_email.trim() || EMAIL_FORMAT.test(form.customer_email.trim())
+        ? ''
+        : 'Enter a valid email address',
+    customer_gst:
+      !form.customer_gst.trim() || GSTIN_FORMAT.test(form.customer_gst.trim().toUpperCase())
+        ? ''
+        : 'Invalid GST number',
+  };
+}
+
 export default function CustomersPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const { effectivePhone, isSalesManager, isAdmin, employee, activeRole, activeMode } = useAuth();
+  const { effectivePhone, isSalesManager, isAdmin, activeRole, activeMode, can, viewingAs } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -130,6 +166,9 @@ export default function CustomersPage() {
     if (seg) setFilterSegment(seg);
   }, [searchParams]);
 
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState(EMPTY_CUSTOMER);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
@@ -261,6 +300,39 @@ export default function CustomersPage() {
     }
   };
 
+  const customerProblems = newCustomerProblems(newCustomer);
+  const customerReady = Object.values(customerProblems).every((message) => !message);
+  const shownCustomerError = (key: keyof typeof EMPTY_CUSTOMER) =>
+    newCustomer[key].trim() ? customerProblems[key] : '';
+
+  const handleSaveCustomer = async () => {
+    if (!customerReady || savingCustomer) return;
+    setSavingCustomer(true);
+    try {
+      await customersApi.create({
+        customer_name: newCustomer.customer_name.trim(),
+        contact_person: newCustomer.contact_person.trim(),
+        customer_phone: newCustomer.customer_phone.replace(/\D/g, ''),
+        delivery_location: newCustomer.delivery_location.trim(),
+        customer_email: newCustomer.customer_email.trim(),
+        customer_gst: newCustomer.customer_gst.trim().toUpperCase(),
+      });
+      toast.success('Customer saved');
+      setShowNewCustomer(false);
+      setNewCustomer(EMPTY_CUSTOMER);
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+    } catch (err: any) {
+      const message = err?.response?.data?.error;
+      toast.error(
+        Array.isArray(message) ? message.join(', ') : message || 'Could not save customer',
+      );
+    } finally {
+      setSavingCustomer(false);
+    }
+  };
+
   const safeCustomers: any[] = Array.isArray(rawCustomersData) ? rawCustomersData : [];
 
   // Reset pagination on filter change
@@ -351,7 +423,6 @@ export default function CustomersPage() {
 
           <div className="flex items-center gap-2.5 shrink-0">
             <SyncBiginButton
-              show={isAdmin || employee?.role === 'salesperson'}
               onSynced={() => {
                 queryClient.invalidateQueries({ queryKey: ['orders-list'] });
                 queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
@@ -366,6 +437,18 @@ export default function CustomersPage() {
               title="Refresh">
               <RefreshCw size={15} className={isFetching || manualRefreshing || isLoading ? 'animate-spin text-blue-600' : ''} />
             </button>
+            {can('customers.create') && !viewingAs && (
+              <button
+                onClick={() => {
+                  setNewCustomer(EMPTY_CUSTOMER);
+                  setShowNewCustomer(true);
+                }}
+                className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+              >
+                <UserPlus size={15} />
+                New Customer
+              </button>
+            )}
           </div>
         </div>
 
@@ -669,6 +752,80 @@ export default function CustomersPage() {
           itemLabel="customers"
         />
       </div>
+
+      {showNewCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-900">New Customer</h2>
+              <button
+                type="button"
+                onClick={() => setShowNewCustomer(false)}
+                className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form
+              className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSaveCustomer();
+              }}
+            >
+              {(
+                [
+                  ['customer_name', 'Company Name', true, 'e.g. PQR Steel Industries'],
+                  ['contact_person', 'Contact Person', true, 'e.g. Ravi Kumar'],
+                  ['customer_phone', 'Mobile Number', true, '9876543210'],
+                  ['delivery_location', 'Delivery Location', true, 'e.g. Chakan, Pune'],
+                  ['customer_email', 'Email', false, 'name@company.com'],
+                  ['customer_gst', 'GST Number', false, '29ABCDE1234F1Z5'],
+                ] as const
+              ).map(([key, label, required, placeholder]) => {
+                const error = shownCustomerError(key);
+                return (
+                  <label key={key} className="block">
+                    <span className="block text-sm font-medium text-slate-700 mb-1.5">
+                      {label}
+                      {required && <span className="text-rose-500"> *</span>}
+                      {!required && <span className="text-slate-400 font-normal"> (optional)</span>}
+                    </span>
+                    <input
+                      value={newCustomer[key]}
+                      placeholder={placeholder}
+                      onChange={(event) => {
+                        let value = event.target.value;
+                        if (key === 'customer_phone') value = value.replace(/\D/g, '').slice(0, 12);
+                        if (key === 'customer_gst') value = value.toUpperCase().replace(/\s+/g, '').slice(0, 15);
+                        setNewCustomer((prev) => ({ ...prev, [key]: value }));
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                    {error && <span className="block text-rose-500 text-xs mt-1">{error}</span>}
+                  </label>
+                );
+              })}
+              <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowNewCustomer(false)}
+                  className="h-9 px-4 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!customerReady || savingCustomer}
+                  className="h-9 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingCustomer ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

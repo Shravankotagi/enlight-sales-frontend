@@ -27,7 +27,7 @@ import {
   Building2,
   ShieldCheck,
 } from 'lucide-react';
-import { complaintsApi, employeesApi, customersApi, dealsApi } from '../lib/api';
+import { complaintsApi, employeesApi, ordersApi, dealsApi } from '../lib/api';
 import SyncBiginButton from '../components/SyncBiginButton';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -100,12 +100,12 @@ export default function ComplaintsPage() {
   const autoOpenedComplaintRef = useRef<string | null>(null);
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
-  const { isSalesManager, isAdmin, employee, effectivePhone, activeRole, activeMode } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode, guardAction } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -254,19 +254,19 @@ export default function ComplaintsPage() {
     }
   }, [canViewSalesperson]);
 
-  // Fetch the same assigned-customer list the inquiry form uses
+  // Confirmed orders only, same scope as the Orders page
   useEffect(() => {
     const params = buildInquiryScopeParams(effectivePhone, activeMode);
-    customersApi
+    ordersApi
       .getAll(params)
       .then(res => {
         const raw = res?.data;
         const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-        setCustomers(list);
+        setOrders(list);
       })
       .catch(err => {
-        console.error('Error fetching customers directory:', err);
-        setCustomers([]);
+        console.error('Error fetching confirmed orders:', err);
+        setOrders([]);
       });
   }, [effectivePhone, activeMode]);
 
@@ -284,22 +284,23 @@ export default function ComplaintsPage() {
   const customerDirectory = useMemo<CustomerDirectoryItem[]>(() => {
     const dirMap = new Map<string, CustomerDirectoryItem>();
 
-    customers.forEach(c => {
-      const rawName = (c?.customer_name || c?.name || '').trim();
-      const assignedPhone = String(c?.assigned_salesperson_phone || '').trim();
-      if (!rawName || !assignedPhone || assignedPhone === 'unassigned' || assignedPhone === 'null') return;
-      dirMap.set(rawName.toLowerCase(), {
-        id: c.id,
+    orders.forEach(order => {
+      const rawName = String(order?.customer_name || '').trim();
+      if (!rawName) return;
+      const key = rawName.toLowerCase();
+      if (dirMap.has(key)) return;
+      dirMap.set(key, {
+        id: order.id,
         customer_name: rawName,
-        contact_phone: c?.customer_phone || c?.phone || undefined,
-        location: (c?.customer_address || c?.address || c?.city || '').trim() || undefined,
+        contact_phone: order?.customer_phone || undefined,
+        location: String(order?.delivery_location || order?.customer_address || '').trim() || undefined,
       });
     });
 
     return Array.from(dirMap.values()).sort((a, b) =>
       a.customer_name.localeCompare(b.customer_name)
     );
-  }, [customers]);
+  }, [orders]);
 
   // Fetch won deals when customer is chosen in Create Form
   useEffect(() => {
@@ -445,6 +446,7 @@ export default function ComplaintsPage() {
   };
 
   const handleOpenAddModal = () => {
+    if (!guardAction('complaints.log')) return;
     resetCreateForm();
     setShowCreateModal(true);
   };
@@ -610,6 +612,7 @@ export default function ComplaintsPage() {
   // Create Complaint
   const handleCreateComplaint = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('complaints.log')) return;
 
     const errors: Record<string, boolean> = {};
     const selectedCustomer = customerDirectory.some(
@@ -697,6 +700,7 @@ export default function ComplaintsPage() {
   // Save Edited Complaint
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('complaints.update')) return;
     if (!editingComplaint) return;
 
     if (!editRaisedBy.trim()) {
@@ -806,6 +810,7 @@ export default function ComplaintsPage() {
 
   // Resolve inside Details Modal
   const handleResolveInModal = async () => {
+    if (!guardAction('complaints.resolve')) return;
     if (!selectedComplaint) return;
     const notes = modalResolutionNotes.trim();
     if (!notes) {
@@ -951,7 +956,6 @@ export default function ComplaintsPage() {
 
           <div className="flex items-center gap-2.5 shrink-0">
             <SyncBiginButton
-              show={isAdmin || employee?.role === 'salesperson'}
               onSynced={() => fetchComplaints()}
             />
             <button

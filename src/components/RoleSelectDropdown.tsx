@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getAllRoles, type RoleItem } from '../utils/aclConstants';
+import { getAllRoles, setRolesCache, isSystemRoleId, type RoleItem } from '../utils/aclConstants';
+import { rolesApi } from '../lib/api';
 import { ChevronDown, Search, Check, Shield } from 'lucide-react';
 
 interface RoleSelectDropdownProps {
@@ -41,6 +42,27 @@ export const RoleSelectDropdown: React.FC<RoleSelectDropdownProps> = ({
     return () => window.removeEventListener('enlight_roles_updated', handleRolesUpdated);
   }, [propRoles]);
 
+  useEffect(() => {
+    if (propRoles) return;
+    rolesApi
+      .list()
+      .then((res) => {
+        const items: RoleItem[] = (Array.isArray(res.data) ? res.data : []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description || '',
+          isSystem: Boolean(row.is_system ?? row.isSystem) || isSystemRoleId(row.id),
+          data_scope: row.data_scope,
+          permissions: row.permissions || {},
+        }));
+        if (items.length) {
+          setRolesCache(items);
+          setRolesList(items);
+        }
+      })
+      .catch(() => undefined);
+  }, [propRoles]);
+
   // Close when clicking outside
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -61,8 +83,8 @@ export const RoleSelectDropdown: React.FC<RoleSelectDropdownProps> = ({
   );
 
   const filteredRoles = rolesList.filter((r) =>
-    r.name.toLowerCase().includes(search.toLowerCase()) ||
-    r.id.toLowerCase().includes(search.toLowerCase()),
+    String(r.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    String(r.id || '').toLowerCase().includes(search.toLowerCase()),
   );
 
   return (

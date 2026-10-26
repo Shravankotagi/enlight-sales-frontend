@@ -140,7 +140,7 @@ export default function LoginPage() {
       const res = await authApi.verifyOtp(phone, otp);
       const data = res.data;
       login(data.data.token, data.data.employee);
-      navigate('/');
+      navigate('/home', { replace: true });
     } catch (err: any) {
       const msg =
         err.response?.data?.error ||

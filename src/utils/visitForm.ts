@@ -8,12 +8,22 @@ export const VISIT_BRANDS = [
   'Others',
 ] as const;
 
+export const VISIT_CUSTOMER_TYPES = [
+  'OEM',
+  'Fabricator',
+  'EPC',
+  'Manufacturer',
+  'Trader',
+  'Other',
+] as const;
+
 export const VISIT_PAYMENT_TERMS = [
   'Immediate',
   'Advance',
   '30 Days',
   '45 Days',
   '60 Days',
+  '90 Days',
   'LC',
   'BG',
   'PDC',
@@ -30,6 +40,7 @@ export interface NewVisitFormInput {
   location: string;
   locationSource: '' | 'gps' | 'manual';
   customerType: string;
+  customerTypeOther: string;
   visitDate: string;
   visitTime: string;
   visitType: string;
@@ -59,6 +70,117 @@ export function visitPhotoStampLabel(
 ): string {
   const when = at.toLocaleString('en-IN', { hour12: false });
   return `GPS ${latitude.toFixed(5)}, ${longitude.toFixed(5)} · ${when}`;
+}
+
+export function visitCustomerTypeLabel(type: unknown, other: unknown): string {
+  const selected = String(type ?? '').trim();
+  const typed = String(other ?? '').trim();
+  if (selected === 'Other' && typed) return typed;
+  return selected;
+}
+
+export function visitCalendarToday(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === 'year')?.value ?? '';
+  const month = parts.find((part) => part.type === 'month')?.value ?? '';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '';
+  return `${year}-${month}-${day}`;
+}
+
+export function visitCalendarPlusDays(days: number, now: Date = new Date()): string {
+  const [year, month, day] = visitCalendarToday(now).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  const nextYear = date.getUTCFullYear();
+  const nextMonth = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const nextDay = String(date.getUTCDate()).padStart(2, '0');
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
+export const VISIT_WIZARD_STEPS = [
+  { title: 'Company & contact', subtitle: 'Who you met' },
+  { title: 'Visit details', subtitle: 'When and how it went' },
+  { title: 'Commercial intelligence', subtitle: 'What they need and buy' },
+  { title: 'Follow-up', subtitle: 'What happens next' },
+  { title: 'Proof & verify', subtitle: 'Photo from site and customer confirmation' },
+] as const;
+
+export function visitWizardFieldKeys(
+  step: number,
+  input: NewVisitFormInput,
+): string[] {
+  if (step === 0) {
+    return [
+      'customerName',
+      'personMet',
+      'designation',
+      'contactPhone',
+      'email',
+      'location',
+      'customerType',
+      ...(input.customerType === 'Other' ? ['customerTypeOther'] : []),
+    ];
+  }
+  if (step === 1) {
+    return ['visitDate', 'visitTime', 'visitType', 'outcome', 'probability'];
+  }
+  if (step === 2) {
+    return [
+      'productDetails',
+      'monthlyConsumption',
+      'brands',
+      'paymentTerms',
+      'deliveryLocation',
+      'nextPurchase',
+      'currentRequirement',
+      ...(input.brands.includes('Others') ? ['brandOther'] : []),
+    ];
+  }
+  if (step === 3) return ['followup', 'followupDate', 'remarks'];
+  if (step === 4) return ['photo', 'otp'];
+  return [];
+}
+
+export function visitWizardStepErrors(
+  input: NewVisitFormInput,
+  step: number,
+): Record<string, string> {
+  const errors = validateNewVisitForm(input);
+  const stepErrors: Record<string, string> = {};
+  visitWizardFieldKeys(step, input).forEach((field) => {
+    if (errors[field]) stepErrors[field] = errors[field];
+  });
+  return stepErrors;
+}
+
+export function visitWizardProgress(input: NewVisitFormInput, step: number) {
+  const errors = validateNewVisitForm(input);
+  const fields = visitWizardFieldKeys(step, input);
+  return {
+    filled: fields.filter((field) => !errors[field]).length,
+    total: fields.length,
+  };
+}
+
+export function visitCalendarDay(value: string): string {
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== day
+  ) {
+    return '';
+  }
+  return `${match[1]}-${match[2]}-${match[3]}`;
 }
 
 export function visitCityLabel(city: unknown): string {
@@ -112,7 +234,12 @@ export function validateNewVisitForm(
   if (!input.location.trim()) {
     errors.location = 'Enter the city.';
   }
-  if (!input.customerType) errors.customerType = 'Select a customer type.';
+  if (!VISIT_CUSTOMER_TYPES.includes(input.customerType as (typeof VISIT_CUSTOMER_TYPES)[number])) {
+    errors.customerType = 'Select a customer type.';
+  }
+  if (input.customerType === 'Other' && !input.customerTypeOther.trim()) {
+    errors.customerTypeOther = 'Enter the other customer type.';
+  }
   if (!input.visitDate) errors.visitDate = 'Please enter the visit date.';
   if (!input.visitTime) errors.visitTime = 'Please enter the visit time.';
   if (!input.visitType) errors.visitType = 'Select a visit type.';
@@ -140,11 +267,17 @@ export function validateNewVisitForm(
     errors.deliveryLocation = 'Please enter the delivery location.';
   }
   if (!input.nextPurchase) errors.nextPurchase = 'Please enter the next purchase date.';
+  else if (visitCalendarDay(input.nextPurchase) < visitCalendarToday()) {
+    errors.nextPurchase = 'Choose a next purchase date that is today or later.';
+  }
   if (!input.currentRequirement.trim()) {
     errors.currentRequirement = 'Please enter the current requirement.';
   }
   if (!input.followup.trim()) errors.followup = 'Please enter the follow-up action.';
   if (!input.followupDate) errors.followupDate = 'Please enter the follow-up date.';
+  else if (visitCalendarDay(input.followupDate) < visitCalendarToday()) {
+    errors.followupDate = 'Choose a follow-up date that is today or later.';
+  }
   if (!input.remarks.trim()) errors.remarks = 'Please enter meeting remarks.';
   if (!input.photoUrl) errors.photo = 'Take a visit photo with the camera.';
   else if (input.photoLatitude == null || input.photoLongitude == null) {

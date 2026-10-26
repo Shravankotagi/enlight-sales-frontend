@@ -53,6 +53,7 @@ import AddAssignedCustomerDialog, {
   isCustomerInAssignedList,
 } from "../components/AddAssignedCustomerDialog";
 import PaginationControl from "../components/PaginationControl";
+import { Select } from "../components/ui/select";
 import { normalizeListResponse, queryKeys } from "../lib/queryKeys";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -1204,6 +1205,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
       paymentTerms = "45 Days Credit";
     } else if (textLower.includes("60 days") || textLower.includes("60-day")) {
       paymentTerms = "60 Days Credit";
+    } else if (textLower.includes("90 days") || textLower.includes("90-day")) {
+      paymentTerms = "90 Days Credit";
     } else {
       paymentTerms = "";
     }
@@ -1403,11 +1406,13 @@ function DealCard({
   onStageChange,
   onDelete,
   onClick,
+  canDelete = false,
 }: {
   deal: any;
   onStageChange: (id: string, stage: string, cardDeal?: any) => void;
   onDelete: (deal: any) => void;
   onClick?: () => void;
+  canDelete?: boolean;
 }) {
   const currentStage = (deal.stage || "new_inquiry").toLowerCase().trim();
   const isWon = currentStage === "won";
@@ -1424,13 +1429,13 @@ function DealCard({
             : "bg-white border-gray-200"
       }`}
     >
-      <div className="flex items-start justify-between mb-2 gap-1">
-        <h4 className="text-sm font-semibold text-gray-800 leading-tight pr-2">
+      <div className="flex items-start justify-between mb-2 gap-1.5">
+        <h4 className="text-sm font-semibold text-gray-800 leading-tight flex-1 min-w-0 line-clamp-2 break-words">
           {deal.customer_name || "Unknown Customer"}
         </h4>
         <div className="flex items-center gap-1 shrink-0">
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+            className={`text-xs px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${
               isWon
                 ? "bg-emerald-100 text-emerald-800 border-emerald-200"
                 : isLost
@@ -1448,17 +1453,19 @@ function DealCard({
                   ? "PO"
                   : "Inquiry"}
           </span>
-          <button
-            type="button"
-            title="Delete this deal and all records"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(deal);
-            }}
-            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
-          >
-            <Trash2 size={13} />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              title="Delete this deal and all records"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(deal);
+              }}
+              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1575,18 +1582,19 @@ function DealCard({
           ))}
       </div>
 
-      <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-        <span className="text-gray-400 font-medium">
-          {new Date(deal.created_at).toLocaleDateString("en-IN")}
+      <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between gap-1.5 text-xs">
+        <span className="text-gray-400 font-medium text-[11px] whitespace-nowrap shrink-0">
+          {deal.created_at
+            ? new Date(deal.created_at).toLocaleDateString("en-IN")
+            : ""}
         </span>
-        <div className="flex items-center gap-1.5">
-          <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded tracking-wide uppercase">
-            #
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded tracking-tight text-[11px] uppercase whitespace-nowrap shrink-0">
             {deal.deal_number
-              ? deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, "INQ-")
+              ? `#${deal.deal_number.replace(/^#?(?:DEAL|INQ)-/i, "INQ-")}`
               : deal.id
-                ? `INQ-${deal.id.substring(0, 6).toUpperCase()}`
-                : "INQ"}
+                ? `#INQ-${deal.id.substring(0, 6).toUpperCase()}`
+                : "#INQ"}
           </span>
         </div>
       </div>
@@ -1726,6 +1734,9 @@ export function resolveInquiryDealStageKey(
 const EMPTY_INQUIRIES: InquiryItem[] = [];
 const EMPTY_CUSTOMER_NAMES: string[] = [];
 
+const INQUIRY_PREFERRED_MAKES = ['TATA', 'JSW', 'AM/NS India', 'SAIL', 'NMDC', 'Apollo', 'Others'];
+const INQUIRY_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
+
 export default function InquiriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1740,6 +1751,8 @@ export default function InquiriesPage() {
     isSalesManager,
     isProcurement,
     isProcurementManager,
+    guardAction,
+    can,
   } = useAuth();
   const canViewSalesperson = isAdmin || isSalesManager || isProcurement;
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
@@ -1752,6 +1765,7 @@ export default function InquiriesPage() {
     reason: string;
   } | null>(null);
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState<any | null>(null);
+  const [confirmDeleteInquiry, setConfirmDeleteInquiry] = useState<InquiryItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -2563,16 +2577,29 @@ export default function InquiriesPage() {
   }, [wonModal?.poNumber, wonModal?.poReservationToken, wonModal?.dealId]);
 
   const deleteDealMutation = useMutation({
-    mutationFn: (id: string) => dealsApi.delete(id),
-    onSuccess: () => {
+    mutationFn: async (id: string) => {
+      const targetInqId =
+        confirmDeleteDeal?.inquiry_id || confirmDeleteDeal?.rawInquiry?.id;
+      if (targetInqId) {
+        try {
+          return await inquiriesApi.delete(targetInqId);
+        } catch {
+          return await dealsApi.delete(id);
+        }
+      }
+      return await dealsApi.delete(id);
+    },
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["deals"] });
       queryClient.invalidateQueries({ queryKey: ["kanban"] });
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
       queryClient.invalidateQueries({ queryKey: ["kra-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["orders-list"] });
       queryClient.invalidateQueries({ queryKey: ["inquiries-list"] });
+      queryClient.invalidateQueries({ queryKey: ["inquiries"] });
       toast.success("Deal and all associated records deleted successfully");
       setConfirmDeleteDeal(null);
+      await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || "Failed to delete deal");
@@ -3313,6 +3340,27 @@ export default function InquiriesPage() {
     }
   };
 
+  const deleteInquiryMutation = useMutation({
+    mutationFn: (id: string) => inquiriesApi.delete(id),
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ["inquiries-list"] });
+      queryClient.invalidateQueries({ queryKey: ["inquiries"] });
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["kra-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["orders-list"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-names-list"] });
+      toast.success("Inquiry and all associated records deleted successfully");
+      setConfirmDeleteInquiry(null);
+      handleCloseDrawer();
+      await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || "Failed to delete inquiry");
+    },
+  });
+
   const updateInquiryPricingLine = (
     index: number,
     field: keyof InquirySalesPricing["lines"][number],
@@ -3731,6 +3779,7 @@ export default function InquiriesPage() {
   };
 
   const handleSaveDrawerDetails = async () => {
+    if (!guardAction('inquiries.edit')) return;
     if (!selectedInquiry || !editDetails) return;
     if (saveSuccess && !submitting) return; // Prevent re-saving if already in saved state without changes
 
@@ -4123,6 +4172,7 @@ export default function InquiriesPage() {
 
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('inquiries.manage')) return;
 
     // Read directly from ref to avoid React state batching delays
     let extractedJson = formExtractedJsonRef.current;
@@ -4228,12 +4278,13 @@ export default function InquiriesPage() {
     }
 
     if (!formPaymentTerms.trim()) {
-      const el = document.getElementById(
-        "form-payment-terms",
-      ) as HTMLInputElement;
+      toast.error("Please select payment terms");
+      const el = document.getElementById("form-payment-terms");
       if (el) {
         el.focus();
-        el.reportValidity();
+        if (typeof (el as any).reportValidity === "function") {
+          (el as any).reportValidity();
+        }
       }
       return;
     }
@@ -5001,58 +5052,47 @@ export default function InquiriesPage() {
             </div>
 
             {/* 2. Days Filter Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <Calendar
-                size={14}
-                className="absolute left-3 text-blue-600 pointer-events-none"
-              />
-              <select
-                value={dayPreset}
-                onChange={(e) => handleDayPresetChange(e.target.value)}
-                className="w-full sm:w-auto pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="7_days">Last 7 Days</option>
-                <option value="30_days">Last 30 Days</option>
-                <option value="90_days">Last 90 Days</option>
-                <option value="custom">Custom Range</option>
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-2.5 text-slate-400 pointer-events-none"
-              />
-            </div>
+            <Select
+              value={dayPreset}
+              onChange={(e) => handleDayPresetChange(e.target.value)}
+              prefixIcon={<Calendar size={14} className="text-blue-600" />}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-44"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="30_days">Last 30 Days</option>
+              <option value="90_days">Last 90 Days</option>
+              <option value="custom">Custom Range</option>
+            </Select>
 
             {/* 3. Status Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full sm:w-auto pl-3.5 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer appearance-none transition-all"
-              >
-                <option value="all">All ({stageCounts.all})</option>
-                <option value="awaiting_price">Awaiting Price</option>
-                <option value="price_ready">Price Ready</option>
+            <Select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              wrapperClassName="w-full sm:w-auto inline-flex"
+              className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
+              menuClassName="w-56"
+            >
+              <option value="all">All ({stageCounts.all})</option>
+              <option value="awaiting_price">Awaiting Price</option>
+              <option value="price_ready">Price Ready</option>
               <option value="unavailable">Unavailable</option>
-                <option value="new_inquiry">
-                  New Inquiry ({stageCounts.new_inquiry})
-                </option>
-                <option value="quoted">
-                  Price Quote ({stageCounts.quoted})
-                </option>
-                <option value="negotiation">
-                  Negotiation ({stageCounts.negotiation})
-                </option>
-                <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
-                <option value="won">Won ({stageCounts.won})</option>
-                <option value="lost">Lost ({stageCounts.lost})</option>
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-2.5 text-slate-400 pointer-events-none"
-              />
-            </div>
+              <option value="new_inquiry">
+                New Inquiry ({stageCounts.new_inquiry})
+              </option>
+              <option value="quoted">
+                Price Quote ({stageCounts.quoted})
+              </option>
+              <option value="negotiation">
+                Negotiation ({stageCounts.negotiation})
+              </option>
+              <option value="on_hold">On Hold ({stageCounts.on_hold})</option>
+              <option value="won">Won ({stageCounts.won})</option>
+              <option value="lost">Lost ({stageCounts.lost})</option>
+            </Select>
 
             {/* 4. Clear Filter Button */}
             {(searchTerm || filterStatus !== "all" || dayPreset !== "all") && (
@@ -5129,11 +5169,11 @@ export default function InquiriesPage() {
       {viewMode === "pipeline" ? (
         /* Kanban Board View */
         <div className="flex-1 min-h-0 overflow-auto pb-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-[1250px] xl:min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 min-w-[1360px] 2xl:min-w-0">
             {DEFAULT_PIPELINE_STAGES.map(({ key, label, color }) => (
               <div
                 key={key}
-                className={`rounded-xl border-2 ${color} p-3 flex flex-col min-w-[190px]`}
+                className={`rounded-xl border-2 ${color} p-3 flex flex-col min-w-[210px]`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-700 text-sm">
@@ -5154,7 +5194,11 @@ export default function InquiriesPage() {
                       onStageChange={(id, stage, cardDeal) =>
                         handlePipelineStageChange(id, stage, cardDeal || deal)
                       }
-                      onDelete={(d) => setConfirmDeleteDeal(d)}
+                      onDelete={(d) => {
+                        if (!guardAction('inquiries.delete')) return;
+                        setConfirmDeleteDeal(d);
+                      }}
+                      canDelete={can('inquiries.delete')}
                     />
                   ))}
                   {(!pipelineBoard[key] || pipelineBoard[key].length === 0) && (
@@ -5698,6 +5742,22 @@ export default function InquiriesPage() {
                       : "View Original Inquiry"}
                   </span>
                 </button>
+
+                {can('inquiries.delete') && (
+                  <button
+                    type="button"
+                    disabled={deleteInquiryMutation.isPending}
+                    onClick={() => {
+                      if (!guardAction('inquiries.delete')) return;
+                      setConfirmDeleteInquiry(selectedInquiry);
+                    }}
+                    className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 disabled:opacity-60 text-rose-700 hover:text-rose-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border border-rose-200 shadow-2xs cursor-pointer"
+                    title="Delete Inquiry"
+                  >
+                    <Trash2 size={14} className="text-rose-600" />
+                    <span>Delete</span>
+                  </button>
+                )}
 
                 <button
                   onClick={handleCloseDrawer}
@@ -7741,6 +7801,7 @@ export default function InquiriesPage() {
                   setQuotationCc(finalCc);
                   setQuotationCcDraft("");
                   try {
+                    if (!guardAction('inquiries.send_quote')) return;
                     setSendingQuotation(true);
                     setResendNotice("");
                     const pricedItems = (shareDetails.lineItems || []).filter(
@@ -8748,30 +8809,54 @@ export default function InquiriesPage() {
                     Payment Terms{" "}
                     <span className="text-red-500 font-bold">*</span>
                   </label>
-                  <input
+                  <Select
                     id="form-payment-terms"
-                    type="text"
                     required
-                    placeholder="e.g. 30 Days Credit, 100% Advance"
                     value={formPaymentTerms}
                     onChange={(e) => setFormPaymentTerms(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                    placeholder="Select payment terms"
+                  >
+                    <option value="">Select payment terms</option>
+                    {INQUIRY_PAYMENT_TERMS.map((term) => (
+                      <option key={term} value={term}>
+                        {term}
+                      </option>
+                    ))}
+                    {formPaymentTerms &&
+                      !INQUIRY_PAYMENT_TERMS.includes(formPaymentTerms) && (
+                        <option value={formPaymentTerms}>
+                          {formPaymentTerms}
+                        </option>
+                      )}
+                  </Select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Preferred Make
+                    Preferred Brand / Make
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. JSW, AM/NS, Tata, SAIL, or Any"
+                  <Select
                     value={formPreferredMake}
                     onChange={(e) => setFormPreferredMake(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
+                    placeholder="Select preferred make"
+                  >
+                    <option value="">Select preferred make</option>
+                    {INQUIRY_PREFERRED_MAKES.map((make) => (
+                      <option key={make} value={make}>
+                        {make}
+                      </option>
+                    ))}
+                    {formPreferredMake &&
+                      !INQUIRY_PREFERRED_MAKES.includes(formPreferredMake) && (
+                        <option value={formPreferredMake}>
+                          {formPreferredMake}
+                        </option>
+                      )}
+                  </Select>
                 </div>
 
                 <div>
@@ -8931,6 +9016,94 @@ export default function InquiriesPage() {
         </div>
       )}
 
+      {/* Inquiry & Audit Permanent Delete Confirmation Modal */}
+      {confirmDeleteInquiry && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in"
+        >
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Delete Inquiry Permanently?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1.5 mb-5">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Inquiry Ref:</span>
+                <span className="font-mono font-bold text-indigo-600">
+                  #{confirmDeleteInquiry.id
+                    ? `INQ-${confirmDeleteInquiry.id.substring(0, 6).toUpperCase()}`
+                    : "N/A"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Customer / Company:</span>
+                <span className="font-bold text-slate-900 truncate max-w-[200px]">
+                  {(confirmDeleteInquiry as any).company_name ||
+                    confirmDeleteInquiry.customer_name ||
+                    confirmDeleteInquiry.sender_name ||
+                    confirmDeleteInquiry.sender_phone ||
+                    "N/A"}
+                </span>
+              </div>
+              {confirmDeleteInquiry.status && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Status:</span>
+                  <span className="capitalize font-semibold text-slate-700">
+                    {confirmDeleteInquiry.status}
+                  </span>
+                </div>
+              )}
+              <p className="text-[11px] text-red-600 pt-2 border-t border-slate-200">
+                All line items, pricing, linked deals, orders, and audit history tied to this inquiry will be permanently deleted from the database.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                disabled={deleteInquiryMutation.isPending}
+                onClick={() => setConfirmDeleteInquiry(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteInquiryMutation.isPending}
+                onClick={() => {
+                  if (!guardAction('inquiries.delete')) return;
+                  deleteInquiryMutation.mutate(confirmDeleteInquiry.id);
+                }}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {deleteInquiryMutation.isPending ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Yes, Delete Inquiry</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pipeline Permanent Delete Deal Confirmation Modal */}
       {confirmDeleteDeal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
@@ -9001,7 +9174,10 @@ export default function InquiriesPage() {
               <button
                 type="button"
                 disabled={deleteDealMutation.isPending}
-                onClick={() => deleteDealMutation.mutate(confirmDeleteDeal.id)}
+                onClick={() => {
+                  if (!guardAction('inquiries.delete')) return;
+                  deleteDealMutation.mutate(confirmDeleteDeal.id);
+                }}
                 className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
                 {deleteDealMutation.isPending

@@ -47,6 +47,24 @@ Current regression tests:
 | Backend | `issue-238-customer-visit-form.test.ts` | New visits require a verified phone, GPS photo, and listed brand and payment terms; Meta 131047 returns the 24-hour message, and other codes return the code in the 400 |
 | Frontend | `issue-238-customer-visit-form.test.tsx` | Missing visit fields, locked GPS address, typed city when the address is missing, brand dropdown, camera overlay, and the assistant attach menu |
 | Bot | `issue-238-visit-required-fields.test.js` | A new bot visit is not inserted until the new fields, GPS photo, and correct code are present |
+| Frontend | `customer-type-other.test.tsx` | Customer type includes Other, and Other without a typed type is rejected |
+| Frontend | `visit-select-placeholders.test.tsx` | Customer Type and Payment Terms prompts are shown when empty and cannot be selected |
+| Frontend | `visit-future-dates.test.tsx` | A new visit rejects a past next purchase date and follow-up date, and the date pickers start at today |
+| Frontend | `visit-media-preview.test.tsx` | A new visit shows a preview of the captured photo and of each added image or PDF before save |
+| Frontend | `issue-visit-logging-wizard.test.tsx` | The new-visit dialog opens on company and contact, hides later fields, and stays there when Next is pressed with an empty company |
+| Frontend | `visit-list-address.test.tsx` | The visits list shows the full autofetched address instead of only the area and city |
+| Backend | `visit-future-dates.test.ts` | A new visit rejects a past next purchase date and follow-up date, and accepts today |
+| Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |
+| Frontend | `assistant-input-scroll.test.tsx` | A long assistant prompt stays in a scrolling textarea, Enter sends, and Shift+Enter adds a line |
+| Frontend | `assistant-visit-gps.test.tsx` | Opening Log Visit in the assistant starts the device location watch, and an ordinary reply does not |
+| Frontend | `assistant-upload-pdf.test.tsx` | Upload from device accepts a PDF and refuses an image |
+| Bot | `visit-chat-location-photo.test.js` | A WhatsApp visit accepts only a location pin, the assistant stores the full auto-fetched address instead of a shortened city, and only a camera photo after the pin is the visit photo |
+| Bot | `visit-location-edit-lock.test.js` | A new visit's confirmation and edit steps cannot change the captured location, and a delivery location edit still goes through |
+| Bot | `visit-future-dates.test.js` | A past next purchase or follow-up stays in the prompt list until the day is today |
+| Bot | `visit-relative-dates.test.js` | Tomorrow and after a month become calendar days and leave the visit prompt list |
+| Backend, Bot | `visit-otp-test-mode.test.ts`, `visit-otp-test-mode.test.js` | A visit test flag returns the code without WhatsApp, and the WhatsApp configuration error remains when the flag is off |
+| Backend | `customer-type-other.test.ts` | Other without a typed type is rejected, and Other with text is stored on the visit row |
+| Bot | `customer-type-other.test.js` | The customer-type prompt includes Other, and the visit row keeps the typed type |
 | Frontend | `invalid-gstin-customer-edit.test.tsx` | Profile edit modal does not set state from a partial or invalid GSTIN, shows an error, blocks save, and still fills state from a valid GSTIN |
 | Frontend | `remove-uploaded-document.test.tsx` | Remove on Record New Order and Log New Inquiry clears the file and extracted fields; the order system PO stays reserved; a replacement document does not keep the previous extraction |
 | Frontend | `ProcurementPage.test.tsx`, `Layout.procurement.test.tsx`, `procurementPricing.test.ts`, `procurement-workflow.test.ts` | Procurement anonymity, base-price status, pricing formula, role-restricted navigation, and saved sales rates |

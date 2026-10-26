@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { customersApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { INDIAN_GST_STATES, resolveCustomerState } from '../utils/pricingEngine';
 import { Select } from './ui/select';
 
@@ -53,6 +54,7 @@ export default function AddAssignedCustomerDialog({
   onClose,
   onSaved,
 }: AddAssignedCustomerDialogProps) {
+  const { guardAction } = useAuth();
   const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [mobile, setMobile] = useState('');
@@ -101,6 +103,7 @@ export default function AddAssignedCustomerDialog({
   );
 
   const handleSave = async () => {
+    if (!guardAction('customers.create')) return;
     const name = companyName.trim();
     const contact = contactPerson.trim();
     const phone = mobile.replace(/\D/g, '').slice(-10);

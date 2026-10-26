@@ -1,34 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import {
   getAllRoles,
-  createNewRole,
-  updateExistingRole,
-  deleteRole,
-  resetRoleTemplate,
-  saveRoleTemplate,
   DEFAULT_ROLE_TEMPLATES,
+  setRolesCache,
+  isSystemRoleId,
   type RoleItem,
 } from '../utils/aclConstants';
 import { ZohoPermissionsTable } from './ZohoPermissionsTable';
 import { RoleSelectDropdown } from './RoleSelectDropdown';
-import { employeesApi } from '../lib/api';
+import { Select } from './ui/select';
+import { employeesApi, rolesApi } from '../lib/api';
 import {
   X,
   Shield,
   Users,
   Plus,
-  RotateCcw,
   Save,
   Check,
+  AlertCircle,
   Search,
   Trash2,
   Phone,
   KeyRound,
   UserPlus,
-  ChevronDown,
   Edit2,
   Loader2,
   Mail,
+  Lock,
 } from 'lucide-react';
 
 interface EmployeeItem {
@@ -47,11 +45,12 @@ interface RolePermissionsMatrixModalProps {
   onClose: () => void;
   employees?: EmployeeItem[];
   onEmployeeRoleUpdated?: (empId: string, newRole: string) => void;
+  asPage?: boolean;
 }
 
 export const RolePermissionsMatrixModal: React.FC<
   RolePermissionsMatrixModalProps
-> = ({ isOpen, onClose, employees: propEmployees, onEmployeeRoleUpdated }) => {
+> = ({ isOpen, onClose, employees: propEmployees, onEmployeeRoleUpdated, asPage = false }) => {
   // Top 2 Main Tabs: 'roles' vs 'users'
   const [mainTab, setMainTab] = useState<'roles' | 'users'>('roles');
 
@@ -65,7 +64,9 @@ export const RolePermissionsMatrixModal: React.FC<
   const [activePermissions, setActivePermissions] = useState<
     Record<string, boolean>
   >({});
-  const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [dataScope, setDataScope] = useState<'own' | 'team' | 'all'>('own');
+  const [localImportCount, setLocalImportCount] = useState(0);
+  const [feedback, setFeedback] = useState<{ msg: string; isError?: boolean } | null>(null);
 
   // Users Tab State
   const [userList, setUserList] = useState<EmployeeItem[]>(propEmployees || []);
@@ -94,15 +95,37 @@ export const RolePermissionsMatrixModal: React.FC<
 
   // Load roles & employees on open
   useEffect(() => {
-    if (isOpen) {
-      const all = getAllRoles();
-      setRoles(all);
+    if (isOpen || asPage) {
+      rolesApi
+        .list()
+        .then((res) => {
+          const items: RoleItem[] = (Array.isArray(res.data) ? res.data : [])
+            .filter((row: any) => row.is_active !== false)
+            .map((row: any) => ({
+              id: row.id,
+              name: row.name,
+              description: row.description || '',
+              isSystem: Boolean(row.is_system ?? row.isSystem),
+              data_scope: row.data_scope || 'own',
+              permissions: row.permissions || {},
+            }));
+          if (items.length) {
+            setRolesCache(items);
+            setRoles(items);
+          } else {
+            setRoles(getAllRoles());
+          }
+          const saved = localStorage.getItem('enlight_custom_roles_list');
+          const local = saved ? JSON.parse(saved) : [];
+          const known = new Set(items.map((role) => role.id));
+          setLocalImportCount(
+            Array.isArray(local)
+              ? local.filter((role: any) => role?.id && !known.has(role.id) && !role.isSystem).length
+              : 0,
+          );
+        })
+        .catch(() => setRoles(getAllRoles()));
 
-      if (!selectedRoleId || !all.find((r) => r.id === selectedRoleId)) {
-        setSelectedRoleId(all[0]?.id || 'salesperson');
-      }
-
-      // If employees not passed, fetch
       if (!propEmployees || propEmployees.length === 0) {
         employeesApi
           .getAll()
@@ -116,7 +139,7 @@ export const RolePermissionsMatrixModal: React.FC<
         setUserList(propEmployees);
       }
     }
-  }, [isOpen, propEmployees, selectedRoleId]);
+  }, [isOpen, asPage, propEmployees]);
 
   // Sync active permissions when selected role changes
   useEffect(() => {
@@ -129,60 +152,148 @@ export const RolePermissionsMatrixModal: React.FC<
       const current = roles.find((r) => r.id === selectedRoleId);
       if (current) {
         setActivePermissions({ ...current.permissions });
+        setDataScope(current.data_scope || (current.id === 'admin' ? 'all' : current.id === 'sales_manager' ? 'team' : 'own'));
       }
     }
-    setFeedbackMsg('');
   }, [selectedRoleId, isCreatingRole, cloneFromRoleId, roles]);
 
-  if (!isOpen) return null;
+  if (!isOpen && !asPage) return null;
 
-  const showToast = (msg: string) => {
-    setFeedbackMsg(msg);
-    setTimeout(() => setFeedbackMsg(''), 2500);
+  const showToast = (msg: string, isError: boolean = false) => {
+    setFeedback({ msg, isError });
+    setTimeout(() => setFeedback(null), 3000);
   };
 
   // Roles Tab Actions
-  const handleSaveCurrentRolePermissions = () => {
+  const handleSaveCurrentRolePermissions = async () => {
     if (isCreatingRole) {
       if (!newRoleName.trim()) {
-        showToast('Please enter a role name');
+        showToast('Please enter a role name', true);
         return;
       }
-      const created = createNewRole(
-        newRoleName.trim(),
-        newRoleDesc.trim(),
-        activePermissions,
+      const nameTaken = roles.some(
+        (role) =>
+          role.name.trim().toLowerCase() === newRoleName.trim().toLowerCase(),
       );
-      setRoles(getAllRoles());
-      setSelectedRoleId(created.id);
-      setIsCreatingRole(false);
-      setNewRoleName('');
-      setNewRoleDesc('');
-      showToast(`Role "${created.name}" created successfully!`);
+      if (nameTaken) {
+        showToast(`A role named "${newRoleName.trim()}" already exists.`, true);
+        return;
+      }
+      try {
+        const res = await rolesApi.create({
+          name: newRoleName.trim(),
+          description: newRoleDesc.trim(),
+          data_scope: dataScope,
+          permissions: activePermissions,
+        });
+        const created = res.data;
+        if (!created?.id || !created?.name) {
+          showToast('Could not create role', true);
+          return;
+        }
+        const next = [
+          ...roles,
+          {
+            id: created.id,
+            name: created.name,
+            description: created.description || '',
+            isSystem: false,
+            data_scope: created.data_scope,
+            permissions: created.permissions,
+          },
+        ];
+        setRolesCache(next);
+        setRoles(next);
+        setSelectedRoleId(created.id);
+        setIsCreatingRole(false);
+        setNewRoleName('');
+        setNewRoleDesc('');
+        showToast(`Role "${created.name}" created successfully!`);
+      } catch (err: any) {
+        showToast(
+          err?.response?.data?.error ||
+            err?.response?.data?.message ||
+            'Could not create role',
+          true,
+        );
+      }
     } else {
-      updateExistingRole(selectedRoleId, { permissions: activePermissions });
-      saveRoleTemplate(selectedRoleId, activePermissions);
-      setRoles(getAllRoles());
-      showToast('Permissions saved successfully!');
+      if (isSystemRoleId(selectedRoleId) || roles.find((r) => r.id === selectedRoleId)?.isSystem) {
+        showToast('Default system roles are fixed and non-editable. Create a new custom role to customize permissions.', true);
+        return;
+      }
+      try {
+        await rolesApi.update(selectedRoleId, {
+          permissions: activePermissions,
+          data_scope: dataScope,
+        });
+        const next = roles.map((role) =>
+          role.id === selectedRoleId
+            ? { ...role, permissions: activePermissions, data_scope: dataScope }
+            : role,
+        );
+        setRolesCache(next);
+        setRoles(next);
+        showToast('Permissions saved successfully!');
+      } catch (err: any) {
+        showToast(err?.response?.data?.message || 'Could not save permissions', true);
+      }
     }
   };
 
-  const handleResetCurrentRoleToStandard = () => {
-    const factory = resetRoleTemplate(selectedRoleId);
-    setActivePermissions({ ...factory });
-    updateExistingRole(selectedRoleId, { permissions: factory });
-    setRoles(getAllRoles());
-    showToast('Role permissions reset to default template.');
-  };
-
-  const handleDeleteRole = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this custom role?')) {
-      deleteRole(id);
-      const remaining = getAllRoles();
+  const handleDeleteRole = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this custom role?')) return;
+    try {
+      const count = await rolesApi.assignees(id);
+      if ((count.data?.count || 0) > 0) {
+        showToast(`This role is still assigned to ${count.data.count} people.`, true);
+        return;
+      }
+      await rolesApi.remove(id);
+      const remaining = roles.filter((role) => role.id !== id);
+      setRolesCache(remaining);
       setRoles(remaining);
       setSelectedRoleId(remaining[0]?.id || 'salesperson');
       showToast('Role deleted.');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Could not delete role', true);
     }
+  };
+
+  const handleImportLocalRoles = async () => {
+    const saved = localStorage.getItem('enlight_custom_roles_list');
+    const local = saved ? JSON.parse(saved) : [];
+    const known = new Set(roles.map((role) => role.id));
+    let imported = 0;
+    for (const role of Array.isArray(local) ? local : []) {
+      if (!role?.id || role.isSystem || known.has(role.id)) continue;
+      try {
+        await rolesApi.create({
+          name: role.name,
+          description: role.description,
+          data_scope: 'own',
+          permissions: role.permissions || {},
+        });
+        imported += 1;
+      } catch {
+        /* skip a role the server rejected */
+      }
+    }
+    localStorage.removeItem('enlight_custom_roles_list');
+    localStorage.removeItem('enlight_role_template_salesperson');
+    setLocalImportCount(0);
+    const res = await rolesApi.list();
+    const items = (res.data || []).map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      isSystem: Boolean(row.is_system),
+      data_scope: row.data_scope,
+      permissions: row.permissions || {},
+    }));
+    setRolesCache(items);
+    setRoles(items);
+    showToast(`Imported ${imported} roles from this browser.`);
   };
 
   // Open "Invite User" Modal (Matching img2)
@@ -207,7 +318,7 @@ export const RolePermissionsMatrixModal: React.FC<
       name: user.name || '',
       email: user.email || '',
       phone: user.phone || '91',
-      role: user.role || 'salesperson',
+      role: user.role === 'manager' ? 'sales_manager' : user.role || 'salesperson',
       manager_id: user.manager_id || '',
       manager_phone: user.manager_phone || '',
     });
@@ -318,6 +429,9 @@ export const RolePermissionsMatrixModal: React.FC<
   });
 
   const selectedRoleObj = roles.find((r) => r.id === selectedRoleId);
+  const isCurrentRoleSystem =
+    !isCreatingRole &&
+    (Boolean(selectedRoleObj?.isSystem) || isSystemRoleId(selectedRoleId));
 
   const salesManagers = userList.filter(
     (u) => u.role === 'sales_manager' || u.role === 'manager',
@@ -326,9 +440,28 @@ export const RolePermissionsMatrixModal: React.FC<
     (u) => u.role === 'procurement_manager',
   );
 
+  const availableSalesManagers = salesManagers.filter(
+    (m) =>
+      !editingUser ||
+      (m.id !== editingUser.id &&
+        m.employee_id !== editingUser.employee_id &&
+        m.phone?.replace(/\D/g, '').slice(-10) !==
+          editingUser.phone?.replace(/\D/g, '').slice(-10)),
+  );
+  const availableProcurementManagers = procurementManagers.filter(
+    (m) =>
+      !editingUser ||
+      (m.id !== editingUser.id &&
+        m.employee_id !== editingUser.employee_id &&
+        m.phone?.replace(/\D/g, '').slice(-10) !==
+          editingUser.phone?.replace(/\D/g, '').slice(-10)),
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+    <div className={asPage ? 'w-full min-w-0' : 'fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150'}>
+      <div className={asPage
+        ? 'bg-white rounded-2xl border border-slate-200 shadow-xs w-full min-w-0 flex flex-col'
+        : 'bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150'}>
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-3">
@@ -337,8 +470,8 @@ export const RolePermissionsMatrixModal: React.FC<
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900">
-                  Access Control List (ACL) &amp; Role Management
+                <h3 className={`${asPage ? 'text-2xl tracking-tight' : 'text-base'} font-bold text-slate-900`}>
+                  Roles and Permissions
                 </h3>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -346,12 +479,14 @@ export const RolePermissionsMatrixModal: React.FC<
               </p>
             </div>
           </div>
+          {!asPage && (
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
+          )}
         </div>
 
         {/* Primary Navigation Tabs */}
@@ -391,10 +526,16 @@ export const RolePermissionsMatrixModal: React.FC<
             </button>
           </div>
 
-          {feedbackMsg && (
-            <div className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg flex items-center gap-1.5 animate-in fade-in">
-              <Check size={13} />
-              <span>{feedbackMsg}</span>
+          {feedback && (
+            <div
+              className={`text-xs font-bold px-3 py-1 rounded-lg flex items-center gap-1.5 animate-in fade-in ${
+                feedback.isError
+                  ? 'text-rose-700 bg-rose-50 border border-rose-200'
+                  : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+              }`}
+            >
+              {feedback.isError ? <AlertCircle size={13} /> : <Check size={13} />}
+              <span>{feedback.msg}</span>
             </div>
           )}
         </div>
@@ -421,7 +562,34 @@ export const RolePermissionsMatrixModal: React.FC<
                       }}
                     />
                   </div>
+                  
                 </div>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  Data scope
+                  <Select
+                    value={dataScope}
+                    disabled={isCurrentRoleSystem}
+                    onChange={(event) =>
+                      setDataScope(event.target.value as 'own' | 'team' | 'all')
+                    }
+                    wrapperClassName="inline-flex"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-medium gap-1.5"
+                    menuClassName="w-36"
+                  >
+                    <option value="own">Own records</option>
+                    <option value="team">Team</option>
+                    <option value="all">All company</option>
+                  </Select>
+                </label>
+                {localImportCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleImportLocalRoles}
+                    className="text-xs font-semibold text-indigo-700 underline"
+                  >
+                    Import {localImportCount} roles saved in this browser
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -445,15 +613,14 @@ export const RolePermissionsMatrixModal: React.FC<
               <div className="flex items-center gap-2">
                 {!isCreatingRole && selectedRoleObj && (
                   <>
-                    {selectedRoleObj.isSystem ? (
-                      <button
-                        onClick={handleResetCurrentRoleToStandard}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                        title="Reset to factory default permissions"
+                    {isCurrentRoleSystem ? (
+                      <div
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-xl text-xs font-bold border border-slate-200 cursor-not-allowed select-none"
+                        title="Default system roles are fixed and non-editable"
                       >
-                        <RotateCcw size={12} />
-                        <span>Reset Defaults</span>
-                      </button>
+                        <Lock size={12} className="text-slate-400" />
+                        <span>Fixed (Non-editable)</span>
+                      </div>
                     ) : (
                       <button
                         onClick={() => handleDeleteRole(selectedRoleObj.id)}
@@ -500,26 +667,30 @@ export const RolePermissionsMatrixModal: React.FC<
                   <label className="block text-xs font-bold text-indigo-950 uppercase mb-1">
                     Clone Baseline From
                   </label>
-                  <select
+                  <Select
                     value={cloneFromRoleId}
                     onChange={(e) => setCloneFromRoleId(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer font-medium"
+                    menuClassName="w-full"
                   >
                     {roles.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
             )}
 
             {/* Permissions Table */}
-            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+            <div className={`p-4 sm:p-6 space-y-4 overflow-x-auto ${asPage ? '' : 'overflow-y-auto flex-1'}`}>
+              
+
               <ZohoPermissionsTable
                 permissions={activePermissions}
                 onChange={setActivePermissions}
+                readOnly={isCurrentRoleSystem}
               />
             </div>
           </div>
@@ -696,15 +867,25 @@ export const RolePermissionsMatrixModal: React.FC<
           </p>
           <div className="flex items-center gap-2.5">
             {mainTab === 'roles' && (
-              <button
-                onClick={handleSaveCurrentRolePermissions}
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-blue-500/20 active:scale-95 flex items-center gap-1.5"
-              >
-                <Save size={14} />
-                <span>
-                  {isCreatingRole ? 'Create & Save Role' : 'Save Template'}
-                </span>
-              </button>
+              isCurrentRoleSystem ? (
+                <div
+                  className="px-4 py-2 bg-slate-100 text-slate-400 font-bold rounded-xl text-xs border border-slate-200 flex items-center gap-1.5 cursor-not-allowed select-none"
+                  title="Default system roles cannot be modified"
+                >
+                  <Lock size={13} />
+                  <span>Fixed System Role</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleSaveCurrentRolePermissions}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-blue-500/20 active:scale-95 flex items-center gap-1.5"
+                >
+                  <Save size={14} />
+                  <span>
+                    {isCreatingRole ? 'Create & Save Role' : 'Save Template'}
+                  </span>
+                </button>
+              )
             )}
             <button
               onClick={onClose}
@@ -719,9 +900,9 @@ export const RolePermissionsMatrixModal: React.FC<
       {/* Zoho Books "Invite User" / "Assign Role" Modal (EXACTLY matching img2) */}
       {showInviteModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg animate-in zoom-in-95 duration-150">
             {/* Card Header matching img2 */}
-            <div className="px-6 py-4.5 border-b border-slate-200 flex items-center justify-between">
+            <div className="px-6 py-4.5 border-b border-slate-200 flex items-center justify-between rounded-t-2xl">
               <h3 className="text-xl font-bold text-slate-900">
                 {editingUser ? 'Edit User & Role' : 'Invite User'}
               </h3>
@@ -744,8 +925,8 @@ export const RolePermissionsMatrixModal: React.FC<
 
               {/* Name* */}
               <div>
-                <label className="block text-sm font-medium text-red-500 mb-1.5">
-                  Name*
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -761,8 +942,8 @@ export const RolePermissionsMatrixModal: React.FC<
 
               {/* Email Address* */}
               <div>
-                <label className="block text-sm font-medium text-red-500 mb-1.5">
-                  Email Address*
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Email Address <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -777,8 +958,8 @@ export const RolePermissionsMatrixModal: React.FC<
 
               {/* WhatsApp Number* (Required for Enlight Sigma WhatsApp OTP) */}
               <div>
-                <label className="block text-sm font-medium text-red-500 mb-1.5">
-                  WhatsApp Number*
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  WhatsApp Number <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -800,28 +981,28 @@ export const RolePermissionsMatrixModal: React.FC<
 
               {/* Role* matching img2 */}
               <div>
-                <label className="block text-sm font-medium text-red-500 mb-1.5">
-                  Role*
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Role <span className="text-rose-500">*</span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={inviteForm.role}
-                    onChange={(e) =>
-                      setInviteForm((prev) => ({ ...prev, role: e.target.value }))
-                    }
-                    className="w-full appearance-none px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer pr-10"
-                  >
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={18}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                </div>
+                <Select
+                  value={inviteForm.role}
+                  onChange={(e) =>
+                    setInviteForm((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                      manager_id: e.target.value === prev.role ? prev.manager_id : '',
+                      manager_phone: e.target.value === prev.role ? prev.manager_phone : '',
+                    }))
+                  }
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer font-medium"
+                  menuClassName="w-full"
+                >
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </Select>
               </div>
 
               {/* Notice for Procurement Manager role */}
@@ -845,37 +1026,32 @@ export const RolePermissionsMatrixModal: React.FC<
               )}
 
               {/* Assigned Sales Manager (for salesperson) */}
-              {inviteForm.role === 'salesperson' && salesManagers.length > 0 && (
+              {inviteForm.role === 'salesperson' && availableSalesManagers.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Assigned Sales Manager{' '}
                     <span className="text-slate-400 text-xs font-normal">(optional)</span>
                   </label>
-                  <div className="relative">
-                    <select
-                      value={inviteForm.manager_id || ''}
-                      onChange={(e) => {
-                        const mgr = salesManagers.find((m) => m.id === e.target.value);
-                        setInviteForm((prev) => ({
-                          ...prev,
-                          manager_id: e.target.value,
-                          manager_phone: mgr?.phone || '',
-                        }));
-                      }}
-                      className="w-full appearance-none px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer pr-10"
-                    >
-                      <option value="">-- None (Direct to Admin) --</option>
-                      {salesManagers.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.employee_id})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={18}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                    />
-                  </div>
+                  <Select
+                    value={inviteForm.manager_id || ''}
+                    onChange={(e) => {
+                      const mgr = availableSalesManagers.find((m) => m.id === e.target.value);
+                      setInviteForm((prev) => ({
+                        ...prev,
+                        manager_id: e.target.value,
+                        manager_phone: mgr?.phone || '',
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer font-medium"
+                    menuClassName="w-full"
+                  >
+                    <option value="">-- None (Direct to Admin) --</option>
+                    {availableSalesManagers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.employee_id})
+                      </option>
+                    ))}
+                  </Select>
                 </div>
               )}
 
@@ -886,31 +1062,26 @@ export const RolePermissionsMatrixModal: React.FC<
                     Assigned Procurement Manager{' '}
                     <span className="text-slate-400 text-xs font-normal">(optional)</span>
                   </label>
-                  <div className="relative">
-                    <select
-                      value={inviteForm.manager_id || ''}
-                      onChange={(e) => {
-                        const mgr = procurementManagers.find((m) => m.id === e.target.value);
-                        setInviteForm((prev) => ({
-                          ...prev,
-                          manager_id: e.target.value,
-                          manager_phone: mgr?.phone || '',
-                        }));
-                      }}
-                      className="w-full appearance-none px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer pr-10"
-                    >
-                      <option value="">-- None (Direct to Admin) --</option>
-                      {procurementManagers.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.employee_id})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={18}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                    />
-                  </div>
+                  <Select
+                    value={inviteForm.manager_id || ''}
+                    onChange={(e) => {
+                      const mgr = availableProcurementManagers.find((m) => m.id === e.target.value);
+                      setInviteForm((prev) => ({
+                        ...prev,
+                        manager_id: e.target.value,
+                        manager_phone: mgr?.phone || '',
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer font-medium"
+                    menuClassName="w-full"
+                  >
+                    <option value="">-- None (Direct to Admin) --</option>
+                    {availableProcurementManagers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.employee_id})
+                      </option>
+                    ))}
+                  </Select>
                   <p className="text-slate-400 text-[11px] mt-1 font-sans">
                     Procurement Manager who oversees this person&apos;s inquiries and provides team base rates.
                   </p>

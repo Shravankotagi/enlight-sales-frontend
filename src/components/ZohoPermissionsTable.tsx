@@ -1,6 +1,36 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ZOHO_ACL_SECTIONS } from '../utils/aclConstants';
 import { Check, Minus } from 'lucide-react';
+
+function TruncatedLabel({ text }: { text: string }) {
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
+
+  return (
+    <span
+      className="text-[11px] text-slate-600 truncate max-w-[140px]"
+      onMouseEnter={(event) => {
+        const el = event.currentTarget;
+        if (el.scrollWidth <= el.clientWidth) return;
+        const box = el.getBoundingClientRect();
+        setTip({ x: box.left + box.width / 2, y: box.top });
+      }}
+      onMouseLeave={() => setTip(null)}
+    >
+      {text}
+      {tip &&
+        createPortal(
+          <span
+            className="fixed z-[80] max-w-xs -translate-x-1/2 -translate-y-full whitespace-normal rounded-md bg-slate-900 px-2 py-1 text-left text-[11px] font-normal leading-snug text-white shadow-lg pointer-events-none"
+            style={{ left: tip.x, top: tip.y - 6 }}
+          >
+            {text}
+          </span>,
+          document.body,
+        )}
+    </span>
+  );
+}
 
 interface ZohoPermissionsTableProps {
   permissions: Record<string, boolean>;
@@ -211,9 +241,7 @@ export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
                                 false,
                                 () => toggleKey(row.otherAction!.key),
                               )}
-                              <span className="text-[11px] text-slate-600 truncate max-w-[140px]" title={row.otherAction.label}>
-                                {row.otherAction.label}
-                              </span>
+                              <TruncatedLabel text={row.otherAction.label} />
                             </div>
                           ) : (
                             <span className="text-slate-300 text-xs">—</span>

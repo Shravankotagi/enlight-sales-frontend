@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Users,
-  LogOut,
   Loader2,
   UserPlus,
   X,
   ShieldAlert,
-  Shield,
   FileSpreadsheet,
   LayoutDashboard,
   UserCheck,
@@ -19,7 +17,6 @@ import {
   ArrowRight,
   Phone,
   Mail,
-  Calendar,
   CheckCircle2,
   TrendingUp,
   Building2,
@@ -33,9 +30,8 @@ import {
 } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
 import { EmployeeAclSection } from '../components/EmployeeAclSection';
-import { RolePermissionsMatrixModal } from '../components/RolePermissionsMatrixModal';
 import { RoleSelectDropdown } from '../components/RoleSelectDropdown';
-import { getRoleTemplate, countOverrides } from '../utils/aclConstants';
+import { getRoleTemplate, countOverrides, getCachedRoles } from '../utils/aclConstants';
 import { employeesApi } from '../lib/api';
 
 interface Employee {
@@ -75,7 +71,6 @@ export default function AdminSelectionPage() {
   const {
     token,
     employee,
-    logout,
     setViewingAs,
     clearViewingAs,
     isSalesManager,
@@ -92,7 +87,6 @@ export default function AdminSelectionPage() {
 
   // Add / Edit Modal state
   const [showModal, setShowModal] = useState(false);
-  const [showRolesMatrixModal, setShowRolesMatrixModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
@@ -115,6 +109,7 @@ export default function AdminSelectionPage() {
     assigned_salesperson_ids: [],
     permissions: getRoleTemplate('salesperson'),
   });
+  const [aclTouched, setAclTouched] = useState(false);
 
   const fetchEmployees = () => {
     setLoading(true);
@@ -202,6 +197,7 @@ export default function AdminSelectionPage() {
       assigned_salesperson_ids: [],
       permissions: getRoleTemplate('salesperson'),
     });
+    setAclTouched(false);
     setShowModal(true);
   };
 
@@ -242,6 +238,7 @@ export default function AdminSelectionPage() {
         .map((person) => person.id),
       permissions: emp.permissions ? { ...emp.permissions } : getRoleTemplate(emp.role),
     });
+    setAclTouched(false);
     setShowModal(true);
   };
 
@@ -277,7 +274,7 @@ export default function AdminSelectionPage() {
         phone: form.phone.replace(/\D/g, ''),
         role: form.role,
         employee_id: form.employee_id.trim(),
-        permissions: form.permissions || getRoleTemplate(form.role),
+        permissions: aclTouched ? form.permissions ?? null : null,
       };
       if (form.email.trim()) {
         payload.email = form.email.trim();
@@ -463,17 +460,10 @@ export default function AdminSelectionPage() {
     navigate('/home');
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   const pageTitle = isSalesManager
     ? 'Sales Manager Portal'
-    : 'Admin Control Center';
-  const pageSubtitle = isSalesManager
-    ? `Manage and monitor your assigned sales team · ${employee?.name}`
-    : `Executive employee & admin account management · ${employee?.name}`;
+    : 'User Management';
 
   // Filter accounts based on search query and role filter
   const filteredEmployees = employees.filter((emp) => {
@@ -498,6 +488,24 @@ export default function AdminSelectionPage() {
     return true;
   });
 
+  const availableSalesManagers = allManagers.filter(
+    (mgr) =>
+      !form.id ||
+      (mgr.id !== form.id &&
+        mgr.employee_id !== form.employee_id &&
+        mgr.phone.replace(/\D/g, '').slice(-10) !==
+          form.phone.replace(/\D/g, '').slice(-10)),
+  );
+
+  const availableProcurementManagers = procurementManagers.filter(
+    (mgr) =>
+      !form.id ||
+      (mgr.id !== form.id &&
+        mgr.employee_id !== form.employee_id &&
+        mgr.phone.replace(/\D/g, '').slice(-10) !==
+          form.phone.replace(/\D/g, '').slice(-10)),
+  );
+
   const adminCount = employees.filter((e) => e.role === 'admin').length;
   const managerCount = employees.filter(
     (e) => e.role === 'sales_manager' || e.role === 'manager',
@@ -509,13 +517,6 @@ export default function AdminSelectionPage() {
     (e) =>
       e.role === 'procurement_person' || e.role === 'procurement_manager',
   ).length;
-
-  const todayStr = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
 
   return (
     <div className={isAdmin ? 'space-y-4 animate-fade-in font-sans text-slate-900 pb-8' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
@@ -536,17 +537,6 @@ export default function AdminSelectionPage() {
                     <CheckCircle2 size={12} /> {isAdmin ? 'Super Admin System Authority' : 'Assigned Team Authority'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {pageSubtitle}
-                </p>
-                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-medium flex-wrap">
-                  <Calendar size={13} className="text-slate-400" />
-                  <span>{todayStr}</span>
-                  <span className="text-slate-300">·</span>
-                  <span>
-                    Signed in as <strong className="text-slate-700">{employee?.name}</strong> ({employee?.employee_id})
-                  </span>
-                </p>
               </div>
             </div>
 
@@ -582,33 +572,6 @@ export default function AdminSelectionPage() {
               {isAdmin && (
                 <>
                   <button
-                    onClick={handleViewPersonalDashboard}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-blue-500/20 active:scale-95 cursor-pointer"
-                    title="Switch to My Personal Salesperson Dashboard (Your Individual Accounts & Targets)"
-                  >
-                    <UserCheck size={15} />
-                    <span>My Salesperson Dashboard</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      clearViewingAs();
-                      navigate('/admin-dashboard');
-                    }}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="Open Company-wide Admin Overview Dashboard"
-                  >
-                    <ShieldAlert size={15} className="text-blue-600" />
-                    <span>Admin Overview</span>
-                  </button>
-                  <button
-                    onClick={() => setShowRolesMatrixModal(true)}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="View standard Roles & Permissions Matrix (Zoho Model)"
-                  >
-                    <Shield size={15} className="text-blue-600" />
-                    <span>Roles</span>
-                  </button>
-                  <button
                     onClick={() => setShowImportModal(true)}
                     className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
                     title="Import clients via CSV"
@@ -626,15 +589,6 @@ export default function AdminSelectionPage() {
                   </button>
                 </>
               )}
-
-              <button
-                onClick={handleLogout}
-                className="h-9 flex items-center gap-1.5 px-3 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-                title="Sign out"
-              >
-                <LogOut size={14} />
-                <span>Logout</span>
-              </button>
             </div>
           </div>
         </div>
@@ -729,68 +683,6 @@ export default function AdminSelectionPage() {
             </div>
           </div>
         </div>
-
-        {/* Executive Launch Banners (Personal Workspace vs Company Overview) */}
-        {isAdmin && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Banner 1: Personal Salesperson Workspace */}
-            <div
-              onClick={handleViewPersonalDashboard}
-              className="bg-white hover:bg-blue-50/30 border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
-                    <UserCheck size={14} /> Personal Workspace
-                  </span>
-                  <span className="text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    Open Workspace <ArrowRight size={13} />
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                  My Salesperson Dashboard
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Direct view into personal inquiries, won orders, personal deal pipeline, and individual customer accounts.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
-                <span className="text-slate-400">Scoped strictly to personal accounts</span>
-                <span className="font-bold text-blue-600">Launch My View →</span>
-              </div>
-            </div>
-
-            {/* Banner 2: Enterprise Admin Overview */}
-            <div
-              onClick={() => {
-                clearViewingAs();
-                navigate('/reports');
-              }}
-              className="bg-white hover:bg-indigo-50/30 border border-slate-200 hover:border-indigo-300 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
-                    <ShieldAlert size={14} /> Executive Intelligence
-                  </span>
-                  <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    Open Analytics <ArrowRight size={13} />
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                  Company-Wide Admin Overview
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Aggregated executive view covering all sales representatives, total delivered tonnage, review queues, and company-wide won orders.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
-                <span className="text-slate-400">Company-wide aggregated metrics</span>
-                <span className="font-bold text-indigo-600">Launch Analytics →</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Directory Management Console */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -1091,6 +983,7 @@ export default function AdminSelectionPage() {
                                   Procurement Person
                                 </>
                               ) : (
+                                getCachedRoles().find((r) => r.id === emp.role)?.name ||
                                 'Salesperson'
                               )}
                             </span>
@@ -1321,7 +1214,8 @@ export default function AdminSelectionPage() {
                                 ? 'Proc Mgr'
                                 : isProcPerson
                                   ? 'Proc Person'
-                                  : 'Sales Rep'}
+                                  : getCachedRoles().find((r) => r.id === emp.role)?.name ||
+                                    'Sales Rep'}
                         </span>
                         {emp.permissions &&
                           countOverrides(emp.role, emp.permissions) > 0 && (
@@ -1432,7 +1326,7 @@ export default function AdminSelectionPage() {
                 {isEditMode ? (
                   <>
                     <Edit2 size={18} className="text-blue-600" />
-                    Edit User &amp; Role
+                    Edit User
                   </>
                 ) : (
                   <>
@@ -1461,8 +1355,8 @@ export default function AdminSelectionPage() {
               <div className="space-y-4">
                 {/* Name* */}
                 <div>
-                  <label className="block text-sm font-medium text-red-500 mb-1.5">
-                    Name*
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Name <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1477,8 +1371,8 @@ export default function AdminSelectionPage() {
 
                 {/* Email Address* */}
                 <div>
-                  <label className="block text-sm font-medium text-red-500 mb-1.5">
-                    Email Address*
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Email Address <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="email"
@@ -1493,8 +1387,8 @@ export default function AdminSelectionPage() {
 
                 {/* WhatsApp Number* */}
                 <div>
-                  <label className="block text-sm font-medium text-red-500 mb-1.5">
-                    WhatsApp Number*
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    WhatsApp Number <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="tel"
@@ -1514,16 +1408,18 @@ export default function AdminSelectionPage() {
                   </p>
                 </div>
 
-                {/* Role* (Zoho Dropdown) */}
+                {/* Role is assigned on /roles. Edit keeps the role already saved on the user. */}
+                {!isEditMode && (
                 <div>
-                  <label className="block text-sm font-medium text-red-500 mb-1.5">
-                    Role*
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Role <span className="text-rose-500">*</span>
                   </label>
                   <RoleSelectDropdown
                     value={form.role}
                     label=""
                     required={true}
                     onChange={(newRole) => {
+                      setAclTouched(false);
                       setForm((f) => ({
                         ...f,
                         role: newRole,
@@ -1538,6 +1434,7 @@ export default function AdminSelectionPage() {
                     }}
                   />
                 </div>
+                )}
 
                 {/* Notice for Admin role */}
                 {form.role === 'admin' && (
@@ -1570,7 +1467,7 @@ export default function AdminSelectionPage() {
                 )}
 
                 {/* Manager Assignment (when role is salesperson) */}
-                {form.role === 'salesperson' && allManagers.length > 0 && (
+                {form.role === 'salesperson' && availableSalesManagers.length > 0 && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Assigned Sales Manager{' '}
@@ -1583,14 +1480,14 @@ export default function AdminSelectionPage() {
                           ...f,
                           manager_id: e.target.value,
                           manager_phone:
-                            allManagers.find((m) => m.id === e.target.value)
+                            availableSalesManagers.find((m) => m.id === e.target.value)
                               ?.phone || '',
                         }))
                       }
                       className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                     >
                       <option value="">-- None (Direct to Admin) --</option>
-                      {allManagers.map((mgr) => (
+                      {availableSalesManagers.map((mgr) => (
                         <option key={mgr.id} value={mgr.id}>
                           {mgr.name} ({mgr.employee_id})
                         </option>
@@ -1613,14 +1510,14 @@ export default function AdminSelectionPage() {
                           ...f,
                           manager_id: e.target.value,
                           manager_phone:
-                            procurementManagers.find((m) => m.id === e.target.value)
+                            availableProcurementManagers.find((m) => m.id === e.target.value)
                               ?.phone || '',
                         }))
                       }
                       className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                     >
                       <option value="">-- None (Direct to Admin) --</option>
-                      {procurementManagers.map((mgr) => (
+                      {availableProcurementManagers.map((mgr) => (
                         <option key={mgr.id} value={mgr.id}>
                           {mgr.name} ({mgr.employee_id})
                         </option>
@@ -1638,11 +1535,11 @@ export default function AdminSelectionPage() {
                       Assigned Salespeople
                     </label>
                     <div className="max-h-40 overflow-auto rounded-xl border border-slate-200 bg-slate-50/60 p-2 space-y-1">
-                      {employees.filter((person) => person.role === 'salesperson' && person.is_active !== false).length === 0 ? (
+                      {employees.filter((person) => person.role === 'salesperson' && person.is_active !== false && (!form.id || person.id !== form.id)).length === 0 ? (
                         <p className="px-2 py-1.5 text-xs text-slate-400">No active salespeople</p>
                       ) : (
                         employees
-                          .filter((person) => person.role === 'salesperson' && person.is_active !== false)
+                          .filter((person) => person.role === 'salesperson' && person.is_active !== false && (!form.id || person.id !== form.id))
                           .map((person) => {
                             const selected = (form.assigned_salesperson_ids || []).includes(person.id);
                             return (
@@ -1679,14 +1576,17 @@ export default function AdminSelectionPage() {
                   </div>
                 )}
 
-                {/* Zoho Books-style Role & Permissions (ACL) Section */}
-                <EmployeeAclSection
-                  role={form.role}
-                  permissions={form.permissions || getRoleTemplate(form.role)}
-                  onChange={(updated) =>
-                    setForm((f) => ({ ...f, permissions: updated }))
-                  }
-                />
+                {/* Edit User does not customize permissions. Those live on /roles. */}
+                {!isEditMode && (
+                  <EmployeeAclSection
+                    role={form.role}
+                    permissions={form.permissions || getRoleTemplate(form.role)}
+                    onChange={(updated) => {
+                      setAclTouched(true);
+                      setForm((f) => ({ ...f, permissions: updated }));
+                    }}
+                  />
+                )}
 
                 {/* Employee ID */}
                 <div>
@@ -1770,18 +1670,6 @@ export default function AdminSelectionPage() {
           phone: e.phone,
           employee_id: e.employee_id,
         }))}
-      />
-
-      {/* Role & Permissions Matrix Modal (Zoho Model with Roles & Users Tabs) */}
-      <RolePermissionsMatrixModal
-        isOpen={showRolesMatrixModal}
-        onClose={() => setShowRolesMatrixModal(false)}
-        employees={employees}
-        onEmployeeRoleUpdated={(empId, newRole) => {
-          setEmployees((prev) =>
-            prev.map((e) => (e.id === empId ? { ...e, role: newRole } : e)),
-          );
-        }}
       />
 
       {/* Permanent Delete Confirmation Modal */}

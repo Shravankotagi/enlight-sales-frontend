@@ -37,7 +37,7 @@ const API = axios.create({
   timeout: 30000,
 });
 
-function unwrapApiResponse<T>(response: { data?: any }): { data: T } {
+function unwrapApiResponse<T = any>(response: { data?: any }): { data: T } {
   const envelope = response?.data;
   return {
     data:
@@ -85,21 +85,26 @@ API.interceptors.response.use(
     const isOtpAuthRequest = /\/auth\/(?:request-otp|verify-otp)(?:$|[/?])/.test(
       requestUrl,
     );
+    const isAuthMe = /\/auth\/me(?:$|[/?])/.test(requestUrl);
 
     const isLogoutRequest = /\/auth\/logout(?:$|[/?])/.test(requestUrl);
     const body = error.response?.data;
     const message = String(body?.error || body?.message || '');
     const deactivated = /deactivat/i.test(message);
-    if (error.response?.status === 401 && !isOtpAuthRequest && !isLogoutRequest) {
+    if (error.response?.status === 401 && !isOtpAuthRequest && !isLogoutRequest && !isAuthMe) {
       postAuthLogout('session_expired');
       sessionStorage.removeItem('enlight_token');
       sessionStorage.removeItem('enlight_employee');
       sessionStorage.removeItem('enlight_viewing_as');
+      sessionStorage.removeItem('enlight_access');
       sessionStorage.removeItem('enlight_active_chat_session_id');
       sessionStorage.removeItem('enlight_last_activity');
       window.location.href = deactivated
         ? '/login?reason=deactivated'
         : '/login';
+    }
+    if (error.response?.status === 403) {
+      window.dispatchEvent(new CustomEvent('enlight_permissions_stale'));
     }
     return Promise.reject(error);
   }
@@ -169,6 +174,7 @@ export const customersApi = {
   getReorderQueue: (params?: any) => API.get('/customers/reorder-queue', { params }),
   getLossAnalytics: (params?: any) => API.get('/customers/loss-analytics', { params }),
   importClients: (data: any) => API.post('/customers/import', data),
+  create: (data: any) => API.post('/customers', data),
   update: (id: string, data: any) => API.patch(`/customers/${encodeURIComponent(id)}`, data),
 };
 
@@ -270,6 +276,7 @@ export const chatbotApi = {
     sessionId?: string;
     image?: { base64: string; mimeType: string };
     gps?: { latitude: number; longitude: number; accuracy?: number };
+    photoSource?: 'camera' | 'upload';
   }) => API.post('/chat/message', data, { timeout: 120000 }),
   getSessions: () => API.get('/chat/sessions'),
   getSessionMessages: (sessionId: string) =>
@@ -295,6 +302,29 @@ export const zohoApi = {
   getStatus: () => API.get('/zoho/status'),
 };
 
+export const rolesApi = {
+  me: () => API.get('/auth/me').then(unwrapApiResponse),
+  list: () => API.get('/roles').then(unwrapApiResponse),
+  catalog: () => API.get('/roles/catalog'),
+  assignees: (id: string) => API.get(`/roles/${id}/assignees`).then(unwrapApiResponse),
+  create: (body: {
+    name: string;
+    description?: string;
+    data_scope?: string;
+    permissions: Record<string, boolean>;
+  }) => API.post('/roles', body).then(unwrapApiResponse),
+  update: (
+    id: string,
+    body: {
+      name?: string;
+      description?: string;
+      data_scope?: string;
+      permissions?: Record<string, boolean>;
+    },
+  ) => API.put(`/roles/${id}`, body).then(unwrapApiResponse),
+  remove: (id: string) => API.delete(`/roles/${id}`).then(unwrapApiResponse),
+};
+
 export const activityLogsApi = {
   getAll: (params?: {
     from?: string;
@@ -306,6 +336,12 @@ export const activityLogsApi = {
     mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
+  getCounts: (params?: {
+    from?: string;
+    to?: string;
+    salesperson_phone?: string;
+    mode?: string;
+  }) => API.get('/activity-logs/counts', { params }),
 };
 
 export function postAuthLogout(reason: 'manual' | 'session_expired') {

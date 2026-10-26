@@ -36,7 +36,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import {
-  calculateOrdersTotalTonnage,
+  calculateTotalTonnageMt,
   getOrderTonnage,
   INDIAN_GST_STATES,
   resolveCustomerState,
@@ -293,7 +293,7 @@ function CustomerProfilePageContent() {
     location.state?.from === 'dashboard' ||
     new URLSearchParams(location.search).get('from') === 'dashboard';
   const queryClient = useQueryClient();
-  const { isSalesManager, isAdmin, effectivePhone } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, guardAction, can } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits'>('overview');
@@ -456,6 +456,7 @@ function CustomerProfilePageContent() {
   };
 
   const handleOpenEdit = () => {
+    if (!guardAction('customers.edit')) return;
     if (!customer) return;
     const gstinResult = evaluateCustomerGstin(customer.customer_gst);
     const address = customer.customer_address || customer.address || '';
@@ -483,6 +484,7 @@ function CustomerProfilePageContent() {
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('customers.edit')) return;
     if (!editForm.customer_name || !editForm.customer_name.trim()) {
       toast.error('Customer name is required');
       return;
@@ -698,7 +700,7 @@ function CustomerProfilePageContent() {
           </button>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {!String(customer.id || '').startsWith('virtual-') && (
+            {can('customers.edit') && !String(customer.id || '').startsWith('virtual-') && (
               <button
                 onClick={handleOpenEdit}
                 className="h-9 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 px-3.5 rounded-xl border border-slate-300 transition-colors cursor-pointer shadow-2xs">
@@ -774,7 +776,7 @@ function CustomerProfilePageContent() {
           <div>
             <p className="text-xs text-slate-500 font-medium">Total Tonnage</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">
-              {calculateOrdersTotalTonnage(wonDeals).formattedText || formatTonnage(customer.total_tonnage)}
+              {formatTonnage(customer.total_tonnage)}
             </p>
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -1219,19 +1221,18 @@ function CustomerProfilePageContent() {
                           {safeFormatDate(deal.won_at || deal.created_at)}
                         </td>
                         <td className="py-3 px-3 text-slate-700">
-                          {items.length > 0 ? (
-                            <div className="space-y-1">
-                              {items.map((it: any, iIdx: number) => (
-                                <p key={iIdx} className="text-2xs font-medium">
-                                  <span className="font-bold text-slate-900">{it.sku_text || 'Item'}</span>
-                                  {it.quantity && ` — ${it.quantity} ${it.unit || 'MT'}`}
-                                  {it.rate && ` @ ₹${Number(it.rate).toLocaleString('en-IN')}`}
-                                </p>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-slate-400">Standard Spec</span>
-                          )}
+                          {items.length > 0 && (() => {
+                            const totalMt = calculateTotalTonnageMt(items).totalMt;
+                            const tonnage = totalMt > 0
+                              ? `(${totalMt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MT)`
+                              : '';
+                            return (
+                              <p className="text-xs font-medium text-slate-600 whitespace-nowrap">
+                                {items.length} {items.length === 1 ? 'Item' : 'Items'}
+                                {tonnage && <span className="font-semibold ml-1.5">{tonnage}</span>}
+                              </p>
+                            );
+                          })()}
                         </td>
                         <td className="py-3 px-3 text-slate-600">
                           {deal.payment_terms || 'Standard'}
