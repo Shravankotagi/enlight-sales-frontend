@@ -2,7 +2,7 @@
 
 On a customer profile, Recent Confirmed Orders shows an item count such as "2 Items". Order Tonnage stays in its own column. The Orders tab still shows the count with MT.
 
-An admin on a customer profile can delete that customer. The confirmation states that the customer and related inquiries, orders, visits, and complaints are removed. Other logins do not see the button, and the API rejects them. A name has to match the company, or share its phone with a compatible name. A short or unrelated name is left in place.
+An admin on a customer profile can delete that customer. The confirmation states that the customer and related inquiries, orders, visits, and complaints are removed. The profile calls `customersApi.delete`, which sends `DELETE /customers/:id`. Other logins do not see the button, and the API rejects them. A name has to match the company, or share its phone with a compatible name. A short or unrelated name is left in place.
 
 `CustomersPage.tsx` shows Sync Bigin only for a signed-in admin or salesperson, then refreshes the customer list. It lists/imports/updates customer data; `CustomerProfilePage.tsx` presents a single customer and related operations. Both consume `customersApi` and are constrained by the authenticated/viewing-as salesperson context.
 
