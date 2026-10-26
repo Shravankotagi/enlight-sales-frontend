@@ -128,8 +128,7 @@ export default function CustomersPage() {
   const [filterSegment, setFilterSegment] = useState<string>(() => searchParams.get('segment') || 'all');
 
   useEffect(() => {
-    const seg = searchParams.get('segment');
-    if (seg) setFilterSegment(seg);
+    setFilterSegment(searchParams.get('segment') || 'all');
   }, [searchParams]);
 
   const [currentPage, setCurrentPage] = useState(1);
