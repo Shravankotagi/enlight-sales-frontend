@@ -1,6 +1,6 @@
 # Customers and customer intelligence
 
-`DELETE /customers/:id` is admin-only. It deletes that `recurring_customers` row and the deals, deal items, inquiries, inquiry line items, visits, complaints, payments, follow-ups, and KRA logs that belong to the same company. `CustomersModule` owns `recurring_customers` and customer-facing analytics. It exposes customer list/detail/update/import plus churn risk, reorder queue, and loss analytics. `customer-insights.service.ts` derives behavior from orders/deals, visit and ownership data.
+`DELETE /customers/:id` is admin-only. It deletes that `recurring_customers` row and the deals, deal items, inquiries, inquiry line items, visits, complaints, payments, follow-ups, and KRA logs that belong to the same company. Follow-ups are matched by customer name or `followup_tasks.linked_deal_id`. That table has no `deal_id` column. `CustomersModule` owns `recurring_customers` and customer-facing analytics. It exposes customer list/detail/update/import plus churn risk, reorder queue, and loss analytics. `customer-insights.service.ts` derives behavior from orders/deals, visit and ownership data.
 
 A customer may be resolved by name/ID in different bot flows. Normalize carefully and preserve salesperson/manager scope. Customer onboarding/update is also performed by bot tools; align field names and ownership assignment with those tools.
 
