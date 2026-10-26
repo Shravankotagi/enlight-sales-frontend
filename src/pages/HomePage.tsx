@@ -18,7 +18,7 @@ import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import { getFollowUpStatusInfo } from '../utils/visitUtils';
 import { deriveSegment } from './CustomersPage';
-import { isProductInquiry, parseInquiryText, resolveInquiryDealStageKey } from './InquiriesPage';
+import { isProductInquiry, resolveInquiryDealStageKey } from './InquiriesPage';
 import {
   Package,
   ShoppingBag,
@@ -718,10 +718,7 @@ export default function HomePage() {
 
     // 1. Quote Follow-up (Strictly matches Inquiries & Pipeline stageCounts.quoted)
     const quotedInquiriesCount = activeInquiries.filter(inq => {
-      const parsed = parseInquiryText(inq.raw_text || '', inq);
-      const stageKey = resolveInquiryDealStageKey(inq, parsed.companyName, safeDeals);
-      const normKey = (stageKey === 'qualified' || stageKey === 'saved' || stageKey === 'confirmed') ? 'quoted' : (stageKey === 'hold' ? 'on_hold' : stageKey);
-      return normKey === 'quoted';
+      return resolveInquiryDealStageKey(inq) === 'quoted';
     }).length;
     if (quotedInquiriesCount > 0) {
       items.push({
@@ -796,9 +793,7 @@ export default function HomePage() {
 
     // 5. Review New Inquiries (Strictly matches Inquiries tab stageCounts.new_inquiry)
     const newInquiriesCount = activeInquiries.filter(inq => {
-      const parsed = parseInquiryText(inq.raw_text || '', inq);
-      const stageKey = resolveInquiryDealStageKey(inq, parsed.companyName, safeDeals);
-      return stageKey === 'new_inquiry' || stageKey === 'review';
+      return resolveInquiryDealStageKey(inq) === 'new_inquiry';
     }).length;
 
     if (newInquiriesCount > 0) {
