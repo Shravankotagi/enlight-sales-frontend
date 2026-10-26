@@ -37,8 +37,9 @@ Current regression tests:
 | Repo | File | Guards |
 |---|---|---|
 | Bot | `issue-procurement-chatbot.test.js` | Procurement scope, exact awaiting-price match, text-only base-price list, inquiry details, cancel then menu, customer-field hiding, salesperson price buttons, price confirmation before save, a dashboard yes that saves, a saved price that becomes Price Quote, and a salesperson log that does not save a sell rate |
-| Bot | `issue-procurement-all-inquiries.test.js` | All inquiries counts every Inquiries-tab status filter, including a pricing row that also has a deal stage, pages the newest 10, accepts next and the old current-inquiries phrase, includes an owner-resolved awaiting inquiry that Pending prices lists, and a pasted line opens details without base-price entry |
+| Bot | `issue-procurement-all-inquiries.test.js` | All inquiries uses backend `display_stage` for every pipeline total and badge, pages the newest 10, accepts next and the old current-inquiries phrase, includes an owner-resolved awaiting inquiry that Pending prices lists, and opens pasted details without base-price entry |
 | Bot | `issue-procurement-base-price-lines.test.js` | Log a base price shows every line, a price is stored on the chosen line only, and the other lines’ prices and notes stay as they were; a price-ready number does not open or save a base price |
+| Bot | `issue-procurement-base-price-dot-separator.test.js` | `1. 500` and `1-500` both preview and save ₹500/MT, not ₹0.5/MT |
 | Bot | `duplicate-customer-discard-draft.test.js` | Duplicate-customer warning shows only **Discard Draft**; blocked state ignores other text; discard finalizes the draft |
 | Backend | `leaderboard-salesperson-identity.test.ts` | Mixed phone formats resolve to one named row; never "Unknown" |
 | Frontend | `admin-leaderboard-identity-and-orders.test.tsx` | Leaderboard shows names/IDs/phones, counts orders (not deals), excludes admins |
@@ -88,6 +89,9 @@ Current regression tests:
 | Frontend | `procurement-header-actions.test.tsx` | Procurement person and manager inquiries headers hide Sync Bigin, View Confirmed Orders, and Log New Inquiry, and keep Refresh |
 | Backend | `inquiry-pricing.workflow.spec.ts`, `inquiries.procurement-scope.spec.ts` | Procurement scope, customer-field stripping, partial and unavailable pricing, sales override, decline eligibility |
 | Backend | `issue-procurement-routing-details.spec.ts` | Mapped salesperson inquiries get that procurement person and a unique `PR-` number; product lines survive procurement detail |
+| Backend | `issue-procurement-linked-deal-stage.spec.ts` | A procurement list and detail row expose canonical `display_stage` from the newest linked deal or normalized inquiry fields, while hiding the customer |
+| Frontend | `issue-procurement-linked-deal-stage.test.ts` | The Inquiries tab consumes backend `display_stage` and does not recreate pipeline decisions from raw deal or status fields |
+| Frontend | `issue-procurement-po-stage-normalization.test.ts` | Mixed-case PO metadata is classified once by the backend and consumed as its canonical Won stage |
 
 ## Cross-repo parity fixture
 `pricing-parity.json` is copied identically to `em-os-bot/test/fixtures/`, `em-os-backend/src/test-utils/fixtures/`, and `em-os-frontend/src/test/fixtures/`. Each repo's parity test runs its own pricing/HSN code against it. Change all three copies together in the same set of PRs.

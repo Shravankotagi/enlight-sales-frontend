@@ -12,6 +12,7 @@ const inquiries = [
     id: 'old-1',
     status: 'won',
     stage: 'won',
+    display_stage: 'won',
     customer_name: 'Old Metals',
     created_at: '2026-08-01T00:00:00.000Z',
     inquiry_type: 'inquiry',
@@ -22,6 +23,7 @@ const inquiries = [
   {
     id: 'new-1',
     status: 'review',
+    display_stage: 'new_inquiry',
     pricing_status: 'awaiting_price',
     customer_name: 'New Metals',
     created_at: '2026-10-15T04:00:00.000Z',
