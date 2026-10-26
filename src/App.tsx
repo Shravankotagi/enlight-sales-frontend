@@ -78,7 +78,9 @@ function AppRoutes() {
         element={
           !isAuthenticated ? (
             <Navigate to="/login" replace />
-          ) : (inquiryOnly || (isProcurement && location.pathname !== '/assistant')) && location.pathname !== '/inquiries' ? (
+          ) : (inquiryOnly || isProcurement) &&
+            location.pathname !== '/inquiries' &&
+            location.pathname !== '/assistant' ? (
             <Navigate to="/inquiries" replace />
           ) : (
             <Layout />
