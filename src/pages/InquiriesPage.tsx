@@ -176,6 +176,8 @@ export interface InquiryItem {
   procurement_assigned_at?: string | null;
   procurement_number?: string | null;
   pricing_status?: string | null;
+  linked_deal_stage?: string | null;
+  display_stage?: string | null;
 }
 
 export interface LineItemDetail {
@@ -1632,103 +1634,13 @@ export function resolveLinkedDeal(
   return null;
 }
 
-export function resolveInquiryDealStageKey(
-  inq: InquiryItem,
-  companyName?: string,
-  dealsList: any[] = [],
-): string {
-  // 1. If the linked deal in deals table has moved to an active pipeline stage, that deal stage is the source of truth!
-  const linkedDeal = resolveLinkedDeal(inq, companyName, dealsList);
-  if (linkedDeal) {
-    const dealStage = (linkedDeal?.stage || "").toLowerCase().trim();
-    if (
-      ["won", "lost", "negotiation", "quoted", "on_hold", "qualified"].includes(
-        dealStage,
-      )
-    ) {
-      if (dealStage === "qualified") return "quoted";
-      if (dealStage === "hold") return "on_hold";
-      return dealStage;
-    }
-  }
-
-  // 2. Direct inquiry stage if explicitly set beyond new_inquiry
-  const directInqStage = (inq as any)?.stage
-    ? String((inq as any).stage)
-        .toLowerCase()
-        .trim()
-    : "";
-  if (
-    directInqStage &&
-    ["won", "lost", "negotiation", "quoted", "on_hold", "qualified"].includes(
-      directInqStage,
-    )
-  ) {
-    if (directInqStage === "qualified") return "quoted";
-    if (directInqStage === "hold") return "on_hold";
-    return directInqStage;
-  }
-
-  const details = parseInquiryText(inq.raw_text || "", inq);
-  const st = (inq.status || "").toLowerCase().trim();
-  const isPo =
-    inq.inquiry_type === "purchase_order" ||
-    inq.source_channel === "whatsapp_po" ||
-    (inq.raw_text || "").includes("[PO Document Attached");
-  if (isPo && (st === "confirmed" || st === "won" || st === "processed")) {
-    return "won";
-  }
-  if (st === "won") {
-    return "won";
-  }
-
-  const hasRates =
-    (details.lineItems || []).length > 0 &&
-    (details.lineItems || []).every(
-      (i: any) => Number(i.rate) > 0 && Number(i.quantity) > 0,
-    );
-  const isQuoted =
-    (st === "quoted" || st === "quotation_sent") &&
-    (hasRates || inq.inquiry_type === "quotation_sent");
-  const isConfirmed =
-    (st === "confirmed" ||
-      st === "saved" ||
-      st === "processed" ||
-      st === "quotation_ready") &&
-    hasRates;
-
-  if (st === "negotiation") {
-    return "negotiation";
-  }
-  if (
-    isQuoted ||
-    st === "quoted" ||
-    st === "quotation_sent" ||
-    inq.inquiry_type === "quotation_sent" ||
-    isConfirmed ||
-    st === "confirmed" ||
-    st === "saved" ||
-    st === "processed"
-  ) {
-    return "quoted";
-  }
-  if (st === "on_hold" || st === "hold") {
-    return "on_hold";
-  }
-  if (
-    st === "review" ||
-    st === "needs_review" ||
-    st === "pending" ||
-    !st ||
-    st === "new" ||
-    st === "draft"
-  ) {
-    return "new_inquiry";
-  }
-  if (st === "lost") {
-    return "lost";
-  }
-  return "new_inquiry";
+export function resolveInquiryDealStageKey(inq: InquiryItem): string {
+  const stage = String(inq.display_stage || "").toLowerCase().trim();
+  return ["new_inquiry", "quoted", "negotiation", "on_hold", "won", "lost"].includes(
+    stage,
+  )
+    ? stage
+    : "new_inquiry";
 }
 
 const EMPTY_INQUIRIES: InquiryItem[] = [];
@@ -2707,9 +2619,8 @@ export default function InquiriesPage() {
 
   const getInquiryDealStageKey = (
     inq: InquiryItem,
-    companyName?: string,
   ): string => {
-    return resolveInquiryDealStageKey(inq, companyName, rawDeals);
+    return resolveInquiryDealStageKey(inq);
   };
 
   const handleUpdateDealStage = async (
@@ -4631,18 +4542,9 @@ export default function InquiriesPage() {
       lost: 0,
     };
     periodInquiries.forEach((inq) => {
-      const parsed = parseInquiryText(inq.raw_text || "", inq);
-      const stageKey = getInquiryDealStageKey(inq, parsed.companyName);
-      const normKey =
-        stageKey === "qualified" ||
-        stageKey === "saved" ||
-        stageKey === "confirmed"
-          ? "quoted"
-          : stageKey === "hold"
-            ? "on_hold"
-            : stageKey;
-      if (counts[normKey as keyof typeof counts] !== undefined) {
-        counts[normKey as keyof typeof counts]++;
+      const stageKey = getInquiryDealStageKey(inq);
+      if (counts[stageKey as keyof typeof counts] !== undefined) {
+        counts[stageKey as keyof typeof counts]++;
       }
     });
     return counts;
@@ -4738,7 +4640,7 @@ export default function InquiriesPage() {
           text.toLowerCase().includes(s) ||
           inquirySearchHaystack(i).includes(s);
 
-        const dealStage = getInquiryDealStageKey(i, parsed.companyName);
+        const dealStage = getInquiryDealStageKey(i);
         const procurementStatus = inquiryStatusFromServer(i);
         const matchesStatus =
           filterStatus === "all" ||
@@ -4766,17 +4668,7 @@ export default function InquiriesPage() {
 
     filtered.forEach((inq) => {
       const parsed = parseInquiryText(inq.raw_text || "", inq);
-      const rawStage = getInquiryDealStageKey(inq, parsed.companyName);
-      const stageKey =
-        rawStage === "qualified" ||
-        rawStage === "saved" ||
-        rawStage === "confirmed"
-          ? "quoted"
-          : rawStage === "hold"
-            ? "on_hold"
-            : rawStage === "review" || !rawStage
-              ? "new_inquiry"
-              : rawStage;
+      const stageKey = getInquiryDealStageKey(inq);
 
       if (board[stageKey]) {
         const linkedDeal = getLinkedDeal(inq, parsed.companyName);
@@ -5354,10 +5246,7 @@ export default function InquiriesPage() {
                       details.lineItems && details.lineItems.length > 0
                         ? details.lineItems.length
                         : 1;
-                    const dealStageKey = getInquiryDealStageKey(
-                      inq,
-                      details.companyName,
-                    );
+                    const dealStageKey = getInquiryDealStageKey(inq);
                     const dealStageInfo = getDealStageDisplay(dealStageKey);
                     const linkedDeal = getLinkedDeal(inq, details.companyName);
                     const inquiryProcurementStatus = inquiryStatusFromServer(inq);
@@ -7184,10 +7073,7 @@ export default function InquiriesPage() {
 
               {(() => {
                 const currentDrawerDealStage = selectedInquiry
-                  ? getInquiryDealStageKey(
-                      selectedInquiry,
-                      editDetails?.companyName,
-                    )
+                  ? getInquiryDealStageKey(selectedInquiry)
                   : "";
                 const isQuotedDrawerStage =
                   currentDrawerDealStage === "quoted" ||
