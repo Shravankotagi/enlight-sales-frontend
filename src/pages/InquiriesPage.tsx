@@ -4534,6 +4534,9 @@ export default function InquiriesPage() {
   const stageCounts = useMemo(() => {
     const counts = {
       all: periodInquiries.length,
+      awaiting_price: 0,
+      price_ready: 0,
+      unavailable: 0,
       new_inquiry: 0,
       quoted: 0,
       negotiation: 0,
@@ -4543,8 +4546,32 @@ export default function InquiriesPage() {
     };
     periodInquiries.forEach((inq) => {
       const stageKey = getInquiryDealStageKey(inq);
-      if (counts[stageKey as keyof typeof counts] !== undefined) {
-        counts[stageKey as keyof typeof counts]++;
+      const procStatus = inquiryStatusFromServer(inq);
+
+      if (procStatus === "awaiting_price" || stageKey === "awaiting_price") {
+        counts.awaiting_price++;
+      }
+      if (procStatus === "price_ready" || stageKey === "price_ready") {
+        counts.price_ready++;
+      }
+      if (procStatus === "unavailable" || stageKey === "unavailable") {
+        counts.unavailable++;
+      }
+
+      if (
+        ["new_inquiry", "quoted", "negotiation", "on_hold", "won", "lost"].includes(
+          stageKey,
+        )
+      ) {
+        counts[
+          stageKey as
+            | "new_inquiry"
+            | "quoted"
+            | "negotiation"
+            | "on_hold"
+            | "won"
+            | "lost"
+        ]++;
       }
     });
     return counts;
@@ -4969,9 +4996,15 @@ export default function InquiriesPage() {
               menuClassName="w-56"
             >
               <option value="all">All ({stageCounts.all})</option>
-              <option value="awaiting_price">Awaiting Price</option>
-              <option value="price_ready">Price Ready</option>
-              <option value="unavailable">Unavailable</option>
+              <option value="awaiting_price">
+                Awaiting Price ({stageCounts.awaiting_price})
+              </option>
+              <option value="price_ready">
+                Price Ready ({stageCounts.price_ready})
+              </option>
+              <option value="unavailable">
+                Unavailable ({stageCounts.unavailable})
+              </option>
               <option value="new_inquiry">
                 New Inquiry ({stageCounts.new_inquiry})
               </option>
