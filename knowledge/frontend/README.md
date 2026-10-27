@@ -9,7 +9,7 @@ Supabase is used for realtime invalidation, not direct application data reads. T
 |---|---|
 | `/login`, `/admin` | Login and admin selection |
 | `/home`, `/assistant`, `/intelligence` | overview and assistant intelligence |
-| `/inquiries`, `/orders`, `/customers/:id` | commercial/customer operations |
+| `/inquiries`, `/orders`, `/customers/:id` | commercial/customer operations. `/procurement` redirects to `/inquiries`. |
 | `/visits`, `/complaints`, `/kra`, `/reports`, `/logs` | field operations and analytics |
 | `/admin-dashboard` | admin only |
 

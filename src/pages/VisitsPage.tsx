@@ -181,11 +181,11 @@ export default function VisitsPage() {
   const autoOpenedVisitRef = useRef<string | null>(null);
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
-  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode, viewingAs } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode, viewingAs, can, guardAction } = useAuth();
   const viewingAsName = viewingAs?.name;
   const viewingAsPhone = viewingAs?.phone;
   const canViewSalesperson = isSalesManager || isAdmin;
-  const canEditVisit = isAdmin || isSalesManager;
+  const canEditVisit = can('visits.update');
 
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -766,6 +766,7 @@ export default function VisitsPage() {
 
   // Reset form and open Add New Visit modal cleanly
   const handleOpenAddModal = () => {
+    if (!guardAction('visits.log')) return;
     setFormCustomerName('');
     setFormPersonMet('');
     setFormContactPhone('');
@@ -994,6 +995,7 @@ export default function VisitsPage() {
 
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!guardAction('visits.log')) return;
 
     const input = newVisitInput();
     const errors = validateNewVisitForm(input);
@@ -1194,10 +1196,7 @@ export default function VisitsPage() {
 
   const handleUpdateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canEditVisit) {
-      alert('Access Denied: Only Sales Managers and Administrators have permission to update field visits.');
-      return;
-    }
+    if (!guardAction('visits.update')) return;
     if (!selectedVisit) return;
 
     const errors: Record<string, string | boolean> = {};

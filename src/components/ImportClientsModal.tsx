@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Upload, Download, FileSpreadsheet, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { customersApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 interface Salesperson {
   name: string;
@@ -37,6 +38,7 @@ export default function ImportClientsModal({
   salespeople: _salespeople,
   onSuccess,
 }: ImportClientsModalProps) {
+  const { guardAction } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [parsedClients, setParsedClients] = useState<ParsedClient[]>([]);
   const [parseError, setParseError] = useState<string>('');
@@ -121,7 +123,6 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
 
     const rows: ParsedClient[] = [];
     for (let i = 1; i < lines.length; i++) {
-      // Split comma considering quotes
       const values = lines[i].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
       const customerName = values[nameIdx] || '';
       if (!customerName) continue;
@@ -171,6 +172,7 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
 
   // Submit Import
   const handleImportSubmit = async () => {
+    if (!guardAction('clients.import_csv')) return;
     if (parsedClients.length === 0) {
       setErrorMsg('Please select a valid CSV/XLSX file with client records');
       return;

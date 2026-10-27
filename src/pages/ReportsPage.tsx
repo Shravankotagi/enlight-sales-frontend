@@ -13,7 +13,6 @@ import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 import { buildInquiryScopeParams } from '../utils/inquiryScope';
 import {
   isProductInquiry,
-  parseInquiryText,
   resolveInquiryDealStageKey,
 } from './InquiriesPage';
 
@@ -258,8 +257,7 @@ export default function ReportsPage() {
         const day = inquiryCreatedDay(inq.created_at);
         if (day && (day < from || day > to)) continue;
       }
-      const companyName = parseInquiryText(inq.raw_text || '', inq).companyName;
-      let stage = resolveInquiryDealStageKey(inq, companyName, funnelDeals);
+      let stage = resolveInquiryDealStageKey(inq);
       if (stage === 'qualified' || stage === 'saved' || stage === 'confirmed') stage = 'quoted';
       if (stage === 'hold') stage = 'on_hold';
       if (counts[stage] !== undefined) counts[stage] += 1;

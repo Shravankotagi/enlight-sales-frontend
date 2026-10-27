@@ -140,24 +140,25 @@ export default function LogsPage() {
         }),
   });
 
-  // Fetch count query for all modules across current date filter
+  // Fetch accurate count query for all modules across current date filter
   const { data: allModuleCountsData } = useQuery({
     queryKey: ['activity-logs-counts', effectivePhone, dateRange],
     queryFn: () =>
       activityLogsApi
-        .getAll({
+        .getCounts({
           salesperson_phone: effectivePhone || undefined,
           from: fromDate,
-          to: toDate,
-          limit: 500,
+          to: toDate ? `${toDate}T23:59:59.999Z` : undefined,
         })
         .then((r) => {
           const raw = r?.data;
-          if (Array.isArray(raw)) return raw;
-          if (Array.isArray(raw?.data)) return raw.data;
-          if (Array.isArray(raw?.data?.data)) return raw.data.data;
-          return [];
-        }),
+          const payload = raw?.data || raw;
+          if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+            return payload as Record<string, number>;
+          }
+          return null;
+        })
+        .catch(() => null),
   });
 
   const { data: authEmployees = [] } = useQuery({
@@ -178,7 +179,15 @@ export default function LogsPage() {
       Visits: 0,
       Complaints: 0,
     };
-    const list = allModuleCountsData || activityLogsData || [];
+    if (allModuleCountsData && typeof allModuleCountsData === 'object' && allModuleCountsData.All !== undefined) {
+      counts.All = Number(allModuleCountsData.All) || 0;
+      counts.Inquiries = Number(allModuleCountsData.Inquiries) || 0;
+      counts.Orders = Number(allModuleCountsData.Orders) || 0;
+      counts.Visits = Number(allModuleCountsData.Visits) || 0;
+      counts.Complaints = Number(allModuleCountsData.Complaints) || 0;
+      return counts;
+    }
+    const list = activityLogsData || [];
     if (Array.isArray(list)) {
       counts.All = list.length;
       for (const log of list) {
@@ -362,7 +371,10 @@ export default function LogsPage() {
         {/* Top-right Events Count Pill */}
         <div className="px-4 py-1.5 rounded-full bg-white border border-slate-200 shadow-2xs text-xs font-mono text-slate-600 flex items-center gap-2">
           <span className="font-bold text-blue-600">
-            {activityLogsData ? activityLogsData.length : 0}
+            {(moduleFilter === 'All'
+              ? (moduleCounts.All || (activityLogsData ? activityLogsData.length : 0))
+              : (moduleCounts[moduleFilter] ?? (activityLogsData ? activityLogsData.length : 0))
+            ).toLocaleString('en-IN')}
           </span>{' '}
           events · <span className="text-slate-400">{presetLabel}</span>
         </div>
@@ -421,11 +433,11 @@ export default function LogsPage() {
             className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:border-blue-500 shadow-2xs cursor-pointer gap-2"
             menuClassName="w-48"
           >
-            <option value="All">All ({moduleCounts.All})</option>
-            <option value="Inquiries">Inquiries ({moduleCounts.Inquiries})</option>
-            <option value="Orders">Orders ({moduleCounts.Orders})</option>
-            <option value="Visits">Visits ({moduleCounts.Visits})</option>
-            <option value="Complaints">Complaints ({moduleCounts.Complaints})</option>
+            <option value="All">All ({moduleCounts.All.toLocaleString('en-IN')})</option>
+            <option value="Inquiries">Inquiries ({moduleCounts.Inquiries.toLocaleString('en-IN')})</option>
+            <option value="Orders">Orders ({moduleCounts.Orders.toLocaleString('en-IN')})</option>
+            <option value="Visits">Visits ({moduleCounts.Visits.toLocaleString('en-IN')})</option>
+            <option value="Complaints">Complaints ({moduleCounts.Complaints.toLocaleString('en-IN')})</option>
             {isAdmin && <option value="Auth">Login / Logout</option>}
             {isAdmin && <option value="Employees">User Management</option>}
           </Select>

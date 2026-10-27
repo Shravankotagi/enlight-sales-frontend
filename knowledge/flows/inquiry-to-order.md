@@ -1,9 +1,10 @@
 # Inquiry-to-order flow
 
-1. An inquiry is created through dashboard APIs, bot sales/catalog/OCR flow, or document parsing; data is stored in `inquiries`/`inquiry_items`.
-2. Products, HSN, pricing, and quotation are evaluated under shared business rules.
-3. A commercial record progresses through deal/pipeline stages in `deals`/`deal_items`.
-4. System PO allocation uses a reservation token; processing persists generated/reference PO fields and finalizes/release behavior.
-5. A won deal is rendered as an order by `OrdersPage`.
+1. An inquiry is created through dashboard APIs, the bot catalog, or document parsing, and is stored in `inquiries` / `inquiry_items`. A new inquiry starts as `awaiting_price` with a procurement number and the procurement person copied from the salesperson. A price typed while logging is a customer target in the notes. It is not the sell rate. After the bot saves it, the salesperson can choose Price This Inquiry.
+2. Procurement enters a base price on one line at a time, on the inquiries page or in the assistant. The assistant save writes only the chosen line. One priced line makes the inquiry `price_ready`. Every line unavailable makes it `unavailable`.
+3. Sales can price an `awaiting_price` or `price_ready` inquiry from Add Price to Inquiry, or price the one just logged. They send base, transport, loading, credit, and margin per line. A missing value is asked for again. Blank credit is 0 only when they send blank, `-`, or 0. The sell rate is `base + transport + loading + credit + margin`. Save and Cancel are shown when the lines are complete. Save sets `pricing_status` to `sales_priced` and the inquiry stage to `quoted` (Price Quote). Negotiation, On Hold, Won, and Lost keep their stage. *Price this inquiry* still asks only for the four components after procurement has saved the base. Quotations and the decline email stay on the dashboard for sales and admins. The assistant does not send the decline.
+4. A commercial record progresses through deal stages in `deals` / `deal_items`. Recording an order needs the saved sales rate. Procurement cannot create deals, send quotations, or confirm orders. An older inquiry with no `pricing_status` can still be ordered.
+5. System PO allocation uses a reservation token; processing persists generated/reference PO fields and finalizes/release behavior.
+6. A won deal is rendered as an order by `OrdersPage` (restricted to sales personnel and admins).
 
 Do not conflate inquiry identifier, deal identifier, purchase-order number, and reservation token. Validate current database state on every transition because bot/UI context may be stale.
