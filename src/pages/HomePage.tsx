@@ -17,7 +17,6 @@ import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import { getFollowUpStatusInfo } from '../utils/visitUtils';
-import { deriveSegment } from './CustomersPage';
 import { isProductInquiry, resolveInquiryDealStageKey } from './InquiriesPage';
 import {
   Package,
@@ -563,20 +562,8 @@ export default function HomePage() {
   // 2. Won Orders count
   const totalWonOrdersCount = targetOrders.length;
 
-  // 3. New Customers count (matching Customers tab tag "New" and newAccountsCount)
-  const newCustomersCount = useMemo(() => {
-    if (!safeCustomers || safeCustomers.length === 0) return 0;
-    return safeCustomers.filter((c: any) => {
-      if (deriveSegment(c) !== 'new') return false;
-      if (dateRange.from && dateRange.to) {
-        const orderDateStr = c.last_order_date || c.created_at;
-        if (!orderDateStr) return false;
-        const itemDate = new Date(orderDateStr).toISOString().split('T')[0];
-        return itemDate >= dateRange.from && itemDate <= dateRange.to;
-      }
-      return true;
-    }).length;
-  }, [safeCustomers, dateRange]);
+  // Same customer list the Customers page shows with no segment or date filter.
+  const totalCustomersCount = safeCustomers.length;
 
   // 4. Customer Visits count
   const totalVisitsCount = useMemo(() => {
@@ -1138,20 +1125,20 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 4: New Customers - Blue Soft */}
+        {/* Card 4: Total Customers */}
         <div
-          onClick={() => navigate('/customers?segment=new')}
+          onClick={() => navigate('/customers')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer"
-          title="View New Customers">
+          title="View all customers">
           <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs self-start shrink-0">
             <Users size={18} />
           </div>
           <div>
             <div className="flex items-baseline gap-2">
               <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
-                {newCustomersCount}
+                {totalCustomersCount}
               </p>
-              <span className="text-sm sm:text-base font-bold text-slate-900">New Customers</span>
+              <span className="text-sm sm:text-base font-bold text-slate-900">Total Customers</span>
             </div>
           </div>
         </div>
