@@ -230,6 +230,7 @@ export const inquiriesApi = {
   getOne: (id: string) => API.get(`/inquiries/${id}`),
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
+  getTonnageReviews: () => API.get('/inquiries/tonnage-reviews'),
   create: (data: any) => API.post('/inquiries', data),
   updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
   previewQuotation: (id: string, payload: any) => API.post(`/inquiries/quotation-preview/${id}`, payload),

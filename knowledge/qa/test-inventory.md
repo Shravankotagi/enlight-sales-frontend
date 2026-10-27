@@ -79,6 +79,10 @@ Current regression tests:
 | Frontend | `issue-procurement-save-base-price.test.tsx` | Procurement Save Prices sends the base price; a rejected save shows the server error; a stale list refresh does not clear Price Ready |
 | Backend | `issue-procurement-mt-line-amount.spec.ts` | A Nos line stores taxable amount as its MT weight times the per-MT rate |
 | Backend | `issue-procurement-save-base-price.spec.ts` | A missing `credit_per_mt` column retries the upsert, and a failed pricing-status update rejects the save |
+| Frontend | `issue-price-quote-status-move.test.ts` | Lost, Negotiation, and On Hold are allowed from a Price Quote badge even when the deal is still New Inquiry, and those moves stay blocked from a New Inquiry badge |
+| Backend | `issue-procurement-tonnage-review.spec.ts` | A Price Ready weight change reopens Awaiting Price and stores the MT diff; the same weight in KG and a rate-only edit do not; a later edit keeps the original weight; saving a base price clears the review; another procurement person does not receive the row |
+| Frontend | `issue-procurement-tonnage-review.test.tsx` | The procurement bell sits beside Refresh, lists the `PR-` id and the MT change, and opens Save Prices; an empty list has no badge; a salesperson does not see the bell |
+| Bot | `issue-procurement-tonnage-review.test.js` | A KG quantity equal to the existing MT does not open a review; a Price Ready quantity sync reopens the inquiry; the awaiting-price reply says Tonnage updated only for an open review |
 | Backend | `issue-procurement-awaiting-price-edit.spec.ts` | Procurement base-price and status updates are rejected for Price Ready, Unavailable, and a pre-cutoff Awaiting Price; an Awaiting Price save and an admin save still proceed |
 | Backend | `issue-procurement-view-only-acl.spec.ts` | A view-only procurement save is rejected even when fill base prices stays checked; empty permissions still allow an Awaiting Price save; delete and send quote follow their ACL keys |
 | Bot | `issue-procurement-view-only-acl.test.js` | A view-only procurement user cannot open or save a base price, and pending prices and all inquiries still open |
@@ -88,7 +92,7 @@ Current regression tests:
 | Backend | `issue-share-quotation-preview.spec.ts` | Quotation preview follows `employees.id` for a stored id, a customer owner, or a deal, and a different employee id is denied |
 | Frontend | `issue-procurement-kanban-click.test.tsx` | A procurement person opens Kanban View on the first click |
 | Frontend | `procurement-header-actions.test.tsx` | Procurement person and manager inquiries headers hide Sync Bigin, View Confirmed Orders, and Log New Inquiry, and keep Refresh |
-| Backend | `inquiry-pricing.workflow.spec.ts`, `inquiries.procurement-scope.spec.ts` | Procurement scope, customer-field stripping, partial and unavailable pricing, sales override, decline eligibility |
+| Backend | `inquiry-pricing.workflow.spec.ts`, `inquiries.procurement-scope.spec.ts` | Procurement scope, customer-field stripping, partial and unavailable pricing, sales override, decline eligibility, and a sales-price save that moves a New Inquiry deal to Price Quote while leaving Negotiation in place |
 | Backend | `issue-procurement-routing-details.spec.ts` | Mapped salesperson inquiries get that procurement person and a unique `PR-` number; product lines survive procurement detail |
 | Backend | `issue-procurement-linked-deal-stage.spec.ts` | A procurement list and detail row expose canonical `display_stage` from the newest linked deal or normalized inquiry fields, while hiding the customer |
 | Frontend | `issue-procurement-linked-deal-stage.test.ts` | The Inquiries tab consumes backend `display_stage` and does not recreate pipeline decisions from raw deal or status fields |

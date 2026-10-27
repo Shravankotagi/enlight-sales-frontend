@@ -31,6 +31,7 @@
 - [ ] Procurement manager also sees the team and the open unassigned pool.
 - [ ] Customer name, phone, email, and raw text are absent for both procurement roles.
 - [ ] A blank base price becomes unavailable. One priced line is Price Ready. All blank lines are Unavailable.
+- [ ] A Price Ready inquiry whose tonnage changes returns to Awaiting Price, appears on the procurement bell, and leaves that bell when base prices are saved again.
 - [ ] Procurement can edit only Base Price and has one Save Prices button. A salesperson save collapses Base, Transport, Loading, Credit, and Margin into Rate.
 - [ ] Sales can price before procurement responds, copy transport, loading, and margin to available rows, and quote only those rows.
 - [ ] Maharashtra shows CGST and SGST. Every other state shows IGST.

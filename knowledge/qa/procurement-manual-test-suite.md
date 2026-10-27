@@ -1,6 +1,6 @@
 # Procurement manual test suite
 
-Use this on `feature/procurement` after `supabase-procurement-acl.sql`, `supabase-inquiry-line-pricing.sql`, `supabase-procurement-routing.sql`, and `supabase-pricing-status-preserve.sql` have been applied. Do not run it against production customer data. Use three test accounts: a procurement person who reports to a procurement manager, that procurement manager, and a salesperson. An admin account is needed only for the setup checks.
+Use this on `feature/procurement` after `supabase-procurement-acl.sql`, `supabase-inquiry-line-pricing.sql`, `supabase-procurement-routing.sql`, `supabase-pricing-status-preserve.sql`, and `supabase-procurement-tonnage-review.sql` have been applied. Do not run it against production customer data. Use three test accounts: a procurement person who reports to a procurement manager, that procurement manager, and a salesperson. An admin account is needed only for the setup checks.
 
 Record the result of each case as Pass or Fail. A case fails if the expected result does not happen, even if a nearby case passes.
 
@@ -31,6 +31,7 @@ Record the result of each case as Pass or Fail. A case fails if the expected res
 | P5 | On a second assigned inquiry, save with every base price blank. | Status becomes **Unavailable**. |
 | P6 | Try to log a new inquiry, send a quotation, or mark the inquiry confirmed, won, or lost. | Each action is blocked. |
 | P7 | Send a WhatsApp message from the procurement person's number. | The bot stops the message and does not run quotation, customer, or pricing tools. |
+| P8 | After this person has saved a base price, have the salesperson change that inquiry's tonnage. Open the bell beside Refresh. | The inquiry is Awaiting Price again. The bell lists its `PR-` number and the old and new weight. Opening it shows Save Prices. Saving a base price, or leaving every base price blank, removes it from the bell. |
 
 ## Procurement manager
 
