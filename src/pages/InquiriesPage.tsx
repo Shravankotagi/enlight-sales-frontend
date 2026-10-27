@@ -4175,6 +4175,12 @@ export default function InquiriesPage() {
         }
         return;
       }
+      if (nosMtMissing(item)) {
+        toast.error(`Line ${i + 1}: ${NOS_MT_MISSING_MESSAGE}`);
+        const el = document.getElementById(`form-item-spec-${i}`) as HTMLInputElement;
+        if (el) el.focus();
+        return;
+      }
     }
 
     if (!formDeliveryLocation.trim()) {
@@ -6124,6 +6130,9 @@ export default function InquiriesPage() {
                                         return n;
                                       });
                                     }
+                                    if (fieldErrors[`qty_${idx}`] === NOS_MT_MISSING_MESSAGE && !nosMtMissing(updated[idx])) {
+                                      setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
+                                    }
                                     if (finalHsn && fieldErrors[`hsn_${idx}`]) {
                                       setFieldErrors((prev) => {
                                         const n = { ...prev };
@@ -6302,6 +6311,9 @@ export default function InquiriesPage() {
                                     quantityTons: totalTons,
                                   });
                                   setSaveSuccess(false);
+                                  if (fieldErrors[`qty_${idx}`] === NOS_MT_MISSING_MESSAGE && !nosMtMissing(updated[idx])) {
+                                    setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
+                                  }
                                 }}
                                 className="w-[48px] shrink-0 border-0 border-l border-slate-300 bg-slate-50 px-0.5 py-1 text-[10px] font-bold text-slate-700 outline-none"
                               >
@@ -6395,6 +6407,9 @@ export default function InquiriesPage() {
                                           quantityTons: totalTons,
                                         });
                                         setSaveSuccess(false);
+                                        if (fieldErrors[`qty_${idx}`] === NOS_MT_MISSING_MESSAGE && !nosMtMissing(updated[idx])) {
+                                          setFieldErrors(prev => { const n = { ...prev }; delete n[`qty_${idx}`]; return n; });
+                                        }
                                       }}
                                       placeholder={
                                         itemWeight.canConvert && itemWeight.mt
@@ -8453,6 +8468,9 @@ export default function InquiriesPage() {
                               );
                             })()}
                           </div>
+                          {nosMtMissing(item) && (
+                            <span className="text-[9px] text-red-600 font-normal block text-left mt-0.5 leading-snug max-w-[240px]">{NOS_MT_MISSING_MESSAGE}</span>
+                          )}
                         </td>
                         <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
                           <input

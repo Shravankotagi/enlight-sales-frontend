@@ -24,6 +24,7 @@ import {
   Check,
   ExternalLink,
   Edit2,
+  Trash2,
   UserCheck,
   X,
   ArrowUpRight,
@@ -708,6 +709,15 @@ function CustomerProfilePageContent() {
                 Edit Profile
               </button>
             )}
+            {isAdmin && !String(customer.id || '').startsWith('virtual-') && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="h-9 inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 bg-white hover:bg-rose-50 px-3.5 rounded-xl border border-rose-200 transition-colors cursor-pointer shadow-2xs">
+                <Trash2 size={13} />
+                Delete
+              </button>
+            )}
             <button
               onClick={() => navigate('/orders')}
               className="h-9 inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 rounded-xl transition-colors cursor-pointer shadow-sm">
@@ -972,7 +982,7 @@ function CustomerProfilePageContent() {
                             </td>
                             <td className="py-3 px-3 text-slate-600">
                               {items.length > 0 ? (
-                                <p className="truncate max-w-xs">{items.map((i: any) => i.sku_text || 'Item').join(', ')}</p>
+                                <p className="whitespace-nowrap">{items.length} {items.length === 1 ? 'Item' : 'Items'}</p>
                               ) : (
                                 <span className="text-slate-400">Standard Spec</span>
                               )}
@@ -1535,6 +1545,49 @@ function CustomerProfilePageContent() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <h3 className="text-base font-bold text-slate-900">Delete this customer?</h3>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Do you want to delete <span className="font-semibold text-slate-900">{customer.customer_name}</span>?
+              This removes the customer and all related inquiries, orders, visits, and complaints. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await customersApi.delete(String(customer.id));
+                    toast.success('Customer and related records deleted');
+                    queryClient.invalidateQueries({ queryKey: ['customers'] });
+                    queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+                    queryClient.invalidateQueries({ queryKey: ['customers-reorder'] });
+                    queryClient.invalidateQueries({ queryKey: ['customer-detail'] });
+                    navigate('/customers');
+                  } catch (err: any) {
+                    const errMsg = err?.response?.data?.message || err?.message || 'Could not delete this customer';
+                    toast.error(Array.isArray(errMsg) ? errMsg.join(', ') : errMsg);
+                    setDeleting(false);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl cursor-pointer">
+                {deleting ? 'Deleting...' : 'Delete customer'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

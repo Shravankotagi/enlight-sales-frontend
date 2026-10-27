@@ -176,6 +176,7 @@ export const customersApi = {
   importClients: (data: any) => API.post('/customers/import', data),
   create: (data: any) => API.post('/customers', data),
   update: (id: string, data: any) => API.patch(`/customers/${encodeURIComponent(id)}`, data),
+  delete: (id: string) => API.delete(`/customers/${encodeURIComponent(id)}`),
 };
 
 export const kraApi = {
