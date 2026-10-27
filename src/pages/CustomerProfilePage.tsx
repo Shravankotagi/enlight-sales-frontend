@@ -296,6 +296,8 @@ function CustomerProfilePageContent() {
   const queryClient = useQueryClient();
   const { isSalesManager, isAdmin, effectivePhone, guardAction, can } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits'>('overview');
   const [copiedGst, setCopiedGst] = useState(false);
@@ -709,7 +711,7 @@ function CustomerProfilePageContent() {
                 Edit Profile
               </button>
             )}
-            {isAdmin && !String(customer.id || '').startsWith('virtual-') && (
+            {(can('customers.delete') || isAdmin) && !String(customer.id || '').startsWith('virtual-') && (
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}

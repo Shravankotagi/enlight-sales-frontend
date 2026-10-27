@@ -23,7 +23,6 @@ import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
 import SyncBiginButton from '../components/SyncBiginButton';
-import NewCustomerModal from '../components/NewCustomerModal';
 import { Select } from '../components/ui/select';
 
 function HealthBadge({ risk }: { risk: string }) {
@@ -272,7 +271,6 @@ export default function CustomersPage() {
   };
 
   const [manualRefreshing, setManualRefreshing] = useState(false);
-  const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
 
   const { data: rawCustomersData = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['customers-churn', effectivePhone, activeRole, activeMode],
@@ -423,15 +421,6 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowNewCustomerModal(true)}
-              className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0"
-              title="Add New Customer"
-            >
-              <Plus size={15} />
-              <span>New Customer</span>
-            </button>
             <SyncBiginButton
               onSynced={() => {
                 queryClient.invalidateQueries({ queryKey: ['orders-list'] });

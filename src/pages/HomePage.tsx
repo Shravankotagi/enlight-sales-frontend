@@ -17,7 +17,6 @@ import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import { getFollowUpStatusInfo } from '../utils/visitUtils';
-import { deriveSegment } from './CustomersPage';
 import { isProductInquiry, resolveInquiryDealStageKey } from './InquiriesPage';
 import {
   Package,

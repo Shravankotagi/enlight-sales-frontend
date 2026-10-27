@@ -205,6 +205,18 @@ export interface LineItemDetail {
   igst_amount?: number;
 }
 
+export const NOS_MT_MISSING_MESSAGE =
+  'MT not calculated: enter Length*Width*Thickness in spec (e.g. 2500*1250*10) or type MT manually.';
+
+/** Nos weight comes from three dimensions. A typed MT is accepted instead. */
+export function nosMtMissing(item: LineItemDetail): boolean {
+  if (normalizeUnit(item?.unit) !== 'Nos') return false;
+  if (!(Number(item?.quantity) > 0)) return false;
+  if (item?.is_manual_mt && Number(item?.converted_mt) > 0) return false;
+  const weight = formatLineItemWeightMt(item);
+  return !(weight?.mt != null && weight.mt > 0);
+}
+
 const INQUIRY_EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
 export function inquiryEmailFrom(...values: unknown[]): string {

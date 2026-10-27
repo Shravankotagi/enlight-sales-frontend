@@ -175,6 +175,8 @@ export const customersApi = {
   getLossAnalytics: (params?: any) => API.get('/customers/loss-analytics', { params }),
   importClients: (data: any) => API.post('/customers/import', data),
   create: (data: any) => API.post('/customers', data),
+  createCustomer: (data: any, params?: any) => API.post('/customers', data, { params }),
+  checkConflict: (params: any) => API.get('/customers/check-conflict', { params }),
   update: (id: string, data: any) => API.patch(`/customers/${encodeURIComponent(id)}`, data),
   delete: (id: string) => API.delete(`/customers/${encodeURIComponent(id)}`),
 };
