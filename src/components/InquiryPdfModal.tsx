@@ -479,7 +479,7 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               <table className="w-full text-left text-[12px] border-collapse">
                 <thead>
                   <tr className="bg-[#525E6F] text-white font-bold text-[12px]">
-                    <th className="px-3 py-2.5 text-center w-[5%] font-bold">#</th>
+                    <th className="px-3 py-2.5 text-center w-[5%] font-bold">Sr. No.</th>
                     <th className="px-4 py-2.5 w-[31%] font-bold">Item &amp; Description</th>
                     <th className="px-3 py-2.5 text-center w-[13%] font-bold">HSN/SAC</th>
                     <th className="px-3 py-2.5 text-center w-[13%] font-bold">Brand/Make</th>

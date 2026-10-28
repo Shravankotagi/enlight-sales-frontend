@@ -1883,7 +1883,7 @@ export default function VisitsPage() {
             </colgroup>
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="px-3 py-3.5 text-center">#</th>
+                <th className="px-3 py-3.5 text-center whitespace-nowrap">Sr. No.</th>
                 <th className="px-5 py-3.5 text-left">Customer</th>
                 <th className="px-4 py-3.5 text-left">Contact Person</th>
                 <th className="px-4 py-3.5 text-left">Location</th>
@@ -1913,7 +1913,7 @@ export default function VisitsPage() {
                       key={v.id || idx}
                       className="hover:bg-slate-50/70 transition-colors group align-top">
                       {/* 0. Serial Number */}
-                      <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                      <td data-label="Sr. No." className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
                       </td>
 

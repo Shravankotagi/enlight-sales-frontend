@@ -305,7 +305,7 @@ Shiva Fabrication,Ramesh Verma,917896248624,ramesh@shiva.com,Pune,27CCCCC2222C3Z
                 <table className="w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-700 text-slate-200 uppercase text-[10px]">
                     <tr>
-                      <th className="p-2">#</th>
+                      <th className="p-2 whitespace-nowrap">Sr. no.</th>
                       <th className="p-2">Company Name</th>
                       <th className="p-2">Contact Person</th>
                       <th className="p-2">Phone</th>
