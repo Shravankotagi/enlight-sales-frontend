@@ -5,6 +5,11 @@
   --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
   --font-poppins: 'Poppins', sans-serif;
   --font-serif: 'Libre Baskerville', Georgia, serif;
+  --container-7-5xl: 84rem;
+}
+
+@utility max-w-7\.5xl {
+  max-width: 84rem;
 }
 
 /* 

@@ -82,6 +82,7 @@ export interface InquiryItem {
   source_channel?: string;
   media_urls?: string[];
   has_media?: boolean;
+  preferred_make?: string;
   overall_confidence?: number;
   ai_extraction_json?: any;
   created_at: string;
@@ -91,6 +92,8 @@ export interface InquiryItem {
 export interface LineItemDetail {
   sku_text: string;
   dimensions?: string;
+  brand?: string;
+  make?: string;
   hsn_code?: string;
   quantity: number;
   unit?: string;
@@ -869,6 +872,7 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => {
     const skuText = item.sku_text || item.description || '';
     const itemDim = item.dimensions || '';
+    const itemMake = String((item as any).brand || (item as any).make || (item as any).preferred_make || aiJson.preferred_make || aiJson.make || '').trim();
     const rawQty = Number((item as any).original_quantity ?? item.quantity ?? (item as any).qty) || 0;
     const rawUnit = normalizeUnit((item as any).original_unit || item.unit) || 'MT';
     const baseA = Number(item.amount) || 0;
@@ -880,6 +884,8 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
     return {
       sku_text: skuText,
       dimensions: itemDim,
+      brand: itemMake,
+      make: itemMake,
       hsn_code:
         (item.hsn_code && item.hsn_code.trim()) ||
         (item as any).hsn ||
@@ -907,10 +913,14 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   ) {
     const multiItems = extractMultiItemsFromText(textRaw);
     if (multiItems.length > 0) {
+      const globalMake = String(aiJson.preferred_make || aiJson.make || inq?.preferred_make || '').trim();
       rawLineItems = multiItems.map(m => {
         const calc = calculateLineItem(m);
+        const itemMake = String((m as any).brand || (m as any).make || globalMake).trim();
         return {
           ...m,
+          brand: itemMake,
+          make: itemMake,
           hsn_code:
             (m.hsn_code && m.hsn_code.trim()) ||
             detectHsnCode(m.sku_text, m.dimensions) ||
@@ -1616,6 +1626,8 @@ export default function InquiriesPage() {
     {
       sku_text: '',
       dimensions: '',
+      brand: '',
+      make: '',
       hsn_code: '',
       quantity: 0,
       unit: 'MT',
@@ -1649,6 +1661,8 @@ export default function InquiriesPage() {
       {
         sku_text: '',
         dimensions: '',
+        brand: '',
+        make: '',
         hsn_code: '',
         quantity: 0,
         unit: 'MT',
@@ -2483,9 +2497,12 @@ export default function InquiriesPage() {
           amount: item.isManualAmount ? item.amount : 0,
         });
 
+        const itemMake = String((item as any).brand || (item as any).make || (item as any).preferred_make || ai.preferred_make || ai.make || inq.preferred_make || '').trim();
         return {
           sku_text: skuText,
           dimensions: itemDim,
+          brand: itemMake,
+          make: itemMake,
           hsn_code:
             (item.hsn_code && item.hsn_code.trim()) ||
             item.hsn ||
@@ -2604,9 +2621,15 @@ export default function InquiriesPage() {
         isInterState: isEditInterState,
       });
 
+      const allMakes = Array.from(new Set(itemsToSave.map(i => i.brand || i.make).filter(Boolean)));
+      const derivedPreferredMake = allMakes.join(', ');
+
       let summaryRequirement = '';
       if (itemsToSave.length > 0) {
-        const itemStrs = itemsToSave.map(item => `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}: ${item.quantity} ${item.unit || 'MT'} @ ₹${Number(item.rate) || 0}/${item.unit || 'MT'}`);
+        const itemStrs = itemsToSave.map(item => {
+          const makeStr = (item.brand || item.make) ? ` [Make: ${item.brand || item.make}]` : '';
+          return `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}${makeStr}: ${item.quantity} ${item.unit || 'MT'} @ ₹${Number(item.rate) || 0}/${item.unit || 'MT'}`;
+        });
         summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       } else {
         summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${(Number(editDetails.unitPrice) || 0).toLocaleString('en-IN')}/MT. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
@@ -2628,6 +2651,8 @@ export default function InquiriesPage() {
         is_inter_state: isEditInterState,
         paymentTerms: editDetails.paymentTerms,
         payment_terms: editDetails.paymentTerms,
+        preferred_make: derivedPreferredMake || (selectedInquiry?.ai_extraction_json as any)?.preferred_make || undefined,
+        make: derivedPreferredMake || (selectedInquiry?.ai_extraction_json as any)?.make || undefined,
         lineItems: itemsToSave,
         line_items: itemsToSave,
         requirement: summaryRequirement,
@@ -2913,9 +2938,22 @@ export default function InquiriesPage() {
                 amount: amt,
               });
 
+              const itemMake = String(
+                i.preferred_make ||
+                i.make ||
+                i.brand ||
+                extracted.preferred_make ||
+                extracted.make ||
+                extracted.brand ||
+                ''
+              ).trim();
+
               return {
                 ...calc,
                 sku_text: skuText,
+                dimensions: dims,
+                brand: itemMake,
+                make: itemMake,
                 hsn_code: detectedHsn,
                 converted_mt: i.weight_mt !== undefined && i.weight_mt !== null ? i.weight_mt : calc.converted_mt,
               };
@@ -2948,6 +2986,12 @@ export default function InquiriesPage() {
               rawUnit = 'KG';
             }
             const r = Number(extracted.rate) || 0;
+            const singleMake = String(
+              extracted.preferred_make ||
+              extracted.make ||
+              extracted.brand ||
+              ''
+            ).trim();
             const calc = calculateLineItem({
               sku_text: skuText,
               dimensions: dims,
@@ -2957,7 +3001,7 @@ export default function InquiriesPage() {
               rate: r,
               amount: 0,
             });
-            setFormLineItems([{ ...calc, sku_text: skuText, hsn_code: detectedHsn }]);
+            setFormLineItems([{ ...calc, sku_text: skuText, dimensions: dims, brand: singleMake, make: singleMake, hsn_code: detectedHsn }]);
             filledFromDocument = true;
           }
 
@@ -3151,6 +3195,8 @@ export default function InquiriesPage() {
         return {
           sku_text: i.sku_text.trim(),
           dimensions: i.dimensions ? i.dimensions.trim() : '',
+          brand: (i.brand || i.make || '').trim(),
+          make: (i.make || i.brand || '').trim(),
           hsn_code: resolvedHsn,
           quantity: Number(i.quantity) || 0,
           unit: normalizeUnit(i.unit) || 'MT',
@@ -3168,6 +3214,9 @@ export default function InquiriesPage() {
           is_manual_mt: i.is_manual_mt || undefined,
         };
       });
+
+      const allCreatedMakes = Array.from(new Set(lineItemsPayload.map(i => i.brand || i.make).filter(Boolean)));
+      const derivedPreferredMake = allCreatedMakes.join(', ') || formPreferredMake.trim();
 
       const aiExtractionJson: any = {
         ...(extractedJson || {}),
@@ -3202,8 +3251,8 @@ export default function InquiriesPage() {
         deliveryLocation: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim(),
         paymentTerms: formPaymentTerms.trim(),
-        preferred_make: formPreferredMake.trim(),
-        make: formPreferredMake.trim(),
+        preferred_make: derivedPreferredMake,
+        make: derivedPreferredMake,
         line_items: lineItemsPayload,
         lineItems: lineItemsPayload,
         additional_notes: formRequirement.trim(),
@@ -3213,14 +3262,15 @@ export default function InquiriesPage() {
       const itemStrs = lineItemsPayload.map((item, idx) => {
         const sku = item.sku_text || 'Item';
         const dims = item.dimensions ? ` (${item.dimensions})` : '';
+        const makeStr = (item.brand || item.make) ? ` [Make: ${item.brand || item.make}]` : '';
         const qty = item.quantity ? ` - ${item.quantity} ${item.unit || 'MT'}` : '';
         const rate = Number(item.rate) > 0 ? ` @ ₹${item.rate}/${item.unit || 'MT'}` : '';
-        return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
+        return `${idx + 1}. ${sku}${dims}${makeStr}${qty}${rate}`.trim();
       }).filter(Boolean);
 
       const reqDetails = [
         itemStrs.length > 0 ? `Material:\n${itemStrs.join('\n')}` : '',
-        formPreferredMake.trim() ? `Preferred Make: ${formPreferredMake.trim()}` : '',
+        derivedPreferredMake ? `Preferred Make: ${derivedPreferredMake}` : '',
         formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : '',
         formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : '',
         formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : '',
@@ -4123,7 +4173,7 @@ export default function InquiriesPage() {
           className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overscroll-contain animate-in fade-in duration-150"
           onClick={handleCloseDrawer}>
           <div
-            className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
+            className="mobile-sheet bg-white rounded-2xl max-w-7.5xl max-w-[84rem] w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={e => e.stopPropagation()}>
             {/* Drawer Header (Fixed Top) */}
             <div className="sheet-header flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white z-10">
@@ -4374,13 +4424,16 @@ export default function InquiriesPage() {
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
                         <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
-                        <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
+                        <th className="px-4 py-3 border-r border-slate-700 w-[24%] align-middle">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle">
                           HSN/SAC
                         </th>
-                        <th className="px-3 py-3 border-r border-slate-700 w-[20%] text-center align-middle">
+                        <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle">
+                          Brand/Make
+                        </th>
+                        <th className="px-3 py-3 border-r border-slate-700 w-[17%] text-center align-middle">
                           Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
@@ -4558,6 +4611,28 @@ export default function InquiriesPage() {
                             {fieldErrors[`hsn_${idx}`] && (
                               <span className="text-[10px] text-red-600 font-bold block">{fieldErrors[`hsn_${idx}`]}</span>
                             )}
+                          </td>
+                          <td data-label="Brand/Make" className="px-2 py-3.5 border-r border-slate-200 text-center">
+                            <Select
+                              value={item.brand || item.make || ''}
+                              onChange={(e) => {
+                                const updated = [...(editDetails.lineItems || [])];
+                                updated[idx] = { ...updated[idx], brand: e.target.value, make: e.target.value };
+                                setEditDetails({ ...editDetails, lineItems: updated });
+                                setSaveSuccess(false);
+                              }}
+                              wrapperClassName="w-full"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium hover:border-blue-400"
+                              placeholder="Select make"
+                            >
+                              <option value="">Select make</option>
+                              {INQUIRY_PREFERRED_MAKES.map((make) => (
+                                <option key={make} value={make}>{make}</option>
+                              ))}
+                              {(item.brand || item.make) && !INQUIRY_PREFERRED_MAKES.includes(item.brand || item.make || '') && (
+                                <option value={item.brand || item.make}>{item.brand || item.make}</option>
+                              )}
+                            </Select>
                           </td>
                           <td data-label="Qty" className="px-2.5 py-3.5 border-r border-slate-200">
                             <div className="flex items-center gap-1.5 w-full min-w-[170px]">
@@ -4890,10 +4965,28 @@ export default function InquiriesPage() {
                                   onClick={() => {
                                     const current = editDetails.lineItems && editDetails.lineItems.length > 0
                                       ? editDetails.lineItems
-                                      : [{ sku_text: editDetails.productType || '', dimensions: '', hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
+                                      : [{ sku_text: editDetails.productType || '', dimensions: '', brand: '', make: '', hsn_code: '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }];
                                     const updated = [
                                       ...current,
-                                      { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: isEditInterState ? 0 : 9, cgst_amount: 0, sgst_rate: isEditInterState ? 0 : 9, sgst_amount: 0, igst_rate: isEditInterState ? 18 : 0, igst_amount: 0, total_gst: 0, final_amount: 0 },
+                                      {
+                                        sku_text: '',
+                                        dimensions: '',
+                                        brand: current[idx]?.brand || current[0]?.brand || '',
+                                        make: current[idx]?.make || current[0]?.make || '',
+                                        hsn_code: '',
+                                        quantity: 0,
+                                        unit: 'MT',
+                                        rate: 0,
+                                        amount: 0,
+                                        cgst_rate: isEditInterState ? 0 : 9,
+                                        cgst_amount: 0,
+                                        sgst_rate: isEditInterState ? 0 : 9,
+                                        sgst_amount: 0,
+                                        igst_rate: isEditInterState ? 18 : 0,
+                                        igst_amount: 0,
+                                        total_gst: 0,
+                                        final_amount: 0,
+                                      },
                                     ];
                                     setEditDetails({ ...editDetails, lineItems: updated });
                                     setSaveSuccess(false);
@@ -5649,7 +5742,7 @@ export default function InquiriesPage() {
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
         <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="mobile-sheet bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-7.5xl max-w-[84rem] w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="sheet-header flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={20} />
@@ -5894,13 +5987,16 @@ export default function InquiriesPage() {
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
                       <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
-                      <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
+                      <th className="px-4 py-3 border-r border-slate-700 w-[24%] align-middle">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle">
                         HSN/SAC
                       </th>
-                      <th className="px-3 py-3 border-r border-slate-700 w-[19%] text-center align-middle">
+                      <th className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle">
+                        Brand/Make
+                      </th>
+                      <th className="px-3 py-3 border-r border-slate-700 w-[17%] text-center align-middle">
                         Quantity, Unit &amp; Wt (MT) <span className="text-red-500 font-bold">*</span>
                       </th>
                       <th className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle">
@@ -6044,6 +6140,27 @@ export default function InquiriesPage() {
                             placeholder="e.g. 72083730"
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
+                        </td>
+                        <td data-label="Brand/Make" className="px-2 py-3.5 border-r border-slate-200 text-center">
+                          <Select
+                            value={item.brand || item.make || ''}
+                            onChange={(e) => {
+                              const updated = [...formLineItems];
+                              updated[idx] = { ...updated[idx], brand: e.target.value, make: e.target.value };
+                              setFormLineItems(updated);
+                            }}
+                            wrapperClassName="w-full"
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium hover:border-blue-400"
+                            placeholder="Select make"
+                          >
+                            <option value="">Select make</option>
+                            {INQUIRY_PREFERRED_MAKES.map((make) => (
+                              <option key={make} value={make}>{make}</option>
+                            ))}
+                            {(item.brand || item.make) && !INQUIRY_PREFERRED_MAKES.includes(item.brand || item.make || '') && (
+                              <option value={item.brand || item.make}>{item.brand || item.make}</option>
+                            )}
+                          </Select>
                         </td>
                         <td data-label="Qty" className="px-2.5 py-3.5 border-r border-slate-200">
                           <div className="flex items-center gap-1.5 w-full min-w-[170px]">
@@ -6336,7 +6453,25 @@ export default function InquiriesPage() {
                                 onClick={() => {
                                   const updated = [
                                     ...formLineItems,
-                                    { sku_text: '', dimensions: '', hsn_code: '', quantity: 0, unit: 'MT', rate: 0, amount: 0, cgst_rate: isFormInterState ? 0 : 9, cgst_amount: 0, sgst_rate: isFormInterState ? 0 : 9, sgst_amount: 0, igst_rate: isFormInterState ? 18 : 0, igst_amount: 0, total_gst: 0, final_amount: 0 },
+                                    {
+                                      sku_text: '',
+                                      dimensions: '',
+                                      brand: formLineItems[idx]?.brand || formLineItems[0]?.brand || '',
+                                      make: formLineItems[idx]?.make || formLineItems[0]?.make || '',
+                                      hsn_code: '',
+                                      quantity: 0,
+                                      unit: 'MT',
+                                      rate: 0,
+                                      amount: 0,
+                                      cgst_rate: isFormInterState ? 0 : 9,
+                                      cgst_amount: 0,
+                                      sgst_rate: isFormInterState ? 0 : 9,
+                                      sgst_amount: 0,
+                                      igst_rate: isFormInterState ? 18 : 0,
+                                      igst_amount: 0,
+                                      total_gst: 0,
+                                      final_amount: 0,
+                                    },
                                   ];
                                   setFormLineItems(updated);
                                 }}
@@ -6453,35 +6588,15 @@ export default function InquiriesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Preferred Brand / Make</label>
-                  <Select
-                    value={formPreferredMake}
-                    onChange={e => setFormPreferredMake(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
-                    placeholder="Select preferred make"
-                  >
-                    <option value="">Select preferred make</option>
-                    {INQUIRY_PREFERRED_MAKES.map((make) => (
-                      <option key={make} value={make}>{make}</option>
-                    ))}
-                    {formPreferredMake && !INQUIRY_PREFERRED_MAKES.includes(formPreferredMake) && (
-                      <option value={formPreferredMake}>{formPreferredMake}</option>
-                    )}
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes</label>
-                  <input
-                    type="text"
-                    placeholder="Special instructions, delivery timeline, or logistics notes"
-                    value={formRequirement}
-                    onChange={e => setFormRequirement(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes</label>
+                <input
+                  type="text"
+                  placeholder="Special instructions, delivery timeline, or logistics notes"
+                  value={formRequirement}
+                  onChange={e => setFormRequirement(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
+                />
               </div>
 
               <div className="sheet-actions pt-2 flex flex-wrap justify-end gap-2">
