@@ -3874,7 +3874,7 @@ export default function InquiriesPage() {
             <table className="stack-table w-full table-fixed text-left border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider shadow-2xs">
                 <tr>
-                  <th className="px-3 py-3.5 text-center w-[4%]">#</th>
+                  <th className="px-3 py-3.5 text-center w-[4%]">Sr. No.</th>
                   <th className="px-5 py-3.5 text-left w-[22%]">Customer</th>
                   <th className="px-4 py-3.5 text-center w-[14%]">Inquiry ID</th>
                   <th className="px-4 py-3.5 text-center w-[18%]">Items Summary</th>
@@ -3966,7 +3966,7 @@ export default function InquiriesPage() {
                     key={inq.id || idx}
                     onClick={() => handleOpenDrawer(inq)}
                     className="group hover:bg-slate-50/75 transition-colors cursor-pointer">
-                    <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                    <td data-label="Sr. No." className="px-3 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                     <td data-label="Customer" className="px-5 py-3.5 text-left">
                       <div className="font-bold text-slate-900 text-sm truncate">
                         <span className="group-hover:text-blue-600 transition-colors inline-block">
@@ -4423,7 +4423,7 @@ export default function InquiriesPage() {
                   <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
-                        <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                        <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">Sr. No.</th>
                         <th className="px-4 py-3 border-r border-slate-700 w-[24%] align-middle">
                           Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                         </th>
@@ -4465,7 +4465,7 @@ export default function InquiriesPage() {
                         : [{ sku_text: editDetails.productType || '', dimensions: [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), hsn_code: editDetails.productType ? (detectHsnCode(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x ')) || findCustomProductMatch(editDetails.productType, [editDetails.thickness, editDetails.width, editDetails.length].filter(Boolean).join(' x '), rawDbProducts)?.hsn_code || '') : '', quantity: editDetails.quantityTons || 0, unit: 'MT', rate: editDetails.unitPrice || 0, amount: editDetails.totalAmount || 0 }]
                       ).map((item, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
-                          <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                          <td data-label="Sr. No." className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
                           <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                             <div className="space-y-1">
                               <input
@@ -5986,7 +5986,7 @@ export default function InquiriesPage() {
                 <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">Sr. No.</th>
                       <th className="px-4 py-3 border-r border-slate-700 w-[24%] align-middle">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
@@ -6025,7 +6025,7 @@ export default function InquiriesPage() {
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/30">
-                        <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td data-label="Sr. No." className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
                         <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input

@@ -1203,7 +1203,7 @@ function CustomerProfilePageContent() {
               <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
-                    <th className="py-3 px-3">#</th>
+                    <th className="py-3 px-3">Sr. No.</th>
                     <th className="py-3 px-3">PO Number / Deal</th>
                     <th className="py-3 px-3">Date</th>
                     <th className="py-3 px-3">Line Items</th>
@@ -1284,7 +1284,7 @@ function CustomerProfilePageContent() {
               <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
-                    <th className="py-3 px-3">#</th>
+                    <th className="py-3 px-3">Sr. No.</th>
                     <th className="py-3 px-3">Date</th>
                     <th className="py-3 px-3">Source Channel</th>
                     <th className="py-3 px-3">Raw / Extracted Requirement</th>
@@ -1390,7 +1390,7 @@ function CustomerProfilePageContent() {
               <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
-                    <th className="py-3 px-3">#</th>
+                    <th className="py-3 px-3">Sr. No.</th>
                     <th className="py-3 px-3">Type</th>
                     <th className="py-3 px-3">Reported Date</th>
                     <th className="py-3 px-3">Issue Description</th>
@@ -1466,7 +1466,7 @@ function CustomerProfilePageContent() {
               <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
-                    <th className="py-3 px-3">#</th>
+                    <th className="py-3 px-3">Sr. No.</th>
                     <th className="py-3 px-3">Visited Date</th>
                     <th className="py-3 px-3">Salesperson</th>
                     <th className="py-3 px-3">Person Met</th>

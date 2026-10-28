@@ -1712,7 +1712,7 @@ export default function OrdersPage() {
           <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="px-4 py-3 text-center w-[4%]">#</th>
+                <th className="px-4 py-3 text-center w-[4%]">Sr. No.</th>
                 <th className="px-5 py-3 text-left w-[22%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
                 <th className="px-4 py-3 text-center w-[14%]">Reference PO</th>
@@ -1744,7 +1744,7 @@ export default function OrdersPage() {
                     <tr
                       key={ord.id || idx}
                       className="group hover:bg-slate-50/80 transition-colors">
-                      <td data-label="#" className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                      <td data-label="Sr. No." className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                       <td data-label="Customer" className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm">
                           <span className="truncate group-hover:text-blue-600 transition-colors inline-block">
@@ -2174,7 +2174,7 @@ export default function OrdersPage() {
                 <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">Sr. No.</th>
                       <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
@@ -2210,7 +2210,7 @@ export default function OrdersPage() {
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/30">
-                        <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td data-label="Sr. No." className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
                         <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input
