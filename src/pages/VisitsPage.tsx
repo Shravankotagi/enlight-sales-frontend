@@ -614,7 +614,10 @@ export default function VisitsPage() {
   const [resendSeconds, setResendSeconds] = useState(0);
   const [capturingGps, setCapturingGps] = useState(false);
   const gpsSessionRef = useRef<ReturnType<typeof createVisitGpsSession> | null>(null);
-  if (!gpsSessionRef.current) gpsSessionRef.current = createVisitGpsSession();
+  const visitGps = () => {
+    if (!gpsSessionRef.current) gpsSessionRef.current = createVisitGpsSession();
+    return gpsSessionRef.current;
+  };
 
   // Preset Days Helper
   const setFollowupPresetDays = (days: number, isEdit = false) => {
@@ -629,8 +632,8 @@ export default function VisitsPage() {
   };
 
   // GPS Coordinates & File Upload Helpers
-  const watchVisitGps = () => gpsSessionRef.current!.watchForAddress();
-  const readPhotoGps = () => gpsSessionRef.current!.readForPhoto();
+  const watchVisitGps = () => visitGps().watchForAddress();
+  const readPhotoGps = () => visitGps().readForPhoto();
 
   const refreshVisitLocation = async () => {
     setLocating(true);
