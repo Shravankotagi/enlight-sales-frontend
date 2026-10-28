@@ -508,7 +508,7 @@ export default function OrdersPage() {
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
   const queryClient = useQueryClient();
-  const { effectivePhone, employee, activeRole, activeMode, isAdmin, isSalesManager, guardAction } = useAuth();
+  const { effectivePhone, employee, activeRole, activeMode, isAdmin, isSalesManager, guardAction, can } = useAuth();
   const canViewSalesperson = isAdmin || isSalesManager;
   const [isSyncingZoho, setIsSyncingZoho] = useState(false);
 
@@ -981,6 +981,7 @@ export default function OrdersPage() {
   }, [formPoNumber, poReservationToken, showModal]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | File[] } }) => {
+    if (!guardAction('orders.attach_po')) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -1167,7 +1168,7 @@ export default function OrdersPage() {
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guardAction('orders.create')) return;
-    if (formPoNumber.trim() && !guardAction('orders.attach_po')) return;
+    if (formUploadedBase64 && !guardAction('orders.attach_po')) return;
 
     // 1. Client-side inline field validation before API call
     if (!formCustomerName.trim()) {
@@ -1574,13 +1575,15 @@ export default function OrdersPage() {
               <RefreshCw size={15} className={isFetching ? 'animate-spin text-blue-600' : ''} />
             </button>
 
-            <button
-              onClick={handleOpenCreateOrder}
-              disabled={allocatingPo}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
-              <Plus size={15} />
-              Create New Order
-            </button>
+            {can('orders.create') && (
+              <button
+                onClick={handleOpenCreateOrder}
+                disabled={allocatingPo}
+                className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
+                <Plus size={15} />
+                Create New Order
+              </button>
+            )}
           </div>
         </div>
 
@@ -1715,7 +1718,7 @@ export default function OrdersPage() {
           <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="px-4 py-3 text-center w-[4%]">#</th>
+                <th className="px-4 py-3 text-center w-[4%]">Sr. No.</th>
                 <th className="px-5 py-3 text-left w-[22%]">Customers</th>
                 <th className="px-4 py-3 text-center w-[14%]">PO Number</th>
                 <th className="px-4 py-3 text-center w-[14%]">Reference PO</th>
@@ -1747,7 +1750,7 @@ export default function OrdersPage() {
                     <tr
                       key={ord.id || idx}
                       className="group hover:bg-slate-50/80 transition-colors">
-                      <td data-label="#" className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
+                      <td data-label="Sr. No." className="px-4 py-3.5 font-medium text-slate-500 text-center">{globalIdx}</td>
                       <td data-label="Customer" className="px-5 py-3.5 text-left">
                         <div className="font-bold text-slate-900 text-sm">
                           <span className="truncate group-hover:text-blue-600 transition-colors inline-block">
@@ -1966,69 +1969,71 @@ export default function OrdersPage() {
             </div>
 
             {/* Upload PO Document Section */}
-            <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2.5">
-              <div className="flex items-center justify-between text-xs text-blue-900 font-bold">
-                <span className="flex items-center gap-1.5">
-                  <UploadCloud size={15} className="text-blue-600" />
-                  Upload PO Document (Auto-Fill via Gemini)
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
-              </div>
+            {can('orders.attach_po') && (
+              <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-blue-900 font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <UploadCloud size={15} className="text-blue-600" />
+                    Upload PO Document (Auto-Fill via Gemini)
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium font-mono">PDF, JPEG, PNG</span>
+                </div>
 
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const files = e.dataTransfer.files;
-                  if (files && files.length > 0) {
-                    handleFileUpload({ target: { files } } as any);
-                  }
-                }}
-                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl transition-all">
-                <input
-                  id="order-po-file-upload"
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                {isParsingDoc ? (
-                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 animate-pulse py-1">
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>AI Extracting PO details from document...</span>
-                  </div>
-                ) : formUploadedBase64 ? (
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
-                    <CheckCircle size={15} className="text-emerald-600 shrink-0" />
-                    <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const files = e.dataTransfer.files;
+                    if (files && files.length > 0) {
+                      handleFileUpload({ target: { files } } as any);
+                    }
+                  }}
+                  className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white/90 hover:bg-blue-50/60 rounded-xl transition-all">
+                  <input
+                    id="order-po-file-upload"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  {isParsingDoc ? (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 animate-pulse py-1">
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>AI Extracting PO details from document...</span>
+                    </div>
+                  ) : formUploadedBase64 ? (
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 py-1">
+                      <CheckCircle size={15} className="text-emerald-600 shrink-0" />
+                      <span className="truncate max-w-xs">{poFileName || 'Document Attached'}</span>
+                      <label
+                        htmlFor="order-po-file-upload"
+                        className="text-[10px] text-blue-600 underline ml-1 cursor-pointer"
+                      >
+                        Change
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRemoveUploadedOrderDocument}
+                        className="text-[10px] text-rose-600 underline ml-1 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
                     <label
                       htmlFor="order-po-file-upload"
-                      className="text-[10px] text-blue-600 underline ml-1 cursor-pointer"
+                      className="text-xs text-slate-600 font-medium py-1 cursor-pointer"
                     >
-                      Change
+                      Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={handleRemoveUploadedOrderDocument}
-                      className="text-[10px] text-rose-600 underline ml-1 cursor-pointer"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <label
-                    htmlFor="order-po-file-upload"
-                    className="text-xs text-slate-600 font-medium py-1 cursor-pointer"
-                  >
-                    Drop document here, or <span className="text-blue-600 font-bold underline">Browse File</span>
-                  </label>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <form onSubmit={handleCreateOrder} className="space-y-4">
               <div>
@@ -2177,7 +2182,7 @@ export default function OrdersPage() {
                 <table className="stack-table w-full lg:min-w-[960px] text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">#</th>
+                      <th className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle">Sr. No.</th>
                       <th className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle">
                         Description &amp; Specifications <span className="text-red-500 font-bold">*</span>
                       </th>
@@ -2213,7 +2218,7 @@ export default function OrdersPage() {
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/30">
-                        <td data-label="#" className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
+                        <td data-label="Sr. No." className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">{idx + 1}</td>
                         <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input

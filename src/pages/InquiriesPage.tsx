@@ -193,6 +193,7 @@ export interface InquiryItem {
   source_channel?: string;
   media_urls?: string[];
   has_media?: boolean;
+  preferred_make?: string;
   overall_confidence?: number;
   ai_extraction_json?: any;
   created_at: string;
@@ -215,6 +216,8 @@ export interface InquiryItem {
 export interface LineItemDetail {
   sku_text: string;
   dimensions?: string;
+  brand?: string;
+  make?: string;
   hsn_code?: string;
   quantity: number;
   unit?: string;
@@ -1260,63 +1263,42 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
 
   // Build lineItems from ai_extraction_json.line_items OR ai_extraction_json.lineItems (defensive both-key support)
   const lineItemsSource = aiJson.line_items || aiJson.lineItems || [];
-  let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map(
-    (item) => {
-      const skuText = item.sku_text || item.description || "";
-      const itemDim = item.dimensions || "";
-      const rawQty =
-        Number(
-          (item as any).original_quantity ?? item.quantity ?? (item as any).qty,
-        ) || 0;
-      const rawUnit =
-        normalizeUnit((item as any).original_unit || item.unit) || "MT";
-      const baseA = Number(item.amount) || 0;
-      const cgstA =
-        item.cgst_amount !== undefined
-          ? Number(item.cgst_amount)
-          : Math.round(baseA * 0.09 * 100) / 100;
-      const sgstA =
-        item.sgst_amount !== undefined
-          ? Number(item.sgst_amount)
-          : Math.round(baseA * 0.09 * 100) / 100;
-      const totalG =
-        item.total_gst !== undefined
-          ? Number(item.total_gst)
-          : Math.round((cgstA + sgstA) * 100) / 100;
-      const finalA =
-        item.final_amount !== undefined
-          ? Number(item.final_amount)
-          : Math.round((baseA + totalG) * 100) / 100;
+  let rawLineItems: LineItemDetail[] = calculateLineItems(lineItemsSource).map((item) => {
+    const skuText = item.sku_text || item.description || '';
+    const itemDim = item.dimensions || '';
+    const itemMake = String((item as any).brand || (item as any).make || (item as any).preferred_make || aiJson.preferred_make || aiJson.make || '').trim();
+    const rawQty = Number((item as any).original_quantity ?? item.quantity ?? (item as any).qty) || 0;
+    const rawUnit = normalizeUnit((item as any).original_unit || item.unit) || 'MT';
+    const baseA = Number(item.amount) || 0;
+    const cgstA = item.cgst_amount !== undefined ? Number(item.cgst_amount) : Math.round(baseA * 0.09 * 100) / 100;
+    const sgstA = item.sgst_amount !== undefined ? Number(item.sgst_amount) : Math.round(baseA * 0.09 * 100) / 100;
+    const totalG = item.total_gst !== undefined ? Number(item.total_gst) : Math.round((cgstA + sgstA) * 100) / 100;
+    const finalA = item.final_amount !== undefined ? Number(item.final_amount) : Math.round((baseA + totalG) * 100) / 100;
 
-      return {
-        sku_text: skuText,
-        dimensions: itemDim,
-        hsn_code:
-          (item.hsn_code && item.hsn_code.trim()) ||
-          (item as any).hsn ||
-          detectHsnCode(skuText, itemDim) ||
-          "72083840",
-        quantity: rawQty,
-        unit: rawUnit,
-        rate: item.rate,
-        amount: item.amount,
-        cgst_rate: item.cgst_rate ?? 9,
-        cgst_amount: cgstA,
-        sgst_rate: item.sgst_rate ?? 9,
-        sgst_amount: sgstA,
-        total_gst: totalG,
-        final_amount: finalA,
-        converted_mt:
-          (item as any).converted_mt !== undefined
-            ? (item as any).converted_mt
-            : undefined,
-        is_manual_mt:
-          (item as any).is_manual_mt !== undefined
-            ? (item as any).is_manual_mt
-            : undefined,
-      };
-    },
-  );
+    return {
+      sku_text: skuText,
+      dimensions: itemDim,
+      brand: itemMake,
+      make: itemMake,
+      hsn_code:
+        (item.hsn_code && item.hsn_code.trim()) ||
+        (item as any).hsn ||
+        detectHsnCode(skuText, itemDim) ||
+        '',
+      quantity: rawQty,
+      unit: rawUnit,
+      rate: item.rate,
+      amount: item.amount,
+      cgst_rate: item.cgst_rate ?? 9,
+      cgst_amount: cgstA,
+      sgst_rate: item.sgst_rate ?? 9,
+      sgst_amount: sgstA,
+      total_gst: totalG,
+      final_amount: finalA,
+      converted_mt: (item as any).converted_mt !== undefined ? (item as any).converted_mt : undefined,
+      is_manual_mt: (item as any).is_manual_mt !== undefined ? (item as any).is_manual_mt : undefined,
+    };
+  });
 
   // Fallback: If line items is empty or contains 1 long unstructured blob, parse multi-items directly from text
   if (
@@ -1326,10 +1308,14 @@ export function parseInquiryText(text: string, inq: any): ExtractedDetails {
   ) {
     const multiItems = extractMultiItemsFromText(textRaw);
     if (multiItems.length > 0) {
+      const globalMake = String(aiJson.preferred_make || aiJson.make || inq?.preferred_make || '').trim();
       rawLineItems = multiItems.map((m) => {
         const calc = calculateLineItem(m);
+        const itemMake = String((m as any).brand || (m as any).make || globalMake).trim();
         return {
           ...m,
+          brand: itemMake,
+          make: itemMake,
           hsn_code:
             (m.hsn_code && m.hsn_code.trim()) ||
             detectHsnCode(m.sku_text, m.dimensions) ||
@@ -2254,6 +2240,8 @@ export default function InquiriesPage() {
   const emptyLineItem = (): LineItemDetail => ({
     sku_text: "",
     dimensions: "",
+    brand: "",
+    make: "",
     hsn_code: "",
     quantity: 0,
     unit: "MT",
@@ -2296,6 +2284,8 @@ export default function InquiriesPage() {
     {
       sku_text: "",
       dimensions: "",
+      brand: "",
+      make: "",
       hsn_code: "",
       quantity: 0,
       unit: "MT",
@@ -3300,9 +3290,12 @@ export default function InquiriesPage() {
           amount: item.isManualAmount ? item.amount : 0,
         });
 
+        const itemMake = String((item as any).brand || (item as any).make || (item as any).preferred_make || ai.preferred_make || ai.make || inq.preferred_make || '').trim();
         return {
           sku_text: skuText,
           dimensions: itemDim,
+          brand: itemMake,
+          make: itemMake,
           hsn_code:
             (item.hsn_code && item.hsn_code.trim()) ||
             item.hsn ||
@@ -3779,13 +3772,16 @@ export default function InquiriesPage() {
         0;
       const qBreakdown = calculateQuotationBreakdown(baseAmt, itemsToSave);
 
-      let summaryRequirement = "";
+      const allMakes = Array.from(new Set(itemsToSave.map(i => i.brand || i.make).filter(Boolean)));
+      const derivedPreferredMake = allMakes.join(', ');
+
+      let summaryRequirement = '';
       if (itemsToSave.length > 0) {
-        const itemStrs = itemsToSave.map(
-          (item) =>
-            `${item.sku_text || "Item"}${item.dimensions ? ` (${item.dimensions})` : ""}: ${item.quantity} ${item.unit || "MT"} @ ₹${Number(item.rate) || 0}/${item.unit || "MT"}`,
-        );
-        summaryRequirement = `${itemStrs.join(", ")}. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
+        const itemStrs = itemsToSave.map(item => {
+          const makeStr = (item.brand || item.make) ? ` [Make: ${item.brand || item.make}]` : '';
+          return `${item.sku_text || 'Item'}${item.dimensions ? ` (${item.dimensions})` : ''}${makeStr}: ${item.quantity} ${item.unit || 'MT'} @ ₹${Number(item.rate) || 0}/${item.unit || 'MT'}`;
+        });
+        summaryRequirement = `${itemStrs.join(', ')}. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       } else {
         summaryRequirement = `${editDetails.productType} (${editDetails.productForm}), ${editDetails.quantityTons} MT @ ₹${(Number(editDetails.unitPrice) || 0).toLocaleString("en-IN")}/MT. Subtotal: ₹${qBreakdown.formattedSubtotal}, Grand Total: ${qBreakdown.formattedGrandTotal}. Delivery: ${editDetails.deliveryLocation}, Payment: ${editDetails.paymentTerms}`;
       }
@@ -3804,6 +3800,8 @@ export default function InquiriesPage() {
         delivery_location: editDetails.deliveryLocation,
         paymentTerms: editDetails.paymentTerms,
         payment_terms: editDetails.paymentTerms,
+        preferred_make: derivedPreferredMake || (selectedInquiry?.ai_extraction_json as any)?.preferred_make || undefined,
+        make: derivedPreferredMake || (selectedInquiry?.ai_extraction_json as any)?.make || undefined,
         lineItems: itemsToSave,
         line_items: itemsToSave,
         requirement: summaryRequirement,
@@ -4179,17 +4177,26 @@ export default function InquiriesPage() {
                   amount: amt,
                 });
 
-                return {
-                  ...calc,
-                  sku_text: skuText,
-                  hsn_code: detectedHsn,
-                  converted_mt:
-                    i.weight_mt !== undefined && i.weight_mt !== null
-                      ? i.weight_mt
-                      : calc.converted_mt,
-                };
-              },
-            );
+              const itemMake = String(
+                i.preferred_make ||
+                i.make ||
+                i.brand ||
+                extracted.preferred_make ||
+                extracted.make ||
+                extracted.brand ||
+                ''
+              ).trim();
+
+              return {
+                ...calc,
+                sku_text: skuText,
+                dimensions: dims,
+                brand: itemMake,
+                make: itemMake,
+                hsn_code: detectedHsn,
+                converted_mt: i.weight_mt !== undefined && i.weight_mt !== null ? i.weight_mt : calc.converted_mt,
+              };
+            });
             if (mappedItems.length > 0) {
               setFormLineItems(mappedItems);
               filledFromDocument = true;
@@ -4216,6 +4223,12 @@ export default function InquiriesPage() {
               rawUnit = "KG";
             }
             const r = Number(extracted.rate) || 0;
+            const singleMake = String(
+              extracted.preferred_make ||
+              extracted.make ||
+              extracted.brand ||
+              ''
+            ).trim();
             const calc = calculateLineItem({
               sku_text: skuText,
               dimensions: dims,
@@ -4225,9 +4238,7 @@ export default function InquiriesPage() {
               rate: r,
               amount: 0,
             });
-            setFormLineItems([
-              { ...calc, sku_text: skuText, hsn_code: detectedHsn },
-            ]);
+            setFormLineItems([{ ...calc, sku_text: skuText, dimensions: dims, brand: singleMake, make: singleMake, hsn_code: detectedHsn }]);
             filledFromDocument = true;
           }
 
@@ -4451,6 +4462,8 @@ export default function InquiriesPage() {
         return {
           sku_text: i.sku_text.trim(),
           dimensions: i.dimensions ? i.dimensions.trim() : "",
+          brand: (i.brand || i.make || "").trim(),
+          make: (i.make || i.brand || "").trim(),
           hsn_code: i.hsn_code
             ? i.hsn_code.trim()
             : detectHsnCode(i.sku_text, i.dimensions) || "72083840",
@@ -4473,6 +4486,9 @@ export default function InquiriesPage() {
           is_manual_mt: i.is_manual_mt || undefined,
         };
       });
+
+      const allCreatedMakes = Array.from(new Set(lineItemsPayload.map(i => i.brand || i.make).filter(Boolean)));
+      const derivedPreferredMake = allCreatedMakes.join(', ') || formPreferredMake.trim();
 
       const aiExtractionJson: any = {
         ...(extractedJson || {}),
@@ -4504,45 +4520,30 @@ export default function InquiriesPage() {
         deliveryLocation: formDeliveryLocation.trim(),
         payment_terms: formPaymentTerms.trim(),
         paymentTerms: formPaymentTerms.trim(),
-        preferred_make: formPreferredMake.trim(),
-        make: formPreferredMake.trim(),
+        preferred_make: derivedPreferredMake,
+        make: derivedPreferredMake,
         line_items: lineItemsPayload,
         lineItems: lineItemsPayload,
         additional_notes: formRequirement.trim(),
         notes: formRequirement.trim(),
       };
 
-      const itemStrs = lineItemsPayload
-        .map((item, idx) => {
-          const sku = item.sku_text || "Item";
-          const dims = item.dimensions ? ` (${item.dimensions})` : "";
-          const qty = item.quantity
-            ? ` - ${item.quantity} ${item.unit || "MT"}`
-            : "";
-          const rate =
-            Number(item.rate) > 0
-              ? ` @ ₹${item.rate}/${item.unit || "MT"}`
-              : "";
-          return `${idx + 1}. ${sku}${dims}${qty}${rate}`.trim();
-        })
-        .filter(Boolean);
+      const itemStrs = lineItemsPayload.map((item, idx) => {
+        const sku = item.sku_text || 'Item';
+        const dims = item.dimensions ? ` (${item.dimensions})` : '';
+        const makeStr = (item.brand || item.make) ? ` [Make: ${item.brand || item.make}]` : '';
+        const qty = item.quantity ? ` - ${item.quantity} ${item.unit || 'MT'}` : '';
+        const rate = Number(item.rate) > 0 ? ` @ ₹${item.rate}/${item.unit || 'MT'}` : '';
+        return `${idx + 1}. ${sku}${dims}${makeStr}${qty}${rate}`.trim();
+      }).filter(Boolean);
 
       const reqDetails = [
         itemStrs.length > 0 ? `Material:\n${itemStrs.join("\n")}` : "",
-        formPreferredMake.trim()
-          ? `Preferred Make: ${formPreferredMake.trim()}`
-          : "",
-        formDeliveryLocation.trim()
-          ? `Delivery: ${formDeliveryLocation.trim()}`
-          : "",
-        formPaymentTerms.trim()
-          ? `Payment Terms: ${formPaymentTerms.trim()}`
-          : "",
+        derivedPreferredMake ? `Preferred Make: ${derivedPreferredMake}` : "",
+        formDeliveryLocation.trim() ? `Delivery: ${formDeliveryLocation.trim()}` : "",
+        formPaymentTerms.trim() ? `Payment Terms: ${formPaymentTerms.trim()}` : "",
         formRequirement.trim() ? `Notes: ${formRequirement.trim()}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
+      ].filter(Boolean).join("\n");
       const rawText = poFileName
         ? `[Inquiry Attachment: ${poFileName}]\n${reqDetails || "Inquiry"}`
         : reqDetails || "Inquiry";
@@ -5245,12 +5246,14 @@ export default function InquiriesPage() {
                   Confirmed Orders
                 </button>
 
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
-                >
-                  <Plus size={15} /> Log New Inquiry
-                </button>
+                {can('inquiries.manage') && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+                  >
+                    <Plus size={15} /> Log New Inquiry
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -5480,7 +5483,7 @@ export default function InquiriesPage() {
             <table className="w-full table-fixed text-left border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider shadow-2xs">
                 <tr>
-                  <th className="px-3 py-3.5 text-center w-[4%]">#</th>
+                  <th className="px-3 py-3.5 text-center w-[4%]">Sr. No.</th>
                   <th className="px-5 py-3.5 text-left w-[22%]">Customer</th>
                   <th className="px-4 py-3.5 text-center w-[14%]">
                     Inquiry ID
@@ -5641,10 +5644,10 @@ export default function InquiriesPage() {
                         onClick={() => handleOpenDrawer(inq)}
                         className="group hover:bg-slate-50/75 transition-colors cursor-pointer"
                       >
-                        <td className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                        <td data-label="Sr. No." className="px-3 py-3.5 font-medium text-slate-500 text-center">
                           {globalIdx}
                         </td>
-                        <td className="px-5 py-3.5 text-left">
+                        <td data-label="Customer" className="px-5 py-3.5 text-left">
                           <div className="font-bold text-slate-900 text-sm truncate">
                             <span className="group-hover:text-blue-600 transition-colors inline-block">
                               {details.companyName || (
@@ -5676,7 +5679,7 @@ export default function InquiriesPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                        <td data-label="Inquiry ID" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                           {procurementCode ? (
                             <div>
                               <div>{procurementCode}</div>
@@ -5686,7 +5689,7 @@ export default function InquiriesPage() {
                             inquiryCode
                           )}
                         </td>
-                        <td className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
+                        <td data-label="Items Summary" className="px-4 py-3.5 text-xs text-slate-700 text-center font-medium whitespace-nowrap">
                           {itemCount} {itemCount === 1 ? "Item" : "Items"}
                           {tonnageFormatted && (
                             <span className="text-slate-600 font-semibold ml-1.5">
@@ -5694,10 +5697,10 @@ export default function InquiriesPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
+                        <td data-label="Source Channel" className="px-4 py-3.5 text-center text-xs font-medium text-slate-700">
                           {formatSourceChannel(inq.source_channel)}
                         </td>
-                        <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <td data-label="Inquiry Status" className="px-4 py-3.5 text-center whitespace-nowrap">
                           {inquiryProcurementStatus &&
                           inquiryProcurementStatus !== "pricing_saved" ? (
                             <span
@@ -5721,7 +5724,7 @@ export default function InquiriesPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <td data-label="Actions" className="px-4 py-3.5 text-center whitespace-nowrap">
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
@@ -5938,7 +5941,7 @@ export default function InquiriesPage() {
           onClick={handleCloseDrawer}
         >
           <div
-            className="bg-white rounded-2xl max-w-7xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
+            className="mobile-sheet bg-white rounded-2xl max-w-7.5xl max-w-[84rem] w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drawer Header (Fixed Top) */}
@@ -6000,7 +6003,7 @@ export default function InquiriesPage() {
                   </span>
                 </button>
 
-                {can('inquiries.delete') && (
+                {can('inquiries.delete') && !isProcurement && (
                   <button
                     type="button"
                     disabled={deleteInquiryMutation.isPending}
@@ -6213,17 +6216,23 @@ export default function InquiriesPage() {
                         </th>
                         <th
                           rowSpan={2}
-                          className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle"
+                          className="px-4 py-3 border-r border-slate-700 w-[24%] align-middle"
                         >
                           Description &amp; Specifications{" "}
                           <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th
                           rowSpan={2}
-                          className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle"
+                          className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle"
                         >
                           HSN/SAC{" "}
                           <span className="text-red-500 font-bold">*</span>
+                        </th>
+                        <th
+                          rowSpan={2}
+                          className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle"
+                        >
+                          Brand/Make
                         </th>
                         <th
                           rowSpan={isInquiryPricingSaved ? 2 : 1}
@@ -6317,11 +6326,12 @@ export default function InquiriesPage() {
                       ).map((item, idx) => (
                         <tr key={idx} className={`hover:bg-blue-50/30 ${procurementRequest?.line_items[idx]?.line_status === "cannot_price" ? "bg-rose-50/40 opacity-70" : ""}`}>
                           <td
+                            data-label="Sr. No."
                             className={`px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs ${isInquiryPricingSaved ? "" : "hidden"}`}
                           >
                             {idx + 1}
                           </td>
-                          <td className="px-4 py-3.5 border-r border-slate-200">
+                          <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                             <div className="space-y-1">
                               <input
                                 type="text"
@@ -6556,7 +6566,29 @@ export default function InquiriesPage() {
                               </span>
                             )}
                           </td>
-                          <td className="w-[108px] max-w-[108px] px-1.5 py-2 border-r border-slate-200">
+                          <td data-label="Brand/Make" className="px-2 py-3.5 border-r border-slate-200 text-center">
+                            <Select
+                              value={item.brand || item.make || ''}
+                              onChange={(e) => {
+                                const updated = [...(editDetails.lineItems || [])];
+                                updated[idx] = { ...updated[idx], brand: e.target.value, make: e.target.value };
+                                setEditDetails({ ...editDetails, lineItems: updated });
+                                setSaveSuccess(false);
+                              }}
+                              wrapperClassName="w-full"
+                              className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium hover:border-blue-400"
+                              placeholder="Select make"
+                            >
+                              <option value="">Select make</option>
+                              {INQUIRY_PREFERRED_MAKES.map((make) => (
+                                <option key={make} value={make}>{make}</option>
+                              ))}
+                              {(item.brand || item.make) && !INQUIRY_PREFERRED_MAKES.includes(item.brand || item.make || '') && (
+                                <option value={item.brand || item.make}>{item.brand || item.make}</option>
+                              )}
+                            </Select>
+                          </td>
+                          <td data-label="Qty" className="w-[108px] max-w-[108px] px-1.5 py-2 border-r border-slate-200">
                             <div className="flex w-[100px] flex-col gap-1">
                               <div
                                 className={`flex overflow-hidden rounded bg-white ${
@@ -7052,6 +7084,8 @@ export default function InquiriesPage() {
                                               sku_text:
                                                 editDetails.productType || "",
                                               dimensions: "",
+                                              brand: "",
+                                              make: "",
                                               hsn_code: "",
                                               quantity:
                                                 editDetails.quantityTons || 0,
@@ -7066,6 +7100,8 @@ export default function InquiriesPage() {
                                       {
                                         sku_text: "",
                                         dimensions: "",
+                                        brand: current[idx]?.brand || current[0]?.brand || "",
+                                        make: current[idx]?.make || current[0]?.make || "",
                                         hsn_code: "",
                                         quantity: 0,
                                         unit: "MT",
@@ -7359,47 +7395,47 @@ export default function InquiriesPage() {
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-              {activeRole === "salesperson" && hasAvailableProcurementLine && (
-                  <span className="relative group">
-                    <button
-                      type="button"
-                      disabled={!isInquiryPricingSaved}
-                      title={
-                        ["quoted", "won"].includes(
-                          (selectedInquiry?.status || "").toLowerCase(),
-                        ) || isQuotationSent
-                          ? formatLastSharedLabel(
-                              lastSharedById[selectedInquiry.id] ||
-                                (selectedInquiry.ai_extraction_json as any)
-                                  ?.quotation_shared_at,
-                            ) || undefined
-                          : undefined
-                      }
-                      onClick={() => {
-                        setShareInquiry(selectedInquiry);
-                        setShareDetails(editDetails);
-                        setQuotationEmail(
-                          (selectedInquiry as any).customer_email ||
-                            (selectedInquiry as any).sender_email ||
-                            "",
-                        );
-                        setQuotationCcDraft("");
-                        setQuotationCcError("");
-                        setShowQuotationModal(true);
-                      }}
-                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:cursor-not-allowed disabled:bg-slate-300 flex items-center gap-1.5"
-                    >
-                      {["quoted", "won"].includes(
+              {activeRole === "salesperson" && hasAvailableProcurementLine && can('inquiries.send_quote') && (
+                <span className="relative group">
+                  <button
+                    type="button"
+                    disabled={!isInquiryPricingSaved}
+                    title={
+                      ["quoted", "won"].includes(
                         (selectedInquiry?.status || "").toLowerCase(),
-                      ) || isQuotationSent ? (
-                        <>
-                          <Check size={15} /> Share Again
-                        </>
-                      ) : (
-                        "Send quotation"
-                      )}
-                    </button>
-                  </span>
+                      ) || isQuotationSent
+                        ? formatLastSharedLabel(
+                            lastSharedById[selectedInquiry.id] ||
+                              (selectedInquiry.ai_extraction_json as any)
+                                ?.quotation_shared_at,
+                          ) || undefined
+                        : undefined
+                    }
+                    onClick={() => {
+                      setShareInquiry(selectedInquiry);
+                      setShareDetails(editDetails);
+                      setQuotationEmail(
+                        (selectedInquiry as any).customer_email ||
+                          (selectedInquiry as any).sender_email ||
+                          "",
+                      );
+                      setQuotationCcDraft("");
+                      setQuotationCcError("");
+                      setShowQuotationModal(true);
+                    }}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:cursor-not-allowed disabled:bg-slate-300 flex items-center gap-1.5"
+                  >
+                    {["quoted", "won"].includes(
+                      (selectedInquiry?.status || "").toLowerCase(),
+                    ) || isQuotationSent ? (
+                      <>
+                        <Check size={15} /> Share Again
+                      </>
+                    ) : (
+                      "Send quotation"
+                    )}
+                  </button>
+                </span>
               )}
               {activeRole === "salesperson" && everyLineUnavailable && (
                   <button
@@ -8433,9 +8469,9 @@ export default function InquiriesPage() {
 
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-7xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-7.5xl max-w-[84rem] w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+            <div className="sheet-header flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={20} />
                 Log New Inquiry
@@ -8659,21 +8695,26 @@ export default function InquiriesPage() {
                         rowSpan={2}
                         className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle"
                       >
-                        #
+                        Sr. No.
                       </th>
                       <th
                         rowSpan={2}
-                        className="px-4 py-3 border-r border-slate-700 w-[27%] align-middle"
+                        className="px-4 py-3 border-r border-slate-700 w-[24%] align-middle"
                       >
                         Description &amp; Specifications{" "}
                         <span className="text-red-500 font-bold">*</span>
                       </th>
                       <th
                         rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[11%] text-center align-middle"
+                        className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle"
                       >
-                        HSN/SAC{" "}
-                        <span className="text-red-500 font-bold">*</span>
+                        HSN/SAC
+                      </th>
+                      <th
+                        rowSpan={2}
+                        className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle"
+                      >
+                        Brand/Make
                       </th>
                       <th
                         rowSpan={2}
@@ -8718,10 +8759,10 @@ export default function InquiriesPage() {
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {formLineItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/30 [&>td]:align-middle">
-                        <td className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">
+                        <td data-label="Sr. No." className="px-3 py-3.5 border-r border-slate-200 text-slate-400 font-mono text-center text-xs">
                           {idx + 1}
                         </td>
-                        <td className="px-4 py-3.5 border-r border-slate-200">
+                        <td data-label="Description" className="px-4 py-3.5 border-r border-slate-200">
                           <div className="space-y-1">
                             <input
                               id={`form-item-sku-${idx}`}
@@ -8851,7 +8892,28 @@ export default function InquiriesPage() {
                             className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                           />
                         </td>
-                        <td className="w-[132px] border-r border-slate-200 px-1.5 py-3.5 align-middle">
+                        <td data-label="Brand/Make" className="px-2 py-3.5 border-r border-slate-200 text-center">
+                          <Select
+                            value={item.brand || item.make || ''}
+                            onChange={(e) => {
+                              const updated = [...formLineItems];
+                              updated[idx] = { ...updated[idx], brand: e.target.value, make: e.target.value };
+                              setFormLineItems(updated);
+                            }}
+                            wrapperClassName="w-full"
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium hover:border-blue-400"
+                            placeholder="Select make"
+                          >
+                            <option value="">Select make</option>
+                            {INQUIRY_PREFERRED_MAKES.map((make) => (
+                              <option key={make} value={make}>{make}</option>
+                            ))}
+                            {(item.brand || item.make) && !INQUIRY_PREFERRED_MAKES.includes(item.brand || item.make || '') && (
+                              <option value={item.brand || item.make}>{item.brand || item.make}</option>
+                            )}
+                          </Select>
+                        </td>
+                        <td data-label="Qty" className="w-[132px] border-r border-slate-200 px-1.5 py-3.5 align-middle">
                           <div className="mx-auto flex w-full max-w-[124px] flex-col items-stretch gap-1">
                             <div className="flex w-full rounded border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-blue-500">
                             <input
@@ -9179,6 +9241,8 @@ export default function InquiriesPage() {
                                     {
                                       sku_text: "",
                                       dimensions: "",
+                                      brand: formLineItems[idx]?.brand || formLineItems[0]?.brand || "",
+                                      make: formLineItems[idx]?.make || formLineItems[0]?.make || "",
                                       hsn_code: "",
                                       quantity: 0,
                                       unit: "MT",
@@ -9323,44 +9387,15 @@ export default function InquiriesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Preferred Brand / Make
-                  </label>
-                  <Select
-                    value={formPreferredMake}
-                    onChange={(e) => setFormPreferredMake(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white cursor-pointer font-medium hover:border-blue-400"
-                    placeholder="Select preferred make"
-                  >
-                    <option value="">Select preferred make</option>
-                    {INQUIRY_PREFERRED_MAKES.map((make) => (
-                      <option key={make} value={make}>
-                        {make}
-                      </option>
-                    ))}
-                    {formPreferredMake &&
-                      !INQUIRY_PREFERRED_MAKES.includes(formPreferredMake) && (
-                        <option value={formPreferredMake}>
-                          {formPreferredMake}
-                        </option>
-                      )}
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Additional Notes
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Special instructions, delivery timeline, or logistics notes"
-                    value={formRequirement}
-                    onChange={(e) => setFormRequirement(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Additional Notes</label>
+                <input
+                  type="text"
+                  placeholder="Special instructions, delivery timeline, or logistics notes"
+                  value={formRequirement}
+                  onChange={e => setFormRequirement(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 font-medium"
+                />
               </div>
 
               <div className="pt-2 flex justify-end gap-2">

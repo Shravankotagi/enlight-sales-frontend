@@ -44,6 +44,8 @@ interface InquiryItem {
 interface LineItemDetail {
   sku_text: string;
   dimensions?: string;
+  brand?: string;
+  make?: string;
   hsn_code?: string;
   quantity: number;
   unit?: string;
@@ -477,12 +479,13 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
               <table className="w-full text-left text-[12px] border-collapse">
                 <thead>
                   <tr className="bg-[#525E6F] text-white font-bold text-[12px]">
-                    <th className="px-3 py-2.5 text-center w-[5%] font-bold">#</th>
-                    <th className="px-4 py-2.5 w-[39%] font-bold">Item &amp; Description</th>
-                    <th className="px-3 py-2.5 text-center w-[15%] font-bold">HSN/SAC</th>
-                    <th className="px-4 py-2.5 text-center w-[13%] font-bold">Qty</th>
-                    <th className="px-4 py-2.5 text-right w-[13%] font-bold">Rate</th>
-                    <th className="px-4 py-2.5 pr-6 text-right w-[15%] font-bold">Amount</th>
+                    <th className="px-3 py-2.5 text-center w-[5%] font-bold">Sr. No.</th>
+                    <th className="px-4 py-2.5 w-[31%] font-bold">Item &amp; Description</th>
+                    <th className="px-3 py-2.5 text-center w-[13%] font-bold">HSN/SAC</th>
+                    <th className="px-3 py-2.5 text-center w-[13%] font-bold">Brand/Make</th>
+                    <th className="px-4 py-2.5 text-center w-[12%] font-bold">Qty</th>
+                    <th className="px-4 py-2.5 text-right w-[12%] font-bold">Rate</th>
+                    <th className="px-4 py-2.5 pr-6 text-right w-[14%] font-bold">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-900 bg-white">
@@ -505,6 +508,9 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
                           )}
                         </td>
                         <td className="px-3 py-3 text-center font-normal text-slate-700 text-[12px]">{hsn}</td>
+                        <td className="px-3 py-3 text-center font-normal text-slate-900 text-[12px]">
+                          {item.brand || item.make || '-'}
+                        </td>
                         <td className="px-4 py-3 text-center font-normal text-slate-900 text-[12px] whitespace-nowrap">
                           {formatLineItemWeightMt(item).text}
                         </td>

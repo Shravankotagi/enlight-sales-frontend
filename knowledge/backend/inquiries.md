@@ -16,7 +16,7 @@ To preserve commercial integrity, procurement roles are strictly restricted:
 - **Terminal Status Block**: Cannot transition inquiries to sales terminal states (`confirmed`, `won`, `lost`, `saved`, `processed`).
 - **Deal Conversion Block**: Cannot create deals or convert inquiries to orders.
 - **Quotation Block**: Preview and send stay forbidden unless `inquiries.send_quote` is on. Both procurement templates leave it off, so `POST /inquiries/quotation-preview/:id` and `POST /inquiries/send-quotation/:id` return `403 Forbidden` for a normal procurement user.
-- **Deletion Rules**: Delete requires `inquiries.view` and `inquiries.delete`. The person template is off and the manager template is on. A manager may only delete inquiries stamped to their team. An inquiry with no procurement owner cannot be deleted by procurement.
+- **Deletion Rules**: Delete requires `inquiries.view` and `inquiries.delete`. A procurement manager is refused on `DELETE /inquiries/:id` even when that flag is on. A procurement person stays off. A manager may only delete inquiries assigned to their team (cannot delete from the unassigned pool).
 
 ### Quotation email CC contract
 Quotation emails use the subject `Enlight Metals- Quotation for {customer name}`. The body greets the customer in capital letters, and the sent message is HTML with the company logo at the top and bottom. The quotation PDF attachment is unchanged. If the Share Quotation subject does not already start with `Enlight Metals- `, the backend adds that prefix before sending. Purchase-order emails keep their own template.
@@ -28,7 +28,7 @@ Quotation preview and send allow the inquiry when the caller's `employees.id` ow
 The customer email is optional on an inquiry. Document parsing and text parsing store it as `ai_extraction_json.customer_email`. Share Quotation prefills that address in an editable field. The WhatsApp bot and the AI assistant collect the same optional Email ID when logging or updating an inquiry.
 
 ## Dependencies
-Uses product/HSN/pricing rules, PDF generation and image/text parsing. Quotation PDFs from the dashboard and the bot print each line's Qty as metric tons (`39,897.63 KG` prints as `39.898 MT`), never the commercial unit. It feeds deals/order conversion and bot sales/OCR handling. Preserve server-side field authority and scoped queries when adding editable fields.
+Uses product/HSN/pricing rules, PDF generation and image/text parsing. Line items support product-level Brand/Make (`brand` / `make`), displayed as the 4th column immediately after HSN/SAC in inquiry creation and editing. Quotations (PDF preview modal, generated PDFKit buffer, and email breakdown) reflect item-level Brand/Make below product dimensions. Quotation PDFs from the dashboard and the bot print each line's Qty as metric tons (`39,897.63 KG` prints as `39.898 MT`), never the commercial unit. It feeds deals/order conversion and bot sales/OCR handling. Preserve server-side field authority and scoped queries when adding editable fields.
 
 ## Safe modification path
 Trace controller → service → Supabase query before changing behavior. Preserve `supabase.guard`, role/scope checks, response envelope, activity/audit side effects, and related frontend `api.ts` contract.

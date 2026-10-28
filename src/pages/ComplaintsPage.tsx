@@ -100,7 +100,7 @@ export default function ComplaintsPage() {
   const autoOpenedComplaintRef = useRef<string | null>(null);
   const [modalReturnTo, setModalReturnTo] = useState<string | null>(() => searchParams.get('returnTo'));
 
-  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode, guardAction } = useAuth();
+  const { isSalesManager, isAdmin, effectivePhone, activeRole, activeMode, guardAction, can } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -964,12 +964,14 @@ export default function ComplaintsPage() {
               title="Refresh">
               <RefreshCw size={15} className={loading ? 'animate-spin text-blue-600' : ''} />
             </button>
-            <button
-              onClick={handleOpenAddModal}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
-              <Plus size={15} />
-              Log Complaint
-            </button>
+            {can('complaints.log') && (
+              <button
+                onClick={handleOpenAddModal}
+                className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
+                <Plus size={15} />
+                Log Complaint
+              </button>
+            )}
           </div>
       </div>
 
@@ -1115,7 +1117,7 @@ export default function ComplaintsPage() {
           <table className="stack-table w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="px-3 py-3.5 text-center w-12">#</th>
+                <th className="px-3 py-3.5 text-center whitespace-nowrap w-16">Sr. No.</th>
                 <th className="px-5 py-3.5 text-left min-w-[220px]">Customer</th>
                 <th className="px-4 py-3.5 text-left min-w-[160px]">Deal / PO</th>
                 <th className="px-4 py-3.5 text-left min-w-[180px]">Product</th>
@@ -1146,7 +1148,7 @@ export default function ComplaintsPage() {
                       onClick={() => openComplaintDetails(comp)}
                       className="hover:bg-slate-50/70 cursor-pointer transition-colors group">
                       {/* 0. Serial Number */}
-                      <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                      <td data-label="Sr. No." className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
                       </td>
 
@@ -1530,7 +1532,7 @@ export default function ComplaintsPage() {
                   <RefreshCw size={13} className={modalActionLoading ? 'animate-spin' : ''} />
                   {modalActionLoading ? 'Updating...' : 'Reopen Complaint'}
                 </button>
-              ) : (
+              ) : can('complaints.resolve') ? (
                 <button
                   type="button"
                   onClick={handleResolveInModal}
@@ -1539,7 +1541,7 @@ export default function ComplaintsPage() {
                   <Check size={13} strokeWidth={3} />
                   {modalActionLoading ? 'Saving...' : 'Mark as Resolved'}
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
@@ -1735,7 +1737,7 @@ export default function ComplaintsPage() {
                         className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
                       >
                         <option value="reported">Pending (Open)</option>
-                        <option value="resolved">Resolved (Closed)</option>
+                        {can('complaints.resolve') && <option value="resolved">Resolved (Closed)</option>}
                         <option value="reopened">Reopened</option>
                       </Select>
                     </div>
@@ -2045,7 +2047,7 @@ export default function ComplaintsPage() {
                         className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-medium cursor-pointer hover:border-blue-400"
                       >
                         <option value="reported">Pending (Open)</option>
-                        <option value="resolved">Resolved (Closed)</option>
+                        {can('complaints.resolve') && <option value="resolved">Resolved (Closed)</option>}
                         <option value="reopened">Reopened</option>
                       </Select>
                     </div>

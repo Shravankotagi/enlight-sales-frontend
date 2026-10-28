@@ -221,7 +221,7 @@ export default function SalesQuotationModal({ deal, onClose }: SalesQuotationMod
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-700 text-white font-bold text-[11px] tracking-wide">
                 <tr>
-                  <th className="px-3 py-2.5 text-center w-[5%] border-b border-slate-600">#</th>
+                  <th className="px-3 py-2.5 text-center w-[5%] border-b border-slate-600">Sr. No.</th>
                   <th className="px-4 py-2.5 w-[42%] border-b border-slate-600">Item &amp; Description</th>
                   <th className="px-3 py-2.5 text-center w-[15%] border-b border-slate-600">HSN/SAC</th>
                   <th className="px-4 py-2.5 text-right w-[12%] border-b border-slate-600">Qty</th>

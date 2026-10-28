@@ -31,7 +31,7 @@ function AppRoutes() {
   const isAdminRole = employee?.role === 'admin';
   const canOpenStaff =
     isAdminRole ||
-    ['staff.view', 'staff.create', 'staff.manage', 'staff.delete', 'staff.manage_acl'].some((key) => can(key));
+    ['staff.view', 'staff.create', 'staff.manage', 'staff.delete'].some((key) => can(key));
   const inquiryOnly =
     can('inquiries.view') &&
     !can('customers.view') &&

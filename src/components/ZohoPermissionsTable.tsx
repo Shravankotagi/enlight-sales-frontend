@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ZOHO_ACL_SECTIONS } from '../utils/aclConstants';
+import { cascadeCrudPermission, SCOPE_ASSIGNED_PROMPTS, ZOHO_ACL_SECTIONS } from '../utils/aclConstants';
 import { Check, Minus } from 'lucide-react';
 
 function TruncatedLabel({ text }: { text: string }) {
@@ -36,13 +36,20 @@ interface ZohoPermissionsTableProps {
   permissions: Record<string, boolean>;
   onChange: (updated: Record<string, boolean>) => void;
   readOnly?: boolean;
+  users?: { id: string; name: string; employee_id?: string }[];
+  visibilityScope?: Record<string, string[]>;
+  onVisibilityChange?: (next: Record<string, string[]>) => void;
 }
 
 export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
   permissions,
   onChange,
   readOnly = false,
+  users = [],
+  visibilityScope = {},
+  onVisibilityChange,
 }) => {
+  const [picker, setPicker] = useState<{ key: string; selected: string[] } | null>(null);
   const clearInquiryDependents = (
     updated: Record<string, boolean>,
     key: string,
@@ -56,24 +63,35 @@ export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
         'inquiries.delete',
         'inquiries.send_quote',
         'inquiries.scope_assigned',
-        'inquiries.fill_base_prices',
-        'inquiries.price_override',
-        'inquiries.team_inquiries',
       ]) {
         updated[dependent] = false;
       }
-    }
-    if (key === 'inquiries.edit' || key === 'inquiries.view') {
-      updated['inquiries.fill_base_prices'] = false;
-      updated['inquiries.price_override'] = false;
     }
     return updated;
   };
 
   const toggleKey = (key: string) => {
     if (readOnly) return;
+    const prompt = SCOPE_ASSIGNED_PROMPTS[key];
+    if (prompt && permissions[key] && onVisibilityChange) {
+      setPicker({
+        key,
+        selected: [...(visibilityScope[prompt.module] || [])],
+      });
+      return;
+    }
     const next = !permissions[key];
-    onChange(clearInquiryDependents({ ...permissions, [key]: next }, key, next));
+    const updated = cascadeCrudPermission(permissions, key, next);
+    if (!next) {
+      clearInquiryDependents(updated, key, false);
+      if (!updated['inquiries.edit']) {
+        clearInquiryDependents(updated, 'inquiries.edit', false);
+      }
+      if (!updated['inquiries.view']) {
+        clearInquiryDependents(updated, 'inquiries.view', false);
+      }
+    }
+    onChange(updated);
   };
 
   const handleToggleFullRow = (crudKeys: {
@@ -90,13 +108,10 @@ export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
       Boolean(permissions[crudKeys.delete]);
 
     const targetVal = !allActive;
-    const updated = {
-      ...permissions,
-      [crudKeys.view]: targetVal,
-      [crudKeys.create]: targetVal,
-      [crudKeys.edit]: targetVal,
-      [crudKeys.delete]: targetVal,
-    };
+    let updated = { ...permissions };
+    for (const key of [crudKeys.view, crudKeys.create, crudKeys.edit, crudKeys.delete]) {
+      updated = cascadeCrudPermission(updated, key, targetVal);
+    }
     if (!targetVal && crudKeys.view === 'inquiries.view') {
       clearInquiryDependents(updated, 'inquiries.view', false);
     }
@@ -133,6 +148,78 @@ export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
 
   return (
     <div className="space-y-4">
+      {picker &&
+        createPortal(
+          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200">
+              <div className="px-5 py-4 border-b border-slate-200">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Whose else {SCOPE_ASSIGNED_PROMPTS[picker.key]?.noun} should this user see?
+                </h3>
+              </div>
+              <div className="max-h-72 overflow-y-auto px-5 py-3 space-y-2">
+                {users.length === 0 && (
+                  <p className="text-xs text-slate-500">No users are available.</p>
+                )}
+                {users.map((user) => {
+                  const checked = picker.selected.includes(user.id);
+                  return (
+                    <label key={user.id} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setPicker((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  selected: checked
+                                    ? current.selected.filter((id) => id !== user.id)
+                                    : [...current.selected, user.id],
+                                }
+                              : current,
+                          )
+                        }
+                      />
+                      <span>
+                        {user.name}
+                        {user.employee_id ? ` (${user.employee_id})` : ''}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600"
+                  onClick={() => setPicker(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold"
+                  onClick={() => {
+                    const prompt = SCOPE_ASSIGNED_PROMPTS[picker.key];
+                    if (prompt && onVisibilityChange) {
+                      onVisibilityChange({
+                        ...visibilityScope,
+                        [prompt.module]: picker.selected,
+                      });
+                    }
+                    const updated = cascadeCrudPermission(permissions, picker.key, false);
+                    onChange(updated);
+                    setPicker(null);
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
       {ZOHO_ACL_SECTIONS.map((section) => (
         <div
           key={section.id}

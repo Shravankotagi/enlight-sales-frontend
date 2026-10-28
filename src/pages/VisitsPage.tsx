@@ -614,7 +614,10 @@ export default function VisitsPage() {
   const [resendSeconds, setResendSeconds] = useState(0);
   const [capturingGps, setCapturingGps] = useState(false);
   const gpsSessionRef = useRef<ReturnType<typeof createVisitGpsSession> | null>(null);
-  if (!gpsSessionRef.current) gpsSessionRef.current = createVisitGpsSession();
+  const visitGps = () => {
+    if (!gpsSessionRef.current) gpsSessionRef.current = createVisitGpsSession();
+    return gpsSessionRef.current;
+  };
 
   // Preset Days Helper
   const setFollowupPresetDays = (days: number, isEdit = false) => {
@@ -629,8 +632,8 @@ export default function VisitsPage() {
   };
 
   // GPS Coordinates & File Upload Helpers
-  const watchVisitGps = () => gpsSessionRef.current!.watchForAddress();
-  const readPhotoGps = () => gpsSessionRef.current!.readForPhoto();
+  const watchVisitGps = () => visitGps().watchForAddress();
+  const readPhotoGps = () => visitGps().readForPhoto();
 
   const refreshVisitLocation = async () => {
     setLocating(true);
@@ -1522,12 +1525,14 @@ export default function VisitsPage() {
               title="Refresh">
               <RefreshCw size={15} className={loading ? 'animate-spin text-blue-600' : ''} />
             </button>
-            <button
-              onClick={handleOpenAddModal}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
-              <Plus size={15} />
-              Log Customer Visit
-            </button>
+            {can('visits.log') && (
+              <button
+                onClick={handleOpenAddModal}
+                className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
+                <Plus size={15} />
+                Log Customer Visit
+              </button>
+            )}
           </div>
         </div>
 
@@ -1882,7 +1887,7 @@ export default function VisitsPage() {
             </colgroup>
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="px-3 py-3.5 text-center">#</th>
+                <th className="px-3 py-3.5 text-center whitespace-nowrap">Sr. No.</th>
                 <th className="px-5 py-3.5 text-left">Customer</th>
                 <th className="px-4 py-3.5 text-left">Contact Person</th>
                 <th className="px-4 py-3.5 text-left">Location</th>
@@ -1912,7 +1917,7 @@ export default function VisitsPage() {
                       key={v.id || idx}
                       className="hover:bg-slate-50/70 transition-colors group align-top">
                       {/* 0. Serial Number */}
-                      <td data-label="#" className="px-3 py-3.5 font-medium text-slate-500 text-center">
+                      <td data-label="Sr. No." className="px-3 py-3.5 font-medium text-slate-500 text-center">
                         {globalIdx}
                       </td>
 

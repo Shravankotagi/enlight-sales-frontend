@@ -316,6 +316,7 @@ export const rolesApi = {
     description?: string;
     data_scope?: string;
     permissions: Record<string, boolean>;
+    visibility_scope?: Record<string, string[]>;
   }) => API.post('/roles', body).then(unwrapApiResponse),
   update: (
     id: string,
@@ -324,6 +325,7 @@ export const rolesApi = {
       description?: string;
       data_scope?: string;
       permissions?: Record<string, boolean>;
+      visibility_scope?: Record<string, string[]>;
     },
   ) => API.put(`/roles/${id}`, body).then(unwrapApiResponse),
   remove: (id: string) => API.delete(`/roles/${id}`).then(unwrapApiResponse),

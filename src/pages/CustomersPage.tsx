@@ -610,7 +610,7 @@ export default function CustomersPage() {
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="px-4 py-3.5 text-center w-12">#</th>
+                <th className="px-4 py-3.5 text-center whitespace-nowrap w-16">Sr. No.</th>
                 <th className="px-5 py-3.5 min-w-[220px] sticky left-0 bg-slate-50 z-10">Customer</th>
                 <th className="px-4 py-3.5 min-w-[140px]">Segment</th>
                 <th className="px-4 py-3.5 min-w-[170px]">Order Activity</th>

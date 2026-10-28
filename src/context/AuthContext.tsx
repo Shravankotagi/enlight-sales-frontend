@@ -86,12 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               name: meData.name,
               phone: meData.phone,
               role: meData.role,
+              email: meData.email,
             };
             if (
               prev &&
               prev.role === meData.role &&
               prev.name === meData.name &&
-              (prev.email || "") === (meData.email || prev.email || "")
+              ((prev as any).email || "") === (meData.email || (prev as any).email || "")
             ) {
               return prev;
             }
@@ -102,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: meData.role,
               name: meData.name || base.name,
               phone: meData.phone || base.phone,
-              email: meData.email || base.email,
+              email: meData.email || (base as any).email,
             };
             sessionStorage.setItem('enlight_employee', JSON.stringify(updated));
             return updated;
@@ -277,13 +278,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // effectivePhone:
   // - If viewing someone specifically -> that person's phone
-  // - If Salesperson -> their own phone
-  // - If Admin / Sales Manager viewing their own account -> null (all / team aggregate)
+  // - All-company scope, admin, or manager on their own account -> null
+  // - Salesperson -> their own phone
   const effectivePhone = viewingAs
     ? viewingAs.phone || null
-    : isSalesperson
-      ? employee?.phone || null
-      : null;
+    : dataScope === 'all'
+      ? null
+      : isSalesperson
+        ? employee?.phone || null
+        : null;
 
   const activeRole = viewingAs ? viewingAs.role : (employee?.role || 'salesperson');
   const activeMode =
