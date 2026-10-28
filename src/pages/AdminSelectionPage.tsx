@@ -75,6 +75,7 @@ export default function AdminSelectionPage() {
     clearViewingAs,
     isSalesManager,
     isAdmin,
+    can,
   } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [allManagers, setAllManagers] = useState<Employee[]>([]);
@@ -571,14 +572,16 @@ export default function AdminSelectionPage() {
 
               {isAdmin && (
                 <>
-                  <button
-                    onClick={() => setShowImportModal(true)}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="Import clients via CSV"
-                  >
-                    <FileSpreadsheet size={15} className="text-emerald-600" />
-                    <span className="hidden sm:inline">Import Clients</span>
-                  </button>
+                  {can('clients.import_csv') && (
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
+                      title="Import clients via CSV"
+                    >
+                      <FileSpreadsheet size={15} className="text-emerald-600" />
+                      <span className="hidden sm:inline">Import Clients</span>
+                    </button>
+                  )}
                   <button
                     onClick={handleOpenAddModal}
                     className="h-9 flex items-center gap-2 px-3.5 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-indigo-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"

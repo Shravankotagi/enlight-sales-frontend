@@ -209,6 +209,37 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
   },
 ];
 
+/** Create requires View. Edit requires Create and View. Delete requires all three. */
+export function cascadeCrudPermission(
+  permissions: Record<string, boolean>,
+  key: string,
+  next: boolean,
+): Record<string, boolean> {
+  const updated = { ...permissions, [key]: next };
+  for (const section of ZOHO_ACL_SECTIONS) {
+    for (const row of section.rows) {
+      const { view, create, edit, delete: remove } = row.crud;
+      if (![view, create, edit, remove].includes(key)) continue;
+      if (next) {
+        if (key === create || key === edit || key === remove) updated[view] = true;
+        if (key === edit || key === remove) updated[create] = true;
+        if (key === remove) updated[edit] = true;
+      } else if (key === view) {
+        updated[create] = false;
+        updated[edit] = false;
+        updated[remove] = false;
+      } else if (key === create) {
+        updated[edit] = false;
+        updated[remove] = false;
+      } else if (key === edit) {
+        updated[remove] = false;
+      }
+      return updated;
+    }
+  }
+  return updated;
+}
+
 // Factory standard default templates
 export const DEFAULT_ROLE_TEMPLATES: Record<string, Record<string, boolean>> = {
   salesperson: {

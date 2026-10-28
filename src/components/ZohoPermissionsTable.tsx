@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ZOHO_ACL_SECTIONS } from '../utils/aclConstants';
+import { cascadeCrudPermission, ZOHO_ACL_SECTIONS } from '../utils/aclConstants';
 import { Check, Minus } from 'lucide-react';
 
 function TruncatedLabel({ text }: { text: string }) {
@@ -73,7 +73,17 @@ export const ZohoPermissionsTable: React.FC<ZohoPermissionsTableProps> = ({
   const toggleKey = (key: string) => {
     if (readOnly) return;
     const next = !permissions[key];
-    onChange(clearInquiryDependents({ ...permissions, [key]: next }, key, next));
+    const updated = cascadeCrudPermission(permissions, key, next);
+    if (!next) {
+      clearInquiryDependents(updated, key, false);
+      if (!updated['inquiries.edit']) {
+        clearInquiryDependents(updated, 'inquiries.edit', false);
+      }
+      if (!updated['inquiries.view']) {
+        clearInquiryDependents(updated, 'inquiries.view', false);
+      }
+    }
+    onChange(updated);
   };
 
   const handleToggleFullRow = (crudKeys: {

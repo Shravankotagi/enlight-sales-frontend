@@ -1522,12 +1522,14 @@ export default function VisitsPage() {
               title="Refresh">
               <RefreshCw size={15} className={loading ? 'animate-spin text-blue-600' : ''} />
             </button>
-            <button
-              onClick={handleOpenAddModal}
-              className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
-              <Plus size={15} />
-              Log Customer Visit
-            </button>
+            {can('visits.log') && (
+              <button
+                onClick={handleOpenAddModal}
+                className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0">
+                <Plus size={15} />
+                Log Customer Visit
+              </button>
+            )}
           </div>
         </div>
 

@@ -4928,12 +4928,14 @@ export default function InquiriesPage() {
                   Confirmed Orders
                 </button>
 
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
-                >
-                  <Plus size={15} /> Log New Inquiry
-                </button>
+                {can('inquiries.manage') && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="h-9 flex items-center gap-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+                  >
+                    <Plus size={15} /> Log New Inquiry
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -7014,46 +7016,48 @@ export default function InquiriesPage() {
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
               {activeRole === "salesperson" && (
                 hasAvailableProcurementLine ? (
-                  <span className="relative group">
-                    <button
-                      type="button"
-                      disabled={!isInquiryPricingSaved}
-                      title={
-                        ["quoted", "won"].includes(
+                  can('inquiries.send_quote') && (
+                    <span className="relative group">
+                      <button
+                        type="button"
+                        disabled={!isInquiryPricingSaved}
+                        title={
+                          ["quoted", "won"].includes(
+                            (selectedInquiry?.status || "").toLowerCase(),
+                          ) || isQuotationSent
+                            ? formatLastSharedLabel(
+                                lastSharedById[selectedInquiry.id] ||
+                                  (selectedInquiry.ai_extraction_json as any)
+                                    ?.quotation_shared_at,
+                              ) || undefined
+                            : undefined
+                        }
+                        onClick={() => {
+                          setShareInquiry(selectedInquiry);
+                          setShareDetails(editDetails);
+                          setQuotationEmail(
+                            (selectedInquiry as any).customer_email ||
+                              (selectedInquiry as any).sender_email ||
+                              "",
+                          );
+                          setQuotationCcDraft("");
+                          setQuotationCcError("");
+                          setShowQuotationModal(true);
+                        }}
+                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:cursor-not-allowed disabled:bg-slate-300 flex items-center gap-1.5"
+                      >
+                        {["quoted", "won"].includes(
                           (selectedInquiry?.status || "").toLowerCase(),
-                        ) || isQuotationSent
-                          ? formatLastSharedLabel(
-                              lastSharedById[selectedInquiry.id] ||
-                                (selectedInquiry.ai_extraction_json as any)
-                                  ?.quotation_shared_at,
-                            ) || undefined
-                          : undefined
-                      }
-                      onClick={() => {
-                        setShareInquiry(selectedInquiry);
-                        setShareDetails(editDetails);
-                        setQuotationEmail(
-                          (selectedInquiry as any).customer_email ||
-                            (selectedInquiry as any).sender_email ||
-                            "",
-                        );
-                        setQuotationCcDraft("");
-                        setQuotationCcError("");
-                        setShowQuotationModal(true);
-                      }}
-                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:cursor-not-allowed disabled:bg-slate-300 flex items-center gap-1.5"
-                    >
-                      {["quoted", "won"].includes(
-                        (selectedInquiry?.status || "").toLowerCase(),
-                      ) || isQuotationSent ? (
-                        <>
-                          <Check size={15} /> Share Again
-                        </>
-                      ) : (
-                        "Send quotation"
-                      )}
-                    </button>
-                  </span>
+                        ) || isQuotationSent ? (
+                          <>
+                            <Check size={15} /> Share Again
+                          </>
+                        ) : (
+                          "Send quotation"
+                        )}
+                      </button>
+                    </span>
+                  )
                 ) : (
                   <button
                     type="button"

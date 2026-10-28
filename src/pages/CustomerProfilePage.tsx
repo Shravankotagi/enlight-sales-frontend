@@ -1791,24 +1791,30 @@ function CustomerProfilePageContent() {
                   <label className="block text-slate-600 font-semibold mb-1">
                     Assigned Salesperson
                   </label>
-                  <Select
-                    value={editForm.assigned_salesperson_phone}
-                    onChange={e =>
-                      setEditForm({
-                        ...editForm,
-                        assigned_salesperson_phone: e.target.value,
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
-                    placeholder="Unassigned"
-                  >
-                    <option value="">Unassigned</option>
-                    {safeEmployees.map(emp => (
-                      <option key={emp.id} value={emp.phone}>
-                        {emp.name} ({emp.phone})
-                      </option>
-                    ))}
-                  </Select>
+                  {can('customers.reassign') ? (
+                    <Select
+                      value={editForm.assigned_salesperson_phone}
+                      onChange={e =>
+                        setEditForm({
+                          ...editForm,
+                          assigned_salesperson_phone: e.target.value,
+                        })
+                      }
+                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium shadow-2xs bg-white text-xs hover:border-blue-400"
+                      placeholder="Unassigned"
+                    >
+                      <option value="">Unassigned</option>
+                      {safeEmployees.map(emp => (
+                        <option key={emp.id} value={emp.phone}>
+                          {emp.name} ({emp.phone})
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <div className="w-full px-3.5 py-2.5 border border-slate-200 bg-slate-50 text-slate-600 rounded-xl font-medium text-xs">
+                      {getSalespersonName(editForm.assigned_salesperson_phone, '') || 'Unassigned'}
+                    </div>
+                  )}
                 </div>
 
                 <div>

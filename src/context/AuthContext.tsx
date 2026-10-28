@@ -269,13 +269,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // effectivePhone:
   // - If viewing someone specifically -> that person's phone
-  // - If Salesperson -> their own phone
-  // - If Admin / Sales Manager viewing their own account -> null (all / team aggregate)
+  // - All-company scope, admin, or manager on their own account -> null
+  // - Salesperson -> their own phone
   const effectivePhone = viewingAs
     ? viewingAs.phone || null
-    : isSalesperson
-      ? employee?.phone || null
-      : null;
+    : dataScope === 'all'
+      ? null
+      : isSalesperson
+        ? employee?.phone || null
+        : null;
 
   const activeRole = viewingAs ? viewingAs.role : (employee?.role || 'salesperson');
   const activeMode =
