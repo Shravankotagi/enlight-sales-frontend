@@ -839,6 +839,15 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/orders': ['orders.view'],
   '/complaints': ['complaints.view'],
   '/admin-dashboard': ['staff.view'],
+  '/intelligence': ['customers.view', 'inquiries.view', 'orders.view'],
+  '/reports': [
+    'customers.view',
+    'inquiries.view',
+    'orders.view',
+    'visits.view',
+    'complaints.view',
+    'staff.view',
+  ],
   '/control-panel': [
     'staff.view',
     'staff.create',

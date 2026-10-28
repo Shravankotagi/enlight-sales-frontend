@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cascadeCrudPermission } from './aclConstants';
+import { cascadeCrudPermission, routeAllowed } from './aclConstants';
 
 describe('cascadeCrudPermission', () => {
   const blank = {
@@ -64,5 +64,13 @@ describe('cascadeCrudPermission', () => {
       'staff.view': true,
       'clients.import_csv': true,
     });
+  });
+
+  it('keeps intelligence and reports behind a view permission', () => {
+    const customerOnly = (key: string) => key === 'customers.view';
+    expect(routeAllowed('/intelligence', customerOnly)).toBe(true);
+    expect(routeAllowed('/reports', customerOnly)).toBe(true);
+    expect(routeAllowed('/intelligence', () => false)).toBe(false);
+    expect(routeAllowed('/reports', () => false)).toBe(false);
   });
 });

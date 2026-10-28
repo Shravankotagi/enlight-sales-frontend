@@ -312,7 +312,7 @@ export default function CustomersPage() {
         customer_name: newCustomer.customer_name.trim(),
         contact_person: newCustomer.contact_person.trim(),
         customer_phone: newCustomer.customer_phone.replace(/\D/g, ''),
-        delivery_location: newCustomer.delivery_location.trim(),
+        customer_address: newCustomer.delivery_location.trim(),
         customer_email: newCustomer.customer_email.trim(),
         customer_gst: newCustomer.customer_gst.trim().toUpperCase(),
       });
@@ -323,7 +323,8 @@ export default function CustomersPage() {
       queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
       queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
     } catch (err: any) {
-      const message = err?.response?.data?.error;
+      const data = err?.response?.data;
+      const message = data?.message || data?.error;
       toast.error(
         Array.isArray(message) ? message.join(', ') : message || 'Could not save customer',
       );

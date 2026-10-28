@@ -100,12 +100,12 @@ function AppRoutes() {
         <Route path="/complaints" element={routeAllowed('/complaints', can) ? <ComplaintsPage /> : <Navigate to="/home" replace />} />
         <Route path="/kra" element={<KRADashboard />} />
         <Route path="/logs" element={<LogsPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/reports" element={routeAllowed('/reports', can) ? <ReportsPage /> : <Navigate to="/home" replace />} />
         <Route
           path="/roles"
           element={isAdminRole || routeAllowed('/roles', can) ? <RolesPermissionsPage /> : <Navigate to="/home" replace />}
         />
-        <Route path="/intelligence" element={<IntelligencePage />} />
+        <Route path="/intelligence" element={routeAllowed('/intelligence', can) ? <IntelligencePage /> : <Navigate to="/home" replace />} />
         <Route
           path="/admin-dashboard"
           element={isAdminRole || routeAllowed('/admin-dashboard', can) ? <AdminDashboard /> : <Navigate to="/home" replace />}
