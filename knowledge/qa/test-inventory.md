@@ -83,6 +83,12 @@ Current regression tests:
 | Backend | `issue-procurement-tonnage-review.spec.ts` | A Price Ready weight change reopens Awaiting Price and stores the MT diff; the same weight in KG and a rate-only edit do not; a later edit keeps the original weight; saving a base price clears the review; another procurement person does not receive the row |
 | Frontend | `issue-procurement-tonnage-review.test.tsx` | The procurement bell sits beside Refresh, lists the `PR-` id and the MT change, and opens Save Prices; an empty list has no badge; a salesperson does not see the bell |
 | Bot | `issue-procurement-tonnage-review.test.js` | A KG quantity equal to the existing MT does not open a review; a Price Ready quantity sync reopens the inquiry; the awaiting-price reply says Tonnage updated only for an open review |
+| Bot | `issue-chatbot-inquiry-update.test.js` | Update Inquiry includes a sender-only inquiry and a customer-owner inquiry; an `INQ-` code opens that inquiry from the menu and from a sentence; a Price Ready quantity change reopens Awaiting Price without moving the deal to Price Quote; the same weight in KG and a manual piece weight do not reopen |
+| Bot | `issue-inquiry-number-dashboard-parity.test.js` | Update Inquiry uses the dashboard inquiry code (`INQ-` plus the first six characters of the inquiry id), leads with that row's procurement number, includes blank types, purchase orders, and PO text, and does not invent a code for a deal with no inquiry |
+| Bot | `issue-update-inquiry-material-prices.test.js` | Two deal-only materials both show Base, Transport, Loading, Credit, Margin, and Rate; a Price Quote transport change keeps the procurement base and recomputes the rate; Won and Lost refuse a price change; a rate that needs a negative margin asks which component to change |
+| Bot | `issue-update-inquiry-quantity-review.test.js` | A Price Ready card badge does not turn a 40 MT to 50 MT save into a Quoted stage change; the quantity is stored, the inquiry returns to Awaiting Price, and the procurement tonnage review opens |
+| Bot | `issue-update-inquiry-price-save.test.js` | A transport, loading, credit, and margin change shows Base through Rate on the save card; the upsert keeps the existing pricing `line_key`, omits `id`, and stores the recomputed rate |
+| Bot | `issue-add-price-line-formats.test.js` | Add Price accepts a pasted material line for every row, including two beams distinguished by quantity and Heavy Base Plate; `1.` fills only that material; semicolon, pipe, and space separators reach confirmation; an unknown material is named and not saved |
 | Backend | `issue-procurement-awaiting-price-edit.spec.ts` | Procurement base-price and status updates are rejected for Price Ready, Unavailable, and a pre-cutoff Awaiting Price; an Awaiting Price save and an admin save still proceed |
 | Backend | `issue-procurement-view-only-acl.spec.ts` | A view-only procurement save is rejected even when fill base prices stays checked; empty permissions still allow an Awaiting Price save; delete and send quote follow their ACL keys |
 | Bot | `issue-procurement-view-only-acl.test.js` | A view-only procurement user cannot open or save a base price, and pending prices and all inquiries still open |
@@ -118,3 +124,21 @@ When one is resolved, move its case into the main fixture sections and delete th
 Many scripts use configured Supabase and can create/update/delete data. There is no repository-wide dry-run/test-mode switch. They are integration/operational scripts, not automatically safe unit tests. Inspect the script, use a dedicated safe environment where possible, and state the target database before running. Never run migration/cleanup scripts as a default QA command. In particular, `migrate-from-supabase.ts` truncates its target database and RLS/cleanup/migration scripts are operational mutators.
 
 The automated suites above are the only default QA commands; they never touch a real database.
+
+`em-os-bot/test/regression/issue-update-inquiry-status-pricing.test.js` covers pricing-status precedence, historical awaiting-price handling, stage normalization, and the five-component sales pricing breakdown.
+
+`em-os-bot/test/regression/issue-update-inquiry-material-prices.test.js` covers that breakdown for every deal material, a Price Quote transport save that keeps the procurement base, the Won and Lost refusal, and a rate that would require a negative margin.
+
+`em-os-bot/test/regression/issue-add-price-line-formats.test.js` covers pasted material lines, line numbers, semicolon, pipe, and space separators, and an unknown material in Add Price to Inquiry.
+
+`em-os-bot/test/regression/issue-update-inquiry-quantity-review.test.js` covers a quantity change while the open card still says Price Ready. The quantity is saved, the inquiry returns to Awaiting Price, and the procurement tonnage review opens without moving the deal stage.
+
+`em-os-bot/test/regression/issue-update-inquiry-price-save.test.js` covers a price-component save when the pricing row's `line_key` is not the deal item id. The confirmation shows the resulting rate, and the write updates that row in place.
+
+`em-os-bot/test/regression/issue-chatbot-inquiry-update.test.js` also covers the seven-row Update Inquiry page, Next pagination, and visibility of Won/Lost rows.
+
+`em-os-bot/test/regression/issue-inquiry-number-dashboard-parity.test.js` covers the dashboard inquiry code, the procurement number on the same line, and the dashboard row set.
+
+`em-os-bot/test/regression/issue-update-inquiry-empty-select.test.js` covers a `display_stage` select failure, the fallback inquiry query, and a linked-deal salesperson match.
+
+`em-os-frontend/src/test/regression/issue-assistant-chat-cors.test.ts` checks that chat requests send the account token only as `Authorization`. `issue-assistant-session-load.test.tsx` checks that a failed history request is shown as a load error. `em-os-backend/src/__regression__/issue-assistant-chat-cors.spec.ts` checks the CORS allow-list and that a chat with no employee phone is refused.

@@ -23,7 +23,7 @@ Read the `supabase-*.sql` files at the backend root and bot root before changing
 Checked-in RLS rollout SQL covers deals/deal items, recurring customers, payment tracking, KB tables/chunks, and daily LLM usage. It does not cover every operational table (notably inquiries, visits, complaints, employees, KRA logs, CRM sync logs, and conversation sessions). Backend/bot service-role clients bypass RLS, so service-level employee/phone scope checks remain mandatory.
 
 For procurement roles (`procurement_person`, `procurement_manager`), backend service queries enforce `procurementScope`:
-- Assigned inquiries (`procurement_employee_id IN (:ids)`).
-- Unassigned intake pool: open inquiries (`stage IN ('new', 'pending', 'review', 'draft')`) where `procurement_employee_id IS NULL`.
+- Inquiries stamped to the caller (`procurement_employee_id IN (:ids)`). A manager's ids include the procurement people who report to them.
+- An inquiry with `procurement_employee_id` null is not visible. Routing a salesperson stamps that salesperson's existing inquiries.
 
 RLS policies are part of the contract. A schema change needs an explicit migration/SQL artifact, policy review, application query review, and an update to this doc. See `.cursor/skills/supabase-schema-change/SKILL.md`.

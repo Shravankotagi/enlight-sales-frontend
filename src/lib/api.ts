@@ -31,7 +31,7 @@ export function getBotUrl(): string {
 
 export const BOT_URL = getBotUrl();
 
-const API = axios.create({
+export const API = axios.create({
   baseURL: BACKEND_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,

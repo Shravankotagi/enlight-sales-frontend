@@ -9,6 +9,5 @@
 - **Floor margin**: minimum permitted margin, used by pricing and approval guardrails.
 - **Follow-up task**: action derived from visits, payment, customer retention, or KRA work.
 - **Salesperson scope**: frontend and backend filter company data by employee phone, employee role, and manager/team visibility.
-- **Procurement scope**: backend filter for `procurement_person` and `procurement_manager` restricting access to assigned inquiries (`procurement_employee_id IN (:ids)`) and the unassigned intake pool.
-- **Unassigned intake pool**: inquiries in open stages (`new`, `pending`, `review`, `draft`) where `procurement_employee_id IS NULL`, visible to all procurement staff for intake claiming and base price filling.
+- **Procurement scope**: backend filter for `procurement_person` and `procurement_manager`. An inquiry is visible only when `procurement_employee_id` is the caller or, for a manager, a procurement person who reports to them.
 - **Role Permissions Matrix**: Zoho Books-style granular ACL matrix stored in `employees.permissions` (JSONB) defining module-level View/Create/Edit/Delete actions and sub-options (e.g. `fill_base_prices`, `team_inquiries`).
