@@ -14,7 +14,7 @@ Quotation emails use the subject `Enlight Metals- Quotation for {customer name}`
 The customer email is optional on an inquiry. Document parsing and text parsing store it as `ai_extraction_json.customer_email`. Share Quotation prefills that address in an editable field. The WhatsApp bot and the AI assistant collect the same optional Email ID when logging or updating an inquiry.
 
 ## Dependencies
-Uses product/HSN/pricing rules, PDF generation and image/text parsing. Quotation PDFs from the dashboard and the bot print each line's Qty as metric tons (`39,897.63 KG` prints as `39.898 MT`), never the commercial unit. It feeds deals/order conversion and bot sales/OCR handling. Preserve server-side field authority and scoped queries when adding editable fields.
+Uses product/HSN/pricing rules, PDF generation and image/text parsing. Line items support product-level Brand/Make (`brand` / `make`), displayed as the 4th column immediately after HSN/SAC in inquiry creation and editing. Quotations (PDF preview modal, generated PDFKit buffer, and email breakdown) reflect item-level Brand/Make below product dimensions. Quotation PDFs from the dashboard and the bot print each line's Qty as metric tons (`39,897.63 KG` prints as `39.898 MT`), never the commercial unit. It feeds deals/order conversion and bot sales/OCR handling. Preserve server-side field authority and scoped queries when adding editable fields.
 
 ## Safe modification path
 Trace controller → service → Supabase query before changing behavior. Preserve `supabase.guard`, role/scope checks, response envelope, activity/audit side effects, and related frontend `api.ts` contract.
