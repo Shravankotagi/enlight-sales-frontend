@@ -1,6 +1,8 @@
 # Procurement manual test suite
 
-Use this on `feature/procurement` after `supabase-procurement-acl.sql`, `supabase-inquiry-line-pricing.sql`, `supabase-procurement-routing.sql`, and `supabase-pricing-status-preserve.sql` have been applied. Do not run it against production customer data. Use three test accounts: a procurement person who reports to a procurement manager, that procurement manager, and a salesperson. An admin account is needed only for the setup checks.
+The detailed script, including the tonnage bell, is [procurement-test-cases.md](procurement-test-cases.md). This file is the short role pass.
+
+Use this on `feature/procurement` after `supabase-procurement-acl.sql`, `supabase-inquiry-line-pricing.sql`, `supabase-procurement-routing.sql`, `supabase-pricing-status-preserve.sql`, and `supabase-procurement-tonnage-review.sql` have been applied. Do not run it against production customer data. Use three test accounts: a procurement person who reports to a procurement manager, that procurement manager, and a salesperson. An admin account is needed only for the setup checks.
 
 Record the result of each case as Pass or Fail. A case fails if the expected result does not happen, even if a nearby case passes.
 
@@ -9,7 +11,7 @@ Record the result of each case as Pass or Fail. A case fails if the expected res
 1. As admin, create or confirm a procurement manager.
 2. Create a procurement person and set **Assigned Procurement Manager** to that manager. Saving must succeed. Assigning that person to a sales manager must be rejected.
 3. Confirm the salesperson can log in and already owns at least one open inquiry with two products, a quantity, a unit, and a delivery location. One location should be in Maharashtra and another outside Maharashtra.
-4. Leave both inquiries unassigned to procurement at the start.
+4. Leave the salesperson unrouted at the start, so those inquiries have no procurement owner.
 
 ## Shared rules
 
@@ -25,20 +27,21 @@ Record the result of each case as Pass or Fail. A case fails if the expected res
 | # | Action | Expected result |
 |---|---|---|
 | P1 | Open Inquiries. | Only the Inquiries tab is available. Dashboard, Orders, Customers, and the other salesperson tabs are absent. |
-| P2 | Before anyone assigns this person, review the list. | Inquiries assigned to someone else, and the open unassigned pool, are absent. |
+| P2 | Before anyone routes a salesperson to this person, review the list. | Inquiries stamped to someone else are absent. Inquiries with no procurement owner are absent. |
 | P3 | Ask an admin or procurement manager to assign one open inquiry to this person, or assign this person's salesperson in the control panel and create an inquiry for that salesperson. Refresh. | That inquiry appears with its `PR-` procurement id. Customer name, phone, and raw text do not. Salesperson, products, original quantity, unit, and delivery region do. |
 | P4 | Open the inquiry and enter a base price on one product. Leave the other base price blank. Save. | The priced line is available. The blank line is unavailable. Status becomes **Price Ready**. |
 | P5 | On a second assigned inquiry, save with every base price blank. | Status becomes **Unavailable**. |
 | P6 | Try to log a new inquiry, send a quotation, or mark the inquiry confirmed, won, or lost. | Each action is blocked. |
 | P7 | Send a WhatsApp message from the procurement person's number. | The bot stops the message and does not run quotation, customer, or pricing tools. |
+| P8 | After this person has saved a base price, have the salesperson change that inquiry's tonnage on the dashboard, in the assistant, or on WhatsApp. Open the bell beside Refresh. | The inquiry is Awaiting Price again. The bell lists its `PR-` number and the old and new weight. Opening it shows Save Prices. Saving a base price, or leaving every base price blank, removes it from the bell. The deal does not become Price Quote. |
 
 ## Procurement manager
 
 | # | Action | Expected result |
 |---|---|---|
 | M1 | Open Inquiries. | Only the Inquiries tab is available. Customer identity is hidden on every row. |
-| M2 | Compare the list with the person's list. | The manager sees the person's assigned inquiry, the manager's own assigned inquiries, and open unassigned inquiries in `new`, `pending`, `review`, or `draft`. A won, lost, or confirmed inquiry with no procurement owner is absent. |
-| M3 | Assign an unassigned open inquiry to the procurement person, then assign another to the manager. | The person sees only the inquiry assigned to them. The manager still sees both, plus the remaining open pool. |
+| M2 | Compare the list with the person's list. | The manager sees inquiries stamped to the person and inquiries stamped to the manager. An inquiry with no procurement owner is absent. |
+| M3 | Route one salesperson to the person and another to the manager. Refresh both lists. | The person sees only the inquiries of the salesperson routed to them, and each row is stamped to that person. The manager sees both sets. A row already owned by another procurement person stays there. |
 | M4 | Save a base price on a team inquiry. | The save succeeds and the status follows the same available / unavailable rules as P4 and P5. |
 | M5 | Try to create an inquiry, send a quotation, or move an inquiry to confirmed, won, or lost. | Each action is blocked. |
 
@@ -60,7 +63,7 @@ Record the result of each case as Pass or Fail. A case fails if the expected res
 |---|---|---|
 | A1 | Edit the procurement person and choose the procurement manager. | The person saves with that manager. |
 | A2 | Edit the same person and choose a sales manager. | The save is rejected because a procurement person must report to a procurement manager. |
-| A3 | On the procurement person, select one or more salespeople and save. | Each selected salesperson is routed to that person. Their unassigned inquiries, including older won or quoted rows and phones stored in another format, appear in that person's list. A row already owned by another procurement person stays there. A new inquiry for one of those salespeople appears without a manual assign. The inquiry drawer has no Procurement owner control. Its procurement id is `PR-` plus a number, and that id is not the inquiry id. |
+| A3 | On the procurement person, select one or more salespeople and save. | Each selected salesperson is routed to that person. Every inquiry of those salespeople is stamped to that person, including older won or quoted rows, a sender match, a customer-owner match, and phones stored in another format. The row is not labeled Unassigned. A row already owned by another procurement person stays there. A new inquiry for one of those salespeople appears without a manual assign. The inquiry drawer has no Procurement owner control. Its procurement id is `PR-` plus a number, and that id is not the inquiry id. |
 
 ## Automated coverage
 

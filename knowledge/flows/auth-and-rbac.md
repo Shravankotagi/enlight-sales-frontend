@@ -42,9 +42,9 @@ Client query parameters (`salesperson_phone`, `viewing_as`) are untrusted hints.
   - `salesperson`: Caller's phone only.
   - Procurement employees are never included in sales phone scopes.
 - **Procurement Scope** (`getAccessibleProcurementIds`):
-  - `procurement_manager`: Caller's employee ID, direct-report procurement persons, the salespeople routed to those persons, and the open unassigned pool.
-  - `procurement_person`: Caller's employee ID and unassigned inquiries for the salespeople routed to them. They do not see the generic unassigned pool.
-  - Open unassigned pool: inquiries where `status IN ('new', 'pending', 'review', 'draft')` and `procurement_employee_id IS NULL`.
+  - `procurement_manager`: Inquiries stamped to the caller or to the procurement persons who report to them.
+  - `procurement_person`: Inquiries stamped to the caller. Those are the inquiries of the salespeople routed to them.
+  - An inquiry with `procurement_employee_id` null stays out of both lists until its salesperson is routed and the row is stamped.
   - Pricing is saved on the inquiry, so it stays inside the inquiries surface the guard already allows.
 
 ## 5. WhatsApp Bot and the dashboard assistant

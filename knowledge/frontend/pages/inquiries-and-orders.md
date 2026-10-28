@@ -19,8 +19,8 @@ The inquiry list must not sync query results until the request has resolved. A p
 ## Procurement view
 
 When accessed by users with `procurement_person` or `procurement_manager` roles:
-- A procurement person sees inquiries stamped to them and unassigned inquiries for the salespeople assigned to them.
-- A procurement manager also sees the team and the open unassigned pool (`status` in `new`, `pending`, `review`, `draft` where `procurement_employee_id` is null).
+- A procurement person sees inquiries stamped to them. Those are the inquiries of the salespeople routed to them.
+- A procurement manager sees inquiries stamped to them and to the procurement people who report to them. An inquiry with no procurement owner is absent.
 - Admins and procurement managers can assign or reassign an inquiry to a procurement team member.
 - Commercial actions such as sending a quotation, converting to a deal, and marking won or lost stay hidden for procurement roles.
 - The Orders page is hidden from procurement navigation, and its API routes are blocked for those roles.
