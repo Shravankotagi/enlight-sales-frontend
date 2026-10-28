@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
+import { menuRoleLabel } from '../utils/roleLabel';
 import {
   Home,
   Users,
@@ -60,27 +61,13 @@ function UserMenu({
     navigate(isAdmin ? '/control-panel' : '/admin');
   };
 
-  const formatRole = (r?: string) => {
-    if (!r) return '';
-    return r
-      .split(/[_\s]+/)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
-  };
-
-  // Always reflect the user's own true identity & role (never overridden by impersonated user's role)
-  const ownRoleLabel =
-    (roleName && !['salesperson', 'admin', 'sales_manager', 'manager', 'procurement_manager', 'procurement manager', 'procurement_person', 'procurement person'].includes(roleName.toLowerCase()))
-      ? formatRole(roleName)
-      : isAdmin
-        ? 'Admin'
-        : isProcurementManager
-          ? 'Procurement Manager'
-          : isProcurementPerson
-            ? 'Procurement Person'
-            : isSalesManager
-              ? 'Sales Manager'
-              : 'Salesperson';
+  const ownRoleLabel = menuRoleLabel({
+    roleName,
+    isAdmin,
+    isProcurementManager,
+    isProcurementPerson,
+    isSalesManager,
+  });
 
   const isImpersonatingOther = Boolean(
     viewingAs &&

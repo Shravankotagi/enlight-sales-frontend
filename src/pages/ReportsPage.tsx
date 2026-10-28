@@ -34,7 +34,12 @@ function inquiryCreatedDay(value?: string) {
 }
 
 export default function ReportsPage() {
-  const { effectivePhone, isAdmin, activeRole, activeMode } = useAuth();
+  const { effectivePhone, isAdmin, activeRole, activeMode, can } = useAuth();
+  const canOrders = can('orders.view');
+  const canInquiries = can('inquiries.view');
+  const canVisits = can('visits.view');
+  const canCustomers = can('customers.view');
+  const canStaffLogs = can('staff.view');
 
   const [dateRange, setDateRange] = useState<DateFilterRange>({
     preset: 'all',
@@ -74,7 +79,8 @@ export default function ReportsPage() {
     isFetching,
     refetch: refetchOverview,
   } = useQuery({
-    queryKey: ['reports-overview-data', dateRange, effectivePhone, activeRole, activeMode],
+    queryKey: ['reports-overview-data', dateRange, effectivePhone, activeRole, activeMode, canOrders, canInquiries, canCustomers],
+    enabled: canOrders || canInquiries || canCustomers,
     queryFn: async () => {
       const params = getParams();
 
@@ -124,7 +130,8 @@ export default function ReportsPage() {
   const {
     data: reportVisits = [],
   } = useQuery({
-    queryKey: ['reports-visits', dateRange, effectivePhone, activeRole, activeMode],
+    queryKey: ['reports-visits', dateRange, effectivePhone, activeRole, activeMode, canVisits],
+    enabled: canVisits,
     queryFn: async () => {
       const res = await visitsApi.getAll(getParams());
       const raw = res?.data;
@@ -137,7 +144,8 @@ export default function ReportsPage() {
   });
 
   const { data: funnelInquiries = [], refetch: refetchFunnelInquiries } = useQuery({
-    queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode],
+    queryKey: ['inquiries-list', effectivePhone, activeRole, activeMode, canInquiries],
+    enabled: canInquiries,
     queryFn: async () => {
       const res = await inquiriesApi.getAll(buildInquiryScopeParams(effectivePhone, activeMode));
       const raw = res?.data;
@@ -147,7 +155,8 @@ export default function ReportsPage() {
   });
 
   const { data: funnelDeals = [], refetch: refetchFunnelDeals } = useQuery({
-    queryKey: ['reports-funnel-deals', effectivePhone, dateRange, activeRole, activeMode],
+    queryKey: ['reports-funnel-deals', effectivePhone, dateRange, activeRole, activeMode, canInquiries, canOrders],
+    enabled: canInquiries || canOrders,
     queryFn: async () => {
       const params = buildInquiryScopeParams(effectivePhone, activeMode);
       if (dateRange.preset !== 'all') {
@@ -173,7 +182,8 @@ export default function ReportsPage() {
   };
 
   const { data: wonOrders = [], refetch: refetchWonOrders } = useQuery({
-    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode],
+    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode, canOrders],
+    enabled: canOrders,
     queryFn: () =>
       ordersApi
         .getAll({
@@ -212,7 +222,7 @@ export default function ReportsPage() {
 
   const { data: loginActivity = [] } = useQuery({
     queryKey: ['reports-login-activity', dateRange, effectivePhone, activeMode, isAdmin],
-    enabled: isAdmin,
+    enabled: canStaffLogs,
     queryFn: async () => {
       const params = getParams();
       let from = params.from as string | undefined;
@@ -360,6 +370,7 @@ export default function ReportsPage() {
       ) : (
         <div className="space-y-8">
           {/* SECTION 1 - Summary Cards */}
+          {canOrders && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
               <p className="text-2xl font-bold text-gray-900">{wonOrdersCount}</p>
@@ -381,8 +392,10 @@ export default function ReportsPage() {
               <p className="text-sm text-gray-500 mt-1">Unique Products Sold</p>
             </div>
           </div>
+          )}
 
           {/* SECTION 2 - Sales Funnel */}
+          {canInquiries && (
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <TrendingUp size={16} className="text-green-600" /> Sales Funnel
@@ -444,10 +457,12 @@ export default function ReportsPage() {
               <p className="text-gray-400 text-sm text-center py-8">No funnel data for this period</p>
             )}
           </div>
+          )}
 
           {/* SECTION 3 - Top Customers + Lost Reasons */}
+          {(canCustomers || canInquiries) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Top Customers */}
+            {canCustomers && (
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                 <ShoppingBag size={16} className="text-blue-600" /> Top Customers
@@ -469,8 +484,8 @@ export default function ReportsPage() {
                 )}
               </div>
             </div>
-
-            {/* Lost Reasons */}
+            )}
+            {canInquiries && (
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <h3 className="font-semibold text-gray-800 mb-3">Lost Reasons</h3>
               {overview?.lost_reasons && Object.keys(overview.lost_reasons).length > 0 ? (
@@ -494,9 +509,12 @@ export default function ReportsPage() {
                 <p className="text-gray-400 text-sm">No lost deals yet</p>
               )}
             </div>
+            )}
           </div>
+          )}
 
           {/* SECTION 4 - SKU Breakdown */}
+          {canOrders && (
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <Package size={16} className="text-indigo-600" /> SKU Breakdown
@@ -571,7 +589,9 @@ export default function ReportsPage() {
                 />
               )}
             </div>
-            {isAdmin && (
+          </div>
+          )}
+            {canStaffLogs && (
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100">
                   <h2 className="text-sm font-bold text-slate-900">Login activity</h2>
@@ -626,9 +646,10 @@ export default function ReportsPage() {
                 )}
               </div>
             )}
-          </div>
 
           <div className="space-y-4">
+            {canVisits && (
+            <>
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <MapPin size={16} className="text-blue-600" /> Customer Visits
             </h3>
@@ -694,6 +715,8 @@ export default function ReportsPage() {
                 />
               )}
             </div>
+            </>
+            )}
           </div>
         </div>
       )}

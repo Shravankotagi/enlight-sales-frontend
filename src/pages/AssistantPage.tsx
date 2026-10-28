@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { menuRoleLabel } from '../utils/roleLabel';
 import { chatbotApi, visitsApi } from '../lib/api';
 import {
   Sparkles,
@@ -167,7 +168,7 @@ function fitComposer(el: HTMLTextAreaElement) {
 }
 
 export default function AssistantPage() {
-  const { employee, viewingAs } = useAuth();
+  const { employee, viewingAs, roleName, isAdmin, isSalesManager, isProcurementManager, isProcurementPerson } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const initialSessionId = getSavedSessionId();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
@@ -720,8 +721,8 @@ export default function AssistantPage() {
               <span className="font-semibold text-gray-900">
                 {activeEmployee?.name || 'Authorized User'}
               </span>
-              <span className="ml-2 uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
-                {role}
+              <span className="ml-2 bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
+                {menuRoleLabel({ roleName, isAdmin, isSalesManager, isProcurementManager, isProcurementPerson })}
               </span>
             </div>
           </div>

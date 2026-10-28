@@ -15,8 +15,13 @@ import {
 } from 'lucide-react';
 
 export default function IntelligencePage() {
-  const { effectivePhone, activeRole, activeMode } = useAuth();
+  const { effectivePhone, activeRole, activeMode, can } = useAuth();
   const salespersonPhone = effectivePhone || undefined;
+  const canCustomers = can('customers.view');
+  const canInquiries = can('inquiries.view');
+  const canOrders = can('orders.view');
+  const canSeeDeals = canInquiries;
+  const canSeeReorder = canOrders && canCustomers;
   const [attentionPage, setAttentionPage] = useState(1);
   const [reorderPage, setReorderPage] = useState(1);
   const [lossPage, setLossPage] = useState(1);
@@ -31,7 +36,8 @@ export default function IntelligencePage() {
     refetch: refetchChurn,
     isFetching: fetchingChurn,
   } = useQuery({
-    queryKey: ['churn-risk', salespersonPhone, activeRole, activeMode],
+    queryKey: ['churn-risk', salespersonPhone, activeRole, activeMode, canCustomers],
+    enabled: canCustomers,
     queryFn: () =>
       customersApi
         .getChurnRisk({
@@ -46,7 +52,8 @@ export default function IntelligencePage() {
     refetch: refetchReorder,
     isFetching: fetchingReorder,
   } = useQuery({
-    queryKey: ['reorder-queue', salespersonPhone, activeRole, activeMode],
+    queryKey: ['reorder-queue', salespersonPhone, activeRole, activeMode, canSeeReorder],
+    enabled: canSeeReorder,
     queryFn: () =>
       customersApi
         .getReorderQueue({
@@ -61,7 +68,8 @@ export default function IntelligencePage() {
     refetch: refetchCustomers,
     isFetching: fetchingCustomers,
   } = useQuery({
-    queryKey: ['recurring-customers-list', salespersonPhone, activeRole, activeMode],
+    queryKey: ['recurring-customers-list', salespersonPhone, activeRole, activeMode, canCustomers],
+    enabled: canCustomers,
     queryFn: () =>
       customersApi
         .getAll({
@@ -79,7 +87,8 @@ export default function IntelligencePage() {
     refetch: refetchDeals,
     isFetching: fetchingDeals,
   } = useQuery({
-    queryKey: ['intelligence-deals', salespersonPhone, activeRole, activeMode],
+    queryKey: ['intelligence-deals', salespersonPhone, activeRole, activeMode, canSeeDeals],
+    enabled: canSeeDeals,
     queryFn: () =>
       dealsApi
         .getAll({
@@ -247,6 +256,7 @@ export default function IntelligencePage() {
       {/* ══════════════════════════════════════════════════════════════════════
           SECTION 1 - CHURN RADAR
       ══════════════════════════════════════════════════════════════════════ */}
+      {canCustomers && (
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -470,10 +480,12 @@ export default function IntelligencePage() {
           </div>
         )}
       </section>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           SECTION 2 - REORDER QUEUE
       ══════════════════════════════════════════════════════════════════════ */}
+      {canSeeReorder && (
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -635,10 +647,12 @@ export default function IntelligencePage() {
           )}
         </div>
       </section>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           SECTION 3 - LOSS ANALYTICS
       ══════════════════════════════════════════════════════════════════════ */}
+      {canSeeDeals && (
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -832,6 +846,7 @@ export default function IntelligencePage() {
           )}
         </div>
       </section>
+      )}
     </div>
   );
 }
