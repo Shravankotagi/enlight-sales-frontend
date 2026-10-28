@@ -5685,7 +5685,7 @@ export default function InquiriesPage() {
                   </span>
                 </button>
 
-                {can('inquiries.delete') && (
+                {can('inquiries.delete') && !isProcurement && (
                   <button
                     type="button"
                     disabled={deleteInquiryMutation.isPending}

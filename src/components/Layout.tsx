@@ -229,9 +229,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         employee.phone?.replace(/\D/g, '').slice(-10)
   );
 
-  const staffKeys = ['staff.view', 'staff.create', 'staff.manage', 'staff.delete', 'staff.manage_acl'];
+  const userManagementKeys = ['staff.view', 'staff.create', 'staff.manage', 'staff.delete'];
   const showAdminTab = (isAdmin || can('staff.view')) && !isImpersonatingOther;
-  const showUserManagement = (isAdmin || isSalesManager || staffKeys.some((key) => can(key))) && !isImpersonatingOther;
+  const showUserManagement = (isAdminRole || isSalesManager || userManagementKeys.some((key) => can(key))) && !isImpersonatingOther;
 
   const isActive = (path: string) => {
     if (path === '/pipeline')

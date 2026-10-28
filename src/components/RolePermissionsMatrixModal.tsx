@@ -10,6 +10,7 @@ import { ZohoPermissionsTable } from './ZohoPermissionsTable';
 import { RoleSelectDropdown } from './RoleSelectDropdown';
 import { Select } from './ui/select';
 import { employeesApi, rolesApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import {
   X,
   Shield,
@@ -51,6 +52,7 @@ interface RolePermissionsMatrixModalProps {
 export const RolePermissionsMatrixModal: React.FC<
   RolePermissionsMatrixModalProps
 > = ({ isOpen, onClose, employees: propEmployees, onEmployeeRoleUpdated, asPage = false }) => {
+  const { can } = useAuth();
   // Top 2 Main Tabs: 'roles' vs 'users'
   const [mainTab, setMainTab] = useState<'roles' | 'users'>('roles');
 
@@ -64,6 +66,7 @@ export const RolePermissionsMatrixModal: React.FC<
   const [activePermissions, setActivePermissions] = useState<
     Record<string, boolean>
   >({});
+  const [visibilityScope, setVisibilityScope] = useState<Record<string, string[]>>({});
   const [dataScope, setDataScope] = useState<'own' | 'team' | 'all'>('own');
   const [localImportCount, setLocalImportCount] = useState(0);
   const [feedback, setFeedback] = useState<{ msg: string; isError?: boolean } | null>(null);
@@ -108,6 +111,7 @@ export const RolePermissionsMatrixModal: React.FC<
               isSystem: Boolean(row.is_system ?? row.isSystem),
               data_scope: row.data_scope || 'own',
               permissions: row.permissions || {},
+              visibility_scope: row.visibility_scope || {},
             }));
           if (items.length) {
             setRolesCache(items);
@@ -144,14 +148,15 @@ export const RolePermissionsMatrixModal: React.FC<
   // Sync active permissions when selected role changes
   useEffect(() => {
     if (isCreatingRole) {
-      const base =
-        roles.find((r) => r.id === cloneFromRoleId)?.permissions ||
-        DEFAULT_ROLE_TEMPLATES.salesperson;
+      const source = roles.find((r) => r.id === cloneFromRoleId);
+      const base = source?.permissions || DEFAULT_ROLE_TEMPLATES.salesperson;
       setActivePermissions({ ...base });
+      setVisibilityScope({ ...(source?.visibility_scope || {}) });
     } else {
       const current = roles.find((r) => r.id === selectedRoleId);
       if (current) {
         setActivePermissions({ ...current.permissions });
+        setVisibilityScope({ ...(current.visibility_scope || {}) });
         setDataScope(current.data_scope || (current.id === 'admin' ? 'all' : current.id === 'sales_manager' ? 'team' : 'own'));
       }
     }
@@ -185,6 +190,7 @@ export const RolePermissionsMatrixModal: React.FC<
           description: newRoleDesc.trim(),
           data_scope: dataScope,
           permissions: activePermissions,
+          visibility_scope: visibilityScope,
         });
         const created = res.data;
         if (!created?.id || !created?.name) {
@@ -200,6 +206,7 @@ export const RolePermissionsMatrixModal: React.FC<
             isSystem: false,
             data_scope: created.data_scope,
             permissions: created.permissions,
+            visibility_scope: created.visibility_scope || {},
           },
         ];
         setRolesCache(next);
@@ -226,10 +233,16 @@ export const RolePermissionsMatrixModal: React.FC<
         await rolesApi.update(selectedRoleId, {
           permissions: activePermissions,
           data_scope: dataScope,
+          visibility_scope: visibilityScope,
         });
         const next = roles.map((role) =>
           role.id === selectedRoleId
-            ? { ...role, permissions: activePermissions, data_scope: dataScope }
+            ? {
+                ...role,
+                permissions: activePermissions,
+                data_scope: dataScope,
+                visibility_scope: visibilityScope,
+              }
             : role,
         );
         setRolesCache(next);
@@ -290,6 +303,7 @@ export const RolePermissionsMatrixModal: React.FC<
       isSystem: Boolean(row.is_system),
       data_scope: row.data_scope,
       permissions: row.permissions || {},
+      visibility_scope: row.visibility_scope || {},
     }));
     setRolesCache(items);
     setRoles(items);
@@ -298,6 +312,7 @@ export const RolePermissionsMatrixModal: React.FC<
 
   // Open "Invite User" Modal (Matching img2)
   const handleOpenInviteUser = () => {
+    if (!can('staff.create')) return;
     setEditingUser(null);
     setInviteForm({
       name: '',
@@ -313,6 +328,7 @@ export const RolePermissionsMatrixModal: React.FC<
 
   // Open "Assign Role" Modal for existing user (Matching img2)
   const handleOpenAssignRole = (user: EmployeeItem) => {
+    if (!can('staff.manage')) return;
     setEditingUser(user);
     setInviteForm({
       name: user.name || '',
@@ -345,6 +361,9 @@ export const RolePermissionsMatrixModal: React.FC<
       setInviteError('Role is required');
       return;
     }
+
+    if (editingUser && !can('staff.manage')) return;
+    if (!editingUser && !can('staff.create')) return;
 
     setInviteLoading(true);
     setInviteError('');
@@ -691,6 +710,9 @@ export const RolePermissionsMatrixModal: React.FC<
                 permissions={activePermissions}
                 onChange={setActivePermissions}
                 readOnly={isCurrentRoleSystem}
+                users={userList}
+                visibilityScope={visibilityScope}
+                onVisibilityChange={setVisibilityScope}
               />
             </div>
           </div>
@@ -716,6 +738,7 @@ export const RolePermissionsMatrixModal: React.FC<
               </div>
 
               {/* Zoho "+ Invite User" Button */}
+              {can('staff.create') && (
               <button
                 type="button"
                 onClick={handleOpenInviteUser}
@@ -724,6 +747,7 @@ export const RolePermissionsMatrixModal: React.FC<
                 <UserPlus size={15} />
                 <span>Invite User</span>
               </button>
+              )}
             </div>
 
             {/* Clean Zoho Books Users Table */}
@@ -831,6 +855,7 @@ export const RolePermissionsMatrixModal: React.FC<
 
                             {/* Action: Open Zoho Books Assign Role Modal */}
                             <td className="py-3.5 px-5 text-right">
+                              {can('staff.manage') && (
                               <button
                                 type="button"
                                 onClick={() => handleOpenAssignRole(emp)}
@@ -840,6 +865,7 @@ export const RolePermissionsMatrixModal: React.FC<
                                 <Edit2 size={12} />
                                 <span>Assign Role</span>
                               </button>
+                              )}
                             </td>
                           </tr>
                         );

@@ -46,4 +46,23 @@ describe('cascadeCrudPermission', () => {
       true,
     );
   });
+
+  it('ties bulk csv import to staff view', () => {
+    const staff = {
+      'staff.view': true,
+      'staff.create': true,
+      'clients.import_csv': true,
+    };
+    expect(cascadeCrudPermission(staff, 'staff.view', false)).toMatchObject({
+      'staff.view': false,
+      'staff.create': false,
+      'clients.import_csv': false,
+    });
+    expect(
+      cascadeCrudPermission({ 'staff.view': false, 'clients.import_csv': false }, 'clients.import_csv', true),
+    ).toMatchObject({
+      'staff.view': true,
+      'clients.import_csv': true,
+    });
+  });
 });

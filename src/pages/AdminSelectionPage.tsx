@@ -29,10 +29,9 @@ import {
   PackageSearch,
 } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
-import { EmployeeAclSection } from '../components/EmployeeAclSection';
 import { RoleSelectDropdown } from '../components/RoleSelectDropdown';
-import { getRoleTemplate, countOverrides, getCachedRoles } from '../utils/aclConstants';
-import { employeesApi } from '../lib/api';
+import { getRoleTemplate, countOverrides } from '../utils/aclConstants';
+import { employeesApi, rolesApi } from '../lib/api';
 
 interface Employee {
   id: string;
@@ -77,6 +76,9 @@ export default function AdminSelectionPage() {
     isAdmin,
     can,
   } = useAuth();
+  const canCreateStaff = can('staff.create');
+  const canEditStaff = can('staff.manage');
+  const canDeleteStaff = can('staff.delete');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [allManagers, setAllManagers] = useState<Employee[]>([]);
   const [procurementManagers, setProcurementManagers] = useState<Employee[]>([]);
@@ -85,6 +87,7 @@ export default function AdminSelectionPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [roleNames, setRoleNames] = useState<Record<string, string>>({});
 
   // Add / Edit Modal state
   const [showModal, setShowModal] = useState(false);
@@ -158,6 +161,21 @@ export default function AdminSelectionPage() {
   };
 
   useEffect(() => {
+    rolesApi
+      .list()
+      .then((res) => {
+        const items = Array.isArray(res?.data) ? res.data : [];
+        const names: Record<string, string> = {};
+        for (const role of items) {
+          if (role?.id && role?.name) names[role.id] = role.name;
+        }
+        if (names.sales_manager) names.manager = names.sales_manager;
+        setRoleNames(names);
+      })
+      .catch(() => setRoleNames({}));
+  }, [token]);
+
+  useEffect(() => {
     // Admin Control Center must always render from Admin's own identity and scope.
     // Clear any lingering impersonation session so no previous salesperson data bleeds in.
     clearViewingAs();
@@ -179,6 +197,7 @@ export default function AdminSelectionPage() {
   };
 
   const handleOpenAddModal = async () => {
+    if (!can('staff.create')) return;
     setIsEditMode(false);
     setFormError('');
     setFormSuccess('');
@@ -203,6 +222,7 @@ export default function AdminSelectionPage() {
   };
 
   const handleOpenEditModal = (emp: Employee, e: React.MouseEvent) => {
+    if (!can('staff.manage')) return;
     e.stopPropagation();
     setIsEditMode(true);
     setFormError('');
@@ -275,7 +295,7 @@ export default function AdminSelectionPage() {
         phone: form.phone.replace(/\D/g, ''),
         role: form.role,
         employee_id: form.employee_id.trim(),
-        permissions: aclTouched ? form.permissions ?? null : null,
+        permissions: isEditMode ? (aclTouched ? form.permissions ?? null : null) : null,
       };
       if (form.email.trim()) {
         payload.email = form.email.trim();
@@ -386,7 +406,7 @@ export default function AdminSelectionPage() {
   };
 
   const handleDeactivate = async () => {
-    if (!form.id) return;
+    if (!form.id || !can('staff.manage')) return;
     const turningOn = form.is_active === false;
     const confirmMsg = turningOn
       ? `Activate ${form.name}? They will be able to log in again.`
@@ -414,6 +434,7 @@ export default function AdminSelectionPage() {
   };
 
   const handleDeleteClick = (emp: Employee, e: React.MouseEvent) => {
+    if (!can('staff.delete')) return;
     e.stopPropagation();
     setDeleteError('');
     setEmployeeToDelete(emp);
@@ -520,8 +541,8 @@ export default function AdminSelectionPage() {
   ).length;
 
   return (
-    <div className={isAdmin ? 'space-y-4 animate-fade-in font-sans text-slate-900 pb-8' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
-      <div className={isAdmin ? 'space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
+    <div className="space-y-4 animate-fade-in font-sans text-slate-900 pb-8">
+      <div className="space-y-6">
         {/* Top Executive Header Card */}
         <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -570,9 +591,7 @@ export default function AdminSelectionPage() {
                 </>
               )}
 
-              {isAdmin && (
-                <>
-                  {can('clients.import_csv') && (
+              {can('clients.import_csv') && (
                     <button
                       onClick={() => setShowImportModal(true)}
                       className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
@@ -582,6 +601,7 @@ export default function AdminSelectionPage() {
                       <span className="hidden sm:inline">Import Clients</span>
                     </button>
                   )}
+                  {canCreateStaff && (
                   <button
                     onClick={handleOpenAddModal}
                     className="h-9 flex items-center gap-2 px-3.5 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-indigo-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
@@ -590,8 +610,7 @@ export default function AdminSelectionPage() {
                     <UserPlus size={15} className="text-indigo-600" />
                     <span>Add Member</span>
                   </button>
-                </>
-              )}
+                  )}
             </div>
           </div>
         </div>
@@ -735,8 +754,7 @@ export default function AdminSelectionPage() {
 
             {/* Filter Pills & Search Input */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
-              {isAdmin && (
-                <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 overflow-x-auto scrollbar-none">
                   <button
                     onClick={() => setRoleFilter('all')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
@@ -812,7 +830,6 @@ export default function AdminSelectionPage() {
                     </span>
                   </button>
                 </div>
-              )}
 
               {/* Search Bar */}
               <div className="relative flex-1 sm:max-w-xs">
@@ -986,8 +1003,7 @@ export default function AdminSelectionPage() {
                                   Procurement Person
                                 </>
                               ) : (
-                                getCachedRoles().find((r) => r.id === emp.role)?.name ||
-                                'Salesperson'
+                                roleNames[emp.role] || emp.role
                               )}
                             </span>
                             {emp.permissions &&
@@ -1059,7 +1075,7 @@ export default function AdminSelectionPage() {
                             className="flex items-center justify-end gap-2"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {isAdmin && (
+                            {canEditStaff && (
                               <button
                                 onClick={(e) => handleOpenEditModal(emp, e)}
                                 title="Edit Account Details"
@@ -1069,7 +1085,7 @@ export default function AdminSelectionPage() {
                               </button>
                             )}
 
-                            {isAdmin && emp.id !== employee?.id && (
+                            {canDeleteStaff && emp.id !== employee?.id && (
                               <button
                                 onClick={(e) => handleDeleteClick(emp, e)}
                                 title="Permanently Delete Employee and Associated Records"
@@ -1217,8 +1233,7 @@ export default function AdminSelectionPage() {
                                 ? 'Proc Mgr'
                                 : isProcPerson
                                   ? 'Proc Person'
-                                  : getCachedRoles().find((r) => r.id === emp.role)?.name ||
-                                    'Sales Rep'}
+                                  : roleNames[emp.role] || emp.role}
                         </span>
                         {emp.permissions &&
                           countOverrides(emp.role, emp.permissions) > 0 && (
@@ -1265,7 +1280,7 @@ export default function AdminSelectionPage() {
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        {isAdmin && (
+                        {canEditStaff && (
                           <button
                             onClick={(e) => handleOpenEditModal(emp, e)}
                             title="Edit Account Details"
@@ -1274,7 +1289,7 @@ export default function AdminSelectionPage() {
                             <Edit2 size={13} />
                           </button>
                         )}
-                        {isAdmin && emp.id !== employee?.id && (
+                        {canDeleteStaff && emp.id !== employee?.id && (
                           <button
                             onClick={(e) => handleDeleteClick(emp, e)}
                             title="Permanently Delete Employee and Associated Records"
@@ -1579,18 +1594,6 @@ export default function AdminSelectionPage() {
                   </div>
                 )}
 
-                {/* Edit User does not customize permissions. Those live on /roles. */}
-                {!isEditMode && (
-                  <EmployeeAclSection
-                    role={form.role}
-                    permissions={form.permissions || getRoleTemplate(form.role)}
-                    onChange={(updated) => {
-                      setAclTouched(true);
-                      setForm((f) => ({ ...f, permissions: updated }));
-                    }}
-                  />
-                )}
-
                 {/* Employee ID */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -1622,7 +1625,7 @@ export default function AdminSelectionPage() {
 
                 {/* Actions */}
                 <div className="sheet-actions flex gap-3 pt-3 border-t border-slate-100">
-                  {isEditMode && form.id !== employee?.id && (
+                  {isEditMode && canEditStaff && form.id !== employee?.id && (
                     <button
                       type="button"
                       onClick={handleDeactivate}

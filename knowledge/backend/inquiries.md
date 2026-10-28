@@ -16,7 +16,7 @@ To preserve commercial integrity, procurement roles are strictly restricted:
 - **Terminal Status Block**: Cannot transition inquiries to sales terminal states (`confirmed`, `won`, `lost`, `saved`, `processed`).
 - **Deal Conversion Block**: Cannot create deals or convert inquiries to orders.
 - **Quotation Block**: Preview and send stay forbidden unless `inquiries.send_quote` is on. Both procurement templates leave it off, so `POST /inquiries/quotation-preview/:id` and `POST /inquiries/send-quotation/:id` return `403 Forbidden` for a normal procurement user.
-- **Deletion Rules**: Delete requires `inquiries.view` and `inquiries.delete`. The person template is off and the manager template is on. A manager may only delete inquiries assigned to their team (cannot delete from the unassigned pool).
+- **Deletion Rules**: Delete requires `inquiries.view` and `inquiries.delete`. A procurement manager is refused on `DELETE /inquiries/:id` even when that flag is on. A procurement person stays off. A manager may only delete inquiries assigned to their team (cannot delete from the unassigned pool).
 
 ### Quotation email CC contract
 Quotation emails use the subject `Enlight Metals- Quotation for {customer name}`. The body greets the customer in capital letters, and the sent message is HTML with the company logo at the top and bottom. The quotation PDF attachment is unchanged. If the Share Quotation subject does not already start with `Enlight Metals- `, the backend adds that prefix before sending. Purchase-order emails keep their own template.

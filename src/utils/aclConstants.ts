@@ -48,10 +48,6 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
             key: 'customers.scope_assigned',
             label: 'Allow users to handle the data and transactions for assigned customers only.',
           },
-          {
-            key: 'customers.toggle_active',
-            label: 'Activate / Deactivate customer account operational status in directory.',
-          },
         ],
       },
     ],
@@ -79,10 +75,6 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
             key: 'visits.scope_assigned',
             label: 'Allow users to log and view visits for assigned customers only.',
           },
-          {
-            key: 'visits.photo_required',
-            label: 'Require site GPS location verification and meeting summary notes.',
-          },
         ],
       },
     ],
@@ -108,19 +100,7 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
         subOptions: [
           {
             key: 'inquiries.scope_assigned',
-            label: 'Allow users to handle and rate inquiries received by / assigned to them only.',
-          },
-          {
-            key: 'inquiries.fill_base_prices',
-            label: 'Input base product purchase prices and forward raw inquiries to salesperson.',
-          },
-          {
-            key: 'inquiries.price_override',
-            label: 'Allow pricing adjustments below standard recommended rate/MT.',
-          },
-          {
-            key: 'inquiries.team_inquiries',
-            label: 'Allow managers to view and provide rates across their entire assigned team inquiries.',
+            label: 'Allow users to handle and rate inquiries assigned to them only.',
           },
         ],
       },
@@ -216,6 +196,10 @@ export function cascadeCrudPermission(
   next: boolean,
 ): Record<string, boolean> {
   const updated = { ...permissions, [key]: next };
+  if (key === 'clients.import_csv') {
+    if (next) updated['staff.view'] = true;
+    return updated;
+  }
   for (const section of ZOHO_ACL_SECTIONS) {
     for (const row of section.rows) {
       const { view, create, edit, delete: remove } = row.crud;
@@ -228,6 +212,7 @@ export function cascadeCrudPermission(
         updated[create] = false;
         updated[edit] = false;
         updated[remove] = false;
+        if (view === 'staff.view') updated['clients.import_csv'] = false;
       } else if (key === create) {
         updated[edit] = false;
         updated[remove] = false;
@@ -645,7 +630,16 @@ export interface RoleItem {
   isSystem: boolean;
   data_scope?: 'own' | 'team' | 'all';
   permissions: Record<string, boolean>;
+  visibility_scope?: Record<string, string[]>;
 }
+
+export const SCOPE_ASSIGNED_PROMPTS: Record<string, { module: string; noun: string }> = {
+  'customers.scope_assigned': { module: 'customers', noun: 'customers' },
+  'inquiries.scope_assigned': { module: 'inquiries', noun: 'inquiries' },
+  'orders.scope_assigned': { module: 'orders', noun: 'orders' },
+  'visits.scope_assigned': { module: 'visits', noun: 'visits' },
+  'complaints.scope_assigned': { module: 'complaints', noun: 'complaints' },
+};
 
 export const SYSTEM_ROLE_IDS = [
   'admin',
@@ -850,15 +844,8 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
     'staff.create',
     'staff.manage',
     'staff.delete',
-    'staff.manage_acl',
   ],
-  '/roles': [
-    'staff.view',
-    'staff.create',
-    'staff.manage',
-    'staff.delete',
-    'staff.manage_acl',
-  ],
+  '/roles': ['staff.manage_acl'],
 };
 
 export function routeAllowed(
