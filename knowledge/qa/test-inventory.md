@@ -96,6 +96,7 @@ Current regression tests:
 | Bot | `issue-procurement-mt-line-amount.test.js` | A sales price taxable amount uses the line weight in MT, and an MT line still uses its tonnage |
 | Frontend | `issue-send-quotation-button.test.tsx` | A priced inquiry drawer has one quotation button, and the email modal scrolls inside the screen; a denied preview shows the server error |
 | Backend | `issue-share-quotation-preview.spec.ts` | Quotation preview follows `employees.id` for a stored id, a customer owner, or a deal, and a different employee id is denied |
+| Backend | `issue-send-decline-email.spec.ts` | An unavailable inquiry preview names the material and includes the fixed CC addresses; send requires a customer email and keeps `dj@enlightmetals.com` and `vedant@enlightmetals.com` |
 | Frontend | `issue-procurement-kanban-click.test.tsx` | A procurement person opens Kanban View on the first click |
 | Frontend | `procurement-header-actions.test.tsx` | Procurement person and manager inquiries headers hide Sync Bigin, View Confirmed Orders, and Log New Inquiry, and keep Refresh |
 | Backend | `inquiry-pricing.workflow.spec.ts`, `inquiries.procurement-scope.spec.ts` | Procurement scope, customer-field stripping, partial and unavailable pricing, sales override, decline eligibility, and a sales-price save that moves a New Inquiry deal to Price Quote while leaving Negotiation in place |

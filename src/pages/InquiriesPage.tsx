@@ -97,9 +97,27 @@ import {
 } from "../utils/procurementPricing";
 import {
   addQuotationCcEmail,
+  FIXED_QUOTATION_CC,
+  isFixedQuotationCc,
   isValidQuotationEmail,
   normalizeQuotationEmail,
 } from "../utils/quotationCc";
+
+function withSalespersonCc(
+  emails: string[],
+  senderEmail: string,
+  customerEmail = "",
+): string[] {
+  const sender = normalizeQuotationEmail(senderEmail || "");
+  const customer = normalizeQuotationEmail(customerEmail || "");
+  const rest = emails.filter(
+    (email) => normalizeQuotationEmail(email) !== sender,
+  );
+  if (!sender || !isValidQuotationEmail(sender) || sender === customer) {
+    return rest;
+  }
+  return [sender, ...rest];
+}
 
 function pricedLineAmount(rate: number, item: any) {
   return calculateLineAmount(
@@ -1828,6 +1846,15 @@ export default function InquiriesPage() {
   const [showDeclinePreview, setShowDeclinePreview] = useState(false);
   const [declineSent, setDeclineSent] = useState(false);
   const [declineBody, setDeclineBody] = useState("");
+  const [declineEmail, setDeclineEmail] = useState("");
+  const [declineSubject, setDeclineSubject] = useState("");
+  const [declineCc, setDeclineCc] = useState<string[]>([]);
+  const [declineCcDraft, setDeclineCcDraft] = useState("");
+  const [declineCcError, setDeclineCcError] = useState("");
+  const [declineSenderEmail, setDeclineSenderEmail] = useState("");
+  const [declinePreviewLoading, setDeclinePreviewLoading] = useState(false);
+  const [declinePreviewError, setDeclinePreviewError] = useState("");
+  const [sendingDecline, setSendingDecline] = useState(false);
   const [shareInquiry, setShareInquiry] = useState<InquiryItem | null>(null);
   const [shareDetails, setShareDetails] = useState<ExtractedDetails | null>(
     null,
@@ -1893,6 +1920,65 @@ export default function InquiriesPage() {
       cancelled = true;
     };
   }, [showQuotationModal, shareInquiry?.id]);
+
+  useEffect(() => {
+    if (!showDeclinePreview || !selectedInquiry) return;
+    let cancelled = false;
+    setDeclinePreviewLoading(true);
+    setDeclinePreviewError("");
+    inquiriesApi
+      .previewDecline(selectedInquiry.id)
+      .then((res) => {
+        if (cancelled) return;
+        const preview = res?.data?.data || res?.data || {};
+        const customerName =
+          selectedInquiry.customer_name ||
+          selectedInquiry.sender_name ||
+          (selectedInquiry.ai_extraction_json as { customer_name?: string } | undefined)?.customer_name ||
+          "Customer";
+        setDeclineSubject(
+          preview.subject || `Enlight Metals - Quotation Update for ${customerName}`,
+        );
+        setDeclineBody(preview.body || "");
+        const fromPreview = Array.isArray(preview.cc)
+          ? preview.cc
+              .map((email: string) => normalizeQuotationEmail(email))
+              .filter(isValidQuotationEmail)
+          : [];
+        const salespersonEmail =
+          (viewingAs || employee)?.email || preview.employee_email || "";
+        setDeclineCc(
+          withSalespersonCc(fromPreview, salespersonEmail, declineEmail),
+        );
+        setDeclineCcDraft("");
+        setDeclineCcError("");
+        setDeclineSenderEmail(preview.sender_email || "");
+        if (preview.customer_email) setDeclineEmail(preview.customer_email);
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setDeclinePreviewError(
+          err?.response?.data?.error ||
+            err?.response?.data?.message ||
+            "A decline email is available only when every line is unavailable.",
+        );
+        setDeclineSenderEmail("");
+      })
+      .finally(() => {
+        if (!cancelled) setDeclinePreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showDeclinePreview, selectedInquiry?.id]);
+
+  const commitDeclineCcDraft = () => {
+    const result = addQuotationCcEmail(declineCc, declineCcDraft, declineEmail);
+    setDeclineCc(result.emails);
+    setDeclineCcError(result.error);
+    if (!result.error) setDeclineCcDraft("");
+    return result;
+  };
 
   const commitQuotationCcDraft = () => {
     const result = addQuotationCcEmail(
@@ -3605,6 +3691,12 @@ export default function InquiriesPage() {
     procurementRequest?.line_items.some(
       (line) => line.line_status === "priced",
     ),
+  );
+  const everyLineUnavailable = Boolean(
+    procurementRequest?.line_items.length &&
+      procurementRequest.line_items.every(
+        (line) => line.line_status === "cannot_price",
+      ),
   );
   const isInterstateDelivery =
     getGstSplit(0, editDetails?.deliveryLocation || "").type === "igst";
@@ -7267,8 +7359,7 @@ export default function InquiriesPage() {
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-              {activeRole === "salesperson" && (
-                hasAvailableProcurementLine ? (
+              {activeRole === "salesperson" && hasAvailableProcurementLine && (
                   <span className="relative group">
                     <button
                       type="button"
@@ -7309,24 +7400,37 @@ export default function InquiriesPage() {
                       )}
                     </button>
                   </span>
-                ) : (
+              )}
+              {activeRole === "salesperson" && everyLineUnavailable && (
                   <button
                     type="button"
-                    onClick={async () => {
+                    onClick={() => {
+                      const ai = (selectedInquiry.ai_extraction_json || {}) as any;
+                      const customerEmail = inquiryEmailFrom(
+                        (selectedInquiry as any).customer_email,
+                        (selectedInquiry as any).sender_email,
+                        ai.customer_email,
+                        ai.customerEmail,
+                        editDetails?.customerEmail,
+                      );
                       setDeclineSent(false);
-                      try {
-                        const response = await inquiriesApi.previewDecline(selectedInquiry.id);
-                        setDeclineBody(response.data?.body || "");
-                      } catch {
-                        setDeclineBody("A decline email is available only when every line is unavailable.");
-                      }
+                      setDeclinePreviewError("");
+                      setDeclineEmail(customerEmail);
+                      setDeclineCcDraft("");
+                      setDeclineCcError("");
+                      setDeclineCc(
+                        withSalespersonCc(
+                          [...FIXED_QUOTATION_CC],
+                          (viewingAs || employee)?.email || "",
+                          customerEmail,
+                        ),
+                      );
                       setShowDeclinePreview(true);
                     }}
                     className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all"
                   >
-                    Preview decline email
+                    Send Decline Email
                   </button>
-                )
               )}
               <button
                 type="button"
@@ -7657,28 +7761,210 @@ export default function InquiriesPage() {
         </div>
       )}
 
-      {showDeclinePreview && selectedInquiry && editDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><AlertCircle size={20} className="text-rose-600" />Decline email preview</h2>
-              <button type="button" onClick={() => setShowDeclinePreview(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
+      {showDeclinePreview && selectedInquiry && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="send-decline-title"
+            className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]"
+          >
+            <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-slate-100 shrink-0">
+              <h2 id="send-decline-title" className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Send className="text-rose-600" size={22} />
+                Send Decline Email
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeclinePreview(false);
+                  setDeclineCcDraft("");
+                  setDeclineCcError("");
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div className="space-y-3 text-sm">
-              <p><span className="font-semibold text-slate-500">To:</span> {(selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || "Customer email pending"}</p>
-              <p><span className="font-semibold text-slate-500">Subject:</span> Update on your inquiry</p>
-              <textarea readOnly rows={6} value={declineBody} className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" />
-            </div>
-            {declineSent ? <p className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">Decline email sent.</p> : (
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowDeclinePreview(false)} className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700">Close</button>
-                <button type="button" onClick={async () => {
-                  await inquiriesApi.sendDecline(selectedInquiry.id);
-                  setDeclineSent(true);
-                  toast.success("Decline email sent");
-                }} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white">Send decline email</button>
+            <div className="overflow-y-auto px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Customer Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. customer@example.com"
+                  value={declineEmail}
+                  onChange={(event) => setDeclineEmail(event.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-500 text-slate-800"
+                />
               </div>
-            )}
+              {declinePreviewLoading && (
+                <div className="text-xs text-slate-500 flex items-center gap-2">
+                  <RefreshCw size={13} className="animate-spin" /> Preparing email…
+                </div>
+              )}
+              {declinePreviewError && (
+                <div className="p-3 rounded-xl text-xs font-bold border bg-rose-50 text-rose-900 border-rose-200">
+                  {declinePreviewError}
+                </div>
+              )}
+              {declineSenderEmail && (
+                <div className="text-[11px] text-slate-500">
+                  From: <span className="font-semibold text-slate-700">{declineSenderEmail}</span>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">CC</label>
+                <div
+                  className="min-h-[42px] w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs flex flex-wrap items-center gap-1.5 bg-white"
+                  onClick={(event) => event.currentTarget.querySelector("input")?.focus()}
+                >
+                  {declineCc.map((email) => (
+                    <span
+                      key={email}
+                      className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700"
+                    >
+                      {email}
+                      {!isFixedQuotationCc(email) && (
+                        <button
+                          type="button"
+                          aria-label={`Remove ${email}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDeclineCc((current) => current.filter((item) => item !== email));
+                          }}
+                          className="text-slate-400 hover:text-slate-700 rounded-full"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  <input
+                    type="email"
+                    value={declineCcDraft}
+                    onChange={(event) => {
+                      setDeclineCcDraft(event.target.value);
+                      if (declineCcError) setDeclineCcError("");
+                    }}
+                    onBlur={commitDeclineCcDraft}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === ",") {
+                        event.preventDefault();
+                        commitDeclineCcDraft();
+                      } else if (event.key === "Backspace" && !declineCcDraft) {
+                        const lastRemovable = [...declineCc]
+                          .reverse()
+                          .find((email) => !isFixedQuotationCc(email));
+                        if (!lastRemovable) return;
+                        setDeclineCc((current) => {
+                          const index = current.lastIndexOf(lastRemovable);
+                          return index < 0
+                            ? current
+                            : current.filter((_, itemIndex) => itemIndex !== index);
+                        });
+                      }
+                    }}
+                    placeholder={declineCc.length === 0 ? "Add CC recipients" : "Add another email"}
+                    className="min-w-[150px] flex-1 border-0 bg-transparent px-1 py-1 text-xs font-semibold outline-none text-slate-800 placeholder:text-slate-400"
+                  />
+                </div>
+                {declineCcError && (
+                  <p className="mt-1 text-[11px] font-semibold text-rose-600">{declineCcError}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Subject
+                </label>
+                <input
+                  type="text"
+                  value={declineSubject}
+                  onChange={(event) => setDeclineSubject(event.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-500 text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Email Body <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={10}
+                  value={declineBody}
+                  onChange={(event) => setDeclineBody(event.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium leading-relaxed outline-none focus:ring-2 focus:ring-rose-500 text-slate-800 resize-y"
+                />
+              </div>
+              {declineSent && (
+                <p className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
+                  Decline email sent.
+                </p>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 shrink-0 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeclinePreview(false);
+                  setDeclineCcDraft("");
+                  setDeclineCcError("");
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={
+                  sendingDecline ||
+                  declineSent ||
+                  declinePreviewLoading ||
+                  !declineEmail.trim() ||
+                  !declineBody.trim() ||
+                  Boolean(declinePreviewError)
+                }
+                onClick={async () => {
+                  const targetEmail = declineEmail.trim();
+                  if (!targetEmail.includes("@")) {
+                    toast.error("Please enter a valid customer email address");
+                    return;
+                  }
+                  const ccResult = addQuotationCcEmail(declineCc, declineCcDraft, targetEmail);
+                  if (ccResult.error) {
+                    setDeclineCcError(ccResult.error);
+                    toast.error(ccResult.error);
+                    return;
+                  }
+                  setDeclineCc(ccResult.emails);
+                  setDeclineCcDraft("");
+                  try {
+                    setSendingDecline(true);
+                    await inquiriesApi.sendDecline(selectedInquiry.id, {
+                      customer_email: targetEmail,
+                      email_subject: declineSubject,
+                      email_body: declineBody,
+                      cc: ccResult.emails,
+                    });
+                    setDeclineSent(true);
+                    toast.success("Decline email sent");
+                  } catch (err: any) {
+                    toast.error(
+                      err?.response?.data?.error ||
+                        err?.response?.data?.message ||
+                        "Could not send the decline email.",
+                    );
+                  } finally {
+                    setSendingDecline(false);
+                  }
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {sendingDecline ? "Sending..." : "Send Decline Email"}
+              </button>
+            </div>
           </div>
         </div>
       )}

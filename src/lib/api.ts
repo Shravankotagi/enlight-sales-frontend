@@ -246,7 +246,7 @@ export const inquiriesApi = {
   saveSalesPricing: (id: string, payload: any) =>
     API.patch(`/inquiries/${id}/sales-pricing`, payload),
   previewDecline: (id: string) => API.post(`/inquiries/${id}/decline-preview`),
-  sendDecline: (id: string) => API.post(`/inquiries/${id}/decline-email`),
+  sendDecline: (id: string, payload: any) => API.post(`/inquiries/${id}/decline-email`, payload),
 };
 
 export const productsApi = {
