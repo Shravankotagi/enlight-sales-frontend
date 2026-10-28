@@ -53,7 +53,7 @@ Record the result of each case as Pass or Fail. A case fails if the expected res
 | S2 | Enter base, transport, loading, and margin on one available row. Use **Copy to all** for transport, loading, and margin. | Those three values copy only to available rows. An unavailable row stays unchanged and cannot be quoted. |
 | S3 | Save prices, then send a quotation. | The quotation uses the saved rate for available lines only. The server total matches base + transport + loading + margin, multiplied by MT. |
 | S4 | Repeat S3 for a Maharashtra delivery and for a delivery outside Maharashtra. | Maharashtra shows CGST 9% and SGST 9% on the row and the subtotal. The other state shows IGST 18% only. |
-| S5 | Open the inquiry whose lines are all unavailable. | **Send quotation** is not the action. **Preview decline email** opens a polite message. Sending it records the decline. |
+| S5 | Open the inquiry whose lines are all unavailable. | **Send quotation** is not the action. **Send Decline Email** opens a polite message that names the material, with a customer email field and CC. `dj@enlightmetals.com` and `vedant@enlightmetals.com` have no remove button. Sending it records the decline. |
 | S6 | After procurement has priced one line, change the working base price and save again. | The quotation uses the salesperson's base. Procurement's original base is still retained for audit. |
 | S7 | Open Dashboard, Orders, and Customers. | Those tabs still open. The inquiries page does not trap navigation. |
 

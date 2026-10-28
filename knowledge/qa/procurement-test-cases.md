@@ -78,7 +78,7 @@ Prepare two inquiries for Sales, each with two product lines, a quantity, a unit
 | T3 | Sales | Inquiry B is Price Ready, delivery outside Maharashtra | Save prices the same way | The row shows IGST 18% only | |
 | T4 | Sales | Two available lines | Use Copy to all for transport, loading, and margin | Those three values copy only to available rows. An unavailable row stays unchanged | |
 | T5 | Sales | After T2 | Send the quotation | The quotation uses the saved rate for available lines only. The total matches the rate times the MT weight | |
-| T6 | Sales | Every line is unavailable | Open the drawer | Send quotation is not the action. Preview decline email opens a polite message. Sending it records the decline | |
+| T6 | Sales | Every line is unavailable | Open the drawer and Send Decline Email | Send quotation is not the action. The modal names the material, asks for the customer email, and keeps `dj@enlightmetals.com` and `vedant@enlightmetals.com` locked in CC. Sending it records the decline | |
 | T7 | Sales | Procurement has saved a base price | Change the working base and save again | The quotation uses the salesperson's base. Procurement's original base is still stored | |
 | T8 | Sales | A price was saved | Refresh the inquiry | The saved rate, amount, and GST stay. They are not replaced with zero | |
 
