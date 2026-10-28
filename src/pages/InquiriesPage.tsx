@@ -262,6 +262,22 @@ export function inquiryEmailFrom(...values: unknown[]): string {
   return "";
 }
 
+export function quotationCustomerEmail(
+  inquiry?: { customer_email?: string; sender_email?: string; ai_extraction_json?: any } | null,
+  details?: { customerEmail?: string } | null,
+) {
+  const ai = inquiry?.ai_extraction_json || {};
+  return inquiryEmailFrom(
+    details?.customerEmail,
+    inquiry?.customer_email,
+    inquiry?.sender_email,
+    ai.customer_email,
+    ai.customerEmail,
+    ai.customer?.email,
+    ai.email,
+  );
+}
+
 export interface ExtractedDetails {
   companyName: string;
   customerPhone: string;
@@ -1861,6 +1877,12 @@ export default function InquiriesPage() {
   const [lastSharedById, setLastSharedById] = useState<Record<string, string>>(
     {},
   );
+  const quotationWasShared = (inquiry?: { id?: string; ai_extraction_json?: any } | null) =>
+    Boolean(
+      inquiry?.id &&
+        (lastSharedById[inquiry.id] ||
+          (inquiry.ai_extraction_json as any)?.quotation_shared_at),
+    );
 
   useEffect(() => {
     if (!showQuotationModal || !shareInquiry || !shareDetails) return;
@@ -3796,6 +3818,8 @@ export default function InquiriesPage() {
         customer_name: editDetails.companyName,
         customerPhone: editDetails.customerPhone,
         customer_phone: editDetails.customerPhone,
+        customerEmail: (editDetails.customerEmail || "").trim(),
+        customer_email: (editDetails.customerEmail || "").trim(),
         deliveryLocation: editDetails.deliveryLocation,
         delivery_location: editDetails.deliveryLocation,
         paymentTerms: editDetails.paymentTerms,
@@ -3848,6 +3872,7 @@ export default function InquiriesPage() {
         customer_name: editDetails.companyName,
         sender_phone: editDetails.customerPhone,
         customer_phone: editDetails.customerPhone,
+        customer_email: (editDetails.customerEmail || "").trim(),
         raw_text: selectedInquiry.raw_text,
         media_urls: mediaUrlsPayload,
         ai_extraction_json: payload,
@@ -5883,12 +5908,7 @@ export default function InquiriesPage() {
                                       setSubMenuInqId(null);
                                       setShareInquiry(inq);
                                       setShareDetails(details);
-                                      setQuotationEmail(
-                                        (inq as any).customer_email ||
-                                          (inq as any).sender_email ||
-                                          (details as any).customerEmail ||
-                                          "",
-                                      );
+                                      setQuotationEmail(quotationCustomerEmail(inq, details));
                                       setQuotationCcDraft("");
                                       setQuotationCcError("");
                                       setShowQuotationModal(true);
@@ -5941,7 +5961,7 @@ export default function InquiriesPage() {
           onClick={handleCloseDrawer}
         >
           <div
-            className="mobile-sheet bg-white rounded-2xl max-w-7.5xl max-w-[84rem] w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
+            className="mobile-sheet bg-white rounded-2xl max-w-7.5xl max-w-[102rem] w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden my-auto overscroll-contain"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drawer Header (Fixed Top) */}
@@ -6032,7 +6052,7 @@ export default function InquiriesPage() {
             <div className="p-6 overflow-y-auto flex-1 space-y-6 overscroll-contain">
               {/* Editable Fields Form */}
               <div className="space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Company Name{" "}
@@ -6149,6 +6169,25 @@ export default function InquiriesPage() {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={editDetails.customerEmail || ""}
+                      onChange={(e) => {
+                        setEditDetails({
+                          ...editDetails,
+                          customerEmail: e.target.value,
+                        });
+                        setSaveSuccess(false);
+                      }}
+                      placeholder="buyer@company.com"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
                       Salesperson
                     </label>
                     <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs">
@@ -6216,27 +6255,27 @@ export default function InquiriesPage() {
                         </th>
                         <th
                           rowSpan={2}
-                          className="px-4 py-3 border-r border-slate-700 w-[24%] align-middle"
+                          className={`px-4 py-3 border-r border-slate-700 align-middle ${isInquiryPricingSaved ? "w-[26%]" : "w-[16%]"}`}
                         >
                           Description &amp; Specifications{" "}
                           <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th
                           rowSpan={2}
-                          className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle"
+                          className={`px-3 py-3 border-r border-slate-700 text-center align-middle ${isInquiryPricingSaved ? "w-[9%]" : "w-[8%]"}`}
                         >
                           HSN/SAC{" "}
                           <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th
                           rowSpan={2}
-                          className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle"
+                          className={`px-3 py-3 border-r border-slate-700 text-center align-middle ${isInquiryPricingSaved ? "w-[11%]" : "w-[10%]"}`}
                         >
                           Brand/Make
                         </th>
                         <th
                           rowSpan={isInquiryPricingSaved ? 2 : 1}
-                          className="px-2 py-3 border-r border-slate-700 w-[108px] text-center align-middle"
+                          className="px-2 py-3 border-r border-slate-700 w-[144px] text-center align-middle"
                         >
                           Quantity, Unit &amp; Wt (MT){" "}
                           <span className="text-red-500 font-bold">*</span>
@@ -6245,13 +6284,13 @@ export default function InquiriesPage() {
                           <>
                             <th
                               rowSpan={2}
-                              className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle"
+                              className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle"
                             >
                               Rate (₹)/ MT
                             </th>
                             <th
                               rowSpan={2}
-                              className="w-[10%] px-2 py-3 border-r border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest align-middle"
+                              className="w-[11%] px-2 py-3 border-r border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest align-middle"
                             >
                               GST (18%)
                             </th>
@@ -6263,27 +6302,32 @@ export default function InquiriesPage() {
                         ) : (
                           <>
                             <th className="px-2 py-3 border-r border-slate-700 text-center">
-                              Base Price *
+                              Base Price {" "}
+                              <span className="text-red-500 font-bold">*</span>
                             </th>
                             <th className="px-2 py-3 border-r border-slate-700 text-center">
-                              Transport *
+                              Transport {" "}
+                              <span className="text-red-500 font-bold">*</span>
                             </th>
                             <th className="px-2 py-3 border-r border-slate-700 text-center">
-                              Loading *
+                              Loading {" "}
+                              <span className="text-red-500 font-bold">*</span>
                             </th>
                             <th className="px-2 py-3 border-r border-slate-700 text-center">
-                              Credit *
+                              Credit {" "}
+                              <span className="text-red-500 font-bold">*</span>
                             </th>
                             <th className="px-2 py-3 border-r border-slate-700 text-center">
-                              Margin *
+                              Margin {" "}
+                              <span className="text-red-500 font-bold">*</span>
                             </th>
                           </>
                         )}
                         <th
                           rowSpan={isInquiryPricingSaved ? 2 : 1}
-                          className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle"
+                          className={`px-3 py-3 border-r border-slate-700 text-left min-w-[100px] align-middle ${isInquiryPricingSaved ? "w-[14%]" : "w-[13%]"}`}
                         >
-                          Amount (₹)
+                          Amount (₹) Rate/MT
                         </th>
                         <th
                           rowSpan={isInquiryPricingSaved ? 2 : 1}
@@ -6588,8 +6632,8 @@ export default function InquiriesPage() {
                               )}
                             </Select>
                           </td>
-                          <td data-label="Qty" className="w-[108px] max-w-[108px] px-1.5 py-2 border-r border-slate-200">
-                            <div className="flex w-[100px] flex-col gap-1">
+                          <td data-label="Qty" className="w-[144px] max-w-[144px] px-1.5 py-2 border-r border-slate-200">
+                            <div className="flex w-full flex-col gap-1">
                               <div
                                 className={`flex overflow-hidden rounded bg-white ${
                                   fieldErrors[`qty_${idx}`]
@@ -6899,7 +6943,7 @@ export default function InquiriesPage() {
                                   </div>
                                 )}
                               </td>
-                              <td className="w-[10%] max-w-[100px] px-2 py-3.5 border-r border-slate-200 font-mono text-right">
+                              <td className="w-[11%] px-2 py-3.5 border-r border-slate-200 font-mono text-right">
                                 {(() => {
                                   const split = getGstSplit(
                                     taxableLineAmount(
@@ -7030,7 +7074,7 @@ export default function InquiriesPage() {
                               const displayedAmount = taxableAmount;
                               return (
                                 <div className="space-y-1 rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-right text-xs font-bold">
-                                  {!isInquiryPricingSaved && <div className="text-[10px] text-slate-500">Rate/MT: {formatIndianCurrency(draftRate, true)}</div>}
+                                  {!isInquiryPricingSaved }
                                   <div>{formatIndianCurrency(displayedAmount, true)}</div>
                                 </div>
                               );
@@ -7401,9 +7445,7 @@ export default function InquiriesPage() {
                     type="button"
                     disabled={!isInquiryPricingSaved}
                     title={
-                      ["quoted", "won"].includes(
-                        (selectedInquiry?.status || "").toLowerCase(),
-                      ) || isQuotationSent
+                      quotationWasShared(selectedInquiry)
                         ? formatLastSharedLabel(
                             lastSharedById[selectedInquiry.id] ||
                               (selectedInquiry.ai_extraction_json as any)
@@ -7414,25 +7456,21 @@ export default function InquiriesPage() {
                     onClick={() => {
                       setShareInquiry(selectedInquiry);
                       setShareDetails(editDetails);
-                      setQuotationEmail(
-                        (selectedInquiry as any).customer_email ||
-                          (selectedInquiry as any).sender_email ||
-                          "",
-                      );
+                      setQuotationEmail(quotationCustomerEmail(selectedInquiry, editDetails));
                       setQuotationCcDraft("");
                       setQuotationCcError("");
                       setShowQuotationModal(true);
                     }}
                     className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:cursor-not-allowed disabled:bg-slate-300 flex items-center gap-1.5"
                   >
-                    {["quoted", "won"].includes(
-                      (selectedInquiry?.status || "").toLowerCase(),
-                    ) || isQuotationSent ? (
+                    {quotationWasShared(selectedInquiry) ? (
                       <>
                         <Check size={15} /> Share Again
                       </>
                     ) : (
-                      "Send quotation"
+                      <>
+                        <Send size={15} /> Share Quotation
+                      </>
                     )}
                   </button>
                 </span>
@@ -7537,10 +7575,7 @@ export default function InquiriesPage() {
                 if (isProcurement && !procurementCanSendQuote) return null;
                 if (activeRole === "salesperson" && hasAvailableProcurementLine) return null;
 
-                const shareAgain =
-                  ["quoted", "won"].includes(
-                    (selectedInquiry?.status || "").toLowerCase(),
-                  ) || isQuotationSent;
+                const shareAgain = quotationWasShared(selectedInquiry);
                 const lastSharedLabel = shareAgain
                   ? formatLastSharedLabel(
                       lastSharedById[selectedInquiry.id] ||
@@ -7557,12 +7592,7 @@ export default function InquiriesPage() {
                       onClick={() => {
                         setShareInquiry(selectedInquiry);
                         setShareDetails(editDetails);
-                        setQuotationEmail(
-                          (selectedInquiry as any).customer_email ||
-                            (selectedInquiry as any).sender_email ||
-                            (editDetails as any).customerEmail ||
-                            "",
-                        );
+                        setQuotationEmail(quotationCustomerEmail(selectedInquiry, editDetails));
                         setQuotationCcDraft("");
                         setQuotationCcError("");
                         setShowQuotationModal(true);
@@ -8470,7 +8500,7 @@ export default function InquiriesPage() {
       {/* Log New Customer Inquiry Modal */}
       {showModal && (
         <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="mobile-sheet bg-white rounded-2xl max-w-7.5xl max-w-[84rem] w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-7.5xl max-w-[102rem] w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain">
             <div className="sheet-header flex justify-between items-center pb-2 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="text-blue-600" size={20} />
@@ -8559,6 +8589,7 @@ export default function InquiriesPage() {
             </div>
 
             <form onSubmit={handleCreateInquiry} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 items-start">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Company Name <span className="text-red-500 font-bold">*</span>
@@ -8685,10 +8716,11 @@ export default function InquiriesPage() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
+              </div>
 
               {/* Structured Line Items Table matching Image 3 / Orders */}
               <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
-                <table className="w-full min-w-[960px] text-left text-xs text-slate-800 border-collapse">
+                <table className="w-full min-w-[960px] table-fixed text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
                       <th
@@ -8699,33 +8731,33 @@ export default function InquiriesPage() {
                       </th>
                       <th
                         rowSpan={2}
-                        className="px-4 py-3 border-r border-slate-700 w-[24%] align-middle"
+                        className="px-4 py-3 border-r border-slate-700 w-[16%] align-middle"
                       >
                         Description &amp; Specifications{" "}
                         <span className="text-red-500 font-bold">*</span>
                       </th>
                       <th
                         rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle"
+                        className="px-3 py-3 border-r border-slate-700 w-[8%] text-center align-middle"
                       >
                         HSN/SAC
                       </th>
                       <th
                         rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle"
+                        className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle"
                       >
                         Brand/Make
                       </th>
                       <th
                         rowSpan={2}
-                        className="w-[132px] border-r border-slate-700 px-2 py-3 text-center align-middle leading-tight"
+                        className="w-[144px] border-r border-slate-700 px-2 py-3 text-center align-middle leading-tight"
                       >
                         Quantity, Unit &amp; Wt (MT){" "}
                         <span className="text-red-500 font-bold">*</span>
                       </th>
                       <th
                         rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[11%] text-center min-w-[85px] align-middle"
+                        className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle"
                       >
                         Rate (₹)/ MT{" "}
                         <span className="text-red-500 font-bold">*</span>
@@ -8913,8 +8945,8 @@ export default function InquiriesPage() {
                             )}
                           </Select>
                         </td>
-                        <td data-label="Qty" className="w-[132px] border-r border-slate-200 px-1.5 py-3.5 align-middle">
-                          <div className="mx-auto flex w-full max-w-[124px] flex-col items-stretch gap-1">
+                        <td data-label="Qty" className="w-[144px] max-w-[144px] border-r border-slate-200 px-1.5 py-3.5 align-middle">
+                          <div className="mx-auto flex w-full flex-col items-stretch gap-1">
                             <div className="flex w-full rounded border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-blue-500">
                             <input
                               id={`form-item-qty-${idx}`}
