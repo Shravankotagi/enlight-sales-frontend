@@ -179,6 +179,7 @@ export default function AssistantPage() {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingSessions, setFetchingSessions] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [kbModalOpen, setKbModalOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -332,6 +333,7 @@ export default function AssistantPage() {
   const loadSessions = async () => {
     try {
       setFetchingSessions(true);
+      setSessionsError(null);
       const res = await chatbotApi.getSessions();
       const rawData = res.data?.data || res.data || {};
       const sessionList: ChatSession[] = Array.isArray(rawData?.sessions)
@@ -349,6 +351,7 @@ export default function AssistantPage() {
       }
     } catch (err: any) {
       console.error('Failed to load chat sessions:', err);
+      setSessionsError('Conversation history could not be loaded. Try again.');
     } finally {
       setFetchingSessions(false);
     }
@@ -774,7 +777,11 @@ export default function AssistantPage() {
 
               {/* Session List */}
               <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 mt-4">
-                {!Array.isArray(sessions) || sessions.length === 0 ? (
+                {sessionsError ? (
+                  <div className="p-4 text-center text-xs text-red-600 border border-dashed border-red-200 rounded-xl bg-red-50">
+                    {sessionsError}
+                  </div>
+                ) : !Array.isArray(sessions) || sessions.length === 0 ? (
                   <div className="p-4 text-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
                     No past sessions found. Start a new conversation!
                   </div>

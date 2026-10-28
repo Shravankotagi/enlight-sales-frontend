@@ -86,8 +86,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               name: meData.name,
               phone: meData.phone,
               role: meData.role,
+              email: meData.email,
             };
-            if (prev && prev.role === meData.role && prev.name === meData.name) return prev;
+            if (
+              prev &&
+              prev.role === meData.role &&
+              prev.name === meData.name &&
+              ((prev as any).email || "") === (meData.email || (prev as any).email || "")
+            ) {
+              return prev;
+            }
             const updated = {
               ...base,
               id: meData.id || base.id,
@@ -95,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: meData.role,
               name: meData.name || base.name,
               phone: meData.phone || base.phone,
+              email: meData.email || (base as any).email,
             };
             sessionStorage.setItem('enlight_employee', JSON.stringify(updated));
             return updated;

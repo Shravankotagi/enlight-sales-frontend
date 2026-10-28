@@ -13,6 +13,7 @@ import {
   Search,
   CheckCircle,
   RefreshCw,
+  Bell,
   X,
   Building2,
   Calendar,
@@ -46,6 +47,12 @@ import {
   activityLogsApi,
   logPoAllocationError,
 } from "../lib/api";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "../components/ui/dropdown-menu";
 import toast from "react-hot-toast";
 import type { DateFilterRange } from "../components/DateFilterControl";
 import InquiryPdfModal from "../components/InquiryPdfModal";
@@ -90,9 +97,27 @@ import {
 } from "../utils/procurementPricing";
 import {
   addQuotationCcEmail,
+  FIXED_QUOTATION_CC,
+  isFixedQuotationCc,
   isValidQuotationEmail,
   normalizeQuotationEmail,
 } from "../utils/quotationCc";
+
+function withSalespersonCc(
+  emails: string[],
+  senderEmail: string,
+  customerEmail = "",
+): string[] {
+  const sender = normalizeQuotationEmail(senderEmail || "");
+  const customer = normalizeQuotationEmail(customerEmail || "");
+  const rest = emails.filter(
+    (email) => normalizeQuotationEmail(email) !== sender,
+  );
+  if (!sender || !isValidQuotationEmail(sender) || sender === customer) {
+    return rest;
+  }
+  return [sender, ...rest];
+}
 
 function pricedLineAmount(rate: number, item: any) {
   return calculateLineAmount(
@@ -177,6 +202,13 @@ export interface InquiryItem {
   procurement_assigned_at?: string | null;
   procurement_number?: string | null;
   pricing_status?: string | null;
+  tonnage_review_open?: boolean | null;
+  tonnage_review?: {
+    changed_at?: string | null;
+    previous_total_mt?: number | null;
+    next_total_mt?: number | null;
+    lines?: { sku_text?: string; from_mt?: number; to_mt?: number }[];
+  } | null;
   linked_deal_stage?: string | null;
   display_stage?: string | null;
 }
@@ -1641,8 +1673,61 @@ export function resolveInquiryDealStageKey(inq: InquiryItem): string {
     : "new_inquiry";
 }
 
+/** Price Quote on screen wins over a deal row that is still New Inquiry. */
+export function statusMoveBlock(
+  visibleStage: string,
+  dealStage: string,
+  target: string,
+): "new_inquiry" | "on_hold" | null {
+  const visible = String(visibleStage || "").toLowerCase().trim();
+  const stored = String(dealStage || "").toLowerCase().trim();
+  const current =
+    visible === "quoted" || visible === "qualified" ? "quoted" : stored;
+  if (
+    (current === "new_inquiry" || current === "review" || !current) &&
+    (target === "lost" || target === "on_hold" || target === "negotiation")
+  ) {
+    return "new_inquiry";
+  }
+  if (
+    target === "on_hold" &&
+    current !== "quoted" &&
+    current !== "qualified"
+  ) {
+    return "on_hold";
+  }
+  return null;
+}
+
 const EMPTY_INQUIRIES: InquiryItem[] = [];
 const EMPTY_CUSTOMER_NAMES: string[] = [];
+const EMPTY_TONNAGE_REVIEWS: TonnageReviewRow[] = [];
+
+interface TonnageReviewRow {
+  id: string;
+  procurement_number?: string | null;
+  salesperson_name?: string | null;
+  changed_at?: string | null;
+  previous_total_mt?: number | null;
+  next_total_mt?: number | null;
+  lines?: { sku_text?: string; from_mt?: number; to_mt?: number }[];
+}
+
+function formatTonnageMt(value: unknown) {
+  const rounded = Math.round((Number(value) || 0) * 1000) / 1000;
+  return `${rounded} MT`;
+}
+
+function formatTonnageWhen(value?: string | null) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 const INQUIRY_PREFERRED_MAKES = ['TATA', 'JSW', 'AM/NS India', 'SAIL', 'NMDC', 'Apollo', 'Others'];
 const INQUIRY_PAYMENT_TERMS = ['Immediate', 'Advance', '30 Days', '45 Days', '60 Days', 'LC', 'BG', 'PDC'];
@@ -1747,6 +1832,15 @@ export default function InquiriesPage() {
   const [showDeclinePreview, setShowDeclinePreview] = useState(false);
   const [declineSent, setDeclineSent] = useState(false);
   const [declineBody, setDeclineBody] = useState("");
+  const [declineEmail, setDeclineEmail] = useState("");
+  const [declineSubject, setDeclineSubject] = useState("");
+  const [declineCc, setDeclineCc] = useState<string[]>([]);
+  const [declineCcDraft, setDeclineCcDraft] = useState("");
+  const [declineCcError, setDeclineCcError] = useState("");
+  const [declineSenderEmail, setDeclineSenderEmail] = useState("");
+  const [declinePreviewLoading, setDeclinePreviewLoading] = useState(false);
+  const [declinePreviewError, setDeclinePreviewError] = useState("");
+  const [sendingDecline, setSendingDecline] = useState(false);
   const [shareInquiry, setShareInquiry] = useState<InquiryItem | null>(null);
   const [shareDetails, setShareDetails] = useState<ExtractedDetails | null>(
     null,
@@ -1812,6 +1906,65 @@ export default function InquiriesPage() {
       cancelled = true;
     };
   }, [showQuotationModal, shareInquiry?.id]);
+
+  useEffect(() => {
+    if (!showDeclinePreview || !selectedInquiry) return;
+    let cancelled = false;
+    setDeclinePreviewLoading(true);
+    setDeclinePreviewError("");
+    inquiriesApi
+      .previewDecline(selectedInquiry.id)
+      .then((res) => {
+        if (cancelled) return;
+        const preview = res?.data?.data || res?.data || {};
+        const customerName =
+          selectedInquiry.customer_name ||
+          selectedInquiry.sender_name ||
+          (selectedInquiry.ai_extraction_json as { customer_name?: string } | undefined)?.customer_name ||
+          "Customer";
+        setDeclineSubject(
+          preview.subject || `Enlight Metals - Quotation Update for ${customerName}`,
+        );
+        setDeclineBody(preview.body || "");
+        const fromPreview = Array.isArray(preview.cc)
+          ? preview.cc
+              .map((email: string) => normalizeQuotationEmail(email))
+              .filter(isValidQuotationEmail)
+          : [];
+        const salespersonEmail =
+          (viewingAs || employee)?.email || preview.employee_email || "";
+        setDeclineCc(
+          withSalespersonCc(fromPreview, salespersonEmail, declineEmail),
+        );
+        setDeclineCcDraft("");
+        setDeclineCcError("");
+        setDeclineSenderEmail(preview.sender_email || "");
+        if (preview.customer_email) setDeclineEmail(preview.customer_email);
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setDeclinePreviewError(
+          err?.response?.data?.error ||
+            err?.response?.data?.message ||
+            "A decline email is available only when every line is unavailable.",
+        );
+        setDeclineSenderEmail("");
+      })
+      .finally(() => {
+        if (!cancelled) setDeclinePreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showDeclinePreview, selectedInquiry?.id]);
+
+  const commitDeclineCcDraft = () => {
+    const result = addQuotationCcEmail(declineCc, declineCcDraft, declineEmail);
+    setDeclineCc(result.emails);
+    setDeclineCcError(result.error);
+    if (!result.error) setDeclineCcDraft("");
+    return result;
+  };
 
   const commitQuotationCcDraft = () => {
     const result = addQuotationCcEmail(
@@ -2183,6 +2336,26 @@ export default function InquiriesPage() {
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
+  });
+
+  const {
+    data: tonnageReviews = EMPTY_TONNAGE_REVIEWS,
+    isLoading: tonnageReviewsLoading,
+    isError: tonnageReviewsError,
+    refetch: fetchTonnageReviews,
+  } = useQuery<TonnageReviewRow[]>({
+    queryKey: ["tonnage-reviews", employee?.id],
+    enabled: isProcurement,
+    refetchInterval: 10000,
+    queryFn: async () => {
+      const res = await inquiriesApi.getTonnageReviews();
+      const list = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.data)
+          ? res.data.data
+          : [];
+      return list;
+    },
   });
 
   const { data: rawCustomers = EMPTY_CUSTOMER_NAMES } = useQuery<string[]>({
@@ -2673,25 +2846,19 @@ export default function InquiriesPage() {
     }
 
     const currentDealStage = (linked.stage || "").toLowerCase().trim();
-    if (
-      (currentDealStage === "new_inquiry" ||
-        currentDealStage === "review" ||
-        !linked.stage) &&
-      (targetStage === "lost" ||
-        targetStage === "on_hold" ||
-        targetStage === "negotiation")
-    ) {
+    const moveBlock = statusMoveBlock(
+      getInquiryDealStageKey(inq),
+      currentDealStage,
+      targetStage,
+    );
+    if (moveBlock === "new_inquiry") {
       toast.error(
         `Cannot move inquiry to ${targetStage.toUpperCase().replace("_", " ")} from New Inquiry stage. Unit rates must be quoted first.`,
       );
       return;
     }
 
-    if (
-      targetStage === "on_hold" &&
-      currentDealStage !== "quoted" &&
-      currentDealStage !== "qualified"
-    ) {
+    if (moveBlock === "on_hold") {
       toast.error(
         "Cannot put deal on hold. Deal must be in Price Quote stage before it can be placed on hold.",
       );
@@ -3369,6 +3536,14 @@ export default function InquiriesPage() {
       applyPricingResult(selectedInquiry, response);
       pricingDirtyRef.current = false;
       setExpandedRateIndex(null);
+      if (isProcurement) {
+        setSelectedInquiry((current) =>
+          current && current.id === selectedInquiry.id
+            ? { ...current, tonnage_review_open: false, tonnage_review: null }
+            : current,
+        );
+        void fetchTonnageReviews();
+      }
       toast.success("Prices saved");
     } catch (error: any) {
       toast.error(
@@ -3510,6 +3685,12 @@ export default function InquiriesPage() {
       (line) => line.line_status === "priced",
     ),
   );
+  const everyLineUnavailable = Boolean(
+    procurementRequest?.line_items.length &&
+      procurementRequest.line_items.every(
+        (line) => line.line_status === "cannot_price",
+      ),
+  );
   const isInterstateDelivery =
     getGstSplit(0, editDetails?.deliveryLocation || "").type === "igst";
   const pricingLinesComplete = Boolean(
@@ -3637,11 +3818,32 @@ export default function InquiriesPage() {
       const nextStatus = isProcurement
         ? selectedInquiry.status || "review"
         : "confirmed";
-      await inquiriesApi.updateStatus(selectedInquiry.id, nextStatus, payload);
+      const response = await inquiriesApi.updateStatus(
+        selectedInquiry.id,
+        nextStatus,
+        payload,
+      );
+      const body = response?.data;
+      const saved = body?.id ? body : body?.data;
+      const reviewOpened = Boolean(saved?.tonnage_review_open);
+      const savedStatus = String(
+        saved?.status ||
+          (isProcurement ? selectedInquiry.status || "review" : "confirmed"),
+      );
+      const movedToQuote =
+        !reviewOpened &&
+        ["confirmed", "saved", "processed", "quoted", "quotation_sent"].includes(
+          savedStatus.toLowerCase(),
+        );
 
       const updatedObj: InquiryItem = {
         ...selectedInquiry,
-        status: "confirmed",
+        status: savedStatus,
+        pricing_status: saved?.pricing_status ?? selectedInquiry.pricing_status,
+        tonnage_review_open:
+          saved?.tonnage_review_open ?? selectedInquiry.tonnage_review_open,
+        tonnage_review: saved?.tonnage_review ?? selectedInquiry.tonnage_review,
+        display_stage: movedToQuote ? "quoted" : selectedInquiry.display_stage,
         sender_name: editDetails.companyName,
         customer_name: editDetails.companyName,
         sender_phone: editDetails.customerPhone,
@@ -3655,17 +3857,18 @@ export default function InquiriesPage() {
       setSelectedInquiry(updatedObj);
       setDrawerFileBase64(null);
 
-      // Optimistically update linked deal stage to 'qualified'
-      queryClient.setQueryData(["deals", effectivePhone], (old: any[] = []) =>
-        old.map((d) =>
-          d.inquiry_id === selectedInquiry.id ||
-          (d.customer_name &&
-            d.customer_name.toLowerCase().trim() ===
-              editDetails.companyName?.toLowerCase().trim())
-            ? { ...d, stage: "qualified" }
-            : d,
-        ),
-      );
+      if (movedToQuote) {
+        queryClient.setQueryData(["deals", effectivePhone], (old: any[] = []) =>
+          old.map((d) =>
+            d.inquiry_id === selectedInquiry.id ||
+            (d.customer_name &&
+              d.customer_name.toLowerCase().trim() ===
+                editDetails.companyName?.toLowerCase().trim())
+              ? { ...d, stage: "qualified" }
+              : d,
+          ),
+        );
+      }
 
       // Invalidate all related caches so Pipeline cards and KRA metrics update immediately
       queryClient.invalidateQueries({ queryKey: ["kanban"] });
@@ -4854,6 +5057,31 @@ export default function InquiriesPage() {
     setImageViewerUrl(`extracted_preview://${inq.id}`);
   };
 
+  const openTonnageReview = async (review: TonnageReviewRow) => {
+    const reviewFields = {
+      tonnage_review_open: true,
+      tonnage_review: {
+        changed_at: review.changed_at,
+        previous_total_mt: review.previous_total_mt,
+        next_total_mt: review.next_total_mt,
+        lines: review.lines || [],
+      },
+    };
+    const found = inquiries.find((item) => item.id === review.id);
+    if (found) {
+      handleOpenDrawer({ ...found, ...reviewFields });
+      return;
+    }
+    try {
+      const res = await inquiriesApi.getOne(review.id);
+      const item = res?.data?.data || res?.data;
+      if (item) handleOpenDrawer({ ...item, ...reviewFields });
+    } catch (error) {
+      console.warn("Could not open tonnage review:", error);
+      toast.error("Could not open that inquiry.");
+    }
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)] space-y-4 animate-fade-in font-sans">
       {/* Frozen Upper Section (Header, KPI Summary Cards, Filters, Search) */}
@@ -4891,11 +5119,100 @@ export default function InquiriesPage() {
               </button>
             )}
 
+            {isProcurement && (
+            <div className="relative shrink-0 w-9">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Tonnage updates"
+                      title="Tonnage updates"
+                      className="relative h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer shrink-0"
+                    >
+                      <Bell size={15} />
+                      {tonnageReviews.length > 0 && (
+                        <span
+                          aria-label={`${tonnageReviews.length} open tonnage ${tonnageReviews.length === 1 ? "update" : "updates"}`}
+                          className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-4 text-center"
+                        >
+                          {tonnageReviews.length}
+                        </span>
+                      )}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="!top-full !bottom-auto !mt-2 !mb-0 w-[22rem] max-h-96 !overflow-y-auto p-0"
+                  >
+                    <div className="border-b border-slate-100 px-3 py-2.5">
+                      <p className="text-sm font-bold text-slate-900">
+                        Tonnage updates
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Price Ready inquiries whose weight changed
+                      </p>
+                    </div>
+                    {tonnageReviewsLoading ? (
+                      <p className="px-3 py-4 text-xs text-slate-500">
+                        Loading tonnage updates
+                      </p>
+                    ) : tonnageReviewsError ? (
+                      <p className="px-3 py-4 text-xs text-red-600">
+                        Could not load tonnage updates
+                      </p>
+                    ) : tonnageReviews.length === 0 ? (
+                      <p className="px-3 py-4 text-xs text-slate-500">
+                        No tonnage updates
+                      </p>
+                    ) : (
+                      <div className="py-1">
+                        {tonnageReviews.map((review) => {
+                          const when = formatTonnageWhen(review.changed_at);
+                          const products = (review.lines || [])
+                            .map((line) => line.sku_text)
+                            .filter(Boolean)
+                            .join(", ");
+                          return (
+                            <DropdownMenuItem
+                              key={review.id}
+                              onClick={() => openTonnageReview(review)}
+                              className="h-auto flex-col items-start whitespace-normal rounded-none px-3 py-2.5"
+                            >
+                              <span className="block text-sm font-bold text-slate-900">
+                                {review.procurement_number || "Inquiry"}
+                              </span>
+                              <span className="block text-xs font-medium text-slate-500">
+                                {review.salesperson_name || "Salesperson"}
+                                {when ? ` · ${when}` : ""}
+                              </span>
+                              <span className="mt-1 block text-xs font-semibold text-amber-800">
+                                {formatTonnageMt(review.previous_total_mt)} →{" "}
+                                {formatTonnageMt(review.next_total_mt)}
+                              </span>
+                              {products && (
+                                <span className="mt-0.5 block text-xs font-medium text-slate-600">
+                                  {products}
+                                </span>
+                              )}
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+            )}
+
             <button
               type="button"
               disabled={dealsFetching || isFetching}
               onClick={async () => {
-                await Promise.all([fetchMonthlyInquiries(), fetchDeals()]);
+                await Promise.all([
+                  fetchMonthlyInquiries(),
+                  fetchDeals(),
+                  isProcurement ? fetchTonnageReviews() : Promise.resolve(),
+                ]);
                 toast.success(
                   viewMode === "pipeline"
                     ? "Pipeline refreshed"
@@ -5857,6 +6174,36 @@ export default function InquiriesPage() {
                     </span>
                   </div>
                 )}
+                {isProcurement &&
+                  selectedInquiry?.tonnage_review_open &&
+                  selectedInquiry.tonnage_review && (
+                    <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950">
+                      Tonnage changed from{" "}
+                      {formatTonnageMt(
+                        selectedInquiry.tonnage_review.previous_total_mt,
+                      )}{" "}
+                      to{" "}
+                      {formatTonnageMt(
+                        selectedInquiry.tonnage_review.next_total_mt,
+                      )}
+                      . Save a base price again, or leave a line blank to mark
+                      it unavailable.
+                      {(selectedInquiry.tonnage_review.lines || []).length >
+                        0 && (
+                        <ul className="mt-2 space-y-1">
+                          {selectedInquiry.tonnage_review.lines?.map(
+                            (line, index) => (
+                              <li key={`${line.sku_text}-${index}`}>
+                                {line.sku_text || "Material"}:{" "}
+                                {formatTonnageMt(line.from_mt)} →{" "}
+                                {formatTonnageMt(line.to_mt)}
+                              </li>
+                            ),
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 <div className={`bg-white rounded-xl border border-slate-300 shadow-xs ${expandedRateIndex === null ? "overflow-x-auto" : "overflow-visible"}`}>
                   <table className="w-full min-w-[960px] table-fixed text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
@@ -7048,68 +7395,78 @@ export default function InquiriesPage() {
 
             {/* Bottom Actions Bar (Solid White Pinned Footer) */}
             <div className="px-6 py-3.5 bg-white border-t border-slate-200 shrink-0 z-20 flex items-center justify-end gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-              {activeRole === "salesperson" && (
-                hasAvailableProcurementLine ? (
-                  can('inquiries.send_quote') && (
-                    <span className="relative group">
-                      <button
-                        type="button"
-                        disabled={!isInquiryPricingSaved}
-                        title={
-                          ["quoted", "won"].includes(
-                            (selectedInquiry?.status || "").toLowerCase(),
-                          ) || isQuotationSent
-                            ? formatLastSharedLabel(
-                                lastSharedById[selectedInquiry.id] ||
-                                  (selectedInquiry.ai_extraction_json as any)
-                                    ?.quotation_shared_at,
-                              ) || undefined
-                            : undefined
-                        }
-                        onClick={() => {
-                          setShareInquiry(selectedInquiry);
-                          setShareDetails(editDetails);
-                          setQuotationEmail(
-                            (selectedInquiry as any).customer_email ||
-                              (selectedInquiry as any).sender_email ||
-                              "",
-                          );
-                          setQuotationCcDraft("");
-                          setQuotationCcError("");
-                          setShowQuotationModal(true);
-                        }}
-                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:cursor-not-allowed disabled:bg-slate-300 flex items-center gap-1.5"
-                      >
-                        {["quoted", "won"].includes(
-                          (selectedInquiry?.status || "").toLowerCase(),
-                        ) || isQuotationSent ? (
-                          <>
-                            <Check size={15} /> Share Again
-                          </>
-                        ) : (
-                          "Send quotation"
-                        )}
-                      </button>
-                    </span>
-                  )
-                ) : (
+              {activeRole === "salesperson" && hasAvailableProcurementLine && can('inquiries.send_quote') && (
+                <span className="relative group">
                   <button
                     type="button"
-                    onClick={async () => {
+                    disabled={!isInquiryPricingSaved}
+                    title={
+                      ["quoted", "won"].includes(
+                        (selectedInquiry?.status || "").toLowerCase(),
+                      ) || isQuotationSent
+                        ? formatLastSharedLabel(
+                            lastSharedById[selectedInquiry.id] ||
+                              (selectedInquiry.ai_extraction_json as any)
+                                ?.quotation_shared_at,
+                          ) || undefined
+                        : undefined
+                    }
+                    onClick={() => {
+                      setShareInquiry(selectedInquiry);
+                      setShareDetails(editDetails);
+                      setQuotationEmail(
+                        (selectedInquiry as any).customer_email ||
+                          (selectedInquiry as any).sender_email ||
+                          "",
+                      );
+                      setQuotationCcDraft("");
+                      setQuotationCcError("");
+                      setShowQuotationModal(true);
+                    }}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:cursor-not-allowed disabled:bg-slate-300 flex items-center gap-1.5"
+                  >
+                    {["quoted", "won"].includes(
+                      (selectedInquiry?.status || "").toLowerCase(),
+                    ) || isQuotationSent ? (
+                      <>
+                        <Check size={15} /> Share Again
+                      </>
+                    ) : (
+                      "Send quotation"
+                    )}
+                  </button>
+                </span>
+              )}
+              {activeRole === "salesperson" && everyLineUnavailable && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ai = (selectedInquiry.ai_extraction_json || {}) as any;
+                      const customerEmail = inquiryEmailFrom(
+                        (selectedInquiry as any).customer_email,
+                        (selectedInquiry as any).sender_email,
+                        ai.customer_email,
+                        ai.customerEmail,
+                        editDetails?.customerEmail,
+                      );
                       setDeclineSent(false);
-                      try {
-                        const response = await inquiriesApi.previewDecline(selectedInquiry.id);
-                        setDeclineBody(response.data?.body || "");
-                      } catch {
-                        setDeclineBody("A decline email is available only when every line is unavailable.");
-                      }
+                      setDeclinePreviewError("");
+                      setDeclineEmail(customerEmail);
+                      setDeclineCcDraft("");
+                      setDeclineCcError("");
+                      setDeclineCc(
+                        withSalespersonCc(
+                          [...FIXED_QUOTATION_CC],
+                          (viewingAs || employee)?.email || "",
+                          customerEmail,
+                        ),
+                      );
                       setShowDeclinePreview(true);
                     }}
                     className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all"
                   >
-                    Preview decline email
+                    Send Decline Email
                   </button>
-                )
               )}
               <button
                 type="button"
@@ -7440,28 +7797,210 @@ export default function InquiriesPage() {
         </div>
       )}
 
-      {showDeclinePreview && selectedInquiry && editDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><AlertCircle size={20} className="text-rose-600" />Decline email preview</h2>
-              <button type="button" onClick={() => setShowDeclinePreview(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
+      {showDeclinePreview && selectedInquiry && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="send-decline-title"
+            className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]"
+          >
+            <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-slate-100 shrink-0">
+              <h2 id="send-decline-title" className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Send className="text-rose-600" size={22} />
+                Send Decline Email
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeclinePreview(false);
+                  setDeclineCcDraft("");
+                  setDeclineCcError("");
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div className="space-y-3 text-sm">
-              <p><span className="font-semibold text-slate-500">To:</span> {(selectedInquiry as any).customer_email || (selectedInquiry as any).sender_email || "Customer email pending"}</p>
-              <p><span className="font-semibold text-slate-500">Subject:</span> Update on your inquiry</p>
-              <textarea readOnly rows={6} value={declineBody} className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" />
-            </div>
-            {declineSent ? <p className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">Decline email sent.</p> : (
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowDeclinePreview(false)} className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700">Close</button>
-                <button type="button" onClick={async () => {
-                  await inquiriesApi.sendDecline(selectedInquiry.id);
-                  setDeclineSent(true);
-                  toast.success("Decline email sent");
-                }} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white">Send decline email</button>
+            <div className="overflow-y-auto px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Customer Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. customer@example.com"
+                  value={declineEmail}
+                  onChange={(event) => setDeclineEmail(event.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-500 text-slate-800"
+                />
               </div>
-            )}
+              {declinePreviewLoading && (
+                <div className="text-xs text-slate-500 flex items-center gap-2">
+                  <RefreshCw size={13} className="animate-spin" /> Preparing email…
+                </div>
+              )}
+              {declinePreviewError && (
+                <div className="p-3 rounded-xl text-xs font-bold border bg-rose-50 text-rose-900 border-rose-200">
+                  {declinePreviewError}
+                </div>
+              )}
+              {declineSenderEmail && (
+                <div className="text-[11px] text-slate-500">
+                  From: <span className="font-semibold text-slate-700">{declineSenderEmail}</span>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">CC</label>
+                <div
+                  className="min-h-[42px] w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs flex flex-wrap items-center gap-1.5 bg-white"
+                  onClick={(event) => event.currentTarget.querySelector("input")?.focus()}
+                >
+                  {declineCc.map((email) => (
+                    <span
+                      key={email}
+                      className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700"
+                    >
+                      {email}
+                      {!isFixedQuotationCc(email) && (
+                        <button
+                          type="button"
+                          aria-label={`Remove ${email}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDeclineCc((current) => current.filter((item) => item !== email));
+                          }}
+                          className="text-slate-400 hover:text-slate-700 rounded-full"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  <input
+                    type="email"
+                    value={declineCcDraft}
+                    onChange={(event) => {
+                      setDeclineCcDraft(event.target.value);
+                      if (declineCcError) setDeclineCcError("");
+                    }}
+                    onBlur={commitDeclineCcDraft}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === ",") {
+                        event.preventDefault();
+                        commitDeclineCcDraft();
+                      } else if (event.key === "Backspace" && !declineCcDraft) {
+                        const lastRemovable = [...declineCc]
+                          .reverse()
+                          .find((email) => !isFixedQuotationCc(email));
+                        if (!lastRemovable) return;
+                        setDeclineCc((current) => {
+                          const index = current.lastIndexOf(lastRemovable);
+                          return index < 0
+                            ? current
+                            : current.filter((_, itemIndex) => itemIndex !== index);
+                        });
+                      }
+                    }}
+                    placeholder={declineCc.length === 0 ? "Add CC recipients" : "Add another email"}
+                    className="min-w-[150px] flex-1 border-0 bg-transparent px-1 py-1 text-xs font-semibold outline-none text-slate-800 placeholder:text-slate-400"
+                  />
+                </div>
+                {declineCcError && (
+                  <p className="mt-1 text-[11px] font-semibold text-rose-600">{declineCcError}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Subject
+                </label>
+                <input
+                  type="text"
+                  value={declineSubject}
+                  onChange={(event) => setDeclineSubject(event.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-500 text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Email Body <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={10}
+                  value={declineBody}
+                  onChange={(event) => setDeclineBody(event.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium leading-relaxed outline-none focus:ring-2 focus:ring-rose-500 text-slate-800 resize-y"
+                />
+              </div>
+              {declineSent && (
+                <p className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
+                  Decline email sent.
+                </p>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 shrink-0 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeclinePreview(false);
+                  setDeclineCcDraft("");
+                  setDeclineCcError("");
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={
+                  sendingDecline ||
+                  declineSent ||
+                  declinePreviewLoading ||
+                  !declineEmail.trim() ||
+                  !declineBody.trim() ||
+                  Boolean(declinePreviewError)
+                }
+                onClick={async () => {
+                  const targetEmail = declineEmail.trim();
+                  if (!targetEmail.includes("@")) {
+                    toast.error("Please enter a valid customer email address");
+                    return;
+                  }
+                  const ccResult = addQuotationCcEmail(declineCc, declineCcDraft, targetEmail);
+                  if (ccResult.error) {
+                    setDeclineCcError(ccResult.error);
+                    toast.error(ccResult.error);
+                    return;
+                  }
+                  setDeclineCc(ccResult.emails);
+                  setDeclineCcDraft("");
+                  try {
+                    setSendingDecline(true);
+                    await inquiriesApi.sendDecline(selectedInquiry.id, {
+                      customer_email: targetEmail,
+                      email_subject: declineSubject,
+                      email_body: declineBody,
+                      cc: ccResult.emails,
+                    });
+                    setDeclineSent(true);
+                    toast.success("Decline email sent");
+                  } catch (err: any) {
+                    toast.error(
+                      err?.response?.data?.error ||
+                        err?.response?.data?.message ||
+                        "Could not send the decline email.",
+                    );
+                  } finally {
+                    setSendingDecline(false);
+                  }
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {sendingDecline ? "Sending..." : "Send Decline Email"}
+              </button>
+            </div>
           </div>
         </div>
       )}

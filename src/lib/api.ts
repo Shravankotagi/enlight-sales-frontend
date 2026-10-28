@@ -31,7 +31,7 @@ export function getBotUrl(): string {
 
 export const BOT_URL = getBotUrl();
 
-const API = axios.create({
+export const API = axios.create({
   baseURL: BACKEND_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
@@ -230,6 +230,7 @@ export const inquiriesApi = {
   getOne: (id: string) => API.get(`/inquiries/${id}`),
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
+  getTonnageReviews: () => API.get('/inquiries/tonnage-reviews'),
   create: (data: any) => API.post('/inquiries', data),
   updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
   previewQuotation: (id: string, payload: any) => API.post(`/inquiries/quotation-preview/${id}`, payload),
@@ -245,7 +246,7 @@ export const inquiriesApi = {
   saveSalesPricing: (id: string, payload: any) =>
     API.patch(`/inquiries/${id}/sales-pricing`, payload),
   previewDecline: (id: string) => API.post(`/inquiries/${id}/decline-preview`),
-  sendDecline: (id: string) => API.post(`/inquiries/${id}/decline-email`),
+  sendDecline: (id: string, payload: any) => API.post(`/inquiries/${id}/decline-email`, payload),
 };
 
 export const productsApi = {

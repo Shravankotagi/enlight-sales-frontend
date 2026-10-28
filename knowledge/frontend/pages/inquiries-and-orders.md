@@ -14,13 +14,13 @@ System PO allocation is a reservation protocol, not just a display field. Retain
 
 Procurement and sales price the same inquiry. Procurement enters a base price per product. Sales adds transport, loading, credit, and margin, all in ₹/MT. The server stores `base + transport + loading + credit + margin`, then `rate × MT`. A blank credit is 0.
 
-The inquiry list must not sync query results until the request has resolved. A pending or failed request leaves the query data unset, and a fresh empty-array default retriggers that sync on every render and freezes the page, including the sidebar. The inquiry drawer shows `Awaiting Price`, `Price Ready` (including partially available requests), or `Unavailable`. Sales quotes available products only, can copy Transport, Loading, and Margin to all available products, and can send a decline email when no products are available. Maharashtra delivery shows CGST 9% + SGST 9%; other states show IGST 18%.
+The inquiry list must not sync query results until the request has resolved. A pending or failed request leaves the query data unset, and a fresh empty-array default retriggers that sync on every render and freezes the page, including the sidebar. The inquiry drawer shows `Awaiting Price`, `Price Ready` (including partially available requests), or `Unavailable`. Sales quotes available products only, can copy Transport, Loading, and Margin to all available products, and can send a decline email when every line is unavailable. That modal matches Share Quotation: customer email, locked fixed CC addresses, and an editable polite body. Maharashtra delivery shows CGST 9% + SGST 9%; other states show IGST 18%.
 
 ## Procurement view
 
 When accessed by users with `procurement_person` or `procurement_manager` roles:
-- A procurement person sees inquiries stamped to them and unassigned inquiries for the salespeople assigned to them.
-- A procurement manager also sees the team and the open unassigned pool (`status` in `new`, `pending`, `review`, `draft` where `procurement_employee_id` is null).
+- A procurement person sees inquiries stamped to them. Those are the inquiries of the salespeople routed to them.
+- A procurement manager sees inquiries stamped to them and to the procurement people who report to them. An inquiry with no procurement owner is absent.
 - Admins and procurement managers can assign or reassign an inquiry to a procurement team member.
 - Commercial actions such as sending a quotation, converting to a deal, and marking won or lost stay hidden for procurement roles.
 - The Orders page is hidden from procurement navigation, and its API routes are blocked for those roles.
