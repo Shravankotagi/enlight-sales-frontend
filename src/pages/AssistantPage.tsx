@@ -99,6 +99,9 @@ const TECHNICAL_PAYLOAD_DISPLAY_MAP: Record<string, string> = {
   btn_resume_yes: 'Yes, Continue',
   btn_resume_no: 'No, Go to Menu',
   btn_att_no: 'No',
+  btn_add_product: 'Add Product',
+  btn_prod_save: 'Save Product',
+  btn_next_customers: 'Next 10 Customers',
 
   proc_1: 'Pending prices',
   proc_2: 'All inquiries',
@@ -129,6 +132,15 @@ export function formatUserDisplayMessage(content?: string): string {
   if (lower.startsWith('btn_repeat_')) {
     const cleanAction = lower.replace(/^btn_repeat_/, '').replace(/_/g, ' ');
     return `Record Another ${cleanAction.replace(/\b\w/g, (c) => c.toUpperCase())}`;
+  }
+
+  if (lower.startsWith('btn_')) {
+    return lower
+      .replace(/^btn_/, '')
+      .split('_')
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 
   return content;

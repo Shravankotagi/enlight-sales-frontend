@@ -156,6 +156,8 @@ export default function CustomersPage() {
   const queryClient = useQueryClient();
   const { effectivePhone, isSalesManager, isAdmin, activeRole, activeMode, can, viewingAs } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
+  const showOrderColumns = can('orders.view');
+  const customerColumnCount = showOrderColumns ? 8 : 5;
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterHealth, setFilterHealth] = useState<string>('all');
@@ -614,17 +616,23 @@ export default function CustomersPage() {
                 <th className="px-4 py-3.5 text-center whitespace-nowrap w-16">Sr. No.</th>
                 <th className="px-5 py-3.5 min-w-[220px] sticky left-0 bg-slate-50 z-10">Customer</th>
                 <th className="px-4 py-3.5 min-w-[140px]">Segment</th>
-                <th className="px-4 py-3.5 min-w-[170px]">Order Activity</th>
+                {showOrderColumns && (
+                  <th className="px-4 py-3.5 min-w-[170px]">Order Activity</th>
+                )}
                 <th className="px-4 py-3.5 min-w-[140px]">Health</th>
-                <th className="px-4 py-3.5 text-center min-w-[100px]">Orders</th>
+                {showOrderColumns && (
+                  <th className="px-4 py-3.5 text-center min-w-[100px]">Orders</th>
+                )}
                 <th className="px-4 py-3.5 text-center min-w-[120px]">Open Issues</th>
-                <th className="px-5 py-3.5 text-right min-w-[140px]">Total Tonnage</th>
+                {showOrderColumns && (
+                  <th className="px-5 py-3.5 text-right min-w-[140px]">Total Tonnage</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={customerColumnCount} className="px-4 py-12 text-center text-slate-400">
                     <RefreshCw size={20} className="animate-spin inline mr-2 text-blue-600" />
                     Loading customer health data...
                   </td>
@@ -676,7 +684,7 @@ export default function CustomersPage() {
                         <SegmentBadge segment={segment} />
                       </td>
 
-                      {/* 3. Order Activity Column */}
+                      {showOrderColumns && (
                       <td className="px-4 py-3.5 text-xs">
                         <div className="font-semibold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
                           <Calendar size={13} className="text-slate-400 shrink-0" />
@@ -692,18 +700,20 @@ export default function CustomersPage() {
                           Freq: {c.avg_order_frequency_days || 30}d
                         </div>
                       </td>
+                      )}
 
                       {/* 4. Health Column */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <HealthBadge risk={c.churn_risk} />
                       </td>
 
-                      {/* 5. Orders Column */}
+                      {showOrderColumns && (
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
                         <span className="text-xs font-semibold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg">
                           {c.total_orders ?? 0} {Number(c.total_orders) === 1 ? 'Order' : 'Orders'}
                         </span>
                       </td>
+                      )}
 
                       {/* 6. Open Issues Column */}
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
@@ -720,12 +730,13 @@ export default function CustomersPage() {
                         )}
                       </td>
 
-                      {/* 7. Total Tonnage Column */}
+                      {showOrderColumns && (
                       <td className="px-5 py-3.5 text-right whitespace-nowrap">
                         <span className="font-bold text-slate-900 text-sm">
                           {formatTonnage(c.total_tonnage)}
                         </span>
                       </td>
+                      )}
                     </tr>
                   );
                 })

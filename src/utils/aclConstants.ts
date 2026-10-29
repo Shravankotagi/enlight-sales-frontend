@@ -43,12 +43,6 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
           headerLabel: 'Assign owner',
           label: 'Assign / Reassign account owner to rep',
         },
-        subOptions: [
-          {
-            key: 'customers.scope_assigned',
-            label: 'Allow users to handle the data and transactions for assigned customers only.',
-          },
-        ],
       },
     ],
   },
@@ -70,12 +64,6 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
           headerLabel: 'Verify',
           label: 'Verify visit reports and discussion outcomes',
         },
-        subOptions: [
-          {
-            key: 'visits.scope_assigned',
-            label: 'Allow users to log and view visits for assigned customers only.',
-          },
-        ],
       },
     ],
   },
@@ -97,12 +85,6 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
           headerLabel: 'Send Quote',
           label: 'Generate & share formal quotation PDF via WhatsApp / Email',
         },
-        subOptions: [
-          {
-            key: 'inquiries.scope_assigned',
-            label: 'Allow users to handle and rate inquiries assigned to them only.',
-          },
-        ],
       },
     ],
   },
@@ -124,12 +106,6 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
           headerLabel: 'Attach PO',
           label: 'Upload customer Purchase Order documents & OCR parse details',
         },
-        subOptions: [
-          {
-            key: 'orders.scope_assigned',
-            label: 'Allow users to handle sales orders and deals for assigned accounts only.',
-          },
-        ],
       },
     ],
   },
@@ -151,12 +127,6 @@ export const ZOHO_ACL_SECTIONS: AclSection[] = [
           headerLabel: 'Resolve',
           label: 'Mark grievances resolved and close remediation tickets',
         },
-        subOptions: [
-          {
-            key: 'complaints.scope_assigned',
-            label: 'Allow users to view and log complaints for assigned accounts only.',
-          },
-        ],
       },
     ],
   },
@@ -632,14 +602,6 @@ export interface RoleItem {
   permissions: Record<string, boolean>;
   visibility_scope?: Record<string, string[]>;
 }
-
-export const SCOPE_ASSIGNED_PROMPTS: Record<string, { module: string; noun: string }> = {
-  'customers.scope_assigned': { module: 'customers', noun: 'customers' },
-  'inquiries.scope_assigned': { module: 'inquiries', noun: 'inquiries' },
-  'orders.scope_assigned': { module: 'orders', noun: 'orders' },
-  'visits.scope_assigned': { module: 'visits', noun: 'visits' },
-  'complaints.scope_assigned': { module: 'complaints', noun: 'complaints' },
-};
 
 export const SYSTEM_ROLE_IDS = [
   'admin',

@@ -5263,13 +5263,15 @@ export default function InquiriesPage() {
 
             {!isProcurement && (
               <>
-                <button
-                  onClick={() => navigate("/orders")}
-                  className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-                >
-                  <ShoppingBag size={14} className="text-emerald-600" /> View
-                  Confirmed Orders
-                </button>
+                {can('orders.view') && (
+                  <button
+                    onClick={() => navigate("/orders")}
+                    className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+                  >
+                    <ShoppingBag size={14} className="text-emerald-600" /> View
+                    Confirmed Orders
+                  </button>
+                )}
 
                 {can('inquiries.manage') && (
                   <button
@@ -8599,7 +8601,7 @@ export default function InquiriesPage() {
             </div>
 
             <form onSubmit={handleCreateInquiry} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 items-start">
+              <div className="grid grid-cols-3 gap-3 items-start">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Company Name <span className="text-red-500 font-bold">*</span>
@@ -8726,76 +8728,41 @@ export default function InquiriesPage() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Salesperson
+                </label>
+                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
+                  <User size={15} className="text-blue-600 shrink-0" />
+                  <span className="truncate">{activeSalespersonName}</span>
+                </div>
+              </div>
               </div>
 
               {/* Structured Line Items Table matching Image 3 / Orders */}
               <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto shadow-xs">
-                <table className="w-full min-w-[960px] table-fixed text-left text-xs text-slate-800 border-collapse">
+                <table className="w-full table-fixed text-left text-xs text-slate-800 border-collapse">
                   <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                     <tr>
-                      <th
-                        rowSpan={2}
-                        className="px-2 py-3 border-r border-slate-700 w-[3%] text-center align-middle"
-                      >
+                      <th className="px-2 py-3 border-r border-slate-700 w-12 text-center align-middle">
                         Sr. No.
                       </th>
-                      <th
-                        rowSpan={2}
-                        className="px-4 py-3 border-r border-slate-700 w-[16%] align-middle"
-                      >
+                      <th className="px-4 py-3 border-r border-slate-700 align-middle">
                         Description &amp; Specifications{" "}
                         <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th
-                        rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[8%] text-center align-middle"
-                      >
+                      <th className="px-3 py-3 border-r border-slate-700 w-[14%] text-center align-middle">
                         HSN/SAC
                       </th>
-                      <th
-                        rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle"
-                      >
+                      <th className="px-3 py-3 border-r border-slate-700 w-[16%] text-center align-middle">
                         Brand/Make
                       </th>
-                      <th
-                        rowSpan={2}
-                        className="w-[144px] border-r border-slate-700 px-2 py-3 text-center align-middle leading-tight"
-                      >
+                      <th className="w-[144px] border-r border-slate-700 px-2 py-3 text-center align-middle leading-tight">
                         Quantity, Unit &amp; Wt (MT){" "}
                         <span className="text-red-500 font-bold">*</span>
                       </th>
-                      <th
-                        rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle"
-                      >
-                        Rate (₹)/ MT{" "}
-                        <span className="text-red-500 font-bold">*</span>
-                      </th>
-                      <th
-                        colSpan={2}
-                        className="px-3 py-1.5 border-r border-b border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest"
-                      >
-                        18% GST
-                      </th>
-                      <th
-                        rowSpan={2}
-                        className="px-3 py-3 border-r border-slate-700 w-[13%] text-left min-w-[100px] align-middle"
-                      >
-                        Amount (₹)
-                      </th>
-                      <th
-                        rowSpan={2}
-                        className="px-2 py-3 text-center w-[3%] align-middle"
-                      ></th>
-                    </tr>
-                    <tr>
-                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
-                        CGST (9%)
-                      </th>
-                      <th className="px-2.5 py-1.5 border-r border-slate-700 text-right text-[10px] w-[8%] min-w-[75px] bg-slate-850">
-                        SGST (9%)
-                      </th>
+                      <th className="px-2 py-3 text-center w-12 align-middle"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -9063,7 +9030,7 @@ export default function InquiriesPage() {
                                       ? "bg-blue-50/80 text-blue-900"
                                       : "bg-slate-100 text-slate-400"
                                   }`}
-                                  title="Weight in MT (Editable - Amount calculates as MT × Rate)"
+                                  title="Weight in MT"
                                 >
                                   <span className="shrink-0 font-semibold">
                                     Wt
@@ -9129,134 +9096,6 @@ export default function InquiriesPage() {
                             <span className="text-[9px] text-red-600 font-normal block text-left mt-0.5 leading-snug max-w-[240px]">{NOS_MT_MISSING_MESSAGE}</span>
                           )}
                         </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 font-bold font-mono min-w-[95px]">
-                          <input
-                            id={`form-item-rate-${idx}`}
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={item.rate === 0 ? "" : item.rate}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const rawR = val === "" ? 0 : parseFloat(val);
-                              const safeR = isNaN(rawR) || rawR < 0 ? 0 : rawR;
-                              const updated = [...formLineItems];
-                              const currentItem = {
-                                ...updated[idx],
-                                rate: safeR,
-                              };
-                              const calc = calculateLineItem({
-                                ...currentItem,
-                                amount: 0,
-                              });
-                              updated[idx] = {
-                                ...currentItem,
-                                amount: calc.amount,
-                                cgst_rate: calc.cgst_rate,
-                                cgst_amount: calc.cgst_amount,
-                                sgst_rate: calc.sgst_rate,
-                                sgst_amount: calc.sgst_amount,
-                                total_gst: calc.total_gst,
-                                final_amount: calc.final_amount,
-                              };
-                              setFormLineItems(updated);
-                            }}
-                            placeholder="0"
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal text-left text-slate-900"
-                          />
-                        </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
-                          {(() => {
-                            const baseAmt = Number(item.amount) || 0;
-                            const cgst =
-                              item.cgst_amount !== undefined
-                                ? Number(item.cgst_amount)
-                                : Math.round(baseAmt * 0.09 * 100) / 100;
-                            return (
-                              <input
-                                type="text"
-                                readOnly
-                                tabIndex={-1}
-                                value={formatIndianCurrency(cgst, true)}
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
-                              />
-                            );
-                          })()}
-                        </td>
-                        <td className="px-2.5 py-3.5 border-r border-slate-200 min-w-[75px]">
-                          {(() => {
-                            const baseAmt = Number(item.amount) || 0;
-                            const sgst =
-                              item.sgst_amount !== undefined
-                                ? Number(item.sgst_amount)
-                                : Math.round(baseAmt * 0.09 * 100) / 100;
-                            return (
-                              <input
-                                type="text"
-                                readOnly
-                                tabIndex={-1}
-                                value={formatIndianCurrency(sgst, true)}
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs font-mono text-slate-900 text-right cursor-default select-all outline-none"
-                              />
-                            );
-                          })()}
-                        </td>
-                        <td className="px-3 py-3.5 text-left font-bold text-slate-900 font-mono border-r border-slate-200 min-w-[100px]">
-                          {(() => {
-                            const baseAmt = Number(item.amount) || 0;
-                            const cgst =
-                              item.cgst_amount !== undefined
-                                ? Number(item.cgst_amount)
-                                : Math.round(baseAmt * 0.09 * 100) / 100;
-                            const sgst =
-                              item.sgst_amount !== undefined
-                                ? Number(item.sgst_amount)
-                                : Math.round(baseAmt * 0.09 * 100) / 100;
-                            const finalAmt =
-                              item.final_amount !== undefined &&
-                              item.final_amount > 0
-                                ? Number(item.final_amount)
-                                : Math.round((baseAmt + cgst + sgst) * 100) /
-                                  100;
-                            return (
-                              <input
-                                id={`form-item-amount-${idx}`}
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={finalAmt === 0 ? "" : finalAmt}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const rawA = val === "" ? 0 : parseFloat(val);
-                                  const safeFinal =
-                                    isNaN(rawA) || rawA < 0 ? 0 : rawA;
-                                  const safeBase =
-                                    Math.round((safeFinal / 1.18) * 100) / 100;
-                                  const cgstA =
-                                    Math.round(safeBase * 0.09 * 100) / 100;
-                                  const sgstA =
-                                    Math.round(safeBase * 0.09 * 100) / 100;
-                                  const updated = [...formLineItems];
-                                  updated[idx] = {
-                                    ...updated[idx],
-                                    amount: safeBase,
-                                    isManualAmount: true,
-                                    cgst_rate: 9,
-                                    cgst_amount: cgstA,
-                                    sgst_rate: 9,
-                                    sgst_amount: sgstA,
-                                    total_gst:
-                                      Math.round((cgstA + sgstA) * 100) / 100,
-                                    final_amount: safeFinal,
-                                  };
-                                  setFormLineItems(updated);
-                                }}
-                                placeholder="0"
-                                className="w-full min-w-[95px] px-2.5 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs text-left font-mono text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                              />
-                            );
-                          })()}
-                        </td>
                         <td className="px-2 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {formLineItems.length > 1 && (
@@ -9314,73 +9153,14 @@ export default function InquiriesPage() {
                 </table>
 
                 {/* Standard Quotation Pricing Breakdown Layout */}
-                {(() => {
-                  const subtotal = formLineItems.reduce(
-                    (sum, item) => sum + (Number(item.amount) || 0),
-                    0,
-                  );
-                  const qBreakdown = calculateQuotationBreakdown(
-                    subtotal,
-                    formLineItems,
-                  );
-
-                  const totalTonnage = calculateTotalTonnageMt(formLineItems);
-                  const formattedItemsInTotal = totalTonnage.formattedText;
-
-                  return (
-                    <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4">
-                      <div className="text-xs text-slate-700 pt-1">
-                        <span className="font-bold text-slate-900">
-                          Items in Total ={" "}
-                        </span>
-                        <span className="font-mono text-slate-900 font-bold">
-                          {formattedItemsInTotal}
-                        </span>
-                      </div>
-
-                      <div className="w-full sm:w-64 space-y-1 text-xs text-slate-700">
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">
-                            Sub Total
-                          </span>
-                          <span className="font-mono text-slate-900 font-medium">
-                            {qBreakdown.formattedSubtotal}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">
-                            CGST (9%)
-                          </span>
-                          <span className="font-mono text-slate-900 font-medium">
-                            {qBreakdown.formattedCGST}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">
-                            SGST (9%)
-                          </span>
-                          <span className="font-mono text-slate-900 font-medium">
-                            {qBreakdown.formattedSGST}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5">
-                          <span className="font-medium text-slate-600">
-                            Rounding
-                          </span>
-                          <span className="font-mono text-slate-900 font-medium">
-                            {qBreakdown.formattedRounding}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
-                          <span className="font-bold">Total</span>
-                          <span className="font-mono text-base font-black text-slate-950">
-                            {qBreakdown.formattedGrandTotal}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
+                <div className="p-4 bg-white border-t border-slate-200 text-xs text-slate-700">
+                  <span className="font-bold text-slate-900">
+                    Items in Total ={" "}
+                  </span>
+                  <span className="font-mono text-slate-900 font-bold">
+                    {calculateTotalTonnageMt(formLineItems).formattedText}
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
