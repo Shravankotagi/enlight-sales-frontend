@@ -6244,7 +6244,7 @@ export default function InquiriesPage() {
                     </div>
                   )}
                 <div className={`bg-white rounded-xl border border-slate-300 shadow-xs ${expandedRateIndex === null ? "overflow-x-auto" : "overflow-visible"}`}>
-                  <table className="w-full min-w-[960px] table-fixed text-left text-xs text-slate-800 border-collapse">
+                  <table className="w-full min-w-[1280px] table-fixed text-left text-xs text-slate-800 border-collapse">
                     <thead className="bg-slate-800 text-white font-bold uppercase text-[11px] tracking-wider">
                       <tr>
                         <th
@@ -6255,27 +6255,27 @@ export default function InquiriesPage() {
                         </th>
                         <th
                           rowSpan={2}
-                          className={`px-4 py-3 border-r border-slate-700 align-middle ${isInquiryPricingSaved ? "w-[26%]" : "w-[16%]"}`}
+                          className={`px-4 py-3 border-r border-slate-700 align-middle ${isInquiryPricingSaved ? "w-[23%]" : "w-[16%]"}`}
                         >
                           Description &amp; Specifications{" "}
                           <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th
                           rowSpan={2}
-                          className={`px-3 py-3 border-r border-slate-700 text-center align-middle ${isInquiryPricingSaved ? "w-[9%]" : "w-[8%]"}`}
+                          className="px-3 py-3 border-r border-slate-700 w-[8%] text-center align-middle"
                         >
                           HSN/SAC{" "}
                           <span className="text-red-500 font-bold">*</span>
                         </th>
                         <th
                           rowSpan={2}
-                          className={`px-3 py-3 border-r border-slate-700 text-center align-middle ${isInquiryPricingSaved ? "w-[11%]" : "w-[10%]"}`}
+                          className={`px-3 py-3 border-r border-slate-700 text-center align-middle ${isInquiryPricingSaved ? "w-[9%]" : "w-[10%]"}`}
                         >
                           Brand/Make
                         </th>
                         <th
                           rowSpan={isInquiryPricingSaved ? 2 : 1}
-                          className="px-2 py-3 border-r border-slate-700 w-[144px] text-center align-middle"
+                          className={`px-2 py-3 border-r border-slate-700 text-center align-middle ${isInquiryPricingSaved ? "w-[12%]" : "w-[144px]"}`}
                         >
                           Quantity, Unit &amp; Wt (MT){" "}
                           <span className="text-red-500 font-bold">*</span>
@@ -6284,13 +6284,13 @@ export default function InquiriesPage() {
                           <>
                             <th
                               rowSpan={2}
-                              className="px-3 py-3 border-r border-slate-700 w-[12%] text-center align-middle"
+                              className="px-3 py-3 border-r border-slate-700 w-[10%] text-center align-middle"
                             >
                               Rate (₹)/ MT
                             </th>
                             <th
                               rowSpan={2}
-                              className="w-[11%] px-2 py-3 border-r border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest align-middle"
+                              className="min-w-[14rem] w-[18%] whitespace-nowrap px-2 py-3 border-r border-slate-700 text-center text-[10px] bg-slate-800/90 tracking-widest align-middle"
                             >
                               GST (18%)
                             </th>
@@ -6943,7 +6943,7 @@ export default function InquiriesPage() {
                                   </div>
                                 )}
                               </td>
-                              <td className="w-[11%] px-2 py-3.5 border-r border-slate-200 font-mono text-right">
+                              <td className="min-w-[14rem] w-[18%] px-2 py-3.5 border-r border-slate-200 font-mono text-right">
                                 {(() => {
                                   const split = getGstSplit(
                                     taxableLineAmount(
@@ -6957,14 +6957,18 @@ export default function InquiriesPage() {
                                     ),
                                     editDetails?.deliveryLocation || "",
                                   );
-                                  return isInterstateDelivery ? (
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between gap-2 text-[10px] text-slate-500"><span>IGST 18%</span><span className="font-bold text-slate-800">{formatIndianCurrency(split.igst, true)}</span></div>
+                                  const taxLine = (label: string, amount: number) => (
+                                    <div className="flex w-full flex-nowrap items-center justify-between gap-2 text-[10px] text-slate-500">
+                                      <span className="whitespace-nowrap shrink-0 tabular-nums">{label}</span>
+                                      <span className="whitespace-nowrap shrink-0 tabular-nums font-bold text-slate-800">{formatIndianCurrency(amount, true)}</span>
                                     </div>
+                                  );
+                                  return isInterstateDelivery ? (
+                                    taxLine("IGST 18%", split.igst)
                                   ) : (
                                     <div className="space-y-1">
-                                      <div className="flex justify-between gap-2 text-[10px] text-slate-500"><span>CGST 9%</span><span className="font-bold text-slate-800">{formatIndianCurrency(split.cgst, true)}</span></div>
-                                      <div className="flex justify-between gap-2 text-[10px] text-slate-500"><span>SGST 9%</span><span className="font-bold text-slate-800">{formatIndianCurrency(split.sgst, true)}</span></div>
+                                      {taxLine("CGST 9%", split.cgst)}
+                                      {taxLine("SGST 9%", split.sgst)}
                                     </div>
                                   );
                                 })()}
