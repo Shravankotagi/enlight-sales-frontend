@@ -54,6 +54,7 @@ Current regression tests:
 | Frontend | `visit-media-preview.test.tsx` | A new visit shows a preview of the captured photo and of each added image or PDF before save |
 | Frontend | `issue-visit-one-verified-indicator.test.tsx` | After the visit code is accepted, the form shows "Phone verified." and does not also show "Verified" |
 | Frontend | `issue-visit-logging-wizard.test.tsx` | The new-visit dialog opens on company and contact, hides later fields, and stays there when Next is pressed with an empty company |
+| Frontend | `issue-visit-wizard-step-progress.test.tsx` | An empty Log Visit form shows step 1/5, and Next on a filled first step shows 2/5 |
 | Frontend | `visit-list-address.test.tsx` | The visits list shows area and city, keeps the full address on hover, keeps the phone check on that line, and View shows an uploaded document |
 | Backend | `visit-future-dates.test.ts` | A new visit rejects a past next purchase date and follow-up date, and accepts today |
 | Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |
