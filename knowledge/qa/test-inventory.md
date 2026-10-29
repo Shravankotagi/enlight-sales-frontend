@@ -36,7 +36,7 @@ Every bug fix adds a test that fails before the fix and passes after it.
 Current regression tests:
 | Repo | File | Guards |
 |---|---|---|
-| Bot | `issue-procurement-chatbot.test.js` | Procurement scope, exact awaiting-price match, text-only base-price list, inquiry details, cancel then menu, customer-field hiding, salesperson price buttons, price confirmation before save, a dashboard yes that saves, a saved price that becomes Price Quote, and a salesperson log that does not save a sell rate |
+| Bot | `issue-procurement-chatbot.test.js` | Procurement scope, exact awaiting-price match, text-only base-price list, inquiry details, cancel then menu, customer-field hiding, salesperson price buttons, price confirmation before save with the line amount and subtotal, a dashboard yes that saves, a saved price that becomes Price Quote, and a salesperson log that does not save a sell rate |
 | Bot | `issue-procurement-all-inquiries.test.js` | All inquiries uses backend `display_stage` for every pipeline total and badge, pages the newest 10, accepts next and the old current-inquiries phrase, includes an owner-resolved awaiting inquiry that Pending prices lists, and opens pasted details without base-price entry |
 | Bot | `issue-procurement-base-price-lines.test.js` | Log a base price shows every line, a price is stored on the chosen line only, and the other lines’ prices and notes stay as they were; a price-ready number does not open or save a base price |
 | Bot | `issue-procurement-base-price-dot-separator.test.js` | `1. 500` and `1-500` both preview and save ₹500/MT, not ₹0.5/MT |
@@ -78,6 +78,7 @@ Current regression tests:
 | Frontend | `issue-inquiry-gst-column-layout.test.tsx` | A priced inquiry keeps a large IGST, CGST, or SGST amount on one line with its tax label inside the Inquiry & Audit GST column for a salesperson, procurement person, and procurement manager |
 | Frontend | `issue-quotation-preview-notices.test.tsx` | A quotation preview with a priced line and a zero-rate line shows the exclusion notice and the priced-item count in separate strips |
 | Frontend | `issue-procurement-line-item-controls.test.tsx` | A procurement person or manager cannot add, remove, or edit product lines on a priced inquiry; a salesperson still can |
+| Frontend | `issue-procurement-subtotal-only.test.tsx` | A procurement person or manager sees Sub Total in the inquiry drawer and does not see CGST, SGST, IGST, or the grand total; a salesperson still does; a Price Ready line of 30 MT at ₹20,000 shows Sub Total 6,00,000.00 |
 | Backend | `issue-salesperson-sees-base-price.spec.ts` | Line pricing follows `employees.id` for a stored id, a customer owner, or a deal; a stranger and a phone with no employee are denied; creating an inquiry stores that id |
 | Frontend | `issue-procurement-mt-line-amount.test.tsx` | 300 Nos at 7.359 MT and ₹200/MT show ₹1,471.80, and IGST is 18% of that subtotal |
 | Frontend | `issue-procurement-save-base-price.test.tsx` | Procurement Save Prices sends the base price; a rejected save shows the server error; a stale list refresh does not clear Price Ready |

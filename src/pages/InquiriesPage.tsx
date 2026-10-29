@@ -7257,15 +7257,13 @@ export default function InquiriesPage() {
                           ];
 
                     const amountFor = (item: any, index: number) => {
-                      if (!isInquiryPricingSaved) return Number(item.amount) || 0;
-                      return taxableLineAmount(
+                      const rate = shownLineRate(
                         item,
-                        shownLineRate(
-                          item,
-                          inquiryPricing?.lines[index],
-                          procurementRequest?.line_items[index]?.base_price_per_mt,
-                        ),
+                        inquiryPricing?.lines[index],
+                        procurementRequest?.line_items[index]?.base_price_per_mt,
                       );
+                      if (!isInquiryPricingSaved) return pricedLineAmount(rate, item);
+                      return taxableLineAmount(item, rate);
                     };
                     const subtotal = activeLineItems.reduce(
                       (sum, item, index) => {
@@ -7339,29 +7337,33 @@ export default function InquiriesPage() {
                               {formatIndianCurrency(subtotal, true)}
                             </span>
                           </div>
-                          {isInterstateDelivery ? (
-                            <div className="flex justify-between items-center py-0.5">
-                              <span className="font-medium text-slate-600">IGST (18%)</span>
-                              <span className="font-mono text-slate-900 font-medium">{formatIndianCurrency(gstTotals.igst, true)}</span>
-                            </div>
-                          ) : (
+                          {!isProcurement && (
                             <>
-                              <div className="flex justify-between items-center py-0.5">
-                                <span className="font-medium text-slate-600">CGST (9%)</span>
-                                <span className="font-mono text-slate-900 font-medium">{formatIndianCurrency(gstTotals.cgst, true)}</span>
-                              </div>
-                              <div className="flex justify-between items-center py-0.5">
-                                <span className="font-medium text-slate-600">SGST (9%)</span>
-                                <span className="font-mono text-slate-900 font-medium">{formatIndianCurrency(gstTotals.sgst, true)}</span>
+                              {isInterstateDelivery ? (
+                                <div className="flex justify-between items-center py-0.5">
+                                  <span className="font-medium text-slate-600">IGST (18%)</span>
+                                  <span className="font-mono text-slate-900 font-medium">{formatIndianCurrency(gstTotals.igst, true)}</span>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex justify-between items-center py-0.5">
+                                    <span className="font-medium text-slate-600">CGST (9%)</span>
+                                    <span className="font-mono text-slate-900 font-medium">{formatIndianCurrency(gstTotals.cgst, true)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center py-0.5">
+                                    <span className="font-medium text-slate-600">SGST (9%)</span>
+                                    <span className="font-mono text-slate-900 font-medium">{formatIndianCurrency(gstTotals.sgst, true)}</span>
+                                  </div>
+                                </>
+                              )}
+                              <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
+                                <span className="font-bold">Total</span>
+                                <span className="font-mono text-base font-black text-slate-950">
+                                  {formatIndianCurrency(grandTotal, true)}
+                                </span>
                               </div>
                             </>
                           )}
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-300 font-black text-slate-950 text-sm">
-                            <span className="font-bold">Total</span>
-                            <span className="font-mono text-base font-black text-slate-950">
-                              {formatIndianCurrency(grandTotal, true)}
-                            </span>
-                          </div>
                         </div>
                       </div>
                     );
