@@ -1,6 +1,6 @@
 # Inquiries, pipeline, and orders
 
-`InquiriesPage.tsx` also supports the pipeline redirect (`/pipeline` → `/inquiries?view=pipeline`). Kanban cards show the deal's item count and total tonnage in MT, the same summary as the inquiry list, instead of each product line. `OrdersPage.tsx` displays won deals. They use `inquiriesApi`, `dealsApi`, `ordersApi`, and `productsApi` from `lib/api.ts`; detail and quoting use DealDetailDrawer, SalesQuotationModal, InquiryPdfModal, `AddProductDialog`, and System PO helpers.
+`InquiriesPage.tsx` also supports the pipeline redirect (`/pipeline` → `/inquiries?view=pipeline`). Kanban cards show the deal's item count and total tonnage in MT, the same summary as the inquiry list, instead of each product line. `OrdersPage.tsx` displays won deals. They use `inquiriesApi`, `dealsApi`, `ordersApi`, and `productsApi` from `lib/api.ts`; detail and quoting use DealDetailDrawer, SalesQuotationModal, InquiryPdfModal, `AddProductDialog`, and System PO helpers. When a quotation preview has both priced and unpriced products, the amber exclusion notice and the priced-item count are separate strips above the PDF. The count is not part of the warning and is not printed.
 
 In the Log New Inquiry form, Company Name and Email ID sit on one row. Email ID is optional. A document or the inquiry text fills it when an address is present, and the salesperson can change it. The same address is stored on the inquiry and prefills the Share Quotation customer email, which stays editable. Preferred Brand / Make and Payment Terms are dropdowns. Preferred makes are TATA, JSW, AM/NS India, SAIL, NMDC, Apollo, and Others. Payment terms on a new inquiry are Immediate, Advance, 30 Days, 45 Days, 60 Days, LC, BG, and PDC. A value filled by document parsing that is not in the list stays selectable. Recording an order uses the same eight options and does not accept any other payment term. Closing Record New Order without saving clears the form.
 
@@ -14,7 +14,7 @@ System PO allocation is a reservation protocol, not just a display field. Retain
 
 Procurement and sales price the same inquiry. Procurement enters a base price per product. Sales adds transport, loading, credit, and margin, all in ₹/MT. The server stores `base + transport + loading + credit + margin`, then `rate × MT`. A blank credit is 0.
 
-The inquiry list must not sync query results until the request has resolved. A pending or failed request leaves the query data unset, and a fresh empty-array default retriggers that sync on every render and freezes the page, including the sidebar. The inquiry drawer shows `Awaiting Price`, `Price Ready` (including partially available requests), or `Unavailable`. Sales quotes available products only, can copy Transport, Loading, and Margin to all available products, and can send a decline email when every line is unavailable. That modal matches Share Quotation: customer email, locked fixed CC addresses, and an editable polite body. Maharashtra delivery shows CGST 9% + SGST 9%; other states show IGST 18%.
+The inquiry list must not sync query results until the request has resolved. A pending or failed request leaves the query data unset, and a fresh empty-array default retriggers that sync on every render and freezes the page, including the sidebar. The inquiry drawer shows `Awaiting Price`, `Price Ready` (including partially available requests), or `Unavailable`. Sales quotes available products only, can copy Transport, Loading, and Margin to all available products, and can send a decline email when every line is unavailable. That modal matches Share Quotation: customer email, locked fixed CC addresses, and an editable polite body. Maharashtra delivery shows CGST 9% + SGST 9%; other states show IGST 18%. On a priced inquiry, a salesperson, procurement person, and procurement manager each see those labels on one line with their amounts inside the GST column.
 
 ## Procurement view
 
@@ -25,4 +25,6 @@ When accessed by users with `procurement_person` or `procurement_manager` roles:
 - Commercial actions such as sending a quotation, converting to a deal, and marking won or lost stay hidden for procurement roles.
 - The Orders page is hidden from procurement navigation, and its API routes are blocked for those roles.
 - The inquiries header hides Sync Bigin, View Confirmed Orders, and Log New Inquiry. Refresh stays.
+- A procurement person or manager cannot add, remove, or edit product lines. Description, specification, HSN, quantity, weight, brand, and unit stay locked. They can still enter a base price on an existing line while the inquiry is Awaiting Price.
+- The inquiry drawer shows Sub Total for a procurement person or manager. CGST, SGST, IGST, and the grand total stay on the salesperson view.
 

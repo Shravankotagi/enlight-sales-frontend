@@ -157,13 +157,11 @@ export function visitWizardStepErrors(
   return stepErrors;
 }
 
-export function visitWizardProgress(input: NewVisitFormInput, step: number) {
-  const errors = validateNewVisitForm(input);
-  const fields = visitWizardFieldKeys(step, input);
-  return {
-    filled: fields.filter((field) => !errors[field]).length,
-    total: fields.length,
-  };
+export function visitWizardProgress(step: number) {
+  const total = VISIT_WIZARD_STEPS.length;
+  const index = Number.isFinite(step) ? Math.trunc(step) : 0;
+  const current = Math.min(total, Math.max(1, index + 1));
+  return { current, total };
 }
 
 export function visitCalendarDay(value: string): string {

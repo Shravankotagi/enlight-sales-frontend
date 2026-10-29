@@ -36,7 +36,7 @@ Every bug fix adds a test that fails before the fix and passes after it.
 Current regression tests:
 | Repo | File | Guards |
 |---|---|---|
-| Bot | `issue-procurement-chatbot.test.js` | Procurement scope, exact awaiting-price match, text-only base-price list, inquiry details, cancel then menu, customer-field hiding, salesperson price buttons, price confirmation before save, a dashboard yes that saves, a saved price that becomes Price Quote, and a salesperson log that does not save a sell rate |
+| Bot | `issue-procurement-chatbot.test.js` | Procurement scope, exact awaiting-price match, text-only base-price list, inquiry details, cancel then menu, customer-field hiding, salesperson price buttons, price confirmation before save with the line amount and subtotal, a dashboard yes that saves, a saved price that becomes Price Quote, and a salesperson log that does not save a sell rate |
 | Bot | `issue-procurement-all-inquiries.test.js` | All inquiries uses backend `display_stage` for every pipeline total and badge, pages the newest 10, accepts next and the old current-inquiries phrase, includes an owner-resolved awaiting inquiry that Pending prices lists, and opens pasted details without base-price entry |
 | Bot | `issue-procurement-base-price-lines.test.js` | Log a base price shows every line, a price is stored on the chosen line only, and the other lines’ prices and notes stay as they were; a price-ready number does not open or save a base price |
 | Bot | `issue-procurement-base-price-dot-separator.test.js` | `1. 500` and `1-500` both preview and save ₹500/MT, not ₹0.5/MT |
@@ -54,10 +54,13 @@ Current regression tests:
 | Frontend | `visit-media-preview.test.tsx` | A new visit shows a preview of the captured photo and of each added image or PDF before save |
 | Frontend | `issue-visit-one-verified-indicator.test.tsx` | After the visit code is accepted, the form shows "Phone verified." and does not also show "Verified" |
 | Frontend | `issue-visit-logging-wizard.test.tsx` | The new-visit dialog opens on company and contact, hides later fields, and stays there when Next is pressed with an empty company |
+| Frontend | `issue-visit-wizard-step-progress.test.tsx` | An empty Log Visit form shows step 1/5, and Next on a filled first step shows 2/5 |
 | Frontend | `visit-list-address.test.tsx` | The visits list shows area and city, keeps the full address on hover, keeps the phone check on that line, and View shows an uploaded document |
 | Backend | `visit-future-dates.test.ts` | A new visit rejects a past next purchase date and follow-up date, and accepts today |
 | Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |
 | Frontend | `assistant-input-scroll.test.tsx` | A long assistant prompt stays in a scrolling textarea, Enter sends, and Shift+Enter adds a line |
+| Frontend | `issue-assistant-welcome.test.tsx` | An empty salesperson chat shows the welcome heading and the line to type Hi, and does not show My Active Open Deals, Customer 360 Overview, or Sales SOP Guidelines |
+| Frontend | `issue-assistant-foreign-session.test.tsx` | A saved session from another account is not reopened, and Hi is sent on the signed-in user's own session |
 | Frontend | `assistant-visit-gps.test.tsx` | Opening Log Visit in the assistant starts the device location watch, and an ordinary reply does not |
 | Frontend | `assistant-upload-pdf.test.tsx` | Upload from device accepts a PDF and refuses an image |
 | Bot | `visit-chat-location-photo.test.js` | A WhatsApp visit accepts only a location pin, the assistant stores the full auto-fetched address instead of a shortened city, and only a camera photo after the pin is the visit photo |
@@ -74,6 +77,10 @@ Current regression tests:
 | Frontend | `issue-historical-pricing-status.test.tsx` | An inquiry with no pricing status keeps its deal status; only an explicit `awaiting_price` shows Awaiting Price |
 | Frontend | `issue-procurement-search.test.tsx` | A procurement person can filter inquiries by procurement id and product |
 | Frontend | `issue-procurement-price-columns.test.tsx` | A wrapped pricing save keeps the base price; procurement edits only that column on Awaiting Price; a view-only procurement user sees the price and note boxes disabled and no Save Prices; a Price Ready inquiry is read-only and hides Share Quotation and Share Again for a procurement person and manager; a salesperson opening Price Ready sees the saved base price with Transport still visible; a salesperson save collapses the price columns into Rate; a saved row shows 18% GST from the saved rate even when the inquiry line has no amount, including after a list refresh |
+| Frontend | `issue-inquiry-gst-column-layout.test.tsx` | A priced inquiry keeps a large IGST, CGST, or SGST amount on one line with its tax label inside the Inquiry & Audit GST column for a salesperson, procurement person, and procurement manager |
+| Frontend | `issue-quotation-preview-notices.test.tsx` | A quotation preview with a priced line and a zero-rate line shows the exclusion notice and the priced-item count in separate strips |
+| Frontend | `issue-procurement-line-item-controls.test.tsx` | A procurement person or manager cannot add, remove, or edit product lines on a priced inquiry; a salesperson still can |
+| Frontend | `issue-procurement-subtotal-only.test.tsx` | A procurement person or manager sees Sub Total in the inquiry drawer and does not see CGST, SGST, IGST, or the grand total; a salesperson still does; a Price Ready line of 30 MT at ₹20,000 shows Sub Total 6,00,000.00 |
 | Backend | `issue-salesperson-sees-base-price.spec.ts` | Line pricing follows `employees.id` for a stored id, a customer owner, or a deal; a stranger and a phone with no employee are denied; creating an inquiry stores that id |
 | Frontend | `issue-procurement-mt-line-amount.test.tsx` | 300 Nos at 7.359 MT and ₹200/MT show ₹1,471.80, and IGST is 18% of that subtotal |
 | Frontend | `issue-procurement-save-base-price.test.tsx` | Procurement Save Prices sends the base price; a rejected save shows the server error; a stale list refresh does not clear Price Ready |
@@ -86,6 +93,7 @@ Current regression tests:
 | Bot | `issue-chatbot-inquiry-update.test.js` | Update Inquiry includes a sender-only inquiry and a customer-owner inquiry; an `INQ-` code opens that inquiry from the menu and from a sentence; a Price Ready quantity change reopens Awaiting Price without moving the deal to Price Quote; the same weight in KG and a manual piece weight do not reopen |
 | Bot | `issue-inquiry-number-dashboard-parity.test.js` | Update Inquiry uses the dashboard inquiry code (`INQ-` plus the first six characters of the inquiry id), leads with that row's procurement number, includes blank types, purchase orders, and PO text, and does not invent a code for a deal with no inquiry |
 | Bot | `issue-update-inquiry-material-prices.test.js` | Two deal-only materials both show Base, Transport, Loading, Credit, Margin, and Rate; a Price Quote transport change keeps the procurement base and recomputes the rate; Won and Lost refuse a price change; a rate that needs a negative margin asks which component to change |
+| Bot | `issue-update-order-scope.test.js` | Update Order lists the caller's won deals and a customer assigned to them, and leaves out another salesperson's won deal even when a shorter customer name would fuzzy-match it, plus any deal that is not won |
 | Bot | `issue-update-inquiry-quantity-review.test.js` | A Price Ready card badge does not turn a 40 MT to 50 MT save into a Quoted stage change; the quantity is stored, the inquiry returns to Awaiting Price, and the procurement tonnage review opens |
 | Bot | `issue-update-inquiry-price-save.test.js` | A transport, loading, credit, and margin change shows Base through Rate on the save card; the upsert keeps the existing pricing `line_key`, omits `id`, and stores the recomputed rate |
 | Bot | `issue-add-price-line-formats.test.js` | Add Price accepts a pasted material line for every row, including two beams distinguished by quantity and Heavy Base Plate; `1.` fills only that material; semicolon, pipe, and space separators reach confirmation; an unknown material is named and not saved |
