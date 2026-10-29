@@ -296,10 +296,21 @@ function CustomerProfilePageContent() {
   const queryClient = useQueryClient();
   const { isSalesManager, isAdmin, effectivePhone, guardAction, can } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
+  const canOrders = can('orders.view');
+  const canInquiries = can('inquiries.view');
+  const canVisits = can('visits.view');
+  const canComplaints = can('complaints.view');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits'>('overview');
+  const shownTab =
+    (activeTab === 'orders' && !canOrders) ||
+    (activeTab === 'inquiries' && !canInquiries) ||
+    (activeTab === 'complaints' && !canComplaints) ||
+    (activeTab === 'visits' && !canVisits)
+      ? 'overview'
+      : activeTab;
   const [copiedGst, setCopiedGst] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
@@ -535,7 +546,7 @@ function CustomerProfilePageContent() {
       const custPhone = safeStr(customer?.customer_phone);
       const custEmail =
         safeStr(customer?.email) ||
-        (Array.isArray(visits)
+        (canVisits && Array.isArray(visits)
           ? visits.find(
               (v: any) =>
                 v &&
@@ -563,7 +574,7 @@ function CustomerProfilePageContent() {
       }
 
       // 2. Contacts Met via Site Visits (distinct by name/phone)
-      if (Array.isArray(visits)) {
+      if (canVisits && Array.isArray(visits)) {
         visits.forEach((v: any, idx: number) => {
           if (!v) return;
           const rawName = safeStr(v.person_met);
@@ -628,7 +639,7 @@ function CustomerProfilePageContent() {
       console.error('Error generating stakeholders list:', e);
       return [];
     }
-  }, [customer, visits, employeeMap]);
+  }, [customer, visits, employeeMap, canVisits]);
 
   if (isLoading) {
     return (
@@ -720,12 +731,14 @@ function CustomerProfilePageContent() {
                 Delete
               </button>
             )}
-            <button
-              onClick={() => navigate('/orders')}
-              className="h-9 inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 rounded-xl transition-colors cursor-pointer shadow-sm">
-              <ShoppingBag size={14} />
-              View Orders
-            </button>
+            {canOrders && (
+              <button
+                onClick={() => navigate('/orders')}
+                className="h-9 inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 rounded-xl transition-colors cursor-pointer shadow-sm">
+                <ShoppingBag size={14} />
+                View Orders
+              </button>
+            )}
           </div>
         </div>
 
@@ -782,6 +795,7 @@ function CustomerProfilePageContent() {
       </div>
 
       {/* Top 4 Summary Cards */}
+      {canOrders && (
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         {/* Total Tonnage */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -835,12 +849,13 @@ function CustomerProfilePageContent() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Internal Navigation Tabs Bar */}
       <div className="flex items-center gap-1.5 border-b border-slate-200 bg-white p-1.5 rounded-2xl shadow-2xs overflow-x-auto">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'overview'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${shownTab === 'overview'
             ? 'bg-blue-600 text-white shadow-xs'
             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}>
@@ -848,69 +863,77 @@ function CustomerProfilePageContent() {
           Overview
         </button>
 
+        {canOrders && (
         <button
           onClick={() => setActiveTab('orders')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'orders'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${shownTab === 'orders'
             ? 'bg-blue-600 text-white shadow-xs'
             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}>
           <ShoppingBag size={14} />
           Orders
           <span
-            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${shownTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
               }`}>
             {wonDeals.length}
           </span>
         </button>
+        )}
 
+        {canInquiries && (
         <button
           onClick={() => setActiveTab('inquiries')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'inquiries'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${shownTab === 'inquiries'
             ? 'bg-blue-600 text-white shadow-xs'
             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}>
           <MessageSquare size={14} />
           Inquiries
           <span
-            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${activeTab === 'inquiries' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${shownTab === 'inquiries' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
               }`}>
             {inquiries.length}
           </span>
         </button>
+        )}
 
+        {canComplaints && (
         <button
           onClick={() => setActiveTab('complaints')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'complaints'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${shownTab === 'complaints'
             ? 'bg-blue-600 text-white shadow-xs'
             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}>
           <ShieldAlert size={14} />
           Complaints
           <span
-            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${activeTab === 'complaints' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${shownTab === 'complaints' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
               }`}>
             {complaints.length}
           </span>
         </button>
+        )}
 
+        {canVisits && (
         <button
           onClick={() => setActiveTab('visits')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'visits'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${shownTab === 'visits'
             ? 'bg-blue-600 text-white shadow-xs'
             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}>
           <MapPin size={14} />
           Visits
           <span
-            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${activeTab === 'visits' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${shownTab === 'visits' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
               }`}>
             {visits.length}
           </span>
         </button>
+        )}
       </div>
 
       {/* Tab 1: Overview Tab */}
-      {activeTab === 'overview' && (
+      {shownTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column (2/3 width) */}
           <div className="lg:col-span-2 space-y-6">
@@ -935,7 +958,7 @@ function CustomerProfilePageContent() {
               </div>
             </div>
 
-            {/* Recent Orders Preview */}
+            {canOrders && (
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1000,6 +1023,7 @@ function CustomerProfilePageContent() {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {/* Right Column (1/3 width) */}
@@ -1161,19 +1185,23 @@ function CustomerProfilePageContent() {
                     </p>
                   </div>
 
-                  <div>
-                    <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Average Order Value (AOV)</p>
-                    <p className="font-bold text-black text-sm mt-0.5">
-                      {formatCurrency(customer.avg_order_value)}
-                    </p>
-                  </div>
+                  {canOrders && (
+                    <>
+                      <div>
+                        <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Average Order Value (AOV)</p>
+                        <p className="font-bold text-black text-sm mt-0.5">
+                          {formatCurrency(customer.avg_order_value)}
+                        </p>
+                      </div>
 
-                  <div>
-                    <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Trailing 12-Month Revenue</p>
-                    <p className="font-bold text-black text-sm mt-0.5">
-                      {formatCurrency(customer.t12m_revenue)}
-                    </p>
-                  </div>
+                      <div>
+                        <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Trailing 12-Month Revenue</p>
+                        <p className="font-bold text-black text-sm mt-0.5">
+                          {formatCurrency(customer.t12m_revenue)}
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -1182,7 +1210,7 @@ function CustomerProfilePageContent() {
       )}
 
       {/* Tab 2: Orders Tab */}
-      {activeTab === 'orders' && (
+      {shownTab === 'orders' && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -1263,7 +1291,7 @@ function CustomerProfilePageContent() {
       )}
 
       {/* Tab 3: Inquiries Tab */}
-      {activeTab === 'inquiries' && (
+      {shownTab === 'inquiries' && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -1369,7 +1397,7 @@ function CustomerProfilePageContent() {
       )}
 
       {/* Tab 4: Complaints Tab */}
-      {activeTab === 'complaints' && (
+      {shownTab === 'complaints' && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -1445,7 +1473,7 @@ function CustomerProfilePageContent() {
       )}
 
       {/* Tab 5: Visits Tab */}
-      {activeTab === 'visits' && (
+      {shownTab === 'visits' && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">

@@ -11,5 +11,8 @@ describe('procurement button labels', () => {
     expect(formatUserDisplayMessage('btn_price_current|PR-10001')).toBe('Price the current inquiry');
     expect(formatUserDisplayMessage('btn_price_save')).toBe('Save');
     expect(formatUserDisplayMessage('btn_confirm_cancel')).toBe('Cancel');
+    expect(formatUserDisplayMessage('btn_add_product')).toBe('Add Product');
+    expect(formatUserDisplayMessage('btn_prod_save')).toBe('Save Product');
+    expect(formatUserDisplayMessage('btn_new_action')).toBe('New Action');
   });
 });

@@ -8,7 +8,7 @@ Each role has `data_scope`: `own`, `team`, or `all`. A custom role with `all` is
 
 In the role matrix, Create also turns View on, Edit also turns View and Create on, and Delete also turns View, Create, and Edit on. Turning View off clears Create, Edit, and Delete. Turning Create off clears Edit and Delete. Turning Edit off clears Delete. For staff, turning View off also clears CSV import, and turning CSV import on turns View on. Assign owner, Send Quote, and the other special boxes are not part of that chain.
 
-Intelligence, Reports, and the home dashboard only include a module the role can view. Customer, inquiry, order, visit, and complaint numbers stay hidden when that module's View box is off.
+Intelligence, Reports, and the home dashboard only include a module the role can view. Customer, inquiry, order, visit, and complaint numbers stay hidden when that module's View box is off. The customer profile and the customer list order columns follow the same View flags.
 
 User Management stays available with `staff.view`, and that view lists every employee. Add Member needs `staff.create`, picks a role, and stores no separate permission copy, so the person uses that role's permissions. Edit and activate/deactivate need `staff.manage`, and permanent delete needs `staff.delete`. `staff.manage_acl` only opens Roles and Permissions.
 
