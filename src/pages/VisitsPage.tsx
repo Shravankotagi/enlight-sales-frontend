@@ -16,6 +16,7 @@ import {
   Phone,
   Map as MapIcon,
   Edit2,
+  Trash2,
   Calendar,
   MoreVertical,
   Eye,
@@ -186,6 +187,7 @@ export default function VisitsPage() {
   const viewingAsPhone = viewingAs?.phone;
   const canViewSalesperson = isSalesManager || isAdmin;
   const canEditVisit = can('visits.update');
+  const canDeleteVisit = can('visits.delete');
 
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -202,6 +204,8 @@ export default function VisitsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+  const [visitPendingDelete, setVisitPendingDelete] = useState<CustomerVisit | null>(null);
+  const [deletingVisit, setDeletingVisit] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
@@ -905,6 +909,23 @@ export default function VisitsPage() {
       if (!silent) setVisits([]);
     } finally {
       if (!silent) setLoading(false);
+    }
+  };
+
+  const confirmDeleteVisit = async () => {
+    if (!visitPendingDelete) return;
+    setDeletingVisit(true);
+    try {
+      await visitsApi.delete(visitPendingDelete.id);
+      toast.success('Visit deleted');
+      if (selectedVisit?.id === visitPendingDelete.id) setSelectedVisit(null);
+      setVisitPendingDelete(null);
+      await fetchVisits(true);
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.message || err?.message || 'Could not delete this visit';
+      toast.error(Array.isArray(errMsg) ? errMsg.join(', ') : errMsg);
+    } finally {
+      setDeletingVisit(false);
     }
   };
 
@@ -2137,6 +2158,18 @@ export default function VisitsPage() {
                                   Edit
                                 </button>
                               )}
+                              {canDeleteVisit && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    setVisitPendingDelete(v);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer">
+                                  <Trash2 size={14} className="text-rose-500" />
+                                  Delete
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -3058,6 +3091,35 @@ export default function VisitsPage() {
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {visitPendingDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <h3 className="text-base font-bold text-slate-900">Delete this visit?</h3>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Do you want to delete the visit for{' '}
+              <span className="font-semibold text-slate-900">{visitPendingDelete.customer_name || 'this customer'}</span>?
+              This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deletingVisit}
+                onClick={() => setVisitPendingDelete(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingVisit}
+                onClick={confirmDeleteVisit}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl cursor-pointer">
+                {deletingVisit ? 'Deleting...' : 'Delete visit'}
+              </button>
+            </div>
           </div>
         </div>
       )}

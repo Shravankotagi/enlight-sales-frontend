@@ -863,6 +863,7 @@ export default function ComplaintsPage() {
 
   // Reopen inside Details Modal
   const handleReopenInModal = async () => {
+    if (!guardAction('complaints.update')) return;
     if (!selectedComplaint) return;
     try {
       setModalActionLoading(true);
@@ -1510,6 +1511,7 @@ export default function ComplaintsPage() {
             </div>
 
             {/* Modal Footer Action Buttons */}
+            {can('complaints.update') && (
             <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
               <button
                 type="button"
@@ -1543,6 +1545,7 @@ export default function ComplaintsPage() {
                 </button>
               ) : null}
             </div>
+            )}
           </div>
         </div>
       )}

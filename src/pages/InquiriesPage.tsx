@@ -5263,13 +5263,15 @@ export default function InquiriesPage() {
 
             {!isProcurement && (
               <>
-                <button
-                  onClick={() => navigate("/orders")}
-                  className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-                >
-                  <ShoppingBag size={14} className="text-emerald-600" /> View
-                  Confirmed Orders
-                </button>
+                {can('orders.view') && (
+                  <button
+                    onClick={() => navigate("/orders")}
+                    className="h-9 flex items-center gap-1.5 px-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+                  >
+                    <ShoppingBag size={14} className="text-emerald-600" /> View
+                    Confirmed Orders
+                  </button>
+                )}
 
                 {can('inquiries.manage') && (
                   <button
