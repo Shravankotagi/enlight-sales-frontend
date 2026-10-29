@@ -596,8 +596,8 @@ export const RolePermissionsMatrixModal: React.FC<
                     menuClassName="w-36"
                   >
                     <option value="own">Own records</option>
-                    <option value="team">Team</option>
-                    <option value="all">All company</option>
+                    <option value="team">Team records</option>
+                    <option value="all">All records</option>
                   </Select>
                 </label>
                 {localImportCount > 0 && (
@@ -880,7 +880,7 @@ export const RolePermissionsMatrixModal: React.FC<
           <p className="text-slate-500">
             {mainTab === 'roles' ? (
               <span>
-                💡 <strong>Roles Tab:</strong> Create and customize permissions using the Zoho Books permission matrix.
+                💡 <strong>Roles Tab:</strong> Create and customize permissions using above permission matrix.
               </span>
             ) : (
               <span>
@@ -910,12 +910,7 @@ export const RolePermissionsMatrixModal: React.FC<
                 </button>
               )
             )}
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-white rounded-xl font-bold transition-all cursor-pointer"
-            >
-              Close
-            </button>
+            
           </div>
         </div>
       </div>
