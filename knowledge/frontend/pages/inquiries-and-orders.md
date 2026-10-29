@@ -25,4 +25,5 @@ When accessed by users with `procurement_person` or `procurement_manager` roles:
 - Commercial actions such as sending a quotation, converting to a deal, and marking won or lost stay hidden for procurement roles.
 - The Orders page is hidden from procurement navigation, and its API routes are blocked for those roles.
 - The inquiries header hides Sync Bigin, View Confirmed Orders, and Log New Inquiry. Refresh stays.
+- A procurement person or manager cannot add, remove, or edit product lines. Description, specification, HSN, quantity, weight, brand, and unit stay locked. They can still enter a base price on an existing line while the inquiry is Awaiting Price.
 

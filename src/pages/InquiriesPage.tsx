@@ -6331,7 +6331,7 @@ export default function InquiriesPage() {
                         </th>
                         <th
                           rowSpan={isInquiryPricingSaved ? 2 : 1}
-                          className={`px-2 py-3 text-center w-[3%] align-middle ${isInquiryPricingSaved ? "" : "hidden"}`}
+                          className={`px-2 py-3 text-center w-[3%] align-middle ${isInquiryPricingSaved && !isProcurement ? "" : "hidden"}`}
                         ></th>
                       </tr>
                     </thead>
@@ -6613,6 +6613,7 @@ export default function InquiriesPage() {
                           <td data-label="Brand/Make" className="px-2 py-3.5 border-r border-slate-200 text-center">
                             <Select
                               value={item.brand || item.make || ''}
+                              disabled={isProcurement}
                               onChange={(e) => {
                                 const updated = [...(editDetails.lineItems || [])];
                                 updated[idx] = { ...updated[idx], brand: e.target.value, make: e.target.value };
@@ -6703,6 +6704,7 @@ export default function InquiriesPage() {
                               />
                               <select
                                 value={normalizeUnit(item.unit) || "KG"}
+                                disabled={isProcurement}
                                 onChange={(e) => {
                                   const newUnit = e.target.value;
                                   const updated = [
@@ -7085,8 +7087,9 @@ export default function InquiriesPage() {
                             })()}
                           </td>
                           <td
-                            className={`px-2 py-3.5 text-center ${isInquiryPricingSaved ? "" : "hidden"}`}
+                            className={`px-2 py-3.5 text-center ${isInquiryPricingSaved && !isProcurement ? "" : "hidden"}`}
                           >
+                            {isInquiryPricingSaved && !isProcurement && (
                             <div className="flex items-center justify-center gap-1">
                               {(editDetails.lineItems || []).length > 1 && (
                                 <button
@@ -7176,6 +7179,7 @@ export default function InquiriesPage() {
                                 </button>
                               )}
                             </div>
+                            )}
                           </td>
                         </tr>
                       ))}
