@@ -710,9 +710,6 @@ export const RolePermissionsMatrixModal: React.FC<
                 permissions={activePermissions}
                 onChange={setActivePermissions}
                 readOnly={isCurrentRoleSystem}
-                users={userList}
-                visibilityScope={visibilityScope}
-                onVisibilityChange={setVisibilityScope}
               />
             </div>
           </div>
