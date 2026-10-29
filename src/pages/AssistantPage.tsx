@@ -602,11 +602,7 @@ export default function AssistantPage() {
         { label: 'Lost Deal Analytics', text: 'Analyze lost deals and top revenue loss reasons over the last 90 days.', icon: BarChart2 },
         { label: 'Company Knowledge Base', text: 'What is our policy on volume discounts and gross margin thresholds in the Sales SOP?', icon: BookOpen },
       ]
-    : [
-        { label: 'My Active Open Deals', text: 'Show my active open deals and quotations in the pipeline.', icon: TrendingUp },
-        { label: 'Customer 360 Overview', text: 'What is the 360 overview for our top customer accounts?', icon: Users },
-        { label: 'Sales SOP Guidelines', text: 'Search the Knowledge Base for discount rules and quotation policies.', icon: Search },
-      ];
+    : [];
 
   // Resolves image source from raw base64, data URLs, or remote URLs
   const getImageSource = (img: any): string | null => {
@@ -838,18 +834,21 @@ export default function AssistantPage() {
                 <div className="p-4 bg-blue-50 border border-blue-200/60 rounded-2xl text-blue-600 shadow-2xs">
                   <Sparkles size={36} />
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-xl font-bold text-gray-900">
+                <div className={isProcurement || isManagerOrAdmin ? 'space-y-2' : 'space-y-4'}>
+                  <h2 className={`${isProcurement || isManagerOrAdmin ? 'text-xl' : 'text-3xl'} font-bold text-gray-900`}>
                     Welcome to Enlight Sales OS Assistant
                   </h2>
-                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                  <p className={`${isProcurement || isManagerOrAdmin ? 'text-sm max-w-md' : 'text-2xl max-w-2xl'} text-gray-500 mx-auto`}>
                     {isProcurement
                       ? 'List pending or all inquiries, or log a base price in rupees per MT.'
-                      : 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'}
+                      : isManagerOrAdmin
+                        ? 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'
+                        : "I'm the Enlight Sigma AI assistant. Type Hi to see the actions you can take."}
                   </p>
                 </div>
 
                 {/* Quick Prompts */}
+                {quickPrompts.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
                   {quickPrompts.map((qp, idx) => {
                     const IconComp = qp.icon;
@@ -876,6 +875,7 @@ export default function AssistantPage() {
                     );
                   })}
                 </div>
+                )}
               </div>
             ) : (
               Array.isArray(messages) &&
