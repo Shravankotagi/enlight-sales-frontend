@@ -365,19 +365,25 @@ export default function InquiryPdfModal({ inquiry, details, onClose }: InquiryPd
           </div>
         </div>
 
-        {/* Notice banner: unpriced products excluded from PDF (only show when there are also priced items to avoid duplicate warnings) */}
+        {/* Exclusion warning and included count stay in separate strips so they do not read as one notice. */}
         {zeroPriceItems.length > 0 && pricedLineItems.length > 0 && (
-          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 text-xs text-amber-900 flex items-center justify-between gap-3 no-print shrink-0">
-            <div className="flex items-center gap-2">
+          <>
+            <div
+              data-testid="quotation-exclusion-notice"
+              className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 text-xs text-amber-900 flex items-center gap-2 no-print shrink-0"
+            >
               <AlertTriangle size={15} className="text-amber-600 shrink-0" />
               <span>
                 <strong>Notice:</strong> {zeroPriceItems.length} product(s) with empty or 0 rates ({zeroPriceItems.map(i => i.sku_text).join(', ')}) are automatically excluded from this quotation PDF.
               </span>
             </div>
-            <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded shrink-0">
+            <div
+              data-testid="quotation-included-count"
+              className="bg-emerald-50 border-b border-emerald-200 px-6 py-2 text-xs font-semibold text-emerald-800 no-print shrink-0"
+            >
               {pricedLineItems.length} priced item(s) included
-            </span>
-          </div>
+            </div>
+          </>
         )}
 
         {pricedLineItems.length === 0 && (

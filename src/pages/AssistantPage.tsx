@@ -154,6 +154,13 @@ function getSavedSessionId(): string | null {
   }
 }
 
+function clearSavedSessionId() {
+  try {
+    sessionStorage.removeItem(ACTIVE_SESSION_KEY);
+    localStorage.removeItem(ACTIVE_SESSION_KEY);
+  } catch {}
+}
+
 function getCachedMessages(sessionId: string | null): ChatMessage[] {
   if (!sessionId || sessionId === 'new') return [];
   try {
@@ -182,13 +189,8 @@ function fitComposer(el: HTMLTextAreaElement) {
 export default function AssistantPage() {
   const { employee, viewingAs, roleName, isAdmin, isSalesManager, isProcurementManager, isProcurementPerson } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const initialSessionId = getSavedSessionId();
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    initialSessionId && initialSessionId !== 'new' ? initialSessionId : null
-  );
-  const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    getCachedMessages(initialSessionId)
-  );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingSessions, setFetchingSessions] = useState(false);
@@ -357,10 +359,23 @@ export default function AssistantPage() {
       setSessions(sessionList);
 
       const savedSessionId = getSavedSessionId();
-      if (savedSessionId && savedSessionId !== 'new') {
+      const savedIsOwn = Boolean(
+        savedSessionId &&
+        savedSessionId !== 'new' &&
+        sessionList.some((session) => session.id === savedSessionId),
+      );
+      if (savedIsOwn && savedSessionId) {
         selectSession(savedSessionId);
-      } else if (!savedSessionId && sessionList.length > 0) {
-        selectSession(sessionList[0].id);
+      } else if (savedSessionId === 'new') {
+        setActiveSessionId(null);
+        setMessages([]);
+      } else {
+        if (savedSessionId) clearSavedSessionId();
+        if (sessionList.length > 0) selectSession(sessionList[0].id);
+        else {
+          setActiveSessionId(null);
+          setMessages([]);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load chat sessions:', err);
@@ -403,6 +418,11 @@ export default function AssistantPage() {
       } catch {}
     } catch (err: any) {
       console.error('Failed to load session messages:', err);
+      if (err?.response?.status === 403) {
+        clearSavedSessionId();
+        setActiveSessionId(null);
+        setMessages([]);
+      }
       setError('Could not load session history.');
     } finally {
       setLoading(false);
@@ -614,11 +634,7 @@ export default function AssistantPage() {
         { label: 'Lost Deal Analytics', text: 'Analyze lost deals and top revenue loss reasons over the last 90 days.', icon: BarChart2 },
         { label: 'Company Knowledge Base', text: 'What is our policy on volume discounts and gross margin thresholds in the Sales SOP?', icon: BookOpen },
       ]
-    : [
-        { label: 'My Active Open Deals', text: 'Show my active open deals and quotations in the pipeline.', icon: TrendingUp },
-        { label: 'Customer 360 Overview', text: 'What is the 360 overview for our top customer accounts?', icon: Users },
-        { label: 'Sales SOP Guidelines', text: 'Search the Knowledge Base for discount rules and quotation policies.', icon: Search },
-      ];
+    : [];
 
   // Resolves image source from raw base64, data URLs, or remote URLs
   const getImageSource = (img: any): string | null => {
@@ -850,18 +866,21 @@ export default function AssistantPage() {
                 <div className="p-4 bg-blue-50 border border-blue-200/60 rounded-2xl text-blue-600 shadow-2xs">
                   <Sparkles size={36} />
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-xl font-bold text-gray-900">
+                <div className={isProcurement || isManagerOrAdmin ? 'space-y-2' : 'space-y-4'}>
+                  <h2 className={`${isProcurement || isManagerOrAdmin ? 'text-xl' : 'text-3xl'} font-bold text-gray-900`}>
                     Welcome to Enlight Sales OS Assistant
                   </h2>
-                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                  <p className={`${isProcurement || isManagerOrAdmin ? 'text-sm max-w-md' : 'text-2xl max-w-2xl'} text-gray-500 mx-auto`}>
                     {isProcurement
                       ? 'List pending or all inquiries, or log a base price in rupees per MT.'
-                      : 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'}
+                      : isManagerOrAdmin
+                        ? 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'
+                        : "I'm the Enlight Sigma AI assistant. Type Hi to see the actions you can take."}
                   </p>
                 </div>
 
                 {/* Quick Prompts */}
+                {quickPrompts.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
                   {quickPrompts.map((qp, idx) => {
                     const IconComp = qp.icon;
@@ -888,6 +907,7 @@ export default function AssistantPage() {
                     );
                   })}
                 </div>
+                )}
               </div>
             ) : (
               Array.isArray(messages) &&

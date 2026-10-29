@@ -165,6 +165,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
             }
           }}
           className="sr-only"
+          disabled={disabled}
           style={{
             position: 'absolute',
             width: '1px',

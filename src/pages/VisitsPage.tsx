@@ -1524,7 +1524,7 @@ export default function VisitsPage() {
     });
   };
 
-  const createProgress = visitWizardProgress(newVisitInput(), createStep);
+  const createProgress = visitWizardProgress(createStep);
 
   return (
     <div className="flex flex-col min-w-0 overflow-x-hidden lg:h-[calc(100dvh-3rem)] space-y-4 animate-fade-in font-sans">
@@ -2215,7 +2215,7 @@ export default function VisitsPage() {
                 </h2>
                 <div className="flex items-center gap-2 shrink-0">
                   <p className="text-sm font-bold text-slate-800">
-                    {createProgress.filled}/{createProgress.total}
+                    {createProgress.current}/{createProgress.total}
                   </p>
                   <button
                     type="button"
@@ -2228,9 +2228,14 @@ export default function VisitsPage() {
               </div>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                 <div
+                  role="progressbar"
+                  aria-label="Visit form progress"
+                  aria-valuemin={1}
+                  aria-valuemax={createProgress.total}
+                  aria-valuenow={createProgress.current}
                   className="h-full rounded-full bg-blue-600"
                   style={{
-                    width: `${createProgress.total ? (createProgress.filled / createProgress.total) * 100 : 0}%`,
+                    width: `${(createProgress.current / createProgress.total) * 100}%`,
                   }}
                 />
               </div>

@@ -166,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (window.location.pathname === '/admin') {
         sessionStorage.removeItem('enlight_viewing_as');
         sessionStorage.removeItem('enlight_active_chat_session_id');
+        localStorage.removeItem('enlight_active_chat_session_id');
         setViewingAsState(null);
       }
     };
@@ -177,6 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('enlight_token', newToken);
     sessionStorage.setItem('enlight_employee', JSON.stringify(newEmployee));
     sessionStorage.removeItem('enlight_active_chat_session_id');
+    localStorage.removeItem('enlight_active_chat_session_id');
     sessionStorage.removeItem('enlight_viewing_as');
     sessionStorage.removeItem('enlight_access');
     sessionStorage.setItem('enlight_last_activity', String(Date.now()));
@@ -193,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem('enlight_viewing_as');
     sessionStorage.removeItem('enlight_access');
     sessionStorage.removeItem('enlight_active_chat_session_id');
+    localStorage.removeItem('enlight_active_chat_session_id');
     sessionStorage.removeItem('enlight_last_activity');
     setToken(null);
     setEmployee(null);
@@ -230,12 +233,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setViewingAs = (emp: Employee) => {
     sessionStorage.setItem('enlight_viewing_as', JSON.stringify(emp));
     sessionStorage.removeItem('enlight_active_chat_session_id');
+    localStorage.removeItem('enlight_active_chat_session_id');
     setViewingAsState(emp);
   };
 
   const clearViewingAs = () => {
     sessionStorage.removeItem('enlight_viewing_as');
     sessionStorage.removeItem('enlight_active_chat_session_id');
+    localStorage.removeItem('enlight_active_chat_session_id');
     setViewingAsState(null);
   };
 

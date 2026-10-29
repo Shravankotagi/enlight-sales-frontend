@@ -73,7 +73,7 @@ Prepare two inquiries for Sales, each with two product lines, a quantity, a unit
 
 | ID | Role | Precondition | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| T1 | Person | A line whose weight is shown in MT and a base price is entered | Read the line amount before saving | The amount is that MT weight times the per-MT rate. A missing weight makes the amount 0. Subtotal, GST, and the grand total follow those line amounts | |
+| T1 | Person | A line whose weight is shown in MT and a base price is entered | Read the line amount before saving | The amount is that MT weight times the per-MT rate. A missing weight makes the amount 0. The drawer shows Sub Total only, without CGST, SGST, IGST, or a grand total | |
 | T2 | Sales | Inquiry A is Price Ready, delivery in Maharashtra, one line available | Enter base, transport, loading, credit, and margin. Save prices | Rate equals base + transport + loading + credit + margin. A blank credit is 0. The row shows CGST 9% and SGST 9% | |
 | T3 | Sales | Inquiry B is Price Ready, delivery outside Maharashtra | Save prices the same way | The row shows IGST 18% only | |
 | T4 | Sales | Two available lines | Use Copy to all for transport, loading, and margin | Those three values copy only to available rows. An unavailable row stays unchanged | |
