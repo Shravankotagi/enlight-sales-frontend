@@ -142,6 +142,13 @@ function getSavedSessionId(): string | null {
   }
 }
 
+function clearSavedSessionId() {
+  try {
+    sessionStorage.removeItem(ACTIVE_SESSION_KEY);
+    localStorage.removeItem(ACTIVE_SESSION_KEY);
+  } catch {}
+}
+
 function getCachedMessages(sessionId: string | null): ChatMessage[] {
   if (!sessionId || sessionId === 'new') return [];
   try {
@@ -170,13 +177,8 @@ function fitComposer(el: HTMLTextAreaElement) {
 export default function AssistantPage() {
   const { employee, viewingAs, roleName, isAdmin, isSalesManager, isProcurementManager, isProcurementPerson } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const initialSessionId = getSavedSessionId();
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    initialSessionId && initialSessionId !== 'new' ? initialSessionId : null
-  );
-  const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    getCachedMessages(initialSessionId)
-  );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingSessions, setFetchingSessions] = useState(false);
@@ -345,10 +347,23 @@ export default function AssistantPage() {
       setSessions(sessionList);
 
       const savedSessionId = getSavedSessionId();
-      if (savedSessionId && savedSessionId !== 'new') {
+      const savedIsOwn = Boolean(
+        savedSessionId &&
+        savedSessionId !== 'new' &&
+        sessionList.some((session) => session.id === savedSessionId),
+      );
+      if (savedIsOwn && savedSessionId) {
         selectSession(savedSessionId);
-      } else if (!savedSessionId && sessionList.length > 0) {
-        selectSession(sessionList[0].id);
+      } else if (savedSessionId === 'new') {
+        setActiveSessionId(null);
+        setMessages([]);
+      } else {
+        if (savedSessionId) clearSavedSessionId();
+        if (sessionList.length > 0) selectSession(sessionList[0].id);
+        else {
+          setActiveSessionId(null);
+          setMessages([]);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load chat sessions:', err);
@@ -391,6 +406,11 @@ export default function AssistantPage() {
       } catch {}
     } catch (err: any) {
       console.error('Failed to load session messages:', err);
+      if (err?.response?.status === 403) {
+        clearSavedSessionId();
+        setActiveSessionId(null);
+        setMessages([]);
+      }
       setError('Could not load session history.');
     } finally {
       setLoading(false);

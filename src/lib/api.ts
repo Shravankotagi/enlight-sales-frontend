@@ -98,6 +98,7 @@ API.interceptors.response.use(
       sessionStorage.removeItem('enlight_viewing_as');
       sessionStorage.removeItem('enlight_access');
       sessionStorage.removeItem('enlight_active_chat_session_id');
+      localStorage.removeItem('enlight_active_chat_session_id');
       sessionStorage.removeItem('enlight_last_activity');
       window.location.href = deactivated
         ? '/login?reason=deactivated'

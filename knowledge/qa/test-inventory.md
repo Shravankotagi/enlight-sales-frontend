@@ -60,6 +60,7 @@ Current regression tests:
 | Backend | `visit-followup-salesperson.test.ts` | A salesperson can set a visit follow-up to completed, and cannot edit the rest of the visit |
 | Frontend | `assistant-input-scroll.test.tsx` | A long assistant prompt stays in a scrolling textarea, Enter sends, and Shift+Enter adds a line |
 | Frontend | `issue-assistant-welcome.test.tsx` | An empty salesperson chat shows the welcome heading and the line to type Hi, and does not show My Active Open Deals, Customer 360 Overview, or Sales SOP Guidelines |
+| Frontend | `issue-assistant-foreign-session.test.tsx` | A saved session from another account is not reopened, and Hi is sent on the signed-in user's own session |
 | Frontend | `assistant-visit-gps.test.tsx` | Opening Log Visit in the assistant starts the device location watch, and an ordinary reply does not |
 | Frontend | `assistant-upload-pdf.test.tsx` | Upload from device accepts a PDF and refuses an image |
 | Bot | `visit-chat-location-photo.test.js` | A WhatsApp visit accepts only a location pin, the assistant stores the full auto-fetched address instead of a shortened city, and only a camera photo after the pin is the visit photo |
