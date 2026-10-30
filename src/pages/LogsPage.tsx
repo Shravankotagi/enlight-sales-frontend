@@ -24,6 +24,24 @@ import { type FilterPreset } from '../components/DateFilterControl';
 import { Select } from '../components/ui/select';
 
 type ModuleFilter = 'All' | 'Inquiries' | 'Orders' | 'Visits' | 'Complaints' | 'Auth' | 'Employees';
+function sessionExpiredLine(log: any): string | null {
+  const who = [
+    log?.salesperson_name,
+    log?.change_detail?.employee_id ? `(${log.change_detail.employee_id})` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const expired =
+    log?.action_type === 'logout' &&
+    (log?.change_detail?.reason === 'session_expired' ||
+      log?.description === 'Session expired' ||
+      String(log?.description || '').startsWith('Session expired.'));
+  const loginExpired =
+    log?.action_type === 'login' && log?.logout_status === 'Session expired';
+  if (!expired && !loginExpired) return null;
+  return `Session expired. ${who || 'Employee'} logged out.`;
+}
+
 type ActionFilter =
   | 'all'
   | 'login'
@@ -604,7 +622,7 @@ export default function LogsPage() {
                             <div>{getModuleBadge(log.module)}</div>
 
                             <p className="text-slate-900 font-bold text-sm sm:text-[15px] leading-snug tracking-wide break-words">
-                              {log.description || 'Activity recorded'}
+                              {sessionExpiredLine(log) || log.description || 'Activity recorded'}
                             </p>
 
                             <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
