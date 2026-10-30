@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { menuRoleLabel } from '../utils/roleLabel';
 import { chatbotApi, visitsApi } from '../lib/api';
 import {
   Sparkles,
@@ -98,6 +99,17 @@ const TECHNICAL_PAYLOAD_DISPLAY_MAP: Record<string, string> = {
   btn_resume_yes: 'Yes, Continue',
   btn_resume_no: 'No, Go to Menu',
   btn_att_no: 'No',
+  btn_add_product: 'Add Product',
+  btn_prod_save: 'Save Product',
+  btn_next_customers: 'Next 10 Customers',
+
+  proc_1: 'Pending prices',
+  proc_2: 'All inquiries',
+  proc_3: 'Log a Base Price',
+  proc_4: 'My team',
+
+  menu_price: 'Add Price to Inquiry',
+  btn_price_save: 'Save',
 };
 
 export function formatUserDisplayMessage(content?: string): string {
@@ -108,6 +120,8 @@ export function formatUserDisplayMessage(content?: string): string {
   if (TECHNICAL_PAYLOAD_DISPLAY_MAP[lower]) {
     return TECHNICAL_PAYLOAD_DISPLAY_MAP[lower];
   }
+
+  if (lower.startsWith('btn_price_current')) return 'Price the current inquiry';
 
   // Dynamic fallback for any pattern like menu_X or btn_repeat_X
   if (/^menu_([1-9]|10)$/i.test(lower)) {
@@ -120,6 +134,15 @@ export function formatUserDisplayMessage(content?: string): string {
     return `Record Another ${cleanAction.replace(/\b\w/g, (c) => c.toUpperCase())}`;
   }
 
+  if (lower.startsWith('btn_')) {
+    return lower
+      .replace(/^btn_/, '')
+      .split('_')
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
   return content;
 }
 
@@ -129,6 +152,13 @@ function getSavedSessionId(): string | null {
   } catch {
     return null;
   }
+}
+
+function clearSavedSessionId() {
+  try {
+    sessionStorage.removeItem(ACTIVE_SESSION_KEY);
+    localStorage.removeItem(ACTIVE_SESSION_KEY);
+  } catch {}
 }
 
 function getCachedMessages(sessionId: string | null): ChatMessage[] {
@@ -157,18 +187,14 @@ function fitComposer(el: HTMLTextAreaElement) {
 }
 
 export default function AssistantPage() {
-  const { employee, viewingAs } = useAuth();
+  const { employee, viewingAs, roleName, isAdmin, isSalesManager, isProcurementManager, isProcurementPerson } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const initialSessionId = getSavedSessionId();
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    initialSessionId && initialSessionId !== 'new' ? initialSessionId : null
-  );
-  const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    getCachedMessages(initialSessionId)
-  );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingSessions, setFetchingSessions] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [kbModalOpen, setKbModalOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -207,6 +233,8 @@ export default function AssistantPage() {
   const role = (activeEmployee?.role || 'salesperson').toLowerCase();
   const isManagerOrAdmin =
     role === 'manager' || role === 'sales_manager' || role === 'admin';
+  const isProcurement =
+    role === 'procurement_person' || role === 'procurement_manager';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -320,6 +348,7 @@ export default function AssistantPage() {
   const loadSessions = async () => {
     try {
       setFetchingSessions(true);
+      setSessionsError(null);
       const res = await chatbotApi.getSessions();
       const rawData = res.data?.data || res.data || {};
       const sessionList: ChatSession[] = Array.isArray(rawData?.sessions)
@@ -330,13 +359,27 @@ export default function AssistantPage() {
       setSessions(sessionList);
 
       const savedSessionId = getSavedSessionId();
-      if (savedSessionId && savedSessionId !== 'new') {
+      const savedIsOwn = Boolean(
+        savedSessionId &&
+        savedSessionId !== 'new' &&
+        sessionList.some((session) => session.id === savedSessionId),
+      );
+      if (savedIsOwn && savedSessionId) {
         selectSession(savedSessionId);
-      } else if (!savedSessionId && sessionList.length > 0) {
-        selectSession(sessionList[0].id);
+      } else if (savedSessionId === 'new') {
+        setActiveSessionId(null);
+        setMessages([]);
+      } else {
+        if (savedSessionId) clearSavedSessionId();
+        if (sessionList.length > 0) selectSession(sessionList[0].id);
+        else {
+          setActiveSessionId(null);
+          setMessages([]);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load chat sessions:', err);
+      setSessionsError('Conversation history could not be loaded. Try again.');
     } finally {
       setFetchingSessions(false);
     }
@@ -375,6 +418,11 @@ export default function AssistantPage() {
       } catch {}
     } catch (err: any) {
       console.error('Failed to load session messages:', err);
+      if (err?.response?.status === 403) {
+        clearSavedSessionId();
+        setActiveSessionId(null);
+        setMessages([]);
+      }
       setError('Could not load session history.');
     } finally {
       setLoading(false);
@@ -407,9 +455,10 @@ export default function AssistantPage() {
     if ((!textToSend && !selectedPhoto) || loading) return;
 
     const isPdfAttachment = selectedPhoto?.file.type === 'application/pdf';
-    let userDisplayText = displayTitle ||
-      formatUserDisplayMessage(textToSend) ||
-      (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : '');
+    const mappedSend = formatUserDisplayMessage(textToSend);
+    let userDisplayText = mappedSend !== textToSend
+      ? mappedSend
+      : (displayTitle || mappedSend || (selectedPhoto ? (isPdfAttachment ? 'Attached PDF document' : 'Attached image') : ''));
 
     // Parity with WhatsApp list selection: if user typed a menu number (1–10) while looking at the Catalog Menu
     if (!promptTextOverride && textToSend) {
@@ -420,7 +469,7 @@ export default function AssistantPage() {
         lastAssistantMsg.interactiveList.sections.length > 0;
 
       if (isAwaitingCatalogMenu) {
-        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?([1-9]|10)\.?$/i);
+        const numMatch = textToSend.trim().match(/^(?:option\s*|choice\s*|#\s*)?(11|10|[1-9])\.?$/i);
         if (numMatch) {
           const selectedNum = numMatch[1];
           for (const sec of lastAssistantMsg.interactiveList?.sections || []) {
@@ -429,7 +478,8 @@ export default function AssistantPage() {
             );
             if (foundRow) {
               textToSend = foundRow.id || `menu_${selectedNum}`;
-              userDisplayText = foundRow.title;
+              userDisplayText = formatUserDisplayMessage(textToSend);
+              if (userDisplayText === textToSend) userDisplayText = foundRow.title;
               break;
             }
           }
@@ -568,18 +618,23 @@ export default function AssistantPage() {
   };
 
   // Quick prompt suggestions based on role
-  const quickPrompts = isManagerOrAdmin
+  const quickPrompts = isProcurement
+    ? [
+        { label: 'Pending prices', text: 'pending prices', icon: TrendingUp },
+        { label: 'All inquiries', text: 'all inquiries', icon: Search },
+        { label: 'Log a base price', text: 'log a base price', icon: FileText },
+        ...(role === 'procurement_manager'
+          ? [{ label: 'My team', text: 'my team', icon: Users }]
+          : []),
+      ]
+    : isManagerOrAdmin
     ? [
         { label: 'Team Pipeline Summary', text: 'Show me the team pipeline summary and grand value across sales reps.', icon: TrendingUp },
         { label: 'Customer Churn Radar', text: 'Which customer accounts have high or medium churn risk right now?', icon: Users },
         { label: 'Lost Deal Analytics', text: 'Analyze lost deals and top revenue loss reasons over the last 90 days.', icon: BarChart2 },
         { label: 'Company Knowledge Base', text: 'What is our policy on volume discounts and gross margin thresholds in the Sales SOP?', icon: BookOpen },
       ]
-    : [
-        { label: 'My Active Open Deals', text: 'Show my active open deals and quotations in the pipeline.', icon: TrendingUp },
-        { label: 'Customer 360 Overview', text: 'What is the 360 overview for our top customer accounts?', icon: Users },
-        { label: 'Sales SOP Guidelines', text: 'Search the Knowledge Base for discount rules and quotation policies.', icon: Search },
-      ];
+    : [];
 
   // Resolves image source from raw base64, data URLs, or remote URLs
   const getImageSource = (img: any): string | null => {
@@ -623,7 +678,19 @@ export default function AssistantPage() {
         } else if (raw.includes('To start an activity, please select')) {
           prefix = 'To start an activity, please select the relevant option from the menu below:\n\n';
         }
-        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–10) or type what you'd like to do.`;
+        const rowCount = (msg.interactiveList?.sections || []).reduce(
+          (sum, section) => sum + (section.rows?.length || 0),
+          0,
+        );
+        const range = rowCount > 1 ? rowCount : 10;
+        return `${prefix}Welcome to **SalesOS Assistant**!\n\nWhat would you like to do today? Reply with a number (1–${range}) or type what you'd like to do.`;
+      }
+      if (raw.includes('Procurement assistant') && raw.includes('Pending prices')) {
+        const prefix = raw.includes('procurement manager')
+          ? raw.split('Procurement assistant')[0].trim()
+          : '';
+        const intro = 'Procurement assistant. Choose an action.';
+        return prefix ? `${prefix}\n\n${intro}` : intro;
       }
     }
     return raw;
@@ -647,7 +714,9 @@ export default function AssistantPage() {
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              Conversational Sales OS & Knowledge Base RAG Assistant
+              {isProcurement
+                ? 'Pending prices, all inquiries, and base prices'
+                : 'Conversational Sales OS & Knowledge Base RAG Assistant'}
             </p>
           </div>
         </div>
@@ -680,8 +749,8 @@ export default function AssistantPage() {
               <span className="font-semibold text-gray-900">
                 {activeEmployee?.name || 'Authorized User'}
               </span>
-              <span className="ml-2 uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
-                {role}
+              <span className="ml-2 bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
+                {menuRoleLabel({ roleName, isAdmin, isSalesManager, isProcurementManager, isProcurementPerson })}
               </span>
             </div>
           </div>
@@ -737,7 +806,11 @@ export default function AssistantPage() {
 
               {/* Session List */}
               <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 mt-4">
-                {!Array.isArray(sessions) || sessions.length === 0 ? (
+                {sessionsError ? (
+                  <div className="p-4 text-center text-xs text-red-600 border border-dashed border-red-200 rounded-xl bg-red-50">
+                    {sessionsError}
+                  </div>
+                ) : !Array.isArray(sessions) || sessions.length === 0 ? (
                   <div className="p-4 text-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
                     No past sessions found. Start a new conversation!
                   </div>
@@ -793,16 +866,21 @@ export default function AssistantPage() {
                 <div className="p-4 bg-blue-50 border border-blue-200/60 rounded-2xl text-blue-600 shadow-2xs">
                   <Sparkles size={36} />
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-xl font-bold text-gray-900">
+                <div className={isProcurement || isManagerOrAdmin ? 'space-y-2' : 'space-y-4'}>
+                  <h2 className={`${isProcurement || isManagerOrAdmin ? 'text-xl' : 'text-3xl'} font-bold text-gray-900`}>
                     Welcome to Enlight Sales OS Assistant
                   </h2>
-                  <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.
+                  <p className={`${isProcurement || isManagerOrAdmin ? 'text-sm max-w-md' : 'text-2xl max-w-2xl'} text-gray-500 mx-auto`}>
+                    {isProcurement
+                      ? 'List pending or all inquiries, or log a base price in rupees per MT.'
+                      : isManagerOrAdmin
+                        ? 'Ask questions about your pipeline, active deals, Knowledge Base SOPs, reorder queues, or churn risks.'
+                        : "I'm the Enlight Sigma AI assistant. Type Hi to see the actions you can take."}
                   </p>
                 </div>
 
                 {/* Quick Prompts */}
+                {quickPrompts.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
                   {quickPrompts.map((qp, idx) => {
                     const IconComp = qp.icon;
@@ -829,6 +907,7 @@ export default function AssistantPage() {
                     );
                   })}
                 </div>
+                )}
               </div>
             ) : (
               Array.isArray(messages) &&
@@ -1062,7 +1141,7 @@ export default function AssistantPage() {
                     void handleSend();
                   }
                 }}
-                placeholder={selectedPhoto ? "Add notes for this attachment..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
+                placeholder={selectedPhoto ? "Add notes for this attachment..." : isProcurement ? "Reply with a procurement number or a menu choice..." : "Ask about pipeline deals, customer 360, SOP rules, churn radar..."}
                 className="max-h-40 min-h-[1.5rem] flex-1 resize-none overflow-y-auto bg-transparent text-sm leading-5 text-gray-900 placeholder-gray-400 outline-none"
                 disabled={loading}
               />

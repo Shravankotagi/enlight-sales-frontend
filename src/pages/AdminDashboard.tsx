@@ -159,12 +159,6 @@ export default function AdminDashboard() {
     placeholderData: keepPreviousData,
   });
 
-  const { data: funnel, isLoading: funnelLoading, refetch: refetchFunnel } = useQuery({
-    queryKey: ['admin-funnel', selectedPhone, dateRange],
-    queryFn: () => reportsApi.getFunnel(queryParams).then(r => r.data?.data || r.data),
-    placeholderData: keepPreviousData,
-  });
-
   const { data: sku, isLoading: skuLoading, refetch: refetchSku } = useQuery({
     queryKey: ['admin-sku', selectedPhone, dateRange],
     queryFn: () => reportsApi.getSku(queryParams).then(r => r.data?.data || r.data),
@@ -234,7 +228,6 @@ export default function AdminDashboard() {
       await Promise.all([
         refetchEmployees(),
         refetchMonthly(),
-        refetchFunnel(),
         refetchSku(),
         refetchDeals(),
         refetchLeaderboardOrders(),
@@ -248,7 +241,6 @@ export default function AdminDashboard() {
 
   const isLoading =
     monthlyLoading ||
-    funnelLoading ||
     skuLoading ||
     dealsLoading ||
     leaderboardOrdersLoading ||
@@ -740,63 +732,8 @@ export default function AdminDashboard() {
 
         </div>
 
-        {/* Right Column (Funnel Breakdown & Leaderboard) */}
+        {/* Right Column (Leaderboard) */}
         <div className="space-y-6">
-          
-          {/* Funnel Conversion Breakdown Card */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp size={18} className="text-blue-600" />
-                <h3 className="font-bold text-slate-900 text-sm">
-                  Funnel Conversion Breakdown
-                </h3>
-              </div>
-            </div>
-
-            <div className="p-5 space-y-4">
-              {(() => {
-                const funnelList = funnel?.funnel || [];
-                const maxCount = Math.max(
-                  ...funnelList.map((s: any) => Number(s.count) || 0),
-                  1
-                );
-                return funnelList.map((stage: any) => {
-                  const count = Number(stage.count) || 0;
-                  const pct = count > 0 ? Math.round((count / maxCount) * 100) : 0;
-
-                  return (
-                    <div key={stage.stage} className="space-y-1.5">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-                        <span>
-                        {stage.label ||
-                          (stage.stage === 'new_inquiry' || stage.stage === 'new_deals'
-                            ? 'New Inquiry'
-                            : stage.stage === 'quoted' || stage.stage === 'qualified'
-                            ? 'Price Quote'
-                            : stage.stage === 'on_hold'
-                            ? 'On Hold'
-                            : stage.stage === 'won'
-                            ? 'Closed Won'
-                            : stage.stage === 'lost'
-                            ? 'Closed Lost'
-                            : String(stage.stage).replace('_', ' '))}
-                      </span>
-                      <span className="text-slate-900 font-semibold">{stage.count} deal{stage.count !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-200">
-                      <div
-                        className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-            </div>
-          </div>
-
           {/* Salesperson Leaderboard Card */}
           {!selectedSalesperson && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-visible">

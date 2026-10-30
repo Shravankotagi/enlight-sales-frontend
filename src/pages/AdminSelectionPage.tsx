@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Users,
-  LogOut,
   Loader2,
   UserPlus,
   X,
@@ -26,12 +25,13 @@ import {
   RefreshCw,
   Trash2,
   AlertTriangle,
+  Boxes,
+  PackageSearch,
 } from 'lucide-react';
 import ImportClientsModal from '../components/ImportClientsModal';
-import { employeesApi } from '../lib/api';
-import { Select } from '../components/ui/select';
-
-
+import { RoleSelectDropdown } from '../components/RoleSelectDropdown';
+import { getRoleTemplate, countOverrides } from '../utils/aclConstants';
+import { employeesApi, rolesApi } from '../lib/api';
 
 interface Employee {
   id: string;
@@ -45,6 +45,8 @@ interface Employee {
   is_active: boolean;
   manager_id?: string | null;
   manager_phone?: string | null;
+  assigned_procurement_employee_id?: string | null;
+  permissions?: Record<string, boolean> | null;
 }
 
 interface EmployeeForm {
@@ -57,28 +59,35 @@ interface EmployeeForm {
   manager_id?: string;
   manager_phone?: string;
   is_active?: boolean;
+  assigned_salesperson_ids?: string[];
+  permissions?: Record<string, boolean>;
 }
 
-type RoleFilter = 'all' | 'salesperson' | 'sales_manager' | 'admin';
+type RoleFilter = 'all' | 'salesperson' | 'sales_manager' | 'procurement' | 'admin';
 
 export default function AdminSelectionPage() {
   const navigate = useNavigate();
   const {
     token,
     employee,
-    logout,
     setViewingAs,
     clearViewingAs,
     isSalesManager,
     isAdmin,
+    can,
   } = useAuth();
+  const canCreateStaff = can('staff.create');
+  const canEditStaff = can('staff.manage');
+  const canDeleteStaff = can('staff.delete');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [allManagers, setAllManagers] = useState<Employee[]>([]);
+  const [procurementManagers, setProcurementManagers] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [roleNames, setRoleNames] = useState<Record<string, string>>({});
 
   // Add / Edit Modal state
   const [showModal, setShowModal] = useState(false);
@@ -92,6 +101,7 @@ export default function AdminSelectionPage() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+
   const [form, setForm] = useState<EmployeeForm>({
     name: '',
     phone: '91',
@@ -100,7 +110,10 @@ export default function AdminSelectionPage() {
     employee_id: '',
     manager_id: '',
     manager_phone: '',
+    assigned_salesperson_ids: [],
+    permissions: getRoleTemplate('salesperson'),
   });
+  const [aclTouched, setAclTouched] = useState(false);
 
   const fetchEmployees = () => {
     setLoading(true);
@@ -112,11 +125,17 @@ export default function AdminSelectionPage() {
         const rawList = Array.isArray(data) ? data : data?.data || [];
         const activeList = rawList.filter((e: Employee) => e.is_active);
 
-        // Filter managers for assignment dropdown
+        // Filter sales managers for assignment dropdown
         const managers = activeList.filter(
           (e: Employee) => e.role === 'sales_manager' || e.role === 'manager',
         );
         setAllManagers(managers);
+
+        // Filter procurement managers for procurement assignment dropdown
+        const procManagers = activeList.filter(
+          (e: Employee) => e.role === 'procurement_manager',
+        );
+        setProcurementManagers(procManagers);
 
         // If Sales Manager: show only non-admin team members assigned to them
         if (isSalesManager) {
@@ -130,7 +149,7 @@ export default function AdminSelectionPage() {
           );
           setEmployees(team);
         } else {
-          // Admin sees every employee, including deactivated accounts.
+          // Admin sees all employees including other Admins, Sales Managers, and Salespersons
           setEmployees(rawList);
         }
       })
@@ -140,6 +159,21 @@ export default function AdminSelectionPage() {
       })
       .finally(() => setLoading(false));
   };
+
+  useEffect(() => {
+    rolesApi
+      .list()
+      .then((res) => {
+        const items = Array.isArray(res?.data) ? res.data : [];
+        const names: Record<string, string> = {};
+        for (const role of items) {
+          if (role?.id && role?.name) names[role.id] = role.name;
+        }
+        if (names.sales_manager) names.manager = names.sales_manager;
+        setRoleNames(names);
+      })
+      .catch(() => setRoleNames({}));
+  }, [token]);
 
   useEffect(() => {
     // Admin Control Center must always render from Admin's own identity and scope.
@@ -163,6 +197,7 @@ export default function AdminSelectionPage() {
   };
 
   const handleOpenAddModal = async () => {
+    if (!can('staff.create')) return;
     setIsEditMode(false);
     setFormError('');
     setFormSuccess('');
@@ -179,19 +214,25 @@ export default function AdminSelectionPage() {
       employee_id: cleanId,
       manager_id: '',
       manager_phone: '',
+      assigned_salesperson_ids: [],
+      permissions: getRoleTemplate('salesperson'),
     });
+    setAclTouched(false);
     setShowModal(true);
   };
 
   const handleOpenEditModal = (emp: Employee, e: React.MouseEvent) => {
+    if (!can('staff.manage')) return;
     e.stopPropagation();
     setIsEditMode(true);
     setFormError('');
     setFormSuccess('');
 
+    const managerPool =
+      emp.role === 'procurement_person' ? procurementManagers : allManagers;
     const matchedMgrId =
       emp.manager_id ||
-      allManagers.find(
+      managerPool.find(
         (m) =>
           emp.manager_phone &&
           m.phone.replace(/\D/g, '').slice(-10) ===
@@ -209,7 +250,16 @@ export default function AdminSelectionPage() {
       manager_id: matchedMgrId,
       manager_phone: emp.manager_phone || '',
       is_active: emp.is_active !== false,
+      assigned_salesperson_ids: employees
+        .filter(
+          (person) =>
+            person.role === 'salesperson' &&
+            person.assigned_procurement_employee_id === emp.id,
+        )
+        .map((person) => person.id),
+      permissions: emp.permissions ? { ...emp.permissions } : getRoleTemplate(emp.role),
     });
+    setAclTouched(false);
     setShowModal(true);
   };
 
@@ -223,7 +273,7 @@ export default function AdminSelectionPage() {
     if (!form.name.trim()) return 'Name is required';
     const phoneDigits = form.phone.replace(/\D/g, '');
     if (phoneDigits.length !== 12 || !phoneDigits.startsWith('91')) {
-      return 'Phone must be 12 digits starting with 91 (e.g. 919876543210)';
+      return 'Mobile Number must start with 91 followed by 10 digits (e.g., 919876543210)';
     }
     if (!form.employee_id.trim()) return 'Employee ID is required';
     return null;
@@ -245,6 +295,7 @@ export default function AdminSelectionPage() {
         phone: form.phone.replace(/\D/g, ''),
         role: form.role,
         employee_id: form.employee_id.trim(),
+        permissions: isEditMode ? (aclTouched ? form.permissions ?? null : null) : null,
       };
       if (form.email.trim()) {
         payload.email = form.email.trim();
@@ -253,10 +304,16 @@ export default function AdminSelectionPage() {
         payload.manager_id = form.manager_id;
         const selectedMgr = allManagers.find((m) => m.id === form.manager_id);
         if (selectedMgr) payload.manager_phone = selectedMgr.phone;
+      } else if (form.role === 'procurement_person' && form.manager_id) {
+        payload.manager_id = form.manager_id;
+        const selectedMgr = procurementManagers.find((m) => m.id === form.manager_id);
+        if (selectedMgr) payload.manager_phone = selectedMgr.phone;
       } else {
         payload.manager_id = null;
         payload.manager_phone = null;
       }
+      payload.assigned_salesperson_ids =
+        form.role === 'procurement_person' ? form.assigned_salesperson_ids || [] : [];
 
       if (isEditMode && form.id) {
         await employeesApi.update(form.id, payload);
@@ -269,7 +326,11 @@ export default function AdminSelectionPage() {
           ? 'Admin'
           : form.role === 'sales_manager'
             ? 'Sales Manager'
-            : 'Salesperson';
+            : form.role === 'procurement_manager'
+              ? 'Procurement Manager'
+              : form.role === 'procurement_person'
+                ? 'Procurement Person'
+                : 'Salesperson';
 
       setFormSuccess(
         isEditMode
@@ -297,7 +358,9 @@ export default function AdminSelectionPage() {
 
     if (
       typeof serverMsg === 'string' &&
-      (serverMsg.includes('already registered to') || serverMsg.includes('already in use'))
+      (serverMsg.includes('already registered to') ||
+        serverMsg.includes('Please unassign or change') ||
+        serverMsg.includes('already in use'))
     ) {
       return serverMsg;
     }
@@ -343,7 +406,7 @@ export default function AdminSelectionPage() {
   };
 
   const handleDeactivate = async () => {
-    if (!form.id) return;
+    if (!form.id || !can('staff.manage')) return;
     const turningOn = form.is_active === false;
     const confirmMsg = turningOn
       ? `Activate ${form.name}? They will be able to log in again.`
@@ -371,6 +434,7 @@ export default function AdminSelectionPage() {
   };
 
   const handleDeleteClick = (emp: Employee, e: React.MouseEvent) => {
+    if (!can('staff.delete')) return;
     e.stopPropagation();
     setDeleteError('');
     setEmployeeToDelete(emp);
@@ -418,10 +482,6 @@ export default function AdminSelectionPage() {
     navigate('/home');
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   const pageTitle = isSalesManager
     ? 'Sales Manager Portal'
@@ -442,21 +502,47 @@ export default function AdminSelectionPage() {
     if (roleFilter === 'sales_manager')
       return emp.role === 'sales_manager' || emp.role === 'manager';
     if (roleFilter === 'salesperson')
-      return emp.role !== 'admin' && emp.role !== 'sales_manager' && emp.role !== 'manager';
+      return emp.role === 'salesperson';
+    if (roleFilter === 'procurement')
+      return (
+        emp.role === 'procurement_person' || emp.role === 'procurement_manager'
+      );
     return true;
   });
+
+  const availableSalesManagers = allManagers.filter(
+    (mgr) =>
+      !form.id ||
+      (mgr.id !== form.id &&
+        mgr.employee_id !== form.employee_id &&
+        mgr.phone.replace(/\D/g, '').slice(-10) !==
+          form.phone.replace(/\D/g, '').slice(-10)),
+  );
+
+  const availableProcurementManagers = procurementManagers.filter(
+    (mgr) =>
+      !form.id ||
+      (mgr.id !== form.id &&
+        mgr.employee_id !== form.employee_id &&
+        mgr.phone.replace(/\D/g, '').slice(-10) !==
+          form.phone.replace(/\D/g, '').slice(-10)),
+  );
 
   const adminCount = employees.filter((e) => e.role === 'admin').length;
   const managerCount = employees.filter(
     (e) => e.role === 'sales_manager' || e.role === 'manager',
   ).length;
   const salespersonCount = employees.filter(
-    (e) => e.role !== 'admin' && e.role !== 'sales_manager' && e.role !== 'manager',
+    (e) => e.role === 'salesperson',
+  ).length;
+  const procurementCount = employees.filter(
+    (e) =>
+      e.role === 'procurement_person' || e.role === 'procurement_manager',
   ).length;
 
   return (
-    <div className={(isAdmin || isSalesManager) ? 'space-y-6 animate-fade-in pb-12 font-sans text-slate-900' : 'min-h-screen bg-slate-50/70 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 pb-16'}>
-      <div className={(isAdmin || isSalesManager) ? 'space-y-6' : 'max-w-7xl mx-auto space-y-6'}>
+    <div className="space-y-4 animate-fade-in font-sans text-slate-900 pb-8">
+      <div className="space-y-6">
         {/* Top Executive Header Card */}
         <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -505,16 +591,17 @@ export default function AdminSelectionPage() {
                 </>
               )}
 
-              {isAdmin && (
-                <>
-                  <button
-                    onClick={() => setShowImportModal(true)}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="Import clients via CSV"
-                  >
-                    <FileSpreadsheet size={15} className="text-emerald-600" />
-                    <span className="hidden sm:inline">Import Clients</span>
-                  </button>
+              {can('clients.import_csv') && (
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
+                      title="Import clients via CSV"
+                    >
+                      <FileSpreadsheet size={15} className="text-emerald-600" />
+                      <span className="hidden sm:inline">Import Clients</span>
+                    </button>
+                  )}
+                  {canCreateStaff && (
                   <button
                     onClick={handleOpenAddModal}
                     className="h-9 flex items-center gap-2 px-3.5 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-indigo-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
@@ -523,17 +610,7 @@ export default function AdminSelectionPage() {
                     <UserPlus size={15} className="text-indigo-600" />
                     <span>Add Member</span>
                   </button>
-                </>
-              )}
-
-              <button
-                onClick={handleLogout}
-                className="h-9 flex items-center gap-1.5 px-3 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-                title="Sign out"
-              >
-                <LogOut size={14} />
-                <span>Logout</span>
-              </button>
+                  )}
             </div>
           </div>
         </div>
@@ -555,11 +632,9 @@ export default function AdminSelectionPage() {
                 {employees.length}
               </h2>
               <div className="flex items-center gap-2 mt-2">
-                {employees.length > 0 && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
-                    <CheckCircle2 size={11} /> 100% Active Staff
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                  <CheckCircle2 size={11} /> 100% Active Staff
+                </span>
               </div>
             </div>
           </div>
@@ -679,8 +754,7 @@ export default function AdminSelectionPage() {
 
             {/* Filter Pills & Search Input */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
-              {isAdmin && (
-                <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 overflow-x-auto scrollbar-none">
                   <button
                     onClick={() => setRoleFilter('all')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
@@ -734,8 +808,28 @@ export default function AdminSelectionPage() {
                       {salespersonCount}
                     </span>
                   </button>
+                  <button
+                    onClick={() => setRoleFilter('procurement')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      roleFilter === 'procurement'
+                        ? 'bg-white text-teal-800 shadow-2xs border border-teal-200'
+                        : 'text-slate-600 hover:text-teal-800'
+                    }`}
+                  >
+                    <Boxes
+                      size={12}
+                      className={
+                        roleFilter === 'procurement'
+                          ? 'text-teal-600'
+                          : 'text-slate-400'
+                      }
+                    />
+                    <span>Procurement</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-teal-100 text-teal-800 font-extrabold">
+                      {procurementCount}
+                    </span>
+                  </button>
                 </div>
-              )}
 
               {/* Search Bar */}
               <div className="relative flex-1 sm:max-w-xs">
@@ -779,15 +873,11 @@ export default function AdminSelectionPage() {
             <div className="text-center py-16 p-8">
               <Users size={44} className="text-slate-300 mx-auto mb-3" />
               <p className="text-slate-800 font-bold text-sm">
-                {isSalesManager && employees.length === 0
-                  ? 'No salespeople are assigned to you.'
-                  : 'No matching accounts found'}
+                No matching accounts found
               </p>
-              {!isSalesManager || employees.length > 0 ? (
-                <p className="text-slate-400 text-xs mt-1">
-                  Try adjusting your search criteria or role filters.
-                </p>
-              ) : null}
+              <p className="text-slate-400 text-xs mt-1">
+                Try adjusting your search criteria or role filters.
+              </p>
             </div>
           ) : viewMode === 'table' ? (
             /* High-Density Enterprise Table View */
@@ -805,8 +895,14 @@ export default function AdminSelectionPage() {
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredEmployees.map((emp) => {
                     const isEmpAdmin = emp.role === 'admin';
-                    const isMgr = emp.role === 'sales_manager' || emp.role === 'manager';
-                    const assignedMgr = allManagers.find(
+                    const isSalesMgr =
+                      emp.role === 'sales_manager' || emp.role === 'manager';
+                    const isProcMgr = emp.role === 'procurement_manager';
+                    const isProcPerson = emp.role === 'procurement_person';
+                    const assignedMgr = [
+                      ...allManagers,
+                      ...procurementManagers,
+                    ].find(
                       (m) =>
                         m.id === emp.manager_id ||
                         m.phone?.replace(/\D/g, '').slice(-10) ===
@@ -828,13 +924,21 @@ export default function AdminSelectionPage() {
                               className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-2xs ${
                                 isEmpAdmin
                                   ? 'bg-gradient-to-br from-amber-500 to-amber-600'
-                                  : isMgr
+                                  : isSalesMgr
                                     ? 'bg-gradient-to-br from-indigo-600 to-purple-600'
-                                    : 'bg-gradient-to-br from-blue-600 to-cyan-600'
+                                    : isProcMgr
+                                      ? 'bg-gradient-to-br from-teal-600 to-emerald-700'
+                                      : isProcPerson
+                                        ? 'bg-gradient-to-br from-emerald-600 to-teal-600'
+                                        : 'bg-gradient-to-br from-blue-600 to-cyan-600'
                               }`}
                             >
                               {isEmpAdmin ? (
                                 <Crown size={15} />
+                              ) : isProcMgr ? (
+                                <Boxes size={15} />
+                              ) : isProcPerson ? (
+                                <PackageSearch size={15} />
                               ) : (
                                 emp.name.charAt(0).toUpperCase()
                               )}
@@ -864,25 +968,56 @@ export default function AdminSelectionPage() {
 
                         {/* Role & Scope */}
                         <td className="py-3.5 px-4">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                              isEmpAdmin
-                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                                : isMgr
-                                  ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
-                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}
-                          >
-                            {isEmpAdmin ? (
-                              <>
-                                <Crown size={11} className="text-amber-600" /> Executive Admin
-                              </>
-                            ) : isMgr ? (
-                              'Sales Manager'
+                          <div className="flex flex-col gap-1 items-start">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                isEmpAdmin
+                                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                  : isSalesMgr
+                                    ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                    : isProcMgr
+                                      ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                                      : isProcPerson
+                                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                        : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}
+                            >
+                              {isEmpAdmin ? (
+                                <>
+                                  <Crown size={11} className="text-amber-600" />{' '}
+                                  Executive Admin
+                                </>
+                              ) : isSalesMgr ? (
+                                'Sales Manager'
+                              ) : isProcMgr ? (
+                                <>
+                                  <Boxes size={11} className="text-teal-600" />{' '}
+                                  Procurement Manager
+                                </>
+                              ) : isProcPerson ? (
+                                <>
+                                  <PackageSearch
+                                    size={11}
+                                    className="text-emerald-600"
+                                  />{' '}
+                                  Procurement Person
+                                </>
+                              ) : (
+                                roleNames[emp.role] || emp.role
+                              )}
+                            </span>
+                            {emp.permissions &&
+                            countOverrides(emp.role, emp.permissions) > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                Custom ACL (
+                                {countOverrides(emp.role, emp.permissions)})
+                              </span>
                             ) : (
-                              'Salesperson'
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-medium text-slate-400">
+                                Standard ACL
+                              </span>
                             )}
-                          </span>
+                          </div>
                         </td>
 
                         {/* Contact Info */}
@@ -901,17 +1036,36 @@ export default function AdminSelectionPage() {
                             <span className="text-slate-500 font-medium text-xs">
                               Root Administrator
                             </span>
-                          ) : isMgr ? (
+                          ) : isSalesMgr ? (
                             <span className="text-indigo-600 font-semibold text-xs">
-                              Team Supervisor
+                              Sales Team Supervisor
+                            </span>
+                          ) : isProcMgr ? (
+                            <span className="text-teal-600 font-semibold text-xs">
+                              Procurement Supervisor
                             </span>
                           ) : assignedMgr ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-700 bg-indigo-50/80 px-2 py-0.5 rounded-md border border-indigo-200/60">
-                              <UserCheck size={11} className="text-indigo-500" />
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border ${
+                                isProcPerson
+                                  ? 'text-teal-700 bg-teal-50/80 border-teal-200/60'
+                                  : 'text-indigo-700 bg-indigo-50/80 border-indigo-200/60'
+                              }`}
+                            >
+                              <UserCheck
+                                size={11}
+                                className={
+                                  isProcPerson
+                                    ? 'text-teal-500'
+                                    : 'text-indigo-500'
+                                }
+                              />
                               Reports to <strong>{assignedMgr.name}</strong>
                             </span>
                           ) : (
-                            <span className="text-slate-400 text-xs">Direct to Admin</span>
+                            <span className="text-slate-400 text-xs">
+                              Direct to Admin
+                            </span>
                           )}
                         </td>
 
@@ -921,25 +1075,24 @@ export default function AdminSelectionPage() {
                             className="flex items-center justify-end gap-2"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {isAdmin && (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={(e) => handleOpenEditModal(emp, e)}
-                                  title="Edit Account Details"
-                                  className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
-                                >
-                                  <Edit2 size={13} />
-                                </button>
-                                {emp.id !== employee?.id && (
-                                  <button
-                                    onClick={(e) => handleDeleteClick(emp, e)}
-                                    title={`Delete ${emp.name} & Records`}
-                                    className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-rose-200 transition-colors cursor-pointer"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                )}
-                              </div>
+                            {canEditStaff && (
+                              <button
+                                onClick={(e) => handleOpenEditModal(emp, e)}
+                                title="Edit Account Details"
+                                className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            )}
+
+                            {canDeleteStaff && emp.id !== employee?.id && (
+                              <button
+                                onClick={(e) => handleDeleteClick(emp, e)}
+                                title="Permanently Delete Employee and Associated Records"
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 hover:text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             )}
 
                             <button
@@ -947,13 +1100,26 @@ export default function AdminSelectionPage() {
                               className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
                                 isEmpAdmin
                                   ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
-                                  : isMgr
+                                  : isSalesMgr
                                     ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200'
-                                    : 'bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-200'
+                                    : isProcMgr
+                                      ? 'bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200'
+                                      : isProcPerson
+                                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                        : 'bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-200'
                               }`}
                             >
-                              <span>{isEmpAdmin ? 'Open Overview' : 'View Dashboard'}</span>
-                              <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                              <span>
+                                {isEmpAdmin
+                                  ? 'Open Overview'
+                                  : isProcMgr || isProcPerson
+                                    ? 'View Inquiries'
+                                    : 'View Dashboard'}
+                              </span>
+                              <ArrowRight
+                                size={12}
+                                className="group-hover:translate-x-0.5 transition-transform"
+                              />
                             </button>
                           </div>
                         </td>
@@ -968,8 +1134,14 @@ export default function AdminSelectionPage() {
             <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredEmployees.map((emp) => {
                 const isEmpAdmin = emp.role === 'admin';
-                const isMgr = emp.role === 'sales_manager' || emp.role === 'manager';
-                const assignedMgr = allManagers.find(
+                const isSalesMgr =
+                  emp.role === 'sales_manager' || emp.role === 'manager';
+                const isProcMgr = emp.role === 'procurement_manager';
+                const isProcPerson = emp.role === 'procurement_person';
+                const assignedMgr = [
+                  ...allManagers,
+                  ...procurementManagers,
+                ].find(
                   (m) =>
                     m.id === emp.manager_id ||
                     m.phone?.replace(/\D/g, '').slice(-10) ===
@@ -983,9 +1155,13 @@ export default function AdminSelectionPage() {
                     className={`bg-white hover:bg-slate-50/70 border rounded-2xl p-4.5 text-left transition-all group shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between space-y-4 ${
                       isEmpAdmin
                         ? 'border-amber-200 hover:border-amber-400'
-                        : isMgr
+                        : isSalesMgr
                           ? 'border-indigo-200 hover:border-indigo-300'
-                          : 'border-slate-200 hover:border-blue-300'
+                          : isProcMgr
+                            ? 'border-teal-200 hover:border-teal-300'
+                            : isProcPerson
+                              ? 'border-emerald-200 hover:border-emerald-300'
+                              : 'border-slate-200 hover:border-blue-300'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -994,13 +1170,21 @@ export default function AdminSelectionPage() {
                           className={`w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm ${
                             isEmpAdmin
                               ? 'bg-gradient-to-br from-amber-500 to-amber-600'
-                              : isMgr
+                              : isSalesMgr
                                 ? 'bg-gradient-to-br from-indigo-600 to-purple-600'
-                                : 'bg-gradient-to-br from-blue-600 to-cyan-600'
+                                : isProcMgr
+                                  ? 'bg-gradient-to-br from-teal-600 to-emerald-700'
+                                  : isProcPerson
+                                    ? 'bg-gradient-to-br from-emerald-600 to-teal-600'
+                                    : 'bg-gradient-to-br from-blue-600 to-cyan-600'
                           }`}
                         >
                           {isEmpAdmin ? (
                             <Crown size={18} />
+                          ) : isProcMgr ? (
+                            <Boxes size={18} />
+                          ) : isProcPerson ? (
+                            <PackageSearch size={18} />
                           ) : (
                             emp.name.charAt(0).toUpperCase()
                           )}
@@ -1027,17 +1211,37 @@ export default function AdminSelectionPage() {
                         </div>
                       </div>
 
-                      <span
-                        className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold shrink-0 ${
-                          isEmpAdmin
-                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                            : isMgr
-                              ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
-                              : 'bg-slate-100 text-slate-700 border border-slate-200'
-                        }`}
-                      >
-                        {isEmpAdmin ? 'Admin' : isMgr ? 'Manager' : 'Rep'}
-                      </span>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span
+                          className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold ${
+                            isEmpAdmin
+                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                              : isSalesMgr
+                                ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                : isProcMgr
+                                  ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                                  : isProcPerson
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {isEmpAdmin
+                            ? 'Admin'
+                            : isSalesMgr
+                              ? 'Sales Mgr'
+                              : isProcMgr
+                                ? 'Proc Mgr'
+                                : isProcPerson
+                                  ? 'Proc Person'
+                                  : roleNames[emp.role] || emp.role}
+                        </span>
+                        {emp.permissions &&
+                          countOverrides(emp.role, emp.permissions) > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              Custom ACL
+                            </span>
+                          )}
+                      </div>
                     </div>
 
                     <div className="space-y-1.5 text-xs text-slate-500 border-t border-slate-100 pt-3">
@@ -1053,16 +1257,30 @@ export default function AdminSelectionPage() {
                       )}
                       {assignedMgr && (
                         <div className="pt-1">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
-                            <UserCheck size={11} className="text-indigo-500" /> Reports to {assignedMgr.name}
+                          <span
+                            className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border ${
+                              isProcPerson
+                                ? 'text-teal-700 bg-teal-50 border-teal-200'
+                                : 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                            }`}
+                          >
+                            <UserCheck
+                              size={11}
+                              className={
+                                isProcPerson
+                                  ? 'text-teal-500'
+                                  : 'text-indigo-500'
+                              }
+                            />{' '}
+                            Reports to {assignedMgr.name}
                           </span>
                         </div>
                       )}
                     </div>
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                      {isAdmin ? (
-                        <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        {canEditStaff && (
                           <button
                             onClick={(e) => handleOpenEditModal(emp, e)}
                             title="Edit Account Details"
@@ -1070,31 +1288,42 @@ export default function AdminSelectionPage() {
                           >
                             <Edit2 size={13} />
                           </button>
-                          {emp.id !== employee?.id && (
-                            <button
-                              onClick={(e) => handleDeleteClick(emp, e)}
-                              title={`Delete ${emp.name} & Records`}
-                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-rose-200 transition-colors cursor-pointer"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <div />
-                      )}
+                        )}
+                        {canDeleteStaff && emp.id !== employee?.id && (
+                          <button
+                            onClick={(e) => handleDeleteClick(emp, e)}
+                            title="Permanently Delete Employee and Associated Records"
+                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 hover:text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
 
                       <div
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all ${
                           isEmpAdmin
                             ? 'bg-amber-50 group-hover:bg-amber-100 text-amber-900 border border-amber-200'
-                            : isMgr
+                            : isSalesMgr
                               ? 'bg-indigo-50 group-hover:bg-indigo-100 text-indigo-800 border border-indigo-200'
-                              : 'bg-slate-50 group-hover:bg-blue-50 text-slate-700 group-hover:text-blue-700 border border-slate-200 group-hover:border-blue-200'
+                              : isProcMgr
+                                ? 'bg-teal-50 group-hover:bg-teal-100 text-teal-800 border border-teal-200'
+                                : isProcPerson
+                                  ? 'bg-emerald-50 group-hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-slate-50 group-hover:bg-blue-50 text-slate-700 group-hover:text-blue-700 border border-slate-200 group-hover:border-blue-200'
                         }`}
                       >
-                        <span>{isEmpAdmin ? 'Open Overview' : 'View Dashboard'}</span>
-                        <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                        <span>
+                          {isEmpAdmin
+                            ? 'Open Overview'
+                            : isProcMgr || isProcPerson
+                              ? 'View Inquiries'
+                              : 'View Dashboard'}
+                        </span>
+                        <ArrowRight
+                          size={12}
+                          className="group-hover:translate-x-0.5 transition-transform"
+                        />
                       </div>
                     </div>
                   </div>
@@ -1107,20 +1336,20 @@ export default function AdminSelectionPage() {
 
       {/* Add / Edit Account Modal */}
       {showModal && (
-        <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
-          <div className="mobile-sheet bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150 max-h-[100dvh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 {isEditMode ? (
                   <>
                     <Edit2 size={18} className="text-blue-600" />
-                    Edit Account
+                    Edit User
                   </>
                 ) : (
                   <>
                     <UserPlus size={18} className="text-blue-600" />
-                    Add New Employee / Admin
+                    Invite User
                   </>
                 )}
               </h3>
@@ -1139,13 +1368,13 @@ export default function AdminSelectionPage() {
               </div>
             )}
 
-            {/* Form Fields */}
+            {/* Form Fields matching Zoho Books img2 */}
             {!formSuccess && (
               <div className="space-y-4">
-                {/* Name */}
+                {/* Name* */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Full Name <span className="text-rose-500">*</span>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Name <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1154,13 +1383,29 @@ export default function AdminSelectionPage() {
                       setForm((f) => ({ ...f, name: e.target.value }))
                     }
                     placeholder="e.g. Rahul Sharma"
-                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                   />
                 </div>
 
-                {/* Phone */}
+                {/* Email Address* */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Email Address <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, email: e.target.value }))
+                    }
+                    placeholder="rahul@enlightmetals.com"
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                  />
+                </div>
+
+                {/* WhatsApp Number* */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     WhatsApp Number <span className="text-rose-500">*</span>
                   </label>
                   <input
@@ -1174,46 +1419,40 @@ export default function AdminSelectionPage() {
                     }
                     placeholder="919876543210"
                     maxLength={12}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono"
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all font-mono"
                   />
                   <p className="text-slate-400 text-[11px] mt-1">
-                    12 digits starting with 91 (e.g. 919876543210)
+                    12 digits starting with 91 (used for WhatsApp OTP login)
                   </p>
                 </div>
 
-                {/* Email */}
+                {/* Role is assigned on /roles. Edit keeps the role already saved on the user. */}
+                {!isEditMode && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Email <span className="text-slate-400 text-xs font-normal">(optional)</span>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Role <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, email: e.target.value }))
-                    }
-                    placeholder="rahul@enlightmetals.com"
-                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                  <RoleSelectDropdown
+                    value={form.role}
+                    label=""
+                    required={true}
+                    onChange={(newRole) => {
+                      setAclTouched(false);
+                      setForm((f) => ({
+                        ...f,
+                        role: newRole,
+                        permissions: getRoleTemplate(newRole),
+                        manager_id: newRole === f.role ? f.manager_id : '',
+                        manager_phone: newRole === f.role ? f.manager_phone : '',
+                        assigned_salesperson_ids:
+                          newRole === 'procurement_person'
+                            ? f.assigned_salesperson_ids || []
+                            : [],
+                      }));
+                    }}
                   />
                 </div>
-
-                {/* Role */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Role &amp; Permissions <span className="text-rose-500">*</span>
-                  </label>
-                  <Select
-                    value={form.role}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, role: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium hover:border-blue-400 cursor-pointer"
-                  >
-                    <option value="salesperson">Salesperson (Standard Access)</option>
-                    <option value="sales_manager">Sales Manager (Team Scoped Access)</option>
-                    <option value="admin">Admin (Full Company Access &amp; Management)</option>
-                  </Select>
-                </div>
+                )}
 
                 {/* Notice for Admin role */}
                 {form.role === 'admin' && (
@@ -1225,36 +1464,133 @@ export default function AdminSelectionPage() {
                   </div>
                 )}
 
-                {/* Manager Assignment (only when role is salesperson) */}
-                {form.role === 'salesperson' && allManagers.length > 0 && (
+                {/* Notice for Procurement Manager role */}
+                {form.role === 'procurement_manager' && (
+                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-teal-900 text-xs flex items-start gap-2">
+                    <Boxes size={15} className="shrink-0 mt-0.5 text-teal-600" />
+                    <span>
+                      <strong>Procurement Manager:</strong> Supervises assigned procurement staff, provides and reviews base product purchase rates for inquiries, and coordinates with sales reps.
+                    </span>
+                  </div>
+                )}
+
+                {/* Notice for Procurement Person role */}
+                {form.role === 'procurement_person' && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-start gap-2">
+                    <PackageSearch size={15} className="shrink-0 mt-0.5 text-emerald-600" />
+                    <span>
+                      <strong>Procurement Person:</strong> Dedicated to inquiries. Receives raw customer inquiries, calculates &amp; inputs base purchase prices, and forwards rated inquiries to the salesperson.
+                    </span>
+                  </div>
+                )}
+
+                {/* Manager Assignment (when role is salesperson) */}
+                {form.role === 'salesperson' && availableSalesManagers.length > 0 && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Assigned Sales Manager{' '}
                       <span className="text-slate-400 text-xs font-normal">(optional)</span>
                     </label>
-                    <Select
+                    <select
                       value={form.manager_id || ''}
                       onChange={(e) =>
                         setForm((f) => ({
                           ...f,
                           manager_id: e.target.value,
                           manager_phone:
-                            allManagers.find((m) => m.id === e.target.value)
+                            availableSalesManagers.find((m) => m.id === e.target.value)
                               ?.phone || '',
                         }))
                       }
-                      className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium hover:border-blue-400 cursor-pointer"
-                      placeholder="-- None (Direct to Admin) --"
+                      className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
                     >
                       <option value="">-- None (Direct to Admin) --</option>
-                      {allManagers
-                        .filter((mgr) => mgr.id !== form.id)
-                        .map((mgr) => (
+                      {availableSalesManagers.map((mgr) => (
                         <option key={mgr.id} value={mgr.id}>
                           {mgr.name} ({mgr.employee_id})
                         </option>
                       ))}
-                    </Select>
+                    </select>
+                  </div>
+                )}
+
+                {/* Manager Assignment (when role is procurement_person) */}
+                {form.role === 'procurement_person' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Assigned Procurement Manager{' '}
+                      <span className="text-slate-400 text-xs font-normal">(optional)</span>
+                    </label>
+                    <select
+                      value={form.manager_id || ''}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          manager_id: e.target.value,
+                          manager_phone:
+                            availableProcurementManagers.find((m) => m.id === e.target.value)
+                              ?.phone || '',
+                        }))
+                      }
+                      className="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                    >
+                      <option value="">-- None (Direct to Admin) --</option>
+                      {availableProcurementManagers.map((mgr) => (
+                        <option key={mgr.id} value={mgr.id}>
+                          {mgr.name} ({mgr.employee_id})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-slate-400 text-[11px] mt-1">
+                      Procurement Manager who oversees this person&apos;s inquiries and provides team base rates.
+                    </p>
+                  </div>
+                )}
+
+                {form.role === 'procurement_person' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Assigned Salespeople
+                    </label>
+                    <div className="max-h-40 overflow-auto rounded-xl border border-slate-200 bg-slate-50/60 p-2 space-y-1">
+                      {employees.filter((person) => person.role === 'salesperson' && person.is_active !== false && (!form.id || person.id !== form.id)).length === 0 ? (
+                        <p className="px-2 py-1.5 text-xs text-slate-400">No active salespeople</p>
+                      ) : (
+                        employees
+                          .filter((person) => person.role === 'salesperson' && person.is_active !== false && (!form.id || person.id !== form.id))
+                          .map((person) => {
+                            const selected = (form.assigned_salesperson_ids || []).includes(person.id);
+                            return (
+                              <label
+                                key={person.id}
+                                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-800 hover:bg-white cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() =>
+                                    setForm((current) => {
+                                      const ids = current.assigned_salesperson_ids || [];
+                                      return {
+                                        ...current,
+                                        assigned_salesperson_ids: selected
+                                          ? ids.filter((id) => id !== person.id)
+                                          : [...ids, person.id],
+                                      };
+                                    })
+                                  }
+                                />
+                                <span>
+                                  {person.name} ({person.employee_id})
+                                </span>
+                              </label>
+                            );
+                          })
+                      )}
+                    </div>
+                    <p className="text-slate-400 text-[11px] mt-1">
+                      Inquiries from these salespeople land in this person&apos;s queue. Each salesperson routes to one procurement person.
+                    </p>
                   </div>
                 )}
 
@@ -1289,7 +1625,7 @@ export default function AdminSelectionPage() {
 
                 {/* Actions */}
                 <div className="sheet-actions flex gap-3 pt-3 border-t border-slate-100">
-                  {isEditMode && form.id !== employee?.id && (
+                  {isEditMode && canEditStaff && form.id !== employee?.id && (
                     <button
                       type="button"
                       onClick={handleDeactivate}
@@ -1331,76 +1667,6 @@ export default function AdminSelectionPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {employeeToDelete && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
-            <div className="flex items-start gap-3.5">
-              <div className="p-2.5 rounded-2xl bg-rose-100 text-rose-600 shrink-0">
-                <Trash2 size={22} />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-900">
-                  Delete Employee Account?
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Are you sure you want to permanently delete{' '}
-                  <strong className="text-slate-800">{employeeToDelete.name}</strong>{' '}
-                  (<span className="font-mono">{employeeToDelete.employee_id}</span>)?
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 space-y-2 text-xs text-rose-800">
-              <div className="font-bold flex items-center gap-1.5 text-rose-900">
-                <AlertTriangle size={14} className="shrink-0" />
-                <span>Permanent Deletion Warning</span>
-              </div>
-              <ul className="list-disc list-inside space-y-1 text-[11px] text-rose-700">
-                <li>All deals, quotations, inquiries, and visits for this user will be removed.</li>
-                <li>Assigned clients will be safely set to &apos;unassigned&apos;.</li>
-                <li>This action is irreversible and cannot be undone.</li>
-              </ul>
-            </div>
-
-            {deleteError && (
-              <div className="p-3 rounded-xl bg-rose-100 border border-rose-200 text-rose-800 text-xs font-semibold">
-                {deleteError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setEmployeeToDelete(null)}
-                disabled={deleteLoading}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                disabled={deleteLoading}
-                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm shadow-rose-600/20 active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-              >
-                {deleteLoading ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>Deleting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={14} />
-                    <span>Permanently Delete</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Import Clients Modal */}
       <ImportClientsModal
         isOpen={showImportModal}
@@ -1411,6 +1677,69 @@ export default function AdminSelectionPage() {
           employee_id: e.employee_id,
         }))}
       />
+
+      {/* Permanent Delete Confirmation Modal */}
+      {employeeToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 border border-slate-200 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Permanently Delete Employee?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+              <p className="text-xs font-bold text-rose-900">
+                You are deleting: {employeeToDelete.name} ({employeeToDelete.employee_id})
+              </p>
+              <p className="text-[11px] text-rose-700 leading-relaxed">
+                Deleting this employee will permanently delete all associated deals, quotations, visits, KRA logs, and unassign customer accounts.
+              </p>
+            </div>
+
+            {deleteError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setEmployeeToDelete(null)}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" /> Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={13} /> Permanently Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

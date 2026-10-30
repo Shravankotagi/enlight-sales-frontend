@@ -55,7 +55,7 @@ export default function AddAssignedCustomerDialog({
   onClose,
   onSaved,
 }: AddAssignedCustomerDialogProps) {
-  const { isAdmin } = useAuth();
+  const { guardAction, isAdmin } = useAuth();
   const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [mobile, setMobile] = useState('');
@@ -113,6 +113,7 @@ export default function AddAssignedCustomerDialog({
   );
 
   const handleSave = async (allowSimilar = false) => {
+    if (!guardAction('customers.create')) return;
     const name = companyName.trim();
     const contact = contactPerson.trim();
     const phone = mobile.replace(/\D/g, '').slice(-10);

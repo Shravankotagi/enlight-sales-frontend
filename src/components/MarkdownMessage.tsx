@@ -17,10 +17,13 @@ interface MarkdownMessageProps {
  * Preprocesses raw message content to ensure standard Markdown list syntax,
  * clean line breaks, and proper paragraph structure for the chat interface.
  */
-function preprocessMarkdown(raw: string): string {
+export function preprocessMarkdown(raw: string): string {
   if (!raw || typeof raw !== 'string') return '';
 
   let text = raw;
+
+  // Keep thickness*width*length specs from being read as italic markers.
+  text = text.replace(/(\d)\*(?=\d)/g, '$1\\*');
 
   // 1. Convert mid-sentence / inline Unicode bullets (e.g., "Field: * • Field 2: ...") into separate list lines
   text = text.replace(/([^\n])\s*[•⁃◦▪▫►◆]\s+/g, '$1\n- ');

@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import { getFollowUpStatusInfo } from '../utils/visitUtils';
-import { isProductInquiry, parseInquiryText, resolveInquiryDealStageKey } from './InquiriesPage';
+import { isProductInquiry, resolveInquiryDealStageKey } from './InquiriesPage';
 import {
   Package,
   ShoppingBag,
@@ -117,7 +117,13 @@ export default function HomePage() {
     isAdmin,
     activeRole,
     activeMode,
+    can,
   } = useAuth();
+  const canCustomers = can('customers.view');
+  const canInquiries = can('inquiries.view');
+  const canOrders = can('orders.view');
+  const canVisits = can('visits.view');
+  const canComplaints = can('complaints.view');
 
   const isViewingPersonal =
     viewingAs?.role === 'salesperson' &&
@@ -303,7 +309,8 @@ export default function HomePage() {
 
   // 3. Won Orders Query (for Delivered Tonnage) - date range filter applied for RBAC + date accuracy
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
-    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode],
+    queryKey: ['orders-list', effectivePhone, dateRange, activeRole, activeMode, canOrders],
+    enabled: canOrders,
     queryFn: () =>
       ordersApi
         .getAll({
@@ -320,7 +327,8 @@ export default function HomePage() {
 
   // 4. All Deals Query (for Pipeline & Quotes)
   const { data: dealsData, refetch: refetchDeals } = useQuery({
-    queryKey: ['all-deals-list', effectivePhone, activeRole, activeMode],
+    queryKey: ['all-deals-list', effectivePhone, activeRole, activeMode, canInquiries],
+    enabled: canInquiries,
     queryFn: () =>
       dealsApi
         .getAll({
@@ -335,7 +343,8 @@ export default function HomePage() {
 
   // 5. Inquiries Query (for Review New Inquiries Action Card - universal across all reps)
   const { data: inquiriesData, refetch: refetchInquiries } = useQuery({
-    queryKey: ['home-inquiries-list', effectivePhone, activeRole, activeMode],
+    queryKey: ['home-inquiries-list', effectivePhone, activeRole, activeMode, canInquiries],
+    enabled: canInquiries,
     queryFn: () =>
       inquiriesApi
         .getAll({
@@ -351,7 +360,8 @@ export default function HomePage() {
 
   // 6. Customers Churn / Reorder Query
   const { data: churnData, refetch: refetchChurn } = useQuery({
-    queryKey: ['customers-churn-home', effectivePhone, activeRole, activeMode],
+    queryKey: ['customers-churn-home', effectivePhone, activeRole, activeMode, canCustomers],
+    enabled: canCustomers,
     queryFn: () =>
       customersApi
         .getChurnRisk({
@@ -381,7 +391,8 @@ export default function HomePage() {
 
   // 8. Visits Query
   const { data: visitsData, refetch: refetchVisits } = useQuery({
-    queryKey: ['home-visits-list', effectivePhone, dateRange, activeRole, activeMode],
+    queryKey: ['home-visits-list', effectivePhone, dateRange, activeRole, activeMode, canVisits],
+    enabled: canVisits,
     queryFn: () =>
       visitsApi
         .getAll({
@@ -398,7 +409,8 @@ export default function HomePage() {
 
   // 9. Complaints Query
   const { data: complaintsData, refetch: refetchComplaints } = useQuery({
-    queryKey: ['home-complaints-list', effectivePhone, dateRange, activeRole, activeMode],
+    queryKey: ['home-complaints-list', effectivePhone, dateRange, activeRole, activeMode, canComplaints],
+    enabled: canComplaints,
     queryFn: () =>
       complaintsApi
         .getAll({
@@ -424,16 +436,17 @@ export default function HomePage() {
     refetchComplaints();
   };
 
-  const safeOrders: any[] = Array.isArray(ordersData) ? ordersData : [];
-  const safeDeals: any[] = Array.isArray(dealsData) ? dealsData : [];
-  const safeVisits: any[] = Array.isArray(visitsData) ? visitsData : [];
-  const safeComplaints: any[] = Array.isArray(complaintsData) ? complaintsData : [];
+  const safeOrders: any[] = canOrders && Array.isArray(ordersData) ? ordersData : [];
+  const safeDeals: any[] = canInquiries && Array.isArray(dealsData) ? dealsData : [];
+  const safeVisits: any[] = canVisits && Array.isArray(visitsData) ? visitsData : [];
+  const safeComplaints: any[] = canComplaints && Array.isArray(complaintsData) ? complaintsData : [];
   const safeEmployees: any[] = Array.isArray(employeesData) ? employeesData : [];
-  const safeInquiries: any[] = Array.isArray(inquiriesData) ? inquiriesData : [];
-  const safeCustomers: any[] = Array.isArray(churnData) ? churnData : [];
+  const safeInquiries: any[] = canInquiries && Array.isArray(inquiriesData) ? inquiriesData : [];
+  const safeCustomers: any[] = canCustomers && Array.isArray(churnData) ? churnData : [];
 
   // ── Customer Directory for Search Dropdown ──────────────────────────────
   const customerDirectory = useMemo((): CustomerDirectoryItem[] => {
+    if (!canCustomers) return [];
     const map = new Map<string, CustomerDirectoryItem>();
 
     // 1. Add from safeCustomers (churn / recurring customer data)
@@ -487,7 +500,7 @@ export default function HomePage() {
     });
 
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [safeCustomers, safeOrders, safeDeals]);
+  }, [canCustomers, safeCustomers, safeOrders, safeDeals]);
 
   // Filtered Customers based on user input
   const filteredCustomers = useMemo(() => {
@@ -710,10 +723,7 @@ export default function HomePage() {
 
     // 1. Quote Follow-up (Strictly matches Inquiries & Pipeline stageCounts.quoted)
     const quotedInquiriesCount = activeInquiries.filter(inq => {
-      const parsed = parseInquiryText(inq.raw_text || '', inq);
-      const stageKey = resolveInquiryDealStageKey(inq, parsed.companyName, safeDeals);
-      const normKey = (stageKey === 'qualified' || stageKey === 'saved' || stageKey === 'confirmed') ? 'quoted' : (stageKey === 'hold' ? 'on_hold' : stageKey);
-      return normKey === 'quoted';
+      return resolveInquiryDealStageKey(inq) === 'quoted';
     }).length;
     if (quotedInquiriesCount > 0) {
       items.push({
@@ -788,9 +798,7 @@ export default function HomePage() {
 
     // 5. Review New Inquiries (Strictly matches Inquiries tab stageCounts.new_inquiry)
     const newInquiriesCount = activeInquiries.filter(inq => {
-      const parsed = parseInquiryText(inq.raw_text || '', inq);
-      const stageKey = resolveInquiryDealStageKey(inq, parsed.companyName, safeDeals);
-      return stageKey === 'new_inquiry' || stageKey === 'review';
+      return resolveInquiryDealStageKey(inq) === 'new_inquiry';
     }).length;
 
     if (newInquiriesCount > 0) {
@@ -1072,6 +1080,7 @@ export default function HomePage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
 
         {/* Card 1: Delivered Tonnage - Blue Hero */}
+        {canOrders && (
         <div
           onClick={() => navigate('/orders')}
           className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white rounded-xl p-4 sm:p-5 shadow-sm shadow-blue-600/25 flex flex-col justify-between min-h-[145px] relative overflow-hidden group hover:shadow-md transition-all cursor-pointer">
@@ -1095,8 +1104,10 @@ export default function HomePage() {
           </div>
           <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
         </div>
+        )}
 
         {/* Card 2: Won Orders - Blue Soft */}
+        {canOrders && (
         <div
           onClick={() => navigate('/orders')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
@@ -1112,8 +1123,10 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Card 3: Customer Visits - Blue Soft */}
+        {canVisits && (
         <div
           onClick={() => navigate('/visits')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer">
@@ -1129,8 +1142,10 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Card 4: Total Customers */}
+        {canCustomers && (
         <div
           onClick={() => navigate('/customers')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] cursor-pointer"
@@ -1147,8 +1162,10 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Card 5: Total Complaints - Blue Soft */}
+        {canComplaints && (
         <div
           onClick={() => navigate('/complaints')}
           className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between min-h-[145px] col-span-2 sm:col-span-1 cursor-pointer">
@@ -1164,6 +1181,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        )}
 
       </div>
 
@@ -1247,10 +1265,10 @@ export default function HomePage() {
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-3">Sales Representative</th>
-                  <th className="px-4 py-3">Delivered Tonnage</th>
-                  <th className="px-4 py-3">Won Orders</th>
-                  <th className="px-4 py-3">Customer Visits</th>
-                  <th className="px-4 py-3">Pending Complaints</th>
+                  {canOrders && <th className="px-4 py-3">Delivered Tonnage</th>}
+                  {canOrders && <th className="px-4 py-3">Won Orders</th>}
+                  {canVisits && <th className="px-4 py-3">Customer Visits</th>}
+                  {canComplaints && <th className="px-4 py-3">Pending Complaints</th>}
                   <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
@@ -1266,13 +1284,20 @@ export default function HomePage() {
                         <p className="text-[10px] text-slate-400 font-mono">{rep.phone || 'No phone'}</p>
                       </div>
                     </td>
+                    {canOrders && (
                     <td data-label="Delivered Tonnage" className="px-4 py-3.5">
                       <span className="font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 text-xs font-mono">
                         {formatTonnage(rep.deliveredTonnage)} MT
                       </span>
                     </td>
+                    )}
+                    {canOrders && (
                     <td data-label="Won Orders" className="px-4 py-3.5 font-semibold text-slate-800">{rep.ordersCount} Orders</td>
+                    )}
+                    {canVisits && (
                     <td data-label="Customer Visits" className="px-4 py-3.5 font-semibold text-slate-800">{rep.visitsCount} Visits</td>
+                    )}
+                    {canComplaints && (
                     <td data-label="Pending Complaints" className="px-4 py-3.5">
                       {rep.complaintsCount > 0 ? (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
@@ -1282,6 +1307,7 @@ export default function HomePage() {
                         <span className="text-slate-400 font-medium">-</span>
                       )}
                     </td>
+                    )}
                     <td data-label="Action" className="px-4 py-3.5 text-right">
                       <button
                         onClick={() => setViewingAs(rep)}
@@ -1298,6 +1324,7 @@ export default function HomePage() {
       )}
 
       {/* ── Monthly Tonnage Trend & Top Accounts Grid (50-50 Split) ───── */}
+      {canOrders && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Left: Monthly Tonnage Smooth Area Chart (50%) */}
@@ -1443,6 +1470,7 @@ export default function HomePage() {
         </div>
 
         {/* Right: Top Customer Accounts (50%) */}
+        {canCustomers && (
         <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -1491,8 +1519,10 @@ export default function HomePage() {
           </div>
 
         </div>
+        )}
 
       </div>
+      )}
 
     </div>
   );

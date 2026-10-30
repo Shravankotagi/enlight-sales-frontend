@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
+import { menuRoleLabel } from '../utils/roleLabel';
 import {
   Home,
   Users,
@@ -12,6 +13,7 @@ import {
   ShoppingBag,
   History,
   Sparkles,
+  KeyRound,
   ChevronsUpDown,
   PanelLeft,
   Menu,
@@ -19,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { routeAllowed } from '../utils/aclConstants';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -35,7 +38,17 @@ function UserMenu({
   sidebarOpen: boolean;
   isEnlarged: boolean;
 }) {
-  const { employee, logout, isAdmin, isSalesManager, clearViewingAs, viewingAs } = useAuth();
+  const {
+    employee,
+    logout,
+    isAdmin,
+    isSalesManager,
+    isProcurementManager,
+    isProcurementPerson,
+    roleName,
+    clearViewingAs,
+    viewingAs,
+  } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -48,11 +61,13 @@ function UserMenu({
     navigate(isAdmin ? '/control-panel' : '/admin');
   };
 
-  const ownRoleLabel = isAdmin
-    ? 'Admin'
-    : isSalesManager
-      ? 'Sales Manager'
-      : 'Salesperson';
+  const ownRoleLabel = menuRoleLabel({
+    roleName,
+    isAdmin,
+    isProcurementManager,
+    isProcurementPerson,
+    isSalesManager,
+  });
 
   const isImpersonatingOther = Boolean(
     viewingAs &&
@@ -160,7 +175,16 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   });
   const [isHovered, setIsHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { employee, viewingAs, isAdmin, isSalesManager, clearViewingAs } = useAuth();
+  const {
+    employee,
+    viewingAs,
+    isAdmin,
+    isSalesManager,
+    isProcurement,
+    clearViewingAs,
+    can = () => false,
+  } = useAuth();
+  const isAdminRole = employee?.role === 'admin';
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const toggleSidebar = () => {
@@ -192,8 +216,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         employee.phone?.replace(/\D/g, '').slice(-10)
   );
 
-  const showAdminTab = isAdmin && !isImpersonatingOther;
-  const showUserManagement = (isAdmin || isSalesManager) && !isImpersonatingOther;
+  const userManagementKeys = ['staff.view', 'staff.create', 'staff.manage', 'staff.delete'];
+  const showAdminTab = (isAdmin || can('staff.view')) && !isImpersonatingOther;
+  const showUserManagement = (isAdminRole || isSalesManager || userManagementKeys.some((key) => can(key))) && !isImpersonatingOther;
 
   const isActive = (path: string) => {
     if (path === '/pipeline')
@@ -204,6 +229,8 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     );
   };
 
+  const showRoles = (isAdmin || can('staff.manage_acl')) && !isImpersonatingOther;
+
   const navItems = [
     { path: '/home', label: 'Dashboard', icon: Home },
     ...(showAdminTab
@@ -211,6 +238,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       : []),
     ...(showUserManagement
       ? [{ path: '/control-panel', label: 'User Management', icon: Settings }]
+      : []),
+    ...(showRoles
+      ? [{ path: '/roles', label: 'Roles and Permissions', icon: KeyRound }]
       : []),
     { path: '/assistant', label: 'AI Assistant', icon: Sparkles },
     { path: '/inquiries', label: 'Inquiries', icon: FileText },
@@ -222,6 +252,15 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     { path: '/reports', label: 'Reports', icon: BarChart3 },
     { path: '/logs', label: 'Logs', icon: History },
   ];
+  const visibleNavItems = navItems.filter((item) => {
+    if (isProcurement) {
+      return item.path === '/inquiries' || item.path === '/assistant';
+    }
+    if (isAdminRole && (item.path === '/admin-dashboard' || item.path === '/control-panel' || item.path === '/roles')) {
+      return true;
+    }
+    return routeAllowed(item.path, can);
+  });
 
   // Hover enlargement only active when sidebar is OPEN and user hovers over it
   const isEnlarged = sidebarOpen && isHovered;
@@ -373,7 +412,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
         {/* Flat List of Navigation Menu Items */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-2.5 space-y-1 [scrollbar-width:thin] [scrollbar-color:#e2e8f0_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const active = isActive(item.path);
             const Icon = item.icon;
             return (

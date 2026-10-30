@@ -31,13 +31,13 @@ export function getBotUrl(): string {
 
 export const BOT_URL = getBotUrl();
 
-const API = axios.create({
+export const API = axios.create({
   baseURL: BACKEND_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 });
 
-function unwrapApiResponse<T>(response: { data?: any }): { data: T } {
+function unwrapApiResponse<T = any>(response: { data?: any }): { data: T } {
   const envelope = response?.data;
   return {
     data:
@@ -85,21 +85,27 @@ API.interceptors.response.use(
     const isOtpAuthRequest = /\/auth\/(?:request-otp|verify-otp)(?:$|[/?])/.test(
       requestUrl,
     );
+    const isAuthMe = /\/auth\/me(?:$|[/?])/.test(requestUrl);
 
     const isLogoutRequest = /\/auth\/logout(?:$|[/?])/.test(requestUrl);
     const body = error.response?.data;
     const message = String(body?.error || body?.message || '');
     const deactivated = /deactivat/i.test(message);
-    if (error.response?.status === 401 && !isOtpAuthRequest && !isLogoutRequest) {
+    if (error.response?.status === 401 && !isOtpAuthRequest && !isLogoutRequest && !isAuthMe) {
       postAuthLogout('session_expired');
       sessionStorage.removeItem('enlight_token');
       sessionStorage.removeItem('enlight_employee');
       sessionStorage.removeItem('enlight_viewing_as');
+      sessionStorage.removeItem('enlight_access');
       sessionStorage.removeItem('enlight_active_chat_session_id');
+      localStorage.removeItem('enlight_active_chat_session_id');
       sessionStorage.removeItem('enlight_last_activity');
       window.location.href = deactivated
         ? '/login?reason=deactivated'
         : '/login';
+    }
+    if (error.response?.status === 403) {
+      window.dispatchEvent(new CustomEvent('enlight_permissions_stale'));
     }
     return Promise.reject(error);
   }
@@ -169,6 +175,7 @@ export const customersApi = {
   getReorderQueue: (params?: any) => API.get('/customers/reorder-queue', { params }),
   getLossAnalytics: (params?: any) => API.get('/customers/loss-analytics', { params }),
   importClients: (data: any) => API.post('/customers/import', data),
+  create: (data: any) => API.post('/customers', data),
   createCustomer: (data: any, params?: any) => API.post('/customers', data, { params }),
   checkConflict: (params: any) => API.get('/customers/check-conflict', { params }),
   update: (id: string, data: any) => API.patch(`/customers/${encodeURIComponent(id)}`, data),
@@ -224,6 +231,7 @@ export const inquiriesApi = {
   getOne: (id: string) => API.get(`/inquiries/${id}`),
   getReviewQueue: (params?: any) => API.get('/inquiries/review-queue', { params }),
   getStats: (params?: any) => API.get('/inquiries/stats', { params }),
+  getTonnageReviews: () => API.get('/inquiries/tonnage-reviews'),
   create: (data: any) => API.post('/inquiries', data),
   updateStatus: (id: string, status: string, details?: any) => API.patch(`/inquiries/${id}/status`, { status, details }),
   previewQuotation: (id: string, payload: any) => API.post(`/inquiries/quotation-preview/${id}`, payload),
@@ -233,6 +241,13 @@ export const inquiriesApi = {
     API.post('/inquiries/parse-document', payload, { timeout: 150000 }),
   parseText: (payload: { text: string }) => API.post('/inquiries/parse-text', payload),
   delete: (id: string) => API.delete(`/inquiries/${id}`),
+  getLinePricing: (id: string) => API.get(`/inquiries/${id}/line-pricing`),
+  saveProcurementPricing: (id: string, payload: any) =>
+    API.patch(`/inquiries/${id}/procurement-pricing`, payload),
+  saveSalesPricing: (id: string, payload: any) =>
+    API.patch(`/inquiries/${id}/sales-pricing`, payload),
+  previewDecline: (id: string) => API.post(`/inquiries/${id}/decline-preview`),
+  sendDecline: (id: string, payload: any) => API.post(`/inquiries/${id}/decline-email`, payload),
 };
 
 export const productsApi = {
@@ -292,6 +307,31 @@ export const zohoApi = {
   getStatus: () => API.get('/zoho/status'),
 };
 
+export const rolesApi = {
+  me: () => API.get('/auth/me').then(unwrapApiResponse),
+  list: () => API.get('/roles').then(unwrapApiResponse),
+  catalog: () => API.get('/roles/catalog'),
+  assignees: (id: string) => API.get(`/roles/${id}/assignees`).then(unwrapApiResponse),
+  create: (body: {
+    name: string;
+    description?: string;
+    data_scope?: string;
+    permissions: Record<string, boolean>;
+    visibility_scope?: Record<string, string[]>;
+  }) => API.post('/roles', body).then(unwrapApiResponse),
+  update: (
+    id: string,
+    body: {
+      name?: string;
+      description?: string;
+      data_scope?: string;
+      permissions?: Record<string, boolean>;
+      visibility_scope?: Record<string, string[]>;
+    },
+  ) => API.put(`/roles/${id}`, body).then(unwrapApiResponse),
+  remove: (id: string) => API.delete(`/roles/${id}`).then(unwrapApiResponse),
+};
+
 export const activityLogsApi = {
   getAll: (params?: {
     from?: string;
@@ -303,6 +343,12 @@ export const activityLogsApi = {
     mode?: string;
     limit?: number;
   }) => API.get('/activity-logs', { params }),
+  getCounts: (params?: {
+    from?: string;
+    to?: string;
+    salesperson_phone?: string;
+    mode?: string;
+  }) => API.get('/activity-logs/counts', { params }),
 };
 
 export function postAuthLogout(reason: 'manual' | 'session_expired') {
