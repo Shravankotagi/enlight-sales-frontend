@@ -8,6 +8,7 @@
   - **Accessibility**: Includes `motion-reduce:transition-none` and respects operating system reduced motion preferences.
 - `components/DealDetailDrawer.tsx`, `SalesQuotationModal.tsx`, `InquiryPdfModal.tsx`: commercial detail/quotation/PDF interactions.
 - `components/RolePermissionsMatrixModal.tsx`, `components/ZohoPermissionsTable.tsx`: Zoho Books-style granular permissions modal and matrix table.
+- `components/ui/select.tsx`: form dropdown. It opens downward, and opens upward when the list would leave the popup.
 - `components/RoleSelectDropdown.tsx`: employee role dropdown with department styling and manager constraints.
 - `constants/aclConstants.ts`: default permission matrices per role and sub-options (`fill_base_prices`, `team_inquiries`).
 - `components/KnowledgeBaseModal.tsx`: KB management UI.

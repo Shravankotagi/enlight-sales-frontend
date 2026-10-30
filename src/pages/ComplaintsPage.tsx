@@ -23,6 +23,7 @@ import {
   FileText,
   Image as ImageIcon,
   Eye,
+  Trash2,
   ExternalLink,
   Building2,
   ShieldCheck,
@@ -104,6 +105,9 @@ export default function ComplaintsPage() {
   const canViewSalesperson = isSalesManager || isAdmin;
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [complaintPendingDelete, setComplaintPendingDelete] = useState<Complaint | null>(null);
+  const [deletingComplaint, setDeletingComplaint] = useState(false);
+  const canDeleteComplaint = can('complaints.delete');
   const [employees, setEmployees] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1268,6 +1272,18 @@ export default function ComplaintsPage() {
 
               <div className="flex items-center gap-2 shrink-0">
                 {renderStatusBadge(selectedComplaint.status)}
+                {canDeleteComplaint && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!guardAction('complaints.delete')) return;
+                      setComplaintPendingDelete(selectedComplaint);
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg flex items-center gap-1.5 cursor-pointer">
+                    <Trash2 size={13} />
+                    Delete
+                  </button>
+                )}
                 <button
                   onClick={handleCloseComplaintModal}
                   className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors cursor-pointer"
@@ -2192,6 +2208,50 @@ export default function ComplaintsPage() {
                   className="max-h-[70vh] max-w-full object-contain rounded-xl shadow-md mx-auto"
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {complaintPendingDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-[70]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <h3 className="text-base font-bold text-slate-900">Delete this complaint?</h3>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              This removes the complaint for{' '}
+              <span className="font-semibold text-slate-900">{complaintPendingDelete.customer_name || 'this customer'}</span>{' '}
+              from the database. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deletingComplaint}
+                onClick={() => setComplaintPendingDelete(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingComplaint}
+                onClick={async () => {
+                  setDeletingComplaint(true);
+                  try {
+                    await complaintsApi.delete(complaintPendingDelete.id);
+                    toast.success('Complaint deleted');
+                    if (selectedComplaint?.id === complaintPendingDelete.id) {
+                      setSelectedComplaint(null);
+                    }
+                    setComplaintPendingDelete(null);
+                    fetchComplaints(true);
+                  } catch (err: any) {
+                    const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Could not delete this complaint';
+                    toast.error(Array.isArray(errMsg) ? errMsg.join(', ') : errMsg);
+                  } finally {
+                    setDeletingComplaint(false);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl cursor-pointer">
+                {deletingComplaint ? 'Deleting...' : 'Delete complaint'}
+              </button>
             </div>
           </div>
         </div>
