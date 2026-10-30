@@ -419,9 +419,17 @@ export const RolePermissionsMatrixModal: React.FC<
 
         const createdUser = res?.data?.data || res?.data;
         if (createdUser) {
-          setUserList((prev) => [...prev, createdUser]);
+          const { email_sent: _sent, email_notice: _notice, ...user } = createdUser;
+          if (user?.id || user?.employee_id) {
+            setUserList((prev) => [...prev, user]);
+          }
         }
-        showToast(`User ${inviteForm.name} invited successfully!`);
+        const sent = createdUser?.email_sent !== false;
+        showToast(
+          createdUser?.email_notice ||
+            `User ${inviteForm.name} invited successfully!`,
+          !sent,
+        );
       }
 
       setShowInviteModal(false);
