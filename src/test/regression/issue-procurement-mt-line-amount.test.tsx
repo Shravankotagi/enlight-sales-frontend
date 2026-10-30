@@ -103,8 +103,9 @@ describe('procurement per-MT line amount', () => {
     await screen.findAllByText('1,471.80')
     expect(screen.getAllByText('1,471.80').length).toBeGreaterThanOrEqual(2)
     expect(screen.queryByText('60,000.00')).not.toBeInTheDocument()
-    expect(screen.getByText('264.92')).toBeInTheDocument()
-    expect(screen.getByText('1,736.72')).toBeInTheDocument()
+    // Procurement sees the subtotal only, not GST or the grand total.
+    expect(screen.queryByText('264.92')).not.toBeInTheDocument()
+    expect(screen.queryByText('1,736.72')).not.toBeInTheDocument()
     expect(screen.getByDisplayValue('300')).toBeInTheDocument()
     expect(screen.getByDisplayValue('7.359')).toBeInTheDocument()
   })

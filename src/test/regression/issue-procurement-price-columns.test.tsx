@@ -110,8 +110,8 @@ describe('saved price columns', () => {
     await user.click(await screen.findByText('PR-10041'))
 
     expect(await screen.findByDisplayValue('61000')).toBeInTheDocument()
-    expect(screen.queryByText('Transport *')).not.toBeInTheDocument()
-    expect(screen.queryByText('Credit *')).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: /^Transport/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: /^Credit/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save Prices' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Save$/ })).not.toBeInTheDocument()
     expect(screen.getByDisplayValue('HR Coil')).toHaveAttribute('readonly')
@@ -148,7 +148,7 @@ describe('saved price columns', () => {
     await user.click(await screen.findByText('PR-10041'))
 
     expect(await screen.findByDisplayValue('61000')).toBeInTheDocument()
-    expect(screen.getByText('Transport *')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /^Transport/ })).toBeInTheDocument()
   })
 
   it('collapses salesperson price columns into Rate after a wrapped save', async () => {
@@ -180,7 +180,7 @@ describe('saved price columns', () => {
     renderWithProviders(<InquiriesPage />, { route: '/inquiries' })
     await user.click(await screen.findByText('PR-10041'))
 
-    expect(await screen.findByText('Credit *')).toBeInTheDocument()
+    expect(await screen.findByRole('columnheader', { name: /^Credit/ })).toBeInTheDocument()
     const base = await screen.findByPlaceholderText('Enter base price')
     const extras = screen.getAllByPlaceholderText('₹ / MT')
     await user.type(base, '62000')
@@ -189,9 +189,9 @@ describe('saved price columns', () => {
     await user.type(extras[3], '1500')
     await user.click(screen.getByRole('button', { name: 'Save Prices' }))
 
-    expect(await screen.findByRole('columnheader', { name: /Rate/ })).toBeInTheDocument()
+    expect(await screen.findByRole('columnheader', { name: /^Rate/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '65,000.00' })).toBeInTheDocument()
-    expect(screen.queryByText('Transport *')).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: /^Transport/ })).not.toBeInTheDocument()
   })
 
   it('keeps the saved rate when a refresh sends an extraction rate of 0', async () => {

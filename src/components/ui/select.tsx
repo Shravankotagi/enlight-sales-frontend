@@ -22,6 +22,33 @@ export interface SelectProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonE
   chevronClassName?: string;
 }
 
+const MENU_WANT = 240;
+
+/** Open down unless the list would leave the popup, then open up. */
+export function selectMenuPlacement(below: number, above: number, want = MENU_WANT) {
+  const dropUp = below < want && above > below;
+  const room = (dropUp ? above : below) - 12;
+  return { dropUp, maxHeight: Math.max(96, Math.min(want, room)) };
+}
+
+function clipSpace(el: HTMLElement) {
+  const rect = el.getBoundingClientRect();
+  let below = window.innerHeight - rect.bottom;
+  let above = rect.top;
+  let node = el.parentElement;
+  while (node) {
+    const oy = getComputedStyle(node).overflowY;
+    if (oy === 'auto' || oy === 'scroll' || oy === 'hidden') {
+      const box = node.getBoundingClientRect();
+      below = Math.min(below, box.bottom - rect.bottom);
+      above = Math.min(above, rect.top - box.top);
+      break;
+    }
+    node = node.parentElement;
+  }
+  return selectMenuPlacement(below, above);
+}
+
 function extractOptions(children: React.ReactNode): SelectOption[] {
   const options: SelectOption[] = [];
   React.Children.forEach(children, (child) => {
@@ -68,6 +95,8 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
     ref
   ) => {
     const [open, setOpen] = useState(false);
+    const [dropUp, setDropUp] = useState(false);
+    const [menuMax, setMenuMax] = useState(MENU_WANT);
     const containerRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const hiddenSelectRef = useRef<HTMLSelectElement>(null);
@@ -192,7 +221,15 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
           id={id ? `${id}-btn` : undefined}
           type="button"
           disabled={disabled}
-          onClick={() => !disabled && setOpen(!open)}
+          onClick={() => {
+            if (disabled) return;
+            if (!open && containerRef.current) {
+              const place = clipSpace(containerRef.current);
+              setDropUp(place.dropUp);
+              setMenuMax(place.maxHeight);
+            }
+            setOpen(!open);
+          }}
           aria-expanded={open}
           aria-haspopup="listbox"
           className={`w-full flex items-center justify-between text-left transition-all select-none ${
@@ -217,9 +254,11 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
           <div
             ref={listRef}
             role="listbox"
-            className={`absolute top-full mt-1.5 left-0 z-[100] min-w-full w-max max-w-sm max-sm:max-w-[calc(100vw-2rem)] bg-white border border-slate-200/90 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${menuClassName}`}
+            className={`absolute left-0 z-[100] min-w-full w-max max-w-sm max-sm:max-w-[calc(100vw-2rem)] bg-white border border-slate-200/90 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} ${menuClassName}`}
           >
-            <div className="max-h-60 max-sm:max-h-[50dvh] overflow-y-auto p-1 space-y-0.5 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+            <div
+              style={{ maxHeight: menuMax }}
+              className="overflow-y-auto p-1 space-y-0.5 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
               {options.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-slate-400 text-center font-medium">
                   No options available
