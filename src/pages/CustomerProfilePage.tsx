@@ -1624,7 +1624,7 @@ function CustomerProfilePageContent() {
       {/* Edit Customer Profile Modal */}
       {isEditing && (
         <div className="mobile-sheet-overlay fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="mobile-sheet bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto">
+          <div className="mobile-sheet bg-white rounded-2xl max-w-6xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[100vh] my-auto">
             <div className="sheet-header flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Edit2 size={16} className="text-blue-600" />
