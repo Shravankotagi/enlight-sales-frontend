@@ -196,6 +196,7 @@ export const complaintsApi = {
   update: (id: string, data: any) => API.patch(`/kra/complaints/${id}`, data),
   updateStatus: (id: string, status: string, resolution_notes?: string) =>
     API.patch(`/kra/complaints/${id}`, { status, resolution_notes }),
+  delete: (id: string) => API.delete(`/kra/complaints/${id}`),
 };
 
 export const visitsApi = {

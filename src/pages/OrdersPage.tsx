@@ -17,6 +17,7 @@ import {
   Loader2,
   AlertCircle,
   MoreVertical,
+  Trash2,
   RefreshCw,
   Calendar,
   Layers,
@@ -721,6 +722,9 @@ export default function OrdersPage() {
   const [poImageViewerUrl, setPoImageViewerUrl] = useState<string | null>(null);
   const [selectedPoOrder, setSelectedPoOrder] = useState<Order | null>(null);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [orderPendingDelete, setOrderPendingDelete] = useState<Order | null>(null);
+  const [deletingOrder, setDeletingOrder] = useState(false);
+  const canDeleteOrder = can('deals.delete');
   const [loadingPoId, setLoadingPoId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1842,6 +1846,19 @@ export default function OrdersPage() {
                                 )}
                                 <span>{loadingPoId === ord.id ? 'Opening...' : 'View PO'}</span>
                               </button>
+                              {canDeleteOrder && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!guardAction('deals.delete')) return;
+                                    setOpenActionMenuId(null);
+                                    setOrderPendingDelete(ord);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 flex items-center gap-2.5 transition-colors cursor-pointer">
+                                  <Trash2 size={14} className="text-rose-500 shrink-0" />
+                                  <span>Delete</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2791,6 +2808,50 @@ export default function OrdersPage() {
           queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
         }}
       />
+      {orderPendingDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <h3 className="text-base font-bold text-slate-900">Delete this order?</h3>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              This removes the order for{' '}
+              <span className="font-semibold text-slate-900">{orderPendingDelete.customer_name || 'this customer'}</span>{' '}
+              and its line items from the database. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deletingOrder}
+                onClick={() => setOrderPendingDelete(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingOrder}
+                onClick={async () => {
+                  if (!orderPendingDelete) return;
+                  setDeletingOrder(true);
+                  try {
+                    await dealsApi.delete(orderPendingDelete.id);
+                    toast.success('Order deleted');
+                    setOrderPendingDelete(null);
+                    queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+                    queryClient.invalidateQueries({ queryKey: ['deals'] });
+                    queryClient.invalidateQueries({ queryKey: ['all-deals-list'] });
+                  } catch (err: any) {
+                    const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Could not delete this order';
+                    toast.error(Array.isArray(errMsg) ? errMsg.join(', ') : errMsg);
+                  } finally {
+                    setDeletingOrder(false);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl cursor-pointer">
+                {deletingOrder ? 'Deleting...' : 'Delete order'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
