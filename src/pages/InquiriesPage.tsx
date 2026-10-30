@@ -8600,7 +8600,7 @@ export default function InquiriesPage() {
               )}
             </div>
 
-            <form onSubmit={handleCreateInquiry} className="space-y-4">
+            <form autoComplete="off" onSubmit={handleCreateInquiry} className="space-y-4">
               <div className="grid grid-cols-3 gap-3 items-start">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -8615,14 +8615,26 @@ export default function InquiriesPage() {
                     <input
                       id="form-company-name"
                       type="text"
+                      name="inquiry-customer"
+                      autoComplete="off"
                       required
                       placeholder="Type or select company name..."
                       value={formCustomerName}
+                      ref={(node) => {
+                        if (node && document.activeElement !== node) node.readOnly = true;
+                      }}
                       onChange={(e) => {
                         setFormCustomerName(e.target.value);
                         setShowCompanyDropdown(true);
                       }}
-                      onFocus={() => setShowCompanyDropdown(true)}
+                      onFocus={(e) => {
+                        // Chrome still suggests saved companies on a "Company Name" field when autocomplete is off.
+                        e.currentTarget.readOnly = false;
+                        setShowCompanyDropdown(true);
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.readOnly = true;
+                      }}
                       className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
                     />
                     <button
@@ -8721,7 +8733,10 @@ export default function InquiriesPage() {
                 </label>
                 <input
                   id="form-customer-email"
-                  type="email"
+                  type="text"
+                  inputMode="email"
+                  name="inquiry-email"
+                  autoComplete="off"
                   value={formCustomerEmail}
                   onChange={(e) => setFormCustomerEmail(e.target.value)}
                   placeholder="buyer@company.com"
