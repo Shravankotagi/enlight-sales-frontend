@@ -23,6 +23,18 @@ const PRODUCT_CATEGORIES: SteelCategory[] = [
   'Value Added Products',
 ];
 
+function loginErrorText(err: any, fallback: string) {
+  const data = err?.response?.data;
+  const message = Array.isArray(data?.message) ? data.message[0] : data?.message;
+  if (typeof message === 'string' && message && message !== 'Bad Request') {
+    return message;
+  }
+  if (typeof data?.error === 'string' && data.error && data.error !== 'Bad Request') {
+    return data.error;
+  }
+  return fallback;
+}
+
 const BRAND_STATS = [
   { value: '25+', label: 'Steel Products & Grades Available' },
   { value: '20+', label: 'Industrial Sectors Served' },
@@ -117,13 +129,14 @@ export default function LoginPage() {
       if (data.data?.dev_otp) setDevOtp(data.data.dev_otp);
       setStep('otp');
     } catch (err: any) {
-      const msg =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        (err.message === 'Network Error'
-          ? `Unable to reach backend service (${BACKEND_URL}). Please verify backend server is running.`
-          : err.message || 'Unable to connect to backend service.');
-      setError(msg);
+      setError(
+        loginErrorText(
+          err,
+          err.message === 'Network Error'
+            ? `Unable to reach backend service (${BACKEND_URL}). Please verify backend server is running.`
+            : err.message || 'Unable to connect to backend service.',
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -142,13 +155,14 @@ export default function LoginPage() {
       login(data.data.token, data.data.employee);
       navigate('/home', { replace: true });
     } catch (err: any) {
-      const msg =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        (err.message === 'Network Error'
-          ? `Unable to reach backend service (${BACKEND_URL}). Please verify backend server is running.`
-          : err.message || 'Verification failed. Please check backend service.');
-      setError(msg);
+      setError(
+        loginErrorText(
+          err,
+          err.message === 'Network Error'
+            ? `Unable to reach backend service (${BACKEND_URL}). Please verify backend server is running.`
+            : err.message || 'Verification failed. Please check backend service.',
+        ),
+      );
     } finally {
       setLoading(false);
     }
