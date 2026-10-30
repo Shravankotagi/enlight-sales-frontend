@@ -24,6 +24,7 @@
 
 Administrators can inspect and customize individual employee capabilities via a granular permissions editor:
 - **Components**: `RolePermissionsMatrixModal.tsx` hosting `ZohoPermissionsTable.tsx`.
+- **Invite User**: Name, email, and WhatsApp stay in their own form so a browser contact suggestion does not write the Users tab search.
 - **Permission Matrix**: Controls granular actions across functional modules (Inquiries, Deals, Customers, Visits, Complaints, Reports, KRA):
   - View (None, Own, Team, All)
   - Create (boolean)

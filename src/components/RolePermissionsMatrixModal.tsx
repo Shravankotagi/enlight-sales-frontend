@@ -727,8 +727,17 @@ export const RolePermissionsMatrixModal: React.FC<
                 />
                 <input
                   type="text"
+                  name="team-member-filter"
+                  autoComplete="off"
                   value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
+                  onChange={(e) => {
+                    // Browser contact fill also writes this box because the placeholder mentions phone.
+                    if (showInviteModal) {
+                      e.currentTarget.value = userSearch;
+                      return;
+                    }
+                    setUserSearch(e.target.value);
+                  }}
                   placeholder="Search team member by name, ID, or phone..."
                   className="w-full pl-9 pr-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                 />
@@ -933,8 +942,12 @@ export const RolePermissionsMatrixModal: React.FC<
               </button>
             </div>
 
-            {/* Form matching img2 */}
-            <div className="p-6 space-y-4.5">
+            {/* Form matching img2. A real form keeps browser contact fill inside this dialog. */}
+            <form
+              autoComplete="on"
+              className="p-6 space-y-4.5"
+              onSubmit={(e) => e.preventDefault()}
+            >
               {inviteError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs font-medium">
                   {inviteError}
@@ -948,6 +961,8 @@ export const RolePermissionsMatrixModal: React.FC<
                 </label>
                 <input
                   type="text"
+                  name="name"
+                  autoComplete="name"
                   autoFocus
                   value={inviteForm.name}
                   onChange={(e) =>
@@ -965,6 +980,8 @@ export const RolePermissionsMatrixModal: React.FC<
                 </label>
                 <input
                   type="email"
+                  name="email"
+                  autoComplete="email"
                   value={inviteForm.email}
                   onChange={(e) =>
                     setInviteForm((prev) => ({ ...prev, email: e.target.value }))
@@ -981,6 +998,8 @@ export const RolePermissionsMatrixModal: React.FC<
                 </label>
                 <input
                   type="tel"
+                  name="tel"
+                  autoComplete="tel"
                   value={inviteForm.phone}
                   onChange={(e) =>
                     setInviteForm((prev) => ({
@@ -1133,7 +1152,7 @@ export const RolePermissionsMatrixModal: React.FC<
                   )}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
