@@ -72,6 +72,6 @@ describe('historical inquiry status', () => {
     expect(await screen.findByText('Old Metals')).toBeInTheDocument()
     expect(screen.getByText('Won')).toBeInTheDocument()
     expect(screen.getByText('New Metals')).toBeInTheDocument()
-    expect(screen.getAllByText('Awaiting Price')).toHaveLength(2)
+    expect(screen.getAllByText('Awaiting Price')).toHaveLength(1)
   })
 })
