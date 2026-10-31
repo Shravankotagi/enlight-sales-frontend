@@ -33,6 +33,9 @@ import {
   Mail,
   Users,
   User,
+  Package,
+  Factory,
+  Search,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -303,7 +306,8 @@ function CustomerProfilePageContent() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'inquiries' | 'complaints' | 'visits' | 'products'>('overview');
+  const [productFilterTerm, setProductFilterTerm] = useState('');
   const shownTab =
     (activeTab === 'orders' && !canOrders) ||
     (activeTab === 'inquiries' && !canInquiries) ||
@@ -489,6 +493,8 @@ function CustomerProfilePageContent() {
       customer_gst: gstinResult.normalized,
       customer_address: address,
       customer_state: derivedState,
+      industry: customer.industry || '',
+      region: customer.region || derivedState || '',
       assigned_salesperson_phone: customer.assigned_salesperson_phone || '',
       avg_order_frequency_days: customer.avg_order_frequency_days || 30,
       segment: customer.segment || 'new',
@@ -641,6 +647,210 @@ function CustomerProfilePageContent() {
     }
   }, [customer, visits, employeeMap, canVisits]);
 
+  // Aggregated list of products tracked per company across inquiries, won deals, and visits
+  const customerProducts = useMemo(() => {
+    const productsMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        specs: Set<string>;
+        inquiryCount: number;
+        inquiredTonnage: number;
+        orderCount: number;
+        orderedTonnage: number;
+        lastInquiredDate: string | null;
+        lastOrderedDate: string | null;
+        latestDate: string | null;
+        inquiryIds: string[];
+        dealIds: string[];
+      }
+    >();
+
+    const normalizeProductName = (rawName?: string) => {
+      if (!rawName) return '';
+      let n = String(rawName).trim();
+      n = n.replace(/^[-\s*•]+/, '').replace(/[-\s]+$/, '');
+      if (n.length < 2) return '';
+      return n;
+    };
+
+    const getOrInitProduct = (rawName: string) => {
+      const clean = normalizeProductName(rawName);
+      if (!clean) return null;
+      const key = clean.toLowerCase();
+      if (!productsMap.has(key)) {
+        const formatted = clean.charAt(0).toUpperCase() + clean.slice(1);
+        productsMap.set(key, {
+          id: `prod-${key}`,
+          name: formatted,
+          specs: new Set<string>(),
+          inquiryCount: 0,
+          inquiredTonnage: 0,
+          orderCount: 0,
+          orderedTonnage: 0,
+          lastInquiredDate: null,
+          lastOrderedDate: null,
+          latestDate: null,
+          inquiryIds: [],
+          dealIds: [],
+        });
+      }
+      return productsMap.get(key)!;
+    };
+
+    // 1. Process Won Deals / Orders
+    wonDeals.forEach((d: any) => {
+      const dealDate = d.won_at || d.created_at || null;
+      const dealItems = Array.isArray(d.deal_items) ? d.deal_items : [];
+
+      dealItems.forEach((it: any) => {
+        const prodName = it.sku_text || it.product_name || it.description;
+        if (!prodName) return;
+        const entry = getOrInitProduct(prodName);
+        if (!entry) return;
+
+        entry.orderCount += 1;
+        if (d.id && !entry.dealIds.includes(d.id)) {
+          entry.dealIds.push(d.id);
+        }
+
+        const qty = Number(it.quantity) || 0;
+        const unit = String(it.unit || 'MT').toUpperCase();
+        let mtQty = 0;
+        if (unit === 'MT' || unit === 'TON' || unit === 'TONS' || unit === 'METRIC TON') {
+          mtQty = qty;
+        } else if (unit === 'KG' || unit === 'KGS') {
+          mtQty = qty / 1000;
+        } else {
+          mtQty = qty;
+        }
+        entry.orderedTonnage += mtQty;
+
+        if (it.dimensions) entry.specs.add(String(it.dimensions).trim());
+        if (it.grade) entry.specs.add(`Grade: ${String(it.grade).trim()}`);
+        if (it.thickness) entry.specs.add(`${it.thickness}mm`);
+
+        if (dealDate) {
+          if (!entry.lastOrderedDate || new Date(dealDate) > new Date(entry.lastOrderedDate)) {
+            entry.lastOrderedDate = dealDate;
+          }
+          if (!entry.latestDate || new Date(dealDate) > new Date(entry.latestDate)) {
+            entry.latestDate = dealDate;
+          }
+        }
+      });
+    });
+
+    // 2. Process Inquiries
+    inquiries.forEach((inq: any) => {
+      const inqDate = inq.created_at || null;
+      const extraction = inq.ai_extraction_json || {};
+      const lineItems = Array.isArray(extraction.line_items) ? extraction.line_items : [];
+
+      if (lineItems.length > 0) {
+        lineItems.forEach((it: any) => {
+          const prodName = it.sku_text || it.product_name || it.material_description || it.description;
+          if (!prodName) return;
+          const entry = getOrInitProduct(prodName);
+          if (!entry) return;
+
+          entry.inquiryCount += 1;
+          if (inq.id && !entry.inquiryIds.includes(inq.id)) {
+            entry.inquiryIds.push(inq.id);
+          }
+
+          const qty = Number(it.quantity) || 0;
+          const unit = String(it.unit || 'MT').toUpperCase();
+          let mtQty = 0;
+          if (unit === 'MT' || unit === 'TON' || unit === 'TONS' || unit === 'METRIC TON') {
+            mtQty = qty;
+          } else if (unit === 'KG' || unit === 'KGS') {
+            mtQty = qty / 1000;
+          } else {
+            mtQty = qty;
+          }
+          entry.inquiredTonnage += mtQty;
+
+          if (it.thickness) entry.specs.add(`${it.thickness}mm`);
+          if (it.width && it.length) entry.specs.add(`${it.width}x${it.length}`);
+          if (it.grade) entry.specs.add(`Grade: ${String(it.grade).trim()}`);
+          if (it.make) entry.specs.add(`Make: ${String(it.make).trim()}`);
+
+          if (inqDate) {
+            if (!entry.lastInquiredDate || new Date(inqDate) > new Date(entry.lastInquiredDate)) {
+              entry.lastInquiredDate = inqDate;
+            }
+            if (!entry.latestDate || new Date(inqDate) > new Date(entry.latestDate)) {
+              entry.latestDate = inqDate;
+            }
+          }
+        });
+      } else {
+        const reqStr = extraction.product_requirement || inq.raw_text;
+        if (reqStr && typeof reqStr === 'string' && reqStr.trim().length > 1 && reqStr.length < 80) {
+          const entry = getOrInitProduct(reqStr);
+          if (entry) {
+            entry.inquiryCount += 1;
+            if (inq.id && !entry.inquiryIds.includes(inq.id)) {
+              entry.inquiryIds.push(inq.id);
+            }
+            if (inqDate) {
+              if (!entry.lastInquiredDate || new Date(inqDate) > new Date(entry.lastInquiredDate)) {
+                entry.lastInquiredDate = inqDate;
+              }
+              if (!entry.latestDate || new Date(inqDate) > new Date(entry.latestDate)) {
+                entry.latestDate = inqDate;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // 3. Process Visits product details
+    visits.forEach((v: any) => {
+      if (v.product_details && typeof v.product_details === 'string') {
+        const parts = v.product_details
+          .split(/[,;\n]/)
+          .map((p: string) => p.trim())
+          .filter((p: string) => p.length > 1 && p.length < 50);
+        parts.forEach((p: string) => {
+          const entry = getOrInitProduct(p);
+          if (entry) {
+            if (v.monthly_consumption) {
+              entry.specs.add(`Monthly: ${v.monthly_consumption}`);
+            }
+            if (v.visited_at && (!entry.latestDate || new Date(v.visited_at) > new Date(entry.latestDate))) {
+              entry.latestDate = v.visited_at;
+            }
+          }
+        });
+      }
+    });
+
+    return Array.from(productsMap.values())
+      .map(p => ({
+        ...p,
+        specsList: Array.from(p.specs).slice(0, 5),
+        inquiredTonnage: Math.round(p.inquiredTonnage * 100) / 100,
+        orderedTonnage: Math.round(p.orderedTonnage * 100) / 100,
+        status:
+          p.orderCount > 0
+            ? 'Regular Buyer'
+            : p.inquiryCount >= 2
+              ? 'High Interest'
+              : 'Inquired',
+      }))
+      .sort((a, b) => {
+        if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
+        if (b.inquiryCount !== a.inquiryCount) return b.inquiryCount - a.inquiryCount;
+        const timeA = a.latestDate ? new Date(a.latestDate).getTime() : 0;
+        const timeB = b.latestDate ? new Date(b.latestDate).getTime() : 0;
+        return timeB - timeA;
+      });
+  }, [wonDeals, inquiries, visits]);
+
   if (isLoading) {
     return (
       <div className="space-y-6 animate-fade-in pb-12 font-sans">
@@ -763,20 +973,28 @@ function CustomerProfilePageContent() {
                     Rep: {getSalespersonName(customer.assigned_salesperson_phone, customer.assigned_salesperson_name)}
                   </span>
                 )}
+                {customer.industry && (
+                  <span className="font-semibold text-slate-700 inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                    <Factory size={12} className="text-slate-500" />
+                    Industry: {customer.industry}
+                  </span>
+                )}
                 {customer.customer_address && (
                   <span className="inline-flex items-center gap-1 font-medium text-slate-500">
                     <MapPin size={12} className="text-slate-400" />
                     {customer.customer_address}
                   </span>
                 )}
-                {(customer.customer_state ||
+                {(customer.region ||
+                  customer.customer_state ||
                   resolveCustomerState({
                     gstin: customer.customer_gst,
                     address: customer.customer_address,
                   })?.label) && (
                   <span className="font-semibold text-blue-700 inline-flex items-center gap-1 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
-                    State:{' '}
-                    {customer.customer_state ||
+                    Region:{' '}
+                    {customer.region ||
+                      customer.customer_state ||
                       resolveCustomerState({
                         gstin: customer.customer_gst,
                         address: customer.customer_address,
@@ -930,6 +1148,21 @@ function CustomerProfilePageContent() {
           </span>
         </button>
         )}
+
+        <button
+          onClick={() => setActiveTab('products')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${shownTab === 'products'
+            ? 'bg-blue-600 text-white shadow-xs'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}>
+          <Package size={14} />
+          Products
+          <span
+            className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${shownTab === 'products' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
+            {customerProducts.length}
+          </span>
+        </button>
       </div>
 
       {/* Tab 1: Overview Tab */}
@@ -1578,6 +1811,181 @@ function CustomerProfilePageContent() {
         </div>
       )}
 
+      {/* Tab: Products Purchased & Inquired */}
+      {shownTab === 'products' && (
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Package size={18} className="text-blue-600" />
+                Products & Materials ({customerProducts.length})
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Auto-tracked from logged inquiries and confirmed orders for reverse lookup.
+              </p>
+            </div>
+
+            {/* Quick in-tab search for reverse lookup within customer */}
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={14} />
+              <input
+                type="text"
+                placeholder="Search specs, grades, materials..."
+                value={productFilterTerm}
+                onChange={e => setProductFilterTerm(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
+              />
+              {productFilterTerm && (
+                <button
+                  type="button"
+                  onClick={() => setProductFilterTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Metric Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+              <span className="text-xs font-semibold text-slate-500">Tracked Products</span>
+              <p className="text-xl font-bold text-slate-900 mt-0.5">{customerProducts.length}</p>
+            </div>
+            <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-200/80">
+              <span className="text-xs font-semibold text-blue-700">Total Inquired Volume</span>
+              <p className="text-xl font-bold text-blue-900 mt-0.5">
+                {customerProducts.reduce((sum, p) => sum + p.inquiredTonnage, 0).toFixed(1)} MT
+              </p>
+            </div>
+            <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200/80">
+              <span className="text-xs font-semibold text-emerald-700">Total Ordered Volume</span>
+              <p className="text-xl font-bold text-emerald-900 mt-0.5">
+                {customerProducts.reduce((sum, p) => sum + p.orderedTonnage, 0).toFixed(1)} MT
+              </p>
+            </div>
+          </div>
+
+          {customerProducts.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500 font-medium">
+              <Package size={32} className="mx-auto text-slate-300 mb-2" />
+              No products tracked for this customer yet.
+              <p className="text-2xs text-slate-400 mt-1">
+                Products are auto-populated whenever inquiries or purchase orders are recorded.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:bg-white [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500 font-bold bg-slate-50/50">
+                    <th className="py-3 px-3">Sr. No.</th>
+                    <th className="py-3 px-3 min-w-[200px]">Product / Material</th>
+                    <th className="py-3 px-3">Specifications</th>
+                    <th className="py-3 px-3 text-center">Status</th>
+                    <th className="py-3 px-3 text-right">Inquiries</th>
+                    <th className="py-3 px-3 text-right">Orders</th>
+                    <th className="py-3 px-3 whitespace-nowrap">Last Active</th>
+                    <th className="py-3 px-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {customerProducts
+                    .filter(p => {
+                      if (!productFilterTerm.trim()) return true;
+                      const term = productFilterTerm.toLowerCase();
+                      return (
+                        p.name.toLowerCase().includes(term) ||
+                        p.status.toLowerCase().includes(term) ||
+                        p.specsList.some(s => s.toLowerCase().includes(term))
+                      );
+                    })
+                    .map((prod, idx) => {
+                      const statusClass =
+                        prod.status === 'Regular Buyer'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : prod.status === 'High Interest'
+                            ? 'bg-blue-50 text-blue-800 border-blue-200'
+                            : 'bg-slate-100 text-slate-700 border-slate-200';
+
+                      return (
+                        <tr key={prod.id || idx} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3 px-3 text-slate-400 font-medium">{idx + 1}</td>
+                          <td className="py-3 px-3">
+                            <span className="font-bold text-slate-900 text-xs block">{prod.name}</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            {prod.specsList.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 max-w-sm">
+                                {prod.specsList.map((spec, sIdx) => (
+                                  <span
+                                    key={sIdx}
+                                    className="bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded text-2xs font-medium">
+                                    {spec}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 font-medium">Standard</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-2xs font-bold border ${statusClass}`}>
+                              {prod.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <span className="font-bold text-slate-800">
+                              {prod.inquiredTonnage > 0 ? `${prod.inquiredTonnage} MT` : '-'}
+                            </span>
+                            <span className="text-2xs text-slate-400 block font-normal">
+                              {prod.inquiryCount} {prod.inquiryCount === 1 ? 'inquiry' : 'inquiries'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <span className="font-bold text-slate-900">
+                              {prod.orderedTonnage > 0 ? `${prod.orderedTonnage} MT` : '-'}
+                            </span>
+                            <span className="text-2xs text-slate-400 block font-normal">
+                              {prod.orderCount} {prod.orderCount === 1 ? 'order' : 'orders'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                            {prod.latestDate ? safeFormatDate(prod.latestDate) : '-'}
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {prod.inquiryCount > 0 && canInquiries && (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTab('inquiries')}
+                                  className="text-2xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md transition-colors cursor-pointer"
+                                  title="View Inquiries tab">
+                                  Inquiries
+                                </button>
+                              )}
+                              {prod.orderCount > 0 && canOrders && (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTab('orders')}
+                                  className="text-2xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md transition-colors cursor-pointer"
+                                  title="View Orders tab">
+                                  Orders
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {confirmDelete && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
@@ -1810,6 +2218,56 @@ function CustomerProfilePageContent() {
                       })
                     }
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Industry
+                  </label>
+                  <input
+                    type="text"
+                    list="industry-suggestions"
+                    placeholder="e.g. Boilers, Storage Racks, Automobile"
+                    value={editForm.industry || ''}
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        industry: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs text-xs"
+                  />
+                  <datalist id="industry-suggestions">
+                    <option value="Boilers" />
+                    <option value="Storage Racks" />
+                    <option value="Automobile" />
+                    <option value="Fabricator" />
+                    <option value="OEM" />
+                    <option value="PEB / Structure" />
+                    <option value="Tubes & Pipes" />
+                    <option value="Transformer / Electrical" />
+                    <option value="Solar" />
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Region / City
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Pune, Gujarat, Karnataka, Chhattisgarh"
+                    value={editForm.region || ''}
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        region: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs text-xs"
                   />
                 </div>
               </div>

@@ -11,6 +11,8 @@ export type NewCustomerSeed = {
   deliveryLocation?: string;
   email?: string;
   gstNumber?: string;
+  industry?: string;
+  region?: string;
 };
 
 interface NewCustomerModalProps {
@@ -35,6 +37,8 @@ export default function NewCustomerModal({
   const [deliveryLocation, setDeliveryLocation] = useState('');
   const [email, setEmail] = useState('');
   const [gstNumber, setGstNumber] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [region, setRegion] = useState('');
   const [saving, setSaving] = useState(false);
   const [similarityAlert, setSimilarityAlert] = useState<{
     message: string;
@@ -51,6 +55,8 @@ export default function NewCustomerModal({
     setDeliveryLocation(seed?.deliveryLocation || '');
     setEmail(seed?.email || '');
     setGstNumber(seed?.gstNumber || '');
+    setIndustry(seed?.industry || '');
+    setRegion(seed?.region || '');
     setSimilarityAlert(null);
   }, [open, seed]);
 
@@ -109,6 +115,8 @@ export default function NewCustomerModal({
         customer_address: location,
         customer_email: emailVal || undefined,
         customer_gst: gstVal || undefined,
+        industry: industry.trim() || undefined,
+        region: region.trim() || undefined,
         assigned_salesperson_phone: assignedSalespersonPhone || undefined,
         allow_similar: allowSimilar || undefined,
       });
@@ -238,7 +246,45 @@ export default function NewCustomerModal({
               />
             </div>
 
-            {/* Col 1, Row 3: Email (optional) */}
+            {/* Col 1, Row 3: Industry (optional) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-800 mb-1.5">
+                Industry <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                list="new-cust-modal-industry-options"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                placeholder="e.g. Boilers, Storage Racks, Automobile"
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15 transition-all"
+              />
+              <datalist id="new-cust-modal-industry-options">
+                <option value="Boilers" />
+                <option value="Storage Racks" />
+                <option value="Automobile" />
+                <option value="Fabricator" />
+                <option value="OEM" />
+                <option value="PEB / Structure" />
+                <option value="Tubes & Pipes" />
+              </datalist>
+            </div>
+
+            {/* Col 2, Row 3: Region / State (optional) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-800 mb-1.5">
+                Region / State <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                placeholder="e.g. Pune, Gujarat, Karnataka"
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/15 transition-all"
+              />
+            </div>
+
+            {/* Col 1, Row 4: Email (optional) */}
             <div>
               <label className="block text-xs font-semibold text-slate-800 mb-1.5">
                 Email <span className="text-slate-400 font-normal">(optional)</span>
@@ -252,7 +298,7 @@ export default function NewCustomerModal({
               />
             </div>
 
-            {/* Col 2, Row 3: GST Number (optional) */}
+            {/* Col 2, Row 4: GST Number (optional) */}
             <div>
               <label className="block text-xs font-semibold text-slate-800 mb-1.5">
                 GST Number <span className="text-slate-400 font-normal">(optional)</span>

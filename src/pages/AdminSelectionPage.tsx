@@ -7,7 +7,6 @@ import {
   UserPlus,
   X,
   ShieldAlert,
-  FileSpreadsheet,
   LayoutDashboard,
   UserCheck,
   Crown,
@@ -28,7 +27,6 @@ import {
   Boxes,
   PackageSearch,
 } from 'lucide-react';
-import ImportClientsModal from '../components/ImportClientsModal';
 import { RoleSelectDropdown } from '../components/RoleSelectDropdown';
 import { getRoleTemplate, countOverrides } from '../utils/aclConstants';
 import { employeesApi, rolesApi } from '../lib/api';
@@ -92,7 +90,6 @@ export default function AdminSelectionPage() {
   // Add / Edit Modal state
   const [showModal, setShowModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
@@ -591,26 +588,16 @@ export default function AdminSelectionPage() {
                 </>
               )}
 
-              {can('clients.import_csv') && (
-                    <button
-                      onClick={() => setShowImportModal(true)}
-                      className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                      title="Import clients via CSV"
-                    >
-                      <FileSpreadsheet size={15} className="text-emerald-600" />
-                      <span className="hidden sm:inline">Import Clients</span>
-                    </button>
-                  )}
-                  {canCreateStaff && (
-                  <button
-                    onClick={handleOpenAddModal}
-                    className="h-9 flex items-center gap-2 px-3.5 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-indigo-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="Add a new employee or administrator"
-                  >
-                    <UserPlus size={15} className="text-indigo-600" />
-                    <span>Add Member</span>
-                  </button>
-                  )}
+              {canCreateStaff && (
+                <button
+                  onClick={handleOpenAddModal}
+                  className="h-9 flex items-center gap-2 px-3.5 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-indigo-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
+                  title="Add a new employee or administrator"
+                >
+                  <UserPlus size={15} className="text-indigo-600" />
+                  <span>Add Member</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1667,16 +1654,6 @@ export default function AdminSelectionPage() {
         </div>
       )}
 
-      {/* Import Clients Modal */}
-      <ImportClientsModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        salespeople={employees.map((e) => ({
-          name: e.name,
-          phone: e.phone,
-          employee_id: e.employee_id,
-        }))}
-      />
 
       {/* Permanent Delete Confirmation Modal */}
       {employeeToDelete && (

@@ -38,6 +38,7 @@ export type AddCustomerSeed = {
   deliveryLocation: string;
   gstin: string;
   email?: string;
+  industry?: string;
 };
 
 type AddAssignedCustomerDialogProps = {
@@ -45,7 +46,15 @@ type AddAssignedCustomerDialogProps = {
   seed: AddCustomerSeed;
   assignPhone: string;
   onClose: () => void;
-  onSaved: (saved: { companyName: string; mobile: string; deliveryLocation: string; customerState?: string; gstin?: string; email?: string }) => void;
+  onSaved: (saved: {
+    companyName: string;
+    mobile: string;
+    deliveryLocation: string;
+    customerState?: string;
+    gstin?: string;
+    email?: string;
+    industry?: string;
+  }) => void;
 };
 
 export default function AddAssignedCustomerDialog({
@@ -62,6 +71,7 @@ export default function AddAssignedCustomerDialog({
   const [deliveryLocation, setDeliveryLocation] = useState('');
   const [gstin, setGstin] = useState('');
   const [email, setEmail] = useState('');
+  const [industry, setIndustry] = useState('');
   const [customerState, setCustomerState] = useState('');
   const [stateManuallyEdited, setStateManuallyEdited] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,6 +90,7 @@ export default function AddAssignedCustomerDialog({
     setDeliveryLocation(seed.deliveryLocation || '');
     setGstin(seed.gstin || '');
     setEmail(seed.email || '');
+    setIndustry(seed.industry || '');
     setSimilarityAlert(null);
     const initialState = resolveCustomerState({
       gstin: seed.gstin,
@@ -140,6 +151,7 @@ export default function AddAssignedCustomerDialog({
         customer_gst: gstin.trim() || null,
         customer_email: email.trim() || null,
         customer_state: resolvedState || null,
+        industry: industry.trim() || null,
         assigned_salesperson_phone: assignPhone,
         allow_similar: allowSimilar || undefined,
       });
@@ -152,6 +164,7 @@ export default function AddAssignedCustomerDialog({
         customerState: resolvedState || undefined,
         gstin: gstin.trim() || undefined,
         email: email.trim() || undefined,
+        industry: industry.trim() || undefined,
       });
     } catch (err: any) {
       const data = err?.response?.data;
@@ -228,16 +241,37 @@ export default function AddAssignedCustomerDialog({
             className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
           />
         </label>
-        <label className="block text-xs font-semibold text-slate-700">
-          Email <span className="text-slate-400 font-normal">(optional)</span>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="name@company.com"
-            className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <label className="block text-xs font-semibold text-slate-700">
+            Industry <span className="text-slate-400 font-normal">(optional)</span>
+            <input
+              list="assigned-dialog-industry-options"
+              value={industry}
+              onChange={e => setIndustry(e.target.value)}
+              placeholder="e.g. Boilers, Storage Racks"
+              className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <datalist id="assigned-dialog-industry-options">
+              <option value="Boilers" />
+              <option value="Storage Racks" />
+              <option value="Automobile" />
+              <option value="Fabricator" />
+              <option value="OEM" />
+              <option value="PEB / Structure" />
+              <option value="Tubes & Pipes" />
+            </datalist>
+          </label>
+          <label className="block text-xs font-semibold text-slate-700">
+            Email <span className="text-slate-400 font-normal">(optional)</span>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="name@company.com"
+              className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </label>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <label className="block text-xs font-semibold text-slate-700">
             GSTIN

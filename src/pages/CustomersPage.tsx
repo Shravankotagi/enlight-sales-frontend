@@ -17,12 +17,17 @@ import {
   Sparkles,
   UserCheck,
   UserPlus,
+  Factory,
+  MapPin,
+  Package,
+  FileSpreadsheet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
 import SyncBiginButton from '../components/SyncBiginButton';
+import ImportClientsModal from '../components/ImportClientsModal';
 import { Select } from '../components/ui/select';
 
 function HealthBadge({ risk }: { risk: string }) {
@@ -123,6 +128,8 @@ const EMPTY_CUSTOMER = {
   contact_person: '',
   customer_phone: '',
   delivery_location: '',
+  industry: '',
+  region: '',
   customer_email: '',
   customer_gst: '',
 };
@@ -139,6 +146,8 @@ function newCustomerProblems(form: typeof EMPTY_CUSTOMER) {
         ? 'Enter a valid 10-digit mobile number'
         : 'Mobile number is required',
     delivery_location: form.delivery_location.trim() ? '' : 'Delivery location is required',
+    industry: '',
+    region: '',
     customer_email:
       !form.customer_email.trim() || EMAIL_FORMAT.test(form.customer_email.trim())
         ? ''
@@ -157,9 +166,10 @@ export default function CustomersPage() {
   const { effectivePhone, isSalesManager, isAdmin, activeRole, activeMode, can, viewingAs } = useAuth();
   const canViewSalesperson = isSalesManager || isAdmin;
   const showOrderColumns = can('orders.view');
-  const customerColumnCount = showOrderColumns ? 8 : 5;
+  const customerColumnCount = showOrderColumns ? 8 : 6;
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [productSearch, setProductSearch] = useState('');
   const [filterHealth, setFilterHealth] = useState<string>('all');
   const [filterSegment, setFilterSegment] = useState<string>(() => searchParams.get('segment') || 'all');
 
@@ -273,6 +283,7 @@ export default function CustomersPage() {
   };
 
   const [manualRefreshing, setManualRefreshing] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const { data: rawCustomersData = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['customers-churn', effectivePhone, activeRole, activeMode],
@@ -317,6 +328,8 @@ export default function CustomersPage() {
         customer_address: newCustomer.delivery_location.trim(),
         customer_email: newCustomer.customer_email.trim(),
         customer_gst: newCustomer.customer_gst.trim().toUpperCase(),
+        industry: newCustomer.industry.trim() || undefined,
+        region: newCustomer.region.trim() || undefined,
       });
       toast.success('Customer saved');
       setShowNewCustomer(false);
@@ -372,11 +385,22 @@ export default function CustomersPage() {
     const phone = (c?.customer_phone || '').toLowerCase();
     const person = (c?.contact_person || '').toLowerCase();
     const rep = (getSalespersonName(c?.assigned_salesperson_phone, c?.assigned_salesperson_name) || '').toLowerCase();
+    const industry = (c?.industry || '').toLowerCase();
+    const region = (c?.region || c?.customer_state || '').toLowerCase();
+    const productsStr = Array.isArray(c?.tracked_products) ? c.tracked_products.join(' ').toLowerCase() : '';
+
+    const term = searchTerm.toLowerCase();
     const matchesSearch =
-      name.includes(searchTerm.toLowerCase()) ||
-      phone.includes(searchTerm.toLowerCase()) ||
-      person.includes(searchTerm.toLowerCase()) ||
-      rep.includes(searchTerm.toLowerCase());
+      name.includes(term) ||
+      phone.includes(term) ||
+      person.includes(term) ||
+      rep.includes(term) ||
+      industry.includes(term) ||
+      region.includes(term) ||
+      productsStr.includes(term);
+
+    const prodTerm = productSearch.toLowerCase().trim();
+    const matchesProduct = !prodTerm || productsStr.includes(prodTerm);
 
     const risk = (c?.churn_risk || 'active').toLowerCase();
     let matchesHealth = true;
@@ -390,7 +414,7 @@ export default function CustomersPage() {
     if (filterSegment === 'growth') matchesSegment = seg === 'growth';
     if (filterSegment === 'new') matchesSegment = seg === 'new';
 
-    return matchesSearch && matchesHealth && matchesSegment;
+    return matchesSearch && matchesProduct && matchesHealth && matchesSegment;
   });
 
   // Pagination Logic
@@ -401,6 +425,7 @@ export default function CustomersPage() {
 
   const handleClearFilters = () => {
     setSearchTerm('');
+    setProductSearch('');
     setFilterHealth('all');
     setFilterSegment('all');
     setDayPreset('all');
@@ -439,6 +464,16 @@ export default function CustomersPage() {
               title="Refresh">
               <RefreshCw size={15} className={isFetching || manualRefreshing || isLoading ? 'animate-spin text-blue-600' : ''} />
             </button>
+            {can('clients.import_csv') && (
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="h-9 flex items-center gap-2 px-3.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer shrink-0"
+                title="Import clients via CSV"
+              >
+                <FileSpreadsheet size={15} className="text-emerald-600" />
+                <span className="hidden sm:inline">Import Clients</span>
+              </button>
+            )}
             {can('customers.create') && !viewingAs && (
               <button
                 onClick={() => {
@@ -516,6 +551,31 @@ export default function CustomersPage() {
                   onClick={() => setSearchTerm('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
                   title="Clear Search">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Product Reverse Lookup Search */}
+            <div className="relative w-full sm:w-60">
+              <Package className="absolute left-3 top-2.5 text-blue-600" size={15} />
+              <input
+                type="text"
+                placeholder="Product Reverse Lookup..."
+                value={productSearch}
+                onChange={e => {
+                  setProductSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium placeholder:text-slate-400"
+                title="Search customers who buy or inquired about a specific product"
+              />
+              {productSearch && (
+                <button
+                  type="button"
+                  onClick={() => setProductSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                  title="Clear Product Filter">
                   <X size={14} />
                 </button>
               )}
@@ -609,23 +669,21 @@ export default function CustomersPage() {
 
       {/* 4. Customer Listing Data Table */}
       <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
-        <div className={`flex-1 min-h-0 overflow-x-auto ${!isLoading && filteredCustomers.length === 0 ? 'flex flex-col' : ''}`}>
-          <table className="w-full text-left text-sm text-slate-700">
+        <div className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${!isLoading && filteredCustomers.length === 0 ? 'flex flex-col' : ''}`}>
+          <table className="w-full text-center text-sm text-slate-700 table-auto">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="px-4 py-3.5 text-center whitespace-nowrap w-16">Sr. No.</th>
-                <th className="px-5 py-3.5 min-w-[220px] sticky left-0 bg-slate-50 z-10">Customer</th>
-                <th className="px-4 py-3.5 min-w-[140px]">Segment</th>
+                <th className="px-2 py-3 text-center whitespace-nowrap w-12">Sr. No.</th>
+                <th className="px-3 py-3 text-center min-w-[150px]">Customer</th>
+                <th className="px-2 py-3 text-center min-w-[85px]">Segment</th>
                 {showOrderColumns && (
-                  <th className="px-4 py-3.5 min-w-[170px]">Order Activity</th>
+                  <th className="px-2 py-3 text-center min-w-[105px]">Order Activity</th>
                 )}
-                <th className="px-4 py-3.5 min-w-[140px]">Health</th>
+                <th className="px-2 py-3 text-center min-w-[120px]">Health</th>
+                <th className="px-2 py-3 text-center min-w-[95px]">Industry</th>
+                <th className="px-2 py-3 text-center min-w-[110px]">Region</th>
                 {showOrderColumns && (
-                  <th className="px-4 py-3.5 text-center min-w-[100px]">Orders</th>
-                )}
-                <th className="px-4 py-3.5 text-center min-w-[120px]">Open Issues</th>
-                {showOrderColumns && (
-                  <th className="px-5 py-3.5 text-right min-w-[140px]">Total Tonnage</th>
+                  <th className="px-2 py-3 text-center min-w-[95px]">Total Tonnage</th>
                 )}
               </tr>
             </thead>
@@ -642,7 +700,6 @@ export default function CustomersPage() {
                   const serialNum = (currentPage - 1) * pageSize + idx + 1;
                   const salespersonName = getSalespersonName(c.assigned_salesperson_phone, c.assigned_salesperson_name);
                   const segment = deriveSegment(c);
-                  const openIssuesCount = Number(c.open_complaints || 0);
 
                   return (
                     <tr
@@ -662,31 +719,60 @@ export default function CustomersPage() {
                       onClick={() => navigate(`/customers/${c.id}?from=customers`, { state: { from: 'customers' } })}
                       className="hover:bg-slate-50/90 transition-colors group cursor-pointer">
                       {/* # Serial Number */}
-                      <td className="px-4 py-3.5 text-xs text-slate-400 font-medium text-center">
+                      <td className="px-2 py-2.5 text-xs text-slate-400 font-medium text-center">
                         {serialNum}
                       </td>
 
                       {/* 1. Customer Column */}
-                      <td className="px-5 py-3.5 sticky left-0 bg-white z-10">
-                        <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
+                      <td className="px-3 py-2.5 text-center">
+                        <div className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors text-center">
                           {c.customer_name || 'Customer'}
                         </div>
                         {canViewSalesperson && salespersonName && (
-                          <div className="text-xs text-slate-500 font-medium inline-flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                          <div className="text-xs text-slate-500 font-medium inline-flex items-center justify-center gap-1 mt-0.5 whitespace-nowrap">
                             <UserCheck size={12} className="text-slate-400 shrink-0" />
                             Rep: {salespersonName}
+                          </div>
+                        )}
+                        {Array.isArray(c.tracked_products) && c.tracked_products.length > 0 && (
+                          <div className="flex flex-wrap items-center justify-center gap-1 mt-1 max-w-xs mx-auto">
+                            {c.tracked_products.slice(0, 2).map((p: string, pIdx: number) => {
+                              const isMatch =
+                                (productSearch && p.toLowerCase().includes(productSearch.toLowerCase())) ||
+                                (searchTerm && p.toLowerCase().includes(searchTerm.toLowerCase()));
+                              return (
+                                <span
+                                  key={pIdx}
+                                  className={`text-2xs px-1.5 py-0.2 rounded-md font-medium truncate max-w-[120px] ${
+                                    isMatch
+                                      ? 'bg-blue-100 text-blue-800 font-bold border border-blue-300'
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                  title={p}
+                                >
+                                  {p}
+                                </span>
+                              );
+                            })}
+                            {c.tracked_products.length > 2 && (
+                              <span className="text-2xs text-slate-400 font-medium">
+                                +{c.tracked_products.length - 2} more
+                              </span>
+                            )}
                           </div>
                         )}
                       </td>
 
                       {/* 2. Segment Column */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <SegmentBadge segment={segment} />
+                      <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                        <div className="flex justify-center">
+                          <SegmentBadge segment={segment} />
+                        </div>
                       </td>
 
                       {showOrderColumns && (
-                      <td className="px-4 py-3.5 text-xs">
-                        <div className="font-semibold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
+                      <td className="px-2 py-2.5 text-center text-xs">
+                        <div className="font-semibold text-slate-800 flex items-center justify-center gap-1.5 whitespace-nowrap">
                           <Calendar size={13} className="text-slate-400 shrink-0" />
                           {c.last_order_date
                             ? new Date(c.last_order_date).toLocaleDateString('en-IN', {
@@ -696,42 +782,49 @@ export default function CustomersPage() {
                             })
                             : '-'}
                         </div>
-                        <div className="text-slate-500 font-medium text-[11px] mt-0.5 whitespace-nowrap">
+                        <div className="text-slate-500 font-medium text-[11px] mt-0.5 whitespace-nowrap text-center">
                           Freq: {c.avg_order_frequency_days || 30}d
                         </div>
                       </td>
                       )}
 
-                      {/* 4. Health Column */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <HealthBadge risk={c.churn_risk} />
+                      {/* 4. Health Column - Center Aligned */}
+                      <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                        <div className="flex justify-center">
+                          <HealthBadge risk={c.churn_risk} />
+                        </div>
                       </td>
 
-                      {showOrderColumns && (
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <span className="text-xs font-semibold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg">
-                          {c.total_orders ?? 0} {Number(c.total_orders) === 1 ? 'Order' : 'Orders'}
-                        </span>
-                      </td>
-                      )}
-
-                      {/* 6. Open Issues Column */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        {openIssuesCount > 0 ? (
-                          <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
-                            <AlertTriangle size={12} className="text-amber-600 shrink-0" />
-                            {openIssuesCount} Open {openIssuesCount === 1 ? 'Issue' : 'Issues'}
-                          </span>
+                      {/* 5. Industry Column (replaces Orders) */}
+                      <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                        {c.industry ? (
+                          <div className="flex justify-center">
+                            <span className="text-xs font-semibold text-slate-800 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-lg inline-flex items-center gap-1 capitalize">
+                              <Factory size={12} className="text-slate-500 shrink-0" />
+                              {c.industry}
+                            </span>
+                          </div>
                         ) : (
-                          <span className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
-                            <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
-                            0 Issues
-                          </span>
+                          <span className="text-xs text-slate-400 font-medium text-center inline-block">-</span>
+                        )}
+                      </td>
+
+                      {/* 6. Region Column (replaces Open Issues) */}
+                      <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                        {c.region || c.customer_state ? (
+                          <div className="flex justify-center">
+                            <span className="text-xs font-semibold text-blue-800 bg-blue-50/80 border border-blue-200/80 px-2 py-0.5 rounded-lg inline-flex items-center gap-1">
+                              <MapPin size={12} className="text-blue-500 shrink-0" />
+                              {c.region || c.customer_state}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400 font-medium text-center inline-block">-</span>
                         )}
                       </td>
 
                       {showOrderColumns && (
-                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                      <td className="px-2 py-2.5 text-center whitespace-nowrap">
                         <span className="font-bold text-slate-900 text-sm">
                           {formatTonnage(c.total_tonnage)}
                         </span>
@@ -790,6 +883,8 @@ export default function CustomersPage() {
                   ['contact_person', 'Contact Person', true, 'e.g. Ravi Kumar'],
                   ['customer_phone', 'Mobile Number', true, '9876543210'],
                   ['delivery_location', 'Delivery Location', true, 'e.g. Chakan, Pune'],
+                  ['industry', 'Industry', false, 'e.g. Boilers, Storage Racks, Automobile'],
+                  ['region', 'Region / State', false, 'e.g. Pune, Gujarat, Karnataka, Chhattisgarh'],
                   ['customer_email', 'Email', false, 'name@company.com'],
                   ['customer_gst', 'GST Number', false, '29ABCDE1234F1Z5'],
                 ] as const
@@ -837,6 +932,21 @@ export default function CustomersPage() {
           </div>
         </div>
       )}
+      {/* Import Clients Modal */}
+      <ImportClientsModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        salespeople={rawEmployees.map((e: any) => ({
+          name: e.name,
+          phone: e.phone,
+          employee_id: e.employee_id || e.id,
+        }))}
+        onSuccess={() => {
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ['customer-names-list'] });
+          queryClient.invalidateQueries({ queryKey: ['customers-churn'] });
+        }}
+      />
     </div>
   );
 }
