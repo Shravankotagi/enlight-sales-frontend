@@ -114,8 +114,6 @@ export default function LoginPage() {
       ? 'Your account has been deactivated. Please contact your admin.'
       : '',
   );
-  const [devOtp, setDevOtp] = useState('');
-
   const handleRequestOtp = async () => {
     if (!phone || phone.replace(/\D/g, '').length < 10) {
       setError('Please enter a valid 10-digit mobile number');
@@ -124,9 +122,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await authApi.requestOtp(phone);
-      const data = res.data;
-      if (data.data?.dev_otp) setDevOtp(data.data.dev_otp);
+      await authApi.requestOtp(phone);
       setStep('otp');
     } catch (err: any) {
       setError(
@@ -376,14 +372,6 @@ export default function LoginPage() {
                     <strong className="text-white font-mono">+91 {phone}</strong>
                   </p>
 
-                  {devOtp && (
-                    <div className="mt-3.5 p-3.5 bg-white/95 border border-white rounded-xl text-slate-900 text-xs sm:text-sm flex items-center justify-between shadow-sm">
-                      <span className="font-semibold text-slate-700">Testing Mode Active:</span>
-                      <span className="font-mono text-sm sm:text-base font-bold bg-blue-100 px-2.5 py-0.5 rounded-md text-blue-950">
-                        {devOtp}
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 {error && (
