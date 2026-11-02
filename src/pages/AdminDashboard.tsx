@@ -9,7 +9,7 @@ import {
 } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { formatLocalDate } from '../utils/dateUtils';
+import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
@@ -104,13 +104,13 @@ export default function AdminDashboard() {
   const { setViewingAs } = useAuth();
   const [selectedPhone, setSelectedPhone] = useState<string>('');
 
-  const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'all',
-    from: '2000-01-01',
+  const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
+    preset: '7_days',
+    from: getDaysAgo(7),
     to: formatLocalDate(),
-  });
+  }));
 
-  const fromDate = dateRange.from || '2000-01-01';
+  const fromDate = dateRange.from || getDaysAgo(7);
   const toDate = dateRange.to || formatLocalDate();
 
   useEffect(() => {

@@ -46,13 +46,13 @@ describe('DateFilterControl', () => {
     expect(onChange).toHaveBeenLastCalledWith({ preset: 'custom', from: '2026-10-05', to: '2026-10-05' })
   })
 
-  it('offers a Clear Filter button that resets to All Time', () => {
+  it('offers a Clear Filter button that resets to initial preset', () => {
     const onChange = vi.fn()
     render(<DateFilterControl onChange={onChange} />)
 
     selectPreset('this_month')
     fireEvent.click(screen.getByRole('button', { name: 'Clear Filter' }))
 
-    expect(onChange).toHaveBeenLastCalledWith({ preset: 'all', from: '2000-01-01', to: '2026-10-09' })
+    expect(onChange).toHaveBeenLastCalledWith({ preset: '7_days', from: '2026-10-02', to: '2026-10-09' })
   })
 })
