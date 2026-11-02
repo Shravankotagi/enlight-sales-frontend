@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, keepPreviousData } from '@tanstack/react-query';
+import { queryKeys, normalizeListResponse } from '../lib/queryKeys';
 import {
   MapPin,
   Plus,
@@ -192,7 +193,6 @@ export default function VisitsPage() {
   const [visits, setVisits] = useState<CustomerVisit[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [filterFollowup, setFilterFollowup] = useState(() => searchParams.get('followup') || 'all');
@@ -289,34 +289,62 @@ export default function VisitsPage() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeActionMenuId]);
 
-  // Fetch employees list for salesperson name mapping
-  useEffect(() => {
-    if (canViewSalesperson) {
-      employeesApi
-        .getAll()
-        .then(res => {
-          const raw = res?.data;
-          const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-          setEmployees(list);
-        })
-        .catch(() => setEmployees([]));
-    }
-  }, [canViewSalesperson]);
+  // Fetch visits list with React Query caching
+  const {
+    data: visitsRes,
+    isLoading: isVisitsLoading,
+    isFetching: isVisitsFetching,
+  } = useQuery({
+    queryKey: ['visits-list', effectivePhone, dateRange.from, dateRange.to, activeMode, activeRole],
+    queryFn: async () => {
+      const params: any = {};
+      if (dateRange.from) params.from = dateRange.from;
+      if (dateRange.to) params.to = dateRange.to;
+      if (effectivePhone) params.salesperson_phone = effectivePhone;
+      if (activeMode) params.mode = activeMode;
+      const res = await visitsApi.getAll(params);
+      const raw = res?.data;
+      return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData,
+  });
 
-  // Fetch customers list for combobox & autofill
   useEffect(() => {
-    customersApi
-      .getAll()
-      .then(res => {
-        const raw = res?.data;
-        const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-        setCustomers(list);
-      })
-      .catch(err => {
-        console.error('Error fetching customers directory:', err);
-        setCustomers([]);
-      });
-  }, []);
+    if (visitsRes) {
+      setVisits(visitsRes);
+    }
+  }, [visitsRes]);
+
+  const loading = isVisitsLoading && visits.length === 0;
+
+  // Fetch employees list for salesperson name mapping with React Query caching
+  const { data: employeesRes = [] } = useQuery({
+    queryKey: queryKeys.employeesDirectory,
+    queryFn: () => employeesApi.getAll().then(r => normalizeListResponse(r.data)).catch(() => []),
+    staleTime: 5 * 60 * 1000,
+    enabled: canViewSalesperson,
+  });
+
+  useEffect(() => {
+    if (employeesRes) {
+      setEmployees(Array.isArray(employeesRes) ? employeesRes : []);
+    }
+  }, [employeesRes]);
+
+  // Fetch customers list for combobox & autofill with React Query caching
+  const { data: customersRes = [] } = useQuery({
+    queryKey: ['customers-directory-list'],
+    queryFn: () => customersApi.getAll().then(r => normalizeListResponse(r.data)).catch(() => []),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (customersRes) {
+      setCustomers(Array.isArray(customersRes) ? customersRes : []);
+    }
+  }, [customersRes]);
 
   const employeeMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -891,25 +919,8 @@ export default function VisitsPage() {
   const [editGpsAccuracy, setEditGpsAccuracy] = useState<number | null>(null);
   const [editAttachments, setEditAttachments] = useState<VisitAttachment[]>([]);
 
-  const fetchVisits = async (isBackground?: boolean | any) => {
-    const silent = isBackground === true;
-    try {
-      if (!silent) setLoading(true);
-      const params: any = {};
-      if (dateRange.from) params.from = dateRange.from;
-      if (dateRange.to) params.to = dateRange.to;
-      if (effectivePhone) params.salesperson_phone = effectivePhone;
-      if (activeMode) params.mode = activeMode;
-      const res = await visitsApi.getAll(params);
-      const raw = res?.data;
-      const list = Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
-      setVisits(list);
-    } catch (err) {
-      console.error('Error fetching visits:', err);
-      if (!silent) setVisits([]);
-    } finally {
-      if (!silent) setLoading(false);
-    }
+  const fetchVisits = async (_isBackground?: boolean | any) => {
+    await queryClient.invalidateQueries({ queryKey: ['visits-list'] });
   };
 
   const confirmDeleteVisit = async () => {
@@ -920,7 +931,7 @@ export default function VisitsPage() {
       toast.success('Visit deleted');
       if (selectedVisit?.id === visitPendingDelete.id) setSelectedVisit(null);
       setVisitPendingDelete(null);
-      await fetchVisits(true);
+      await fetchVisits();
     } catch (err: any) {
       const errMsg = err?.response?.data?.message || err?.message || 'Could not delete this visit';
       toast.error(Array.isArray(errMsg) ? errMsg.join(', ') : errMsg);
@@ -930,36 +941,17 @@ export default function VisitsPage() {
   };
 
   useEffect(() => {
-    fetchVisits(false);
-  }, [dateRange, effectivePhone, activeRole, activeMode]);
-
-  useEffect(() => {
     const handleDbChange = (e: any) => {
       const { table } = e.detail || {};
       if (table === 'customer_visits') {
-        fetchVisits(true);
+        void queryClient.invalidateQueries({ queryKey: ['visits-list'] });
       }
     };
     window.addEventListener('enlight-db-change', handleDbChange);
-
-    // 15s silent background polling fail-safe
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchVisits(true);
-      }
-    }, 15000);
-
-    const handleFocus = () => {
-      fetchVisits(true);
-    };
-    window.addEventListener('focus', handleFocus);
-
     return () => {
       window.removeEventListener('enlight-db-change', handleDbChange);
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
     };
-  }, [dateRange, effectivePhone, activeRole, activeMode]);
+  }, [queryClient]);
 
   const sendVisitCode = async () => {
     const errors = validateNewVisitForm(newVisitInput(), { requireOtp: false });
@@ -1549,7 +1541,7 @@ export default function VisitsPage() {
               onClick={fetchVisits}
               className="h-9 w-9 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl transition-all shadow-2xs flex items-center justify-center cursor-pointer disabled:opacity-60 shrink-0"
               title="Refresh">
-              <RefreshCw size={15} className={loading ? 'animate-spin text-blue-600' : ''} />
+              <RefreshCw size={15} className={isVisitsFetching ? 'animate-spin text-blue-600' : ''} />
             </button>
             {can('visits.log') && (
               <button
