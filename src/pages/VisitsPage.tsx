@@ -306,8 +306,8 @@ export default function VisitsPage() {
       const raw = res?.data;
       return Array.isArray(raw) ? raw : (raw?.data && Array.isArray(raw.data) ? raw.data : []);
     },
-    staleTime: 30 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
 
@@ -317,7 +317,13 @@ export default function VisitsPage() {
     }
   }, [visitsRes]);
 
-  const loading = isVisitsLoading && visits.length === 0;
+  const safeVisits = useMemo(() => {
+    if (Array.isArray(visits) && visits.length > 0) return visits;
+    if (Array.isArray(visitsRes) && visitsRes.length > 0) return visitsRes;
+    return [];
+  }, [visits, visitsRes]);
+
+  const loading = (isVisitsLoading || isVisitsFetching) && safeVisits.length === 0;
 
   // Fetch employees list for salesperson name mapping with React Query caching
   const { data: employeesRes = [] } = useQuery({
@@ -391,7 +397,7 @@ export default function VisitsPage() {
       });
     });
 
-    visits.forEach(v => {
+    safeVisits.forEach(v => {
       const rawName = (v?.customer_name || '').trim();
       if (!rawName) return;
       const key = rawName.toLowerCase();
@@ -568,7 +574,7 @@ export default function VisitsPage() {
   // Auto-open requested visit modal if navigated with ?visitId=... or ?id=...
   useEffect(() => {
     if (!targetVisitId || autoOpenedVisitRef.current === targetVisitId) return;
-    const found = visits.find(
+    const found = safeVisits.find(
       (v) => String(v.id) === targetVisitId || String(v.id).includes(targetVisitId),
     );
     if (found) {
@@ -576,7 +582,7 @@ export default function VisitsPage() {
       if (returnTo) setModalReturnTo(returnTo);
       setSelectedVisit(found);
       setIsEditing(false);
-    } else if (visits.length > 0) {
+    } else if (safeVisits.length > 0) {
       visitsApi
         .getAll()
         .then((res) => {
@@ -595,7 +601,7 @@ export default function VisitsPage() {
           autoOpenedVisitRef.current = targetVisitId;
         });
     }
-  }, [targetVisitId, visits, returnTo]);
+  }, [targetVisitId, safeVisits, returnTo]);
 
   // Create Form state
   const [formCustomerName, setFormCustomerName] = useState('');
@@ -1362,8 +1368,6 @@ export default function VisitsPage() {
       }
     }
   };
-
-  const safeVisits = Array.isArray(visits) ? visits : [];
 
   // 1. Base scoped visits: filtered by date range, salesperson dropdown, and search text
   const baseScopedVisits = useMemo(() => {
