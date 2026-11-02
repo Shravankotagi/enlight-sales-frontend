@@ -999,7 +999,7 @@ export default function VisitsPage() {
       const res = await visitsApi.verifyVisitOtp(formContactPhone, otpCode.trim());
       const body = res?.data?.data || res?.data;
       if (!body?.verification_token) {
-        setOtpNotice('That code is incorrect.');
+        setOtpNotice('Verification code is incorrect.');
         setOtpVerified(false);
         return;
       }
@@ -1008,10 +1008,15 @@ export default function VisitsPage() {
       setOtpNotice('Phone verified.');
       setFormErrors(prev => ({ ...prev, otp: false }));
     } catch (err: any) {
-      const message = err?.response?.data?.message || 'That code is incorrect.';
+      const message = err?.response?.data?.message || 'Verification code is incorrect.';
       setOtpVerified(false);
       setVerificationToken('');
-      setOtpNotice(Array.isArray(message) ? message.join(' ') : String(message));
+      const text = Array.isArray(message) ? message.join(' ') : String(message);
+      setOtpNotice(
+        /that code is incorrect|verification code is incorrect/i.test(text)
+          ? 'Verification code is incorrect.'
+          : text,
+      );
     } finally {
       setOtpSending(false);
     }
@@ -3050,7 +3055,17 @@ export default function VisitsPage() {
                         </button>
                       </div>
                       {otpNotice && (
-                        <p className={`text-[11px] font-semibold ${otpVerified ? 'text-emerald-700' : 'text-slate-600'}`}>{otpNotice}</p>
+                        <p
+                          className={`text-[11px] font-semibold ${
+                            otpVerified
+                              ? 'text-emerald-700'
+                              : /incorrect|locked|expired|failed|invalid|error/i.test(otpNotice)
+                              ? 'text-red-600'
+                              : 'text-slate-600'
+                          }`}
+                        >
+                          {otpNotice}
+                        </p>
                       )}
                       {formErrors.otp && (
                         <p className="text-[11px] text-rose-500 font-semibold">{String(formErrors.otp)}</p>
