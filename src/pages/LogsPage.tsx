@@ -56,15 +56,15 @@ export default function LogsPage() {
   const [actionType, setActionType] = useState<ActionFilter>('all');
   const [authPhone, setAuthPhone] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [datePreset, setDatePreset] = useState<FilterPreset>('7_days');
+  const [datePreset, setDatePreset] = useState<FilterPreset>('all');
   const [showCustomDate, setShowCustomDate] = useState(false);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
-  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(() => ({
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
-  }));
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
+    from: undefined,
+    to: undefined,
+  });
 
   const handleDatePresetChange = (newPreset: FilterPreset) => {
     setDatePreset(newPreset);
@@ -104,15 +104,15 @@ export default function LogsPage() {
   const handleClearAllFilters = () => {
     setSearchQuery('');
     setModuleFilter('All');
-    setDatePreset('7_days');
+    setDatePreset('all');
     setShowCustomDate(false);
     setActionType('all');
     setAuthPhone('');
     setCustomFrom('');
     setCustomTo('');
     setDateRange({
-      from: getDaysAgo(7),
-      to: formatLocalDate(),
+      from: undefined,
+      to: undefined,
     });
   };
 
@@ -504,7 +504,7 @@ export default function LogsPage() {
           )}
 
           {/* 4. Clear Filter Button (4th Position) */}
-          {(searchQuery || moduleFilter !== 'All' || datePreset !== '7_days' || actionType !== 'all' || authPhone) && (
+          {(searchQuery || moduleFilter !== 'All' || datePreset !== 'all' || actionType !== 'all' || authPhone) && (
             <button
               type="button"
               onClick={handleClearAllFilters}

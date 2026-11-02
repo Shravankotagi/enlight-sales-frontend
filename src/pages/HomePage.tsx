@@ -211,7 +211,7 @@ export default function HomePage() {
   };
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
-  const [dayPreset, setDayPreset] = useState('7_days');
+  const [dayPreset, setDayPreset] = useState('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -232,11 +232,11 @@ export default function HomePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const [dateRange, setDateRange] = useState<DateRange>(() => ({
-    preset: '7_days',
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
-  }));
+  const [dateRange, setDateRange] = useState<DateRange>({
+    preset: 'all',
+    from: undefined,
+    to: undefined,
+  });
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -264,11 +264,11 @@ export default function HomePage() {
   };
 
   const handleClearFilter = () => {
-    setDayPreset('7_days');
+    setDayPreset('all');
     setShowCustomDate(false);
     setCustomFrom('');
     setCustomTo('');
-    setDateRange({ preset: '7_days', from: getDaysAgo(7), to: formatLocalDate() });
+    setDateRange({ preset: 'all', from: undefined, to: undefined });
   };
 
   const [activeBarHover, setActiveBarHover] = useState<number | null>(null);
@@ -1064,7 +1064,7 @@ export default function HomePage() {
           )}
 
           {/* Clear Filter */}
-          {dayPreset !== '7_days' && (
+          {dayPreset !== 'all' && (
             <button
               type="button"
               onClick={handleClearFilter}

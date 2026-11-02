@@ -356,11 +356,11 @@ function KRASheetModal({ kraNumber, sheet, isLoading, onClose }: { kraNumber: nu
 
 export default function KRADashboard() {
   const { effectivePhone } = useAuth();
-  const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
-    preset: '7_days',
-    from: getDaysAgo(7),
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: '30_days',
+    from: getDaysAgo(30),
     to: formatLocalDate(),
-  }));
+  });
   const [activeKraModal, setActiveKraModal] = useState<number | null>(null);
 
   const { data, isLoading, error, refetch: refetchDashboard } = useQuery({

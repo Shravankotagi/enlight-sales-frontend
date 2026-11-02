@@ -2006,16 +2006,16 @@ export default function InquiriesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 25;
 
-  const [dayPreset, setDayPreset] = useState<string>("7_days");
+  const [dayPreset, setDayPreset] = useState<string>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [showCustomDate, setShowCustomDate] = useState(false);
 
-  const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
-    preset: "7_days" as any,
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
-  }));
+  const [dateRange, setDateRange] = useState<DateFilterRange>({
+    preset: "all" as any,
+    from: undefined,
+    to: undefined,
+  });
 
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [subMenuInqId, setSubMenuInqId] = useState<string | null>(null);
@@ -2175,14 +2175,14 @@ export default function InquiriesPage() {
   const handleClearAllFilters = () => {
     setSearchTerm("");
     setFilterStatus("all");
-    setDayPreset("7_days");
+    setDayPreset("all");
     setShowCustomDate(false);
     setCustomFrom("");
     setCustomTo("");
     setDateRange({
-      preset: "7_days" as any,
-      from: getDaysAgo(7),
-      to: formatLocalDate(),
+      preset: "all" as any,
+      from: undefined,
+      to: undefined,
     });
     setCurrentPage(1);
     setOpenActionMenuId(null);
@@ -5385,7 +5385,7 @@ export default function InquiriesPage() {
             </Select>
 
             {/* 4. Clear Filter Button */}
-            {(searchTerm || filterStatus !== "all" || dayPreset !== "7_days") && (
+            {(searchTerm || filterStatus !== "all" || dayPreset !== "all") && (
               <button
                 type="button"
                 onClick={handleClearAllFilters}

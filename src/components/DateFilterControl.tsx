@@ -47,7 +47,7 @@ interface DateFilterControlProps {
   resetKey?: number | string;
 }
 
-export default function DateFilterControl({ onChange, initialPreset = '7_days', value, resetKey }: DateFilterControlProps) {
+export default function DateFilterControl({ onChange, initialPreset = 'all', value, resetKey }: DateFilterControlProps) {
   const effectivePreset = initialPreset;
   const [preset, setPreset] = useState<FilterPreset>(value?.preset || effectivePreset);
   const [showCustom, setShowCustom] = useState((value?.preset || effectivePreset) === 'custom');
@@ -216,10 +216,10 @@ export default function DateFilterControl({ onChange, initialPreset = '7_days', 
       )}
 
       {/* Clear Filter Button */}
-      {preset !== initialPreset && (
+      {preset !== 'all' && (
         <button
           type="button"
-          onClick={() => handleSelectPreset(initialPreset)}
+          onClick={() => handleSelectPreset('all')}
           className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer flex items-center"
         >
           Clear Filter

@@ -118,15 +118,15 @@ export default function ComplaintsPage() {
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Date Filter Presets
-  const [dayPreset, setDayPreset] = useState<string>('7_days');
+  const [dayPreset, setDayPreset] = useState<string>('all');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
   const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
 
-  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(() => ({
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
-  }));
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
+    from: undefined,
+    to: undefined,
+  });
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -189,13 +189,13 @@ export default function ComplaintsPage() {
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterStatus('all');
-    setDayPreset('7_days');
+    setDayPreset('all');
     setShowCustomDate(false);
     setCustomFrom('');
     setCustomTo('');
     setDateRange({
-      from: getDaysAgo(7),
-      to: formatLocalDate(),
+      from: undefined,
+      to: undefined,
     });
     setCurrentPage(1);
   };
@@ -1082,7 +1082,7 @@ export default function ComplaintsPage() {
           </Select>
 
           {/* 4. Clear Filter Button */}
-          {(searchTerm || filterStatus !== 'all' || dayPreset !== '7_days') && (
+          {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
             <button
               type="button"
               onClick={handleClearFilters}

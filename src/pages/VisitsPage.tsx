@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery, keepPreviousData } from '@tanstack/react-query';
 import { queryKeys, normalizeListResponse } from '../lib/queryKeys';
@@ -442,7 +442,7 @@ export default function VisitsPage() {
     return Array.from(dirMap.values()).sort((a, b) =>
       a.customer_name.localeCompare(b.customer_name)
     );
-  }, [customers, visits]);
+  }, [customers, safeVisits]);
 
   const handleSelectCustomerForCreate = (cust: CustomerDirectoryItem) => {
     setFormCustomerName(cust.customer_name);
@@ -499,7 +499,7 @@ export default function VisitsPage() {
     if (cust.monthly_consumption && !editMonthlyConsumption) setEditMonthlyConsumption(cust.monthly_consumption);
   };
 
-  const getSalespersonDisplayName = (v: CustomerVisit) => {
+  const getSalespersonDisplayName = useCallback((v: CustomerVisit) => {
     if (v.salesperson_name && v.salesperson_name !== v.salesperson_phone) {
       return v.salesperson_name;
     }
@@ -511,7 +511,7 @@ export default function VisitsPage() {
       return v.salesperson_phone;
     }
     return null;
-  };
+  }, [employeeMap]);
 
   // Details & Edit Modal States
   const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
@@ -1423,7 +1423,7 @@ export default function VisitsPage() {
 
       return matchesSearch;
     });
-  }, [safeVisits, dateRange, filterSalesperson, searchTerm, employeeMap]);
+  }, [safeVisits, dateRange, filterSalesperson, searchTerm, getSalespersonDisplayName]);
 
   // 2. Further filtered by Outcome, Follow-up status, Customer Type, Probability & Visit Type for table view
   const filtered = useMemo(() => {
