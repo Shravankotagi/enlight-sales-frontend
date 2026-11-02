@@ -201,6 +201,7 @@ export const complaintsApi = {
 
 export const visitsApi = {
   getAll: (params?: any) => API.get('/kra/visits', { params }),
+  getById: (id: string, params?: any) => API.get(`/kra/visits/${id}`, { params }),
   create: (data: any) => API.post('/kra/visits', data),
   requestVisitOtp: (phone: string) => API.post('/kra/visits/otp/request', { phone }),
   verifyVisitOtp: (phone: string, otp: string) => API.post('/kra/visits/otp/verify', { phone, otp }),

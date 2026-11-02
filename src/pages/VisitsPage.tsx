@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery, keepPreviousData } from '@tanstack/react-query';
 import { queryKeys, normalizeListResponse } from '../lib/queryKeys';
@@ -221,15 +221,15 @@ export default function VisitsPage() {
   }, [viewingAsName, viewingAsPhone]);
 
   // Date Filter Presets (Matching Inquiry tab pattern)
-  const [dayPreset, setDayPreset] = useState<string>('all');
+  const [dayPreset, setDayPreset] = useState<string>('7_days');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
   const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
 
-  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
-    from: undefined,
-    to: undefined,
-  });
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(() => ({
+    from: getDaysAgo(7),
+    to: formatLocalDate(),
+  }));
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -442,7 +442,7 @@ export default function VisitsPage() {
     return Array.from(dirMap.values()).sort((a, b) =>
       a.customer_name.localeCompare(b.customer_name)
     );
-  }, [customers, visits]);
+  }, [customers, safeVisits]);
 
   const handleSelectCustomerForCreate = (cust: CustomerDirectoryItem) => {
     setFormCustomerName(cust.customer_name);
@@ -499,7 +499,7 @@ export default function VisitsPage() {
     if (cust.monthly_consumption && !editMonthlyConsumption) setEditMonthlyConsumption(cust.monthly_consumption);
   };
 
-  const getSalespersonDisplayName = (v: CustomerVisit) => {
+  const getSalespersonDisplayName = useCallback((v: CustomerVisit) => {
     if (v.salesperson_name && v.salesperson_name !== v.salesperson_phone) {
       return v.salesperson_name;
     }
@@ -511,7 +511,7 @@ export default function VisitsPage() {
       return v.salesperson_phone;
     }
     return null;
-  };
+  }, [employeeMap]);
 
   // Details & Edit Modal States
   const [selectedVisit, setSelectedVisit] = useState<CustomerVisit | null>(null);
@@ -1214,11 +1214,26 @@ export default function VisitsPage() {
     setEditDeliveryLocation(v.delivery_location || '');
     setEditPreferredMake(v.preferred_make || '');
     setEditPaymentTerms(v.payment_terms || '');
-    setEditGpsPhotoUrl(v.gps_photo_url || null);
+    const isPlaceholder = v.gps_photo_url === 'has_photo' || (v as any).has_gps_photo;
+    setEditGpsPhotoUrl(!isPlaceholder && v.gps_photo_url && v.gps_photo_url !== 'null' ? v.gps_photo_url : null);
     setEditGpsLat(v.gps_latitude ?? null);
     setEditGpsLng(v.gps_longitude ?? null);
     setEditGpsAccuracy(v.gps_accuracy ?? null);
     setEditAttachments(Array.isArray(v.attachments) ? v.attachments : []);
+
+    // Load full visit on demand if photo exists on server
+    if (isPlaceholder) {
+      visitsApi.getById(v.id, activeMode ? { mode: activeMode } : undefined).then(res => {
+        const full = res?.data?.data || res?.data;
+        if (full?.gps_photo_url) {
+          setSelectedVisit(prev => prev && prev.id === v.id ? { ...prev, gps_photo_url: full.gps_photo_url, attachments: full.attachments || prev.attachments } : prev);
+          setEditGpsPhotoUrl(full.gps_photo_url);
+          if (Array.isArray(full.attachments)) setEditAttachments(full.attachments);
+        }
+      }).catch(err => {
+        console.warn('Could not load detailed visit photo:', err);
+      });
+    }
   };
 
   const handleUpdateVisit = async (e: React.FormEvent) => {
@@ -1279,7 +1294,9 @@ export default function VisitsPage() {
         delivery_location: editDeliveryLocation.trim() || null,
         preferred_make: editPreferredMake.trim() || null,
         payment_terms: editPaymentTerms.trim() || null,
-        gps_photo_url: editGpsPhotoUrl || null,
+        gps_photo_url: editGpsPhotoUrl && editGpsPhotoUrl !== 'has_photo'
+          ? editGpsPhotoUrl
+          : ((selectedVisit?.gps_photo_url === 'has_photo' || (selectedVisit as any)?.has_gps_photo) ? undefined : null),
         gps_latitude: editGpsLat ?? null,
         gps_longitude: editGpsLng ?? null,
         gps_accuracy: editGpsAccuracy ?? null,
@@ -1406,7 +1423,7 @@ export default function VisitsPage() {
 
       return matchesSearch;
     });
-  }, [safeVisits, dateRange, filterSalesperson, searchTerm, employeeMap]);
+  }, [safeVisits, dateRange, filterSalesperson, searchTerm, getSalespersonDisplayName]);
 
   // 2. Further filtered by Outcome, Follow-up status, Customer Type, Probability & Visit Type for table view
   const filtered = useMemo(() => {
@@ -1515,13 +1532,13 @@ export default function VisitsPage() {
     setFilterCustomerType('all');
     setFilterProbability('all');
     setFilterVisitType('all');
-    setDayPreset('all');
+    setDayPreset('7_days');
     setShowCustomDate(false);
     setCustomFrom('');
     setCustomTo('');
     setDateRange({
-      from: undefined,
-      to: undefined,
+      from: getDaysAgo(7),
+      to: formatLocalDate(),
     });
   };
 
@@ -1785,7 +1802,7 @@ export default function VisitsPage() {
           </Select>
 
           {/* 9. Clear Filter Button */}
-          {(searchTerm || filterOutcome !== 'all' || filterFollowup !== 'all' || filterSalesperson !== 'all' || filterCustomerType !== 'all' || filterProbability !== 'all' || filterVisitType !== 'all' || dayPreset !== 'all') && (
+          {(searchTerm || filterOutcome !== 'all' || filterFollowup !== 'all' || filterSalesperson !== 'all' || filterCustomerType !== 'all' || filterProbability !== 'all' || filterVisitType !== 'all' || dayPreset !== '7_days') && (
             <button
               type="button"
               onClick={handleClearFilters}
@@ -3442,17 +3459,23 @@ export default function VisitsPage() {
                         {/* GPS Tagged Photo Card */}
                         {selectedVisit.gps_photo_url && (
                           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-white rounded-xl border border-slate-200">
-                            <button
-                              type="button"
-                              onClick={() => openVisitPreview(selectedVisit.gps_photo_url!, 'Customer Visit Photo')}
-                              className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              aria-label="View customer visit photo">
-                              <img
-                                src={selectedVisit.gps_photo_url}
-                                alt="Visit Verification"
-                                className="w-24 h-24 object-cover rounded-lg border border-slate-200 shadow-2xs"
-                              />
-                            </button>
+                            {selectedVisit.gps_photo_url === 'has_photo' ? (
+                              <div className="w-24 h-24 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0">
+                                <RefreshCw size={16} className="animate-spin text-blue-600" />
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openVisitPreview(selectedVisit.gps_photo_url!, 'Customer Visit Photo')}
+                                className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label="View customer visit photo">
+                                <img
+                                  src={selectedVisit.gps_photo_url}
+                                  alt="Visit Verification"
+                                  className="w-24 h-24 object-cover rounded-lg border border-slate-200 shadow-2xs"
+                                />
+                              </button>
+                            )}
                             <div className="space-y-1 min-w-0">
                               <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                                 <Camera size={14} className="text-blue-600" /> Customer Visit Photo
