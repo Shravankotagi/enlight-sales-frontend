@@ -21,7 +21,7 @@ const inquiries = [
     customer_name: 'Alpha Metals',
     customer_email: 'buyer@alphametals.example',
     delivery_location: 'Pune',
-    created_at: '2026-10-15T04:00:00.000Z',
+    created_at: new Date().toISOString(),
     ai_extraction_json: {
       line_items: [
         { sku_text: 'HR Coil', dimensions: '2.5mm', quantity: 12, unit: 'MT', rate: 11100 },

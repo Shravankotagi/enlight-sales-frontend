@@ -1221,17 +1221,17 @@ export default function VisitsPage() {
     setEditGpsAccuracy(v.gps_accuracy ?? null);
     setEditAttachments(Array.isArray(v.attachments) ? v.attachments : []);
 
-    // Load full visit on demand if photo exists on server
-    if (isPlaceholder) {
+    // Load full visit details on demand (photo, attachments, full metadata)
+    if (v.id) {
       visitsApi.getById(v.id, activeMode ? { mode: activeMode } : undefined).then(res => {
         const full = res?.data?.data || res?.data;
-        if (full?.gps_photo_url) {
-          setSelectedVisit(prev => prev && prev.id === v.id ? { ...prev, gps_photo_url: full.gps_photo_url, attachments: full.attachments || prev.attachments } : prev);
-          setEditGpsPhotoUrl(full.gps_photo_url);
+        if (full) {
+          setSelectedVisit(prev => prev && prev.id === v.id ? { ...prev, ...full } : prev);
+          if (full.gps_photo_url) setEditGpsPhotoUrl(full.gps_photo_url);
           if (Array.isArray(full.attachments)) setEditAttachments(full.attachments);
         }
       }).catch(err => {
-        console.warn('Could not load detailed visit photo:', err);
+        console.warn('Could not load detailed visit:', err);
       });
     }
   };

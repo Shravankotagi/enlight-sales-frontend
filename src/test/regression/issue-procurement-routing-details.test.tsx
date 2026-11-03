@@ -19,7 +19,7 @@ const inquiry = {
   sender_name: 'Alpha Metals',
   customer_name: 'Alpha Metals',
   delivery_location: 'Pune, Maharashtra',
-  created_at: '2026-10-01T00:00:00.000Z',
+  created_at: new Date().toISOString(),
   salesperson_phone: '919200000001',
   salesperson_name: 'Akruti',
   ai_extraction_json: {

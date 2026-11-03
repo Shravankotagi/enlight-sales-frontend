@@ -84,7 +84,7 @@ describe('Admin Overview recent orders', () => {
     await screen.findByText('Recent Company-wide Orders')
     await waitFor(() => {
       expect(adminApi.ordersApi.getAll).toHaveBeenCalledWith(
-        expect.objectContaining({ from: '2000-01-01', to: expect.any(String) }),
+        expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
       )
     })
   })

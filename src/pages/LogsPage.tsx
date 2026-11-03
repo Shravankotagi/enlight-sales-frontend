@@ -50,21 +50,37 @@ type ActionFilter =
   | 'employee_deactivated'
   | 'employee_deleted';
 
+function formatRelativeTime(timestampStr: string) {
+  if (!timestampStr) return '';
+  try {
+    const diffSec = Math.floor((Date.now() - new Date(timestampStr).getTime()) / 1000);
+    if (diffSec < 60) return 'just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    const diffDays = Math.floor(diffHrs / 24);
+    return `${diffDays}d ago`;
+  } catch {
+    return '';
+  }
+}
+
 export default function LogsPage() {
   const { effectivePhone, activeRole, activeMode, isAdmin } = useAuth();
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('All');
   const [actionType, setActionType] = useState<ActionFilter>('all');
   const [authPhone, setAuthPhone] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [datePreset, setDatePreset] = useState<FilterPreset>('all');
+  const [datePreset, setDatePreset] = useState<FilterPreset>('7_days');
   const [showCustomDate, setShowCustomDate] = useState(false);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
-  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({
-    from: undefined,
-    to: undefined,
-  });
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(() => ({
+    from: getDaysAgo(7),
+    to: formatLocalDate(),
+  }));
 
   const handleDatePresetChange = (newPreset: FilterPreset) => {
     setDatePreset(newPreset);
@@ -104,15 +120,15 @@ export default function LogsPage() {
   const handleClearAllFilters = () => {
     setSearchQuery('');
     setModuleFilter('All');
-    setDatePreset('all');
+    setDatePreset('7_days');
     setShowCustomDate(false);
     setActionType('all');
     setAuthPhone('');
     setCustomFrom('');
     setCustomTo('');
     setDateRange({
-      from: undefined,
-      to: undefined,
+      from: getDaysAgo(7),
+      to: formatLocalDate(),
     });
   };
 
@@ -293,22 +309,6 @@ export default function LogsPage() {
       return 'border-amber-500 bg-amber-50 shadow-[0_0_8px_rgba(245,158,11,0.35)]';
     }
     return 'border-blue-500 bg-blue-50 shadow-[0_0_8px_rgba(59,130,246,0.35)]';
-  };
-
-  const formatRelativeTime = (timestampStr: string) => {
-    if (!timestampStr) return '';
-    try {
-      const diffSec = Math.floor((Date.now() - new Date(timestampStr).getTime()) / 1000);
-      if (diffSec < 60) return 'just now';
-      const diffMin = Math.floor(diffSec / 60);
-      if (diffMin < 60) return `${diffMin}m ago`;
-      const diffHrs = Math.floor(diffMin / 60);
-      if (diffHrs < 24) return `${diffHrs}h ago`;
-      const diffDays = Math.floor(diffHrs / 24);
-      return `${diffDays}d ago`;
-    } catch {
-      return '';
-    }
   };
 
   const formatDateTime = (timestampStr: string) => formatIstDateTime(timestampStr);
@@ -504,7 +504,7 @@ export default function LogsPage() {
           )}
 
           {/* 4. Clear Filter Button (4th Position) */}
-          {(searchQuery || moduleFilter !== 'All' || datePreset !== 'all' || actionType !== 'all' || authPhone) && (
+          {(searchQuery || moduleFilter !== 'All' || datePreset !== '7_days' || actionType !== 'all' || authPhone) && (
             <button
               type="button"
               onClick={handleClearAllFilters}

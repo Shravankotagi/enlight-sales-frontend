@@ -7,7 +7,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Package, RefreshCw, BarChart3, MapPin } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
 import PaginationControl, { pageOf } from '../components/PaginationControl';
-import { formatLocalDate } from '../utils/dateUtils';
+import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
 import { detectHsnCode } from '../utils/hsnDetector';
 import { calculateOrdersTotalTonnage } from '../utils/pricingEngine';
 import { buildInquiryScopeParams } from '../utils/inquiryScope';
@@ -41,11 +41,11 @@ export default function ReportsPage() {
   const canCustomers = can('customers.view');
   const canStaffLogs = can('staff.view');
 
-  const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'all',
-    from: '2000-01-01',
+  const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
+    preset: '7_days',
+    from: getDaysAgo(7),
     to: formatLocalDate(),
-  });
+  }));
   const [skuPage, setSkuPage] = useState(1);
   const [loginPage, setLoginPage] = useState(1);
   const [visitsPage, setVisitsPage] = useState(1);
@@ -300,7 +300,7 @@ export default function ReportsPage() {
           <SyncBiginButton
             onSynced={refetchAll}
           />
-          <DateFilterControl onChange={setDateRange} />
+          <DateFilterControl onChange={setDateRange} initialPreset="7_days" />
           <button
             onClick={refetchAll}
             title="Refresh all reports"

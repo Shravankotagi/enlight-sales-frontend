@@ -537,17 +537,17 @@ export default function OrdersPage() {
     }
   };
 
-  const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('all');
+  const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('7_days');
   const [showCustomDate, setShowCustomDate] = useState(false);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
-  const [dateRange, setDateRange] = useState<DateFilterRange>({
-    preset: 'all',
-    from: undefined,
-    to: undefined,
-  });
+  const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
+    preset: '7_days',
+    from: getDaysAgo(7),
+    to: formatLocalDate(),
+  }));
 
   const handleDayPresetChange = (preset: string) => {
     const todayStr = formatLocalDate();
@@ -602,11 +602,11 @@ export default function OrdersPage() {
   const handleClearAllFilters = () => {
     setSearchTerm('');
     setFilterStatus('all');
-    setDayPreset('all');
+    setDayPreset('7_days');
     setDateRange({
-      preset: 'all',
-      from: undefined,
-      to: undefined,
+      preset: '7_days',
+      from: getDaysAgo(7),
+      to: formatLocalDate(),
     });
     setShowCustomDate(false);
     setCustomFrom('');
@@ -1682,7 +1682,7 @@ export default function OrdersPage() {
             </Select>
 
             {/* 4. Clear Filter Button */}
-            {(searchTerm || filterStatus !== 'all' || dayPreset !== 'all') && (
+            {(searchTerm || filterStatus !== 'all' || dayPreset !== '7_days') && (
               <button
                 type="button"
                 onClick={handleClearAllFilters}

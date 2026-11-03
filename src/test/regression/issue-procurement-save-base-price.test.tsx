@@ -26,7 +26,7 @@ const inquiry = {
   source_channel: 'web_dashboard',
   salesperson_name: 'Akruti',
   delivery_location: 'Ahmedabad, Gujarat',
-  created_at: '2026-10-16T04:00:00.000Z',
+  created_at: new Date().toISOString(),
   ai_extraction_json: {
     delivery_location: 'Ahmedabad, Gujarat',
     line_items: [line],
