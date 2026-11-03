@@ -1465,17 +1465,19 @@ export default function OrdersPage() {
   const filtered = safeOrders
     .filter((o: Order) => {
       if (dateRange.from && dateRange.to) {
-        const effectiveDate =
-          parseSafeIsoDate(o?.created_at) ||
-          parseSafeIsoDate(o?.won_at) ||
-          parseSafeIsoDate(o?.po_date);
+        const fromDate = dateRange.from.split('T')[0];
+        const toDate = dateRange.to.split('T')[0];
 
-        if (effectiveDate) {
-          const fromDate = dateRange.from.split('T')[0];
-          const toDate = dateRange.to.split('T')[0];
-          if (effectiveDate < fromDate || effectiveDate > toDate) {
-            return false;
-          }
+        const wonDate = parseSafeIsoDate(o?.won_at);
+        const poDate = parseSafeIsoDate(o?.po_date);
+        const createdDate = parseSafeIsoDate(o?.created_at);
+
+        const isWonInRange = wonDate ? wonDate >= fromDate && wonDate <= toDate : false;
+        const isPoInRange = poDate ? poDate >= fromDate && poDate <= toDate : false;
+        const isCreatedInRange = !wonDate && createdDate ? createdDate >= fromDate && createdDate <= toDate : false;
+
+        if (!isWonInRange && !isPoInRange && !isCreatedInRange) {
+          return false;
         }
       }
 
