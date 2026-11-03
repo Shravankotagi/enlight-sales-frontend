@@ -1,5 +1,5 @@
 # Stage 1: Build Vite React App
-FROM node:22-alpine AS builder
+FROM public.ecr.aws/docker/library/node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: High-Performance Nginx Alpine Server
-FROM nginx:alpine AS runner
+FROM public.ecr.aws/docker/library/nginx:alpine AS runner
 
 # Replace default Nginx configuration
 RUN rm -rf /etc/nginx/conf.d/default.conf
