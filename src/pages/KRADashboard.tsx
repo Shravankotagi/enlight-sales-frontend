@@ -4,7 +4,7 @@ import { kraApi } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, CheckCircle, AlertCircle, Clock, ExternalLink, X, LayoutDashboard } from 'lucide-react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { getPersistedDateFilter, setPersistedDateFilter } from '../utils/dateUtils';
 
 function KRACard({ number, label, data, onClick }: { 
   number: number; label: string; data: any; onClick?: () => void;
@@ -356,12 +356,14 @@ function KRASheetModal({ kraNumber, sheet, isLoading, onClose }: { kraNumber: nu
 
 export default function KRADashboard() {
   const { effectivePhone } = useAuth();
-  const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
-    preset: '7_days',
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
-  }));
+  const [dateRange, setDateRange] = useState<DateFilterRange>(() =>
+    getPersistedDateFilter('kra', '7_days') as DateFilterRange,
+  );
   const [activeKraModal, setActiveKraModal] = useState<number | null>(null);
+
+  useEffect(() => {
+    setPersistedDateFilter('kra', dateRange);
+  }, [dateRange]);
 
   const { data, isLoading, error, refetch: refetchDashboard } = useQuery({
     queryKey: ['kra-dashboard', dateRange, effectivePhone],
@@ -440,7 +442,7 @@ export default function KRADashboard() {
           </h1>
         </div>
 
-        <DateFilterControl onChange={setDateRange} />
+        <DateFilterControl onChange={setDateRange} value={dateRange} />
       </div>
 
       <div className="grid grid-cols-3 gap-4 items-stretch">

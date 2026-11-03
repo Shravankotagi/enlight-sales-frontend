@@ -35,6 +35,9 @@ import toast from 'react-hot-toast';
 import {
   formatLocalDate,
   getDaysAgo,
+  getPersistedDateFilter,
+  setPersistedDateFilter,
+  clearPersistedDateFilter,
 } from '../utils/dateUtils';
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 import DealProductCombobox, { type SelectedDealItem } from '../components/DealProductCombobox';
@@ -118,15 +121,27 @@ export default function ComplaintsPage() {
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Date Filter Presets
-  const [dayPreset, setDayPreset] = useState<string>('7_days');
-  const [customFrom, setCustomFrom] = useState<string>('');
-  const [customTo, setCustomTo] = useState<string>('');
-  const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
+  const [initialFilter] = useState(() => getPersistedDateFilter('complaints', '7_days'));
+  const [dayPreset, setDayPreset] = useState<string>(initialFilter.preset);
+  const [customFrom, setCustomFrom] = useState<string>(initialFilter.customFrom || '');
+  const [customTo, setCustomTo] = useState<string>(initialFilter.customTo || '');
+  const [showCustomDate, setShowCustomDate] = useState<boolean>(Boolean(initialFilter.showCustom));
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(() => ({
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
+    from: initialFilter.from,
+    to: initialFilter.to,
   }));
+
+  useEffect(() => {
+    setPersistedDateFilter('complaints', {
+      preset: dayPreset,
+      from: dateRange.from,
+      to: dateRange.to,
+      customFrom,
+      customTo,
+      showCustom: showCustomDate,
+    });
+  }, [dayPreset, dateRange, customFrom, customTo, showCustomDate]);
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -198,6 +213,7 @@ export default function ComplaintsPage() {
       to: formatLocalDate(),
     });
     setCurrentPage(1);
+    clearPersistedDateFilter('complaints');
   };
 
   // Modals

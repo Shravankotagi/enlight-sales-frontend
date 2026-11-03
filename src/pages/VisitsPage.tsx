@@ -64,6 +64,9 @@ import {
   formatLocalDate,
   formatLocalTime,
   getDaysAgo,
+  getPersistedDateFilter,
+  setPersistedDateFilter,
+  clearPersistedDateFilter,
 } from '../utils/dateUtils';
 import CustomerCombobox, { type CustomerDirectoryItem } from '../components/CustomerCombobox';
 import PaginationControl from '../components/PaginationControl';
@@ -221,15 +224,27 @@ export default function VisitsPage() {
   }, [viewingAsName, viewingAsPhone]);
 
   // Date Filter Presets (Matching Inquiry tab pattern)
-  const [dayPreset, setDayPreset] = useState<string>('7_days');
-  const [customFrom, setCustomFrom] = useState<string>('');
-  const [customTo, setCustomTo] = useState<string>('');
-  const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
+  const [initialFilter] = useState(() => getPersistedDateFilter('visits', '7_days'));
+  const [dayPreset, setDayPreset] = useState<string>(initialFilter.preset);
+  const [customFrom, setCustomFrom] = useState<string>(initialFilter.customFrom || '');
+  const [customTo, setCustomTo] = useState<string>(initialFilter.customTo || '');
+  const [showCustomDate, setShowCustomDate] = useState<boolean>(Boolean(initialFilter.showCustom));
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(() => ({
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
+    from: initialFilter.from,
+    to: initialFilter.to,
   }));
+
+  useEffect(() => {
+    setPersistedDateFilter('visits', {
+      preset: dayPreset,
+      from: dateRange.from,
+      to: dateRange.to,
+      customFrom,
+      customTo,
+      showCustom: showCustomDate,
+    });
+  }, [dayPreset, dateRange, customFrom, customTo, showCustomDate]);
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -1540,6 +1555,7 @@ export default function VisitsPage() {
       from: getDaysAgo(7),
       to: formatLocalDate(),
     });
+    clearPersistedDateFilter('visits');
   };
 
   const createProgress = visitWizardProgress(createStep);

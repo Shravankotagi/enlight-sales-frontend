@@ -14,7 +14,13 @@ import {
   complaintsApi,
 } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import {
+  getDaysAgo,
+  formatLocalDate,
+  getPersistedDateFilter,
+  setPersistedDateFilter,
+  clearPersistedDateFilter,
+} from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import { getFollowUpStatusInfo } from '../utils/visitUtils';
 import { isProductInquiry, resolveInquiryDealStageKey } from './InquiriesPage';
@@ -211,10 +217,11 @@ export default function HomePage() {
   };
 
   // ── Inline Filter State (Visits-tab style) ──────────────────────────────
-  const [dayPreset, setDayPreset] = useState('7_days');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const [showCustomDate, setShowCustomDate] = useState(false);
+  const [initialFilter] = useState(() => getPersistedDateFilter('home', '7_days'));
+  const [dayPreset, setDayPreset] = useState(initialFilter.preset);
+  const [customFrom, setCustomFrom] = useState(initialFilter.customFrom || '');
+  const [customTo, setCustomTo] = useState(initialFilter.customTo || '');
+  const [showCustomDate, setShowCustomDate] = useState(Boolean(initialFilter.showCustom));
 
   // ── Customer Search & Dropdown State ──────────────────────────────────────
   const [customerSearch, setCustomerSearch] = useState('');
@@ -233,10 +240,21 @@ export default function HomePage() {
   }, []);
 
   const [dateRange, setDateRange] = useState<DateRange>(() => ({
-    preset: '7_days',
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
+    preset: initialFilter.preset as any,
+    from: initialFilter.from,
+    to: initialFilter.to,
   }));
+
+  useEffect(() => {
+    setPersistedDateFilter('home', {
+      preset: dayPreset,
+      from: dateRange.from,
+      to: dateRange.to,
+      customFrom,
+      customTo,
+      showCustom: showCustomDate,
+    });
+  }, [dayPreset, dateRange, customFrom, customTo, showCustomDate]);
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -273,6 +291,7 @@ export default function HomePage() {
       from: getDaysAgo(7),
       to: formatLocalDate(),
     });
+    clearPersistedDateFilter('home');
   };
 
   const [activeBarHover, setActiveBarHover] = useState<number | null>(null);

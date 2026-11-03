@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clearPersistedDateFilter,
   formatLocalDate,
   getDaysAgo,
   getFirstDayOfMonth,
@@ -18,6 +19,8 @@ import {
   getLastDayOfQuarter,
   getLastDayOfWeek,
   getLastDayOfYear,
+  getPersistedDateFilter,
+  setPersistedDateFilter,
 } from './dateUtils'
 
 // Friday 9 October 2026, local time.
@@ -80,5 +83,22 @@ describe('dateUtils', () => {
     expect(getIsoEndOfDay('2026-10-09')).toBe('2026-10-09T23:59:59.999Z')
     expect(getIsoEndOfDay('2026-10-09T10:00:00Z')).toBe('2026-10-09T10:00:00Z')
     expect(getIsoStartOfDay('')).toBe('')
+  })
+
+  it('persists and restores date filters in sessionStorage', () => {
+    sessionStorage.clear()
+    // Defaults to 7_days when not stored
+    const initial = getPersistedDateFilter('inquiries')
+    expect(initial.preset).toBe('7_days')
+
+    // Persists a 30_days selection
+    setPersistedDateFilter('inquiries', { preset: '30_days' })
+    const restored = getPersistedDateFilter('inquiries')
+    expect(restored.preset).toBe('30_days')
+    expect(restored.from).toBeDefined()
+
+    // Clear resets it
+    clearPersistedDateFilter('inquiries')
+    expect(getPersistedDateFilter('inquiries').preset).toBe('7_days')
   })
 })

@@ -9,7 +9,7 @@ import {
 } from '../lib/api';
 import { useEffect, useState } from 'react';
 import DateFilterControl, { type DateFilterRange } from '../components/DateFilterControl';
-import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
+import { formatLocalDate, getDaysAgo, getPersistedDateFilter, setPersistedDateFilter } from '../utils/dateUtils';
 import { calculateOrdersTotalTonnage, getOrderTonnage } from '../utils/pricingEngine';
 import {
   TrendingUp, ShoppingBag, ShieldAlert,
@@ -104,11 +104,13 @@ export default function AdminDashboard() {
   const { setViewingAs } = useAuth();
   const [selectedPhone, setSelectedPhone] = useState<string>('');
 
-  const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
-    preset: '7_days',
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
-  }));
+  const [dateRange, setDateRange] = useState<DateFilterRange>(() =>
+    getPersistedDateFilter('admin', '7_days') as DateFilterRange,
+  );
+
+  useEffect(() => {
+    setPersistedDateFilter('admin', dateRange);
+  }, [dateRange]);
 
   const fromDate = dateRange.from || getDaysAgo(7);
   const toDate = dateRange.to || formatLocalDate();
@@ -407,7 +409,7 @@ export default function AdminDashboard() {
         {/* Row 2: Filter Toolbar (Date range, Salesperson Filter) */}
         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <DateFilterControl onChange={setDateRange} initialPreset={dateRange.preset} />
+            <DateFilterControl onChange={setDateRange} value={dateRange} />
           </div>
 
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 self-start sm:self-auto">

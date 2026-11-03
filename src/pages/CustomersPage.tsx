@@ -20,7 +20,13 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
+import {
+  formatLocalDate,
+  getDaysAgo,
+  getPersistedDateFilter,
+  setPersistedDateFilter,
+  clearPersistedDateFilter,
+} from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
 import SyncBiginButton from '../components/SyncBiginButton';
 import { Select } from '../components/ui/select';
@@ -174,11 +180,23 @@ export default function CustomersPage() {
   const pageSize = 25;
 
   // Date Filter Presets (Matching Visits tab pattern)
-  const [dayPreset, setDayPreset] = useState<string>('all');
-  const [customFrom, setCustomFrom] = useState<string>('');
-  const [customTo, setCustomTo] = useState<string>('');
-  const [showCustomDate, setShowCustomDate] = useState<boolean>(false);
-  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({});
+  const [initialCustomerFilter] = useState(() => getPersistedDateFilter('customers', 'all'));
+  const [dayPreset, setDayPreset] = useState<string>(() => initialCustomerFilter.preset);
+  const [customFrom, setCustomFrom] = useState<string>(() => initialCustomerFilter.from || '');
+  const [customTo, setCustomTo] = useState<string>(() => initialCustomerFilter.to || '');
+  const [showCustomDate, setShowCustomDate] = useState<boolean>(() => initialCustomerFilter.preset === 'custom');
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(() => ({
+    from: initialCustomerFilter.from,
+    to: initialCustomerFilter.to,
+  }));
+
+  useEffect(() => {
+    setPersistedDateFilter('customers', {
+      preset: dayPreset as any,
+      from: dateRange.from,
+      to: dateRange.to,
+    });
+  }, [dayPreset, dateRange.from, dateRange.to]);
 
   const handleDayPresetChange = (preset: string) => {
     setDayPreset(preset);
@@ -400,6 +418,7 @@ export default function CustomersPage() {
   const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + pageSize);
 
   const handleClearFilters = () => {
+    clearPersistedDateFilter('customers');
     setSearchTerm('');
     setFilterHealth('all');
     setFilterSegment('all');

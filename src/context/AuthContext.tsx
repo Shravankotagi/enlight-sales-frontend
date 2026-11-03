@@ -197,6 +197,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem('enlight_active_chat_session_id');
     localStorage.removeItem('enlight_active_chat_session_id');
     sessionStorage.removeItem('enlight_last_activity');
+    try {
+      Object.keys(sessionStorage).forEach((k) => {
+        if (k.startsWith('enlight_filter_')) {
+          sessionStorage.removeItem(k);
+        }
+      });
+    } catch {
+      // Ignore storage cleanup issues
+    }
     setToken(null);
     setEmployee(null);
     setAccess(null);
@@ -205,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) return;
-    const idleMs = 30 * 60 * 1000;
+    const idleMs = 3 * 60 * 60 * 1000; // 3 hours session idle timeout
     const key = 'enlight_last_activity';
     if (!sessionStorage.getItem(key)) sessionStorage.setItem(key, String(Date.now()));
     let lastWrite = 0;

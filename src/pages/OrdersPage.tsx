@@ -37,7 +37,13 @@ import {
 } from '../lib/api';
 import { type DateFilterRange } from '../components/DateFilterControl';
 import { useAuth } from '../context/AuthContext';
-import { formatLocalDate, getDaysAgo } from '../utils/dateUtils';
+import {
+  formatLocalDate,
+  getDaysAgo,
+  getPersistedDateFilter,
+  setPersistedDateFilter,
+  clearPersistedDateFilter,
+} from '../utils/dateUtils';
 import PaginationControl from '../components/PaginationControl';
 import AddAssignedCustomerDialog, { isCustomerInAssignedList } from '../components/AddAssignedCustomerDialog';
 import { normalizeListResponse, queryKeys } from '../lib/queryKeys';
@@ -537,17 +543,29 @@ export default function OrdersPage() {
     }
   };
 
-  const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>('7_days');
-  const [showCustomDate, setShowCustomDate] = useState(false);
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  const [initialFilter] = useState(() => getPersistedDateFilter('orders', '7_days'));
+  const [dayPreset, setDayPreset] = useState<'all' | 'today' | '7_days' | '30_days' | '90_days' | 'custom'>(initialFilter.preset as any);
+  const [showCustomDate, setShowCustomDate] = useState(Boolean(initialFilter.showCustom));
+  const [customFrom, setCustomFrom] = useState(initialFilter.customFrom || '');
+  const [customTo, setCustomTo] = useState(initialFilter.customTo || '');
   const [filterStatus, setFilterStatus] = useState('all');
 
   const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
-    preset: '7_days',
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
+    preset: initialFilter.preset as any,
+    from: initialFilter.from,
+    to: initialFilter.to,
   }));
+
+  useEffect(() => {
+    setPersistedDateFilter('orders', {
+      preset: dayPreset,
+      from: dateRange.from,
+      to: dateRange.to,
+      customFrom,
+      customTo,
+      showCustom: showCustomDate,
+    });
+  }, [dayPreset, dateRange, customFrom, customTo, showCustomDate]);
 
   const handleDayPresetChange = (preset: string) => {
     const todayStr = formatLocalDate();
@@ -612,6 +630,7 @@ export default function OrdersPage() {
     setCustomFrom('');
     setCustomTo('');
     setCurrentPage(1);
+    clearPersistedDateFilter('orders');
   };
 
   const { data: rawOrders = [], isLoading: loading, isFetching, refetch: fetchOrders } = useQuery<Order[]>({

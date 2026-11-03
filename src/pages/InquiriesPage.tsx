@@ -68,7 +68,13 @@ import {
   canFillProcurementBasePrices,
   canSendProcurementQuote,
 } from "../utils/aclConstants";
-import { getDaysAgo, formatLocalDate } from "../utils/dateUtils";
+import {
+  getDaysAgo,
+  formatLocalDate,
+  getPersistedDateFilter,
+  setPersistedDateFilter,
+  clearPersistedDateFilter,
+} from "../utils/dateUtils";
 import {
   calculateLineItem,
   calculateLineItems,
@@ -2007,16 +2013,28 @@ export default function InquiriesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 25;
 
-  const [dayPreset, setDayPreset] = useState<string>("7_days");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [showCustomDate, setShowCustomDate] = useState(false);
+  const [initialFilter] = useState(() => getPersistedDateFilter('inquiries', '7_days'));
+  const [dayPreset, setDayPreset] = useState<string>(initialFilter.preset);
+  const [customFrom, setCustomFrom] = useState(initialFilter.customFrom || "");
+  const [customTo, setCustomTo] = useState(initialFilter.customTo || "");
+  const [showCustomDate, setShowCustomDate] = useState(Boolean(initialFilter.showCustom));
 
   const [dateRange, setDateRange] = useState<DateFilterRange>(() => ({
-    preset: "7_days" as any,
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
+    preset: initialFilter.preset as any,
+    from: initialFilter.from,
+    to: initialFilter.to,
   }));
+
+  useEffect(() => {
+    setPersistedDateFilter('inquiries', {
+      preset: dayPreset,
+      from: dateRange.from,
+      to: dateRange.to,
+      customFrom,
+      customTo,
+      showCustom: showCustomDate,
+    });
+  }, [dayPreset, dateRange, customFrom, customTo, showCustomDate]);
 
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [subMenuInqId, setSubMenuInqId] = useState<string | null>(null);
@@ -2187,6 +2205,7 @@ export default function InquiriesPage() {
     });
     setCurrentPage(1);
     setOpenActionMenuId(null);
+    clearPersistedDateFilter('inquiries');
   };
 
   const handleDayPresetChange = (preset: string) => {

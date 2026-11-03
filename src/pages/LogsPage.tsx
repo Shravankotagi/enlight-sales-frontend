@@ -18,8 +18,14 @@ import {
   Check,
   History,
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
-import { getDaysAgo, formatLocalDate } from '../utils/dateUtils';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  getDaysAgo,
+  formatLocalDate,
+  getPersistedDateFilter,
+  setPersistedDateFilter,
+  clearPersistedDateFilter,
+} from '../utils/dateUtils';
 import { type FilterPreset } from '../components/DateFilterControl';
 import { Select } from '../components/ui/select';
 
@@ -72,15 +78,24 @@ export default function LogsPage() {
   const [actionType, setActionType] = useState<ActionFilter>('all');
   const [authPhone, setAuthPhone] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [datePreset, setDatePreset] = useState<FilterPreset>('7_days');
-  const [showCustomDate, setShowCustomDate] = useState(false);
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  const [initialLogsFilter] = useState(() => getPersistedDateFilter('logs', '7_days'));
+  const [datePreset, setDatePreset] = useState<FilterPreset>(() => (initialLogsFilter.preset as FilterPreset) || '7_days');
+  const [showCustomDate, setShowCustomDate] = useState(() => initialLogsFilter.preset === 'custom');
+  const [customFrom, setCustomFrom] = useState(() => initialLogsFilter.from || '');
+  const [customTo, setCustomTo] = useState(() => initialLogsFilter.to || '');
 
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(() => ({
-    from: getDaysAgo(7),
-    to: formatLocalDate(),
+    from: initialLogsFilter.from,
+    to: initialLogsFilter.to,
   }));
+
+  useEffect(() => {
+    setPersistedDateFilter('logs', {
+      preset: datePreset,
+      from: dateRange.from,
+      to: dateRange.to,
+    });
+  }, [datePreset, dateRange.from, dateRange.to]);
 
   const handleDatePresetChange = (newPreset: FilterPreset) => {
     setDatePreset(newPreset);
@@ -118,6 +133,7 @@ export default function LogsPage() {
   };
 
   const handleClearAllFilters = () => {
+    clearPersistedDateFilter('logs');
     setSearchQuery('');
     setModuleFilter('All');
     setDatePreset('7_days');

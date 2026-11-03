@@ -18,7 +18,7 @@ const inquiries = [
     source_channel: 'web_dashboard',
     salesperson_name: 'Akruti',
     delivery_location: 'Pune',
-    created_at: '2026-10-15T04:00:00.000Z',
+    created_at: new Date().toISOString(),
     ai_extraction_json: {
       line_items: [
         { sku_text: 'HR Coil', dimensions: '2.5mm', quantity: 12, unit: 'MT' },
@@ -34,7 +34,7 @@ const inquiries = [
     source_channel: 'web_dashboard',
     salesperson_name: 'Shravan',
     delivery_location: 'Ahmedabad',
-    created_at: '2026-10-14T04:00:00.000Z',
+    created_at: new Date().toISOString(),
     ai_extraction_json: {
       line_items: [
         { sku_text: 'GI Sheet', dimensions: '1.2mm', quantity: 4, unit: 'MT' },
